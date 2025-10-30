@@ -1583,22 +1583,39 @@
         function buildPaletteMenu(){palettePanel.innerHTML='';colorPalettes.forEach(palette=>{const option=document.createElement('div');option.className='palette-option';option.innerHTML=`<div class="palette-color" style="background-color: ${palette.bg}"></div><div class="palette-color" style="background-color: ${palette.accent}"></div><div class="palette-color" style="background-color: ${palette.grid}"></div>`;option.addEventListener('click',()=>{const activeProject=projects.find(p=>p.id===activeProjectId);if(activeProject&&(activeProject.type==='moodinfinite'||activeProject.type==='moodprompt')){activeProject.data.canvasBackgroundColor=palette.bg;canvasBackgroundColor=palette.bg;if(activeProject.type==='moodinfinite'){activeProject.data.accentColor=palette.accent;activeProject.data.gridColor=palette.grid;accentColor=palette.accent;gridColor=palette.grid}updateUIColors()}palettePanel.classList.remove('open')});palettePanel.appendChild(option)})}
         function showToast(e,t='success'){if(!showNotifications)return;const o=document.getElementById('toast-container');if(!o)return;const a=document.createElement('div');a.className=`toast-notification ${t}`;let i='';if(t==='success'){i=`<svg xmlns="http://www.w3.org/2000/svg" class="icon" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" /></svg>`}else if(t==='error'){i=`<svg xmlns="http://www.w3.org/2000/svg" class="icon" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd" /></svg>`}a.innerHTML=`${i}<span>${e}</span>`;o.appendChild(a);setTimeout(()=>{a.remove()},3e3)}
         
-        let lastTap = 0, longPressTimer = null, isPinching = false, initialPinchDistance = null, lastPinchCenter = null, initialCameraZoomOnPinch = 1;
+        let lastTap = 0, isPinching = false, initialPinchDistance = null, lastPinchCenter = null, initialCameraZoomOnPinch = 1, twoFingerTapTimer = null, isTwoFingerTouch = false, twoFingerStartPos = null;
         function onTouchStart(e) {
-            e.preventDefault(); clearTimeout(longPressTimer);
+            e.preventDefault();
             if (e.touches.length === 1 && !isPinching) {
                 const currentTime = new Date().getTime(); const tapLength = currentTime - lastTap;
                 if (tapLength < 300 && tapLength > 0) { onDoubleClick(normalizeTouchEvent(e)); lastTap = 0; return; }
                 lastTap = currentTime;
-                longPressTimer = setTimeout(() => { const contextEvent = { preventDefault: () => {}, ...normalizeTouchEvent(e) }; onContextMenu(contextEvent); if (navigator.vibrate) { navigator.vibrate(50); } }, 750); 
                 onMouseDown(normalizeTouchEvent(e));
             } else if (e.touches.length === 2) {
-                isDrawing = false; isMovingItems = false; isTransforming = false; isTransformingArrow = false; isSelectingBox = false; isPinching = true;
+                isDrawing = false; isMovingItems = false; isTransforming = false; isTransformingArrow = false; isSelectingBox = false;
+
+                isTwoFingerTouch = true;
+                twoFingerStartPos = getPinchCenter(e);
+                twoFingerTapTimer = setTimeout(() => {
+                    isTwoFingerTouch = false;
+                    twoFingerTapTimer = null;
+                }, 300); // 300ms tap window
+
+                isPinching = true;
                 initialPinchDistance = getPinchDistance(e); lastPinchCenter = getPinchCenter(e); initialCameraZoomOnPinch = cameraZoom;
             }
         }
         function onTouchMove(e) {
-            e.preventDefault(); clearTimeout(longPressTimer); 
+            e.preventDefault();
+            if (isTwoFingerTouch) {
+                const currentPos = getPinchCenter(e);
+                const moveThreshold = 20; // in pixels
+                if (twoFingerStartPos && (Math.hypot(currentPos.x - twoFingerStartPos.x, currentPos.y - twoFingerStartPos.y) > moveThreshold)) {
+                    isTwoFingerTouch = false;
+                    clearTimeout(twoFingerTapTimer);
+                    twoFingerTapTimer = null;
+                }
+            }
             if (e.touches.length === 1 && !isPinching) { onMouseMove(normalizeTouchEvent(e));
             } else if (e.touches.length === 2 && isPinching) {
                 const center = getPinchCenter(e);
@@ -1611,7 +1628,15 @@
             }
         }
         function onTouchEnd(e) {
-            e.preventDefault(); clearTimeout(longPressTimer); 
+            e.preventDefault();
+            if (isTwoFingerTouch && e.touches.length === 0) {
+                isTwoFingerTouch = false;
+                clearTimeout(twoFingerTapTimer);
+                const contextEvent = { preventDefault: () => {}, ...normalizeTouchEvent(e) };
+                onContextMenu(contextEvent);
+                if (navigator.vibrate) { navigator.vibrate(50); }
+                return;
+            }
             if (e.touches.length < 2) { isPinching = false; initialPinchDistance = null; lastPinchCenter = null; }
             if (e.touches.length === 0) { onMouseUp(normalizeTouchEvent(e)); }
         }
