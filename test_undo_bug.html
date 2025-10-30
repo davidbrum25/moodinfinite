@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Undo Bug Test</title>
+</head>
+<body>
+    <h1>Testing Undo/Redo Bug</h1>
+    <p>Check the console for test results.</p>
+
+    <script>
+        // Mocking canvas and other dependencies
+        const canvas = {
+            getBoundingClientRect: () => ({ left: 0, top: 0 }),
+            style: {},
+            classList: {
+                add: () => {},
+                remove: () => {}
+            }
+        };
+        const ctx = {
+            getImageData: () => ({ data: [0, 0, 0, 0] }),
+            measureText: () => ({ width: 0 })
+        };
+        const textEditor = { style: {} };
+        const selectionToolbar = { style: {} };
+
+        // --- Functions from index.html ---
+        let items = [];
+        let historyStack = [];
+        let historyIndex = -1;
+        const HISTORY_LIMIT = 50;
+
+        function updateSelectionToolbar() {}
+        function updateLeftBarState() {}
+
+        function saveStateForUndo() {
+            const state = JSON.stringify(items, (key, value) => {
+                if (key === 'img') {
+                    return value.src;
+                }
+                return value;
+            });
+            if (historyIndex < historyStack.length - 1) {
+                historyStack = historyStack.slice(0, historyIndex + 1);
+            }
+            if (historyStack.length > 0 && historyStack[historyStack.length - 1] === state) return;
+
+            historyStack.push(state);
+            historyIndex++;
+
+            if (historyStack.length > HISTORY_LIMIT) {
+                historyStack.shift();
+                historyIndex--;
+            }
+        }
+
+        function loadStateFromHistory(stateString) {
+            const parsedState = JSON.parse(stateString);
+            selectedItems = [];
+            updateSelectionToolbar();
+            updateLeftBarState();
+
+            const rehydrateItems = (itemArray) => {
+                return itemArray.map(itemData => {
+                    const newItem = {
+                        ...(itemData.scaleX !== undefined ? {} : { scaleX: 1, scaleY: 1 }),
+                        ...itemData
+                    };
+                    if (newItem.type === 'image') {
+                        const itemState = newItem;
+                        const img = new Image();
+                        img.src = itemState.img;
+                        newItem.img = img;
+                    } else if (newItem.type === 'group') {
+                        newItem.items = rehydrateItems(itemData.items);
+                    }
+                    return newItem;
+                });
+            };
+            items = rehydrateItems(parsedState);
+        }
+
+        function undoLastAction() {
+            if (historyIndex > 0) {
+                historyIndex--;
+                const state = historyStack[historyIndex];
+                loadStateFromHistory(state);
+            }
+        }
+
+        // --- Test Case ---
+        console.log("Running test...");
+
+        // 1. Initial state
+        saveStateForUndo();
+
+        // 2. Add an image
+        const sampleImage = {
+            id: 1,
+            type: 'image',
+            img: { src: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=' },
+            x: 100, y: 100, width: 50, height: 50, rotation: 0
+        };
+        items.push(sampleImage);
+        saveStateForUndo();
+        console.log("State after adding image:", historyStack[1]);
+
+        // 3. Remove the image
+        items = [];
+        saveStateForUndo();
+        console.log("State after removing image:", historyStack[2]);
+
+
+        // 4. Undo the removal
+        console.log("Performing undo...");
+        undoLastAction();
+
+        // 5. Verify the result
+        console.log("Items after undo:", items);
+
+        if (items.length === 1 && items[0].id === 1 && items[0].img && items[0].img.src === sampleImage.img.src) {
+            console.log("%cTest Passed!", "color: green; font-weight: bold;");
+        } else {
+            console.error("%cTest Failed!", "color: red; font-weight: bold;");
+            if(items.length !== 1) console.error(`- Expected 1 item, but found ${items.length}`);
+            else {
+                if(items[0].id !== 1) console.error(`- Expected item id 1, but found ${items[0].id}`);
+                if(!items[0].img) console.error(`- Expected item to have an 'img' property`);
+                else if(items[0].img.src !== sampleImage.img.src) console.error(`- Expected img.src to be '${sampleImage.img.src}', but found '${items[0].img.src}'`);
+            }
+        }
+    </script>
+</body>
+</html>
