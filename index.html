@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0">
     <title>Moodinfinite v0.8.8</title>
     <link rel="icon" href="https://raw.githubusercontent.com/davidbrum25/moodinfinite/refs/heads/main/fav_icon_alternative.png" type="image/png">
-    
+
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700&family=Playfair+Display:ital,wght@0,400..900;1,400..900&family=Source+Code+Pro:ital,wght@0,400;1,400&family=Roboto:ital,wght@0,400;0,700;1,400;1,700&family=Lato:ital,wght@0,400;0,700;1,400&family=Montserrat:wght@400;700&family=Oswald:wght@400;700&family=Nunito:wght@400;700&family=Merriweather:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
@@ -158,11 +158,11 @@
             background-color: rgba(255,255,255,0.2);
             color: #fff;
         }
-        
+
         /* --- CONTENT AREA & TABS --- */
         #content-area { flex-grow: 1; position: relative; overflow: hidden; }
         .tab-content { width: 100%; height: 100%; position: absolute; top: 0; left: 0; }
-        
+
         /* --- MOODPROMPT STYLES --- */
         #moodprompt-container {
             background-color: var(--bg-page); color: var(--text-color); padding: 2rem 1rem 8rem 1rem; /* Adjusted padding for mobile */
@@ -241,7 +241,7 @@
             border-color: var(--switch-bg-checked); color: var(--switch-bg-checked);
             background: rgba(66, 158, 255, 0.1);
         }
-        
+
         /* --- MOODINFINITE CANVAS & UI --- */
         #moodinfinite-container { position: relative; width: 100%; height: 100%; }
         canvas {
@@ -249,26 +249,26 @@
         }
         canvas.grabbing { cursor: grabbing; }
         canvas.eyedropper-active { cursor: crosshair; }
-        
+
         #left-bar {
             position: absolute; top: 50%; left: 1rem; transform: translateY(-50%); z-index: 50;
             background: var(--bg-ui); padding: 0.5rem; border-radius: 0.75rem;
             box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37); display: flex; flex-direction: column; gap: 0.5rem;
             border: 1px solid var(--border-color); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
         }
-        
+
         #context-menu, #confirmation-modal-overlay, #help-modal-overlay, #toast-container, #tab-context-menu { position: fixed; }
         #tab-context-menu {
             z-index: 2200; background: var(--bg-ui); border: 1px solid var(--border-color); border-radius: .75rem;
             box-shadow: 0 8px 32px 0 rgba(0,0,0,.37); padding: .5rem; display: none; width: 180px;
             backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
         }
-        
+
         #context-menu { z-index: 2100; }
         #confirmation-modal-overlay { z-index: 2000; }
         #help-modal-overlay { z-index: 3000; }
         #toast-container { z-index: 5000; }
-        
+
         #context-menu{position:absolute;z-index:2100;background:var(--bg-ui);border:1px solid var(--border-color);border-radius:.75rem;box-shadow:0 8px 32px 0 rgba(0,0,0,.37);padding:.75rem;display:none;width:240px;backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px)}.menu-item{display:flex;align-items:center;justify-content:space-between;padding:.4rem .5rem;border-radius:.375rem;cursor:pointer;transition:background-color .2s;color:var(--text-color)}.menu-item .text-red-500{color:#ef4444;text-shadow:0 1px 2px rgba(0,0,0,.4)}.menu-item:hover{background-color:var(--bg-ui-hover)}.menu-label{font-size:.875rem}.switch{position:relative;display:inline-block;width:38px;height:22px}.switch input{opacity:0;width:0;height:0}.slider{position:absolute;cursor:pointer;top:0;left:0;right:0;bottom:0;background-color:var(--border-color);transition:.4s;border-radius:22px}.slider:before{position:absolute;content:"";height:16px;width:16px;left:3px;bottom:3px;background-color:#fff;transition:.4s;border-radius:50%;box-shadow:0 1px 3px rgba(0,0,0,.3)}input:checked+.slider{background-color:var(--switch-bg-checked)}input:checked+.slider:before{transform:translateX(16px)}.tool-button{background-color:transparent;border:1px solid transparent;border-radius:.5rem;padding:.5rem;cursor:pointer;transition:all .2s;color:var(--text-color)}.tool-button:hover{background-color:var(--bg-ui-hover)}.tool-button:disabled{opacity:.4;cursor:not-allowed;background-color:var(--bg-ui)}.tool-button.active{background-color:var(--bg-ui-hover);color:var(--switch-bg-checked)}.separator{height:1px;background-color:var(--border-color);margin:.25rem}.slider-input{-webkit-appearance:none;appearance:none;width:100%;flex-grow:1;height:8px;background:var(--border-color);border-radius:9999px;cursor:pointer}.slider-input::-webkit-slider-thumb{-webkit-appearance:none;appearance:none;width:1rem;height:1rem;background:var(--switch-bg-checked);cursor:pointer;border-radius:50%}.slider-value-box{background-color:var(--bg-ui-hover);color:var(--text-color);font-size:.75rem;padding:.25rem .5rem;border-radius:.375rem;min-width:50px;text-align:center}.color-picker-input{-webkit-appearance:none;-moz-appearance:none;appearance:none;width:2rem;height:2rem;background-color:transparent;border:none;cursor:pointer;padding:0;border-radius:.375rem;overflow:hidden}.color-picker-input::-webkit-color-swatch{border-radius:.375rem;border:1px solid var(--border-color)}.color-picker-input::-moz-color-swatch{border-radius:.375rem;border:1px solid var(--border-color)}
         #selection-toolbar{position:absolute;z-index:1001;background:var(--bg-ui);padding:.35rem;border-radius:.75rem;box-shadow:0 8px 32px 0 rgba(0,0,0,.37);display:none;gap:.35rem;border:1px solid var(--border-color);transform:translate(-50%,10px);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px)}.selection-tool-btn{background-color:transparent;border:none;border-radius:.375rem;padding:.4rem;cursor:pointer;color:var(--text-color);transition:all .2s;display:flex;align-items:center;justify-content:center}.selection-tool-btn:hover{background-color:var(--bg-ui-hover)}.selection-tool-btn.active{background-color:var(--bg-ui-hover);color:var(--switch-bg-checked)}.selection-tool-btn.pinned{color:#f59e0b}.selection-tool-btn .text-red-500{color:#ef4444}.selection-tool-select{background-color:transparent;border:none;border-radius:.375rem;padding:.4rem;cursor:pointer;color:var(--text-color);font-family:'Inter',sans-serif;font-size:.8rem;outline:0;-webkit-appearance:none;-moz-appearance:none;appearance:none}.selection-tool-select:hover{background-color:var(--bg-ui-hover)}.selection-tool-select option{background-color:var(--bg-ui);color:var(--text-color);font-weight:400;font-style:normal}#text-tools-container,#grid-tools-container,#measure-tools-container{display:none;align-items:center;gap:.35rem;border-right:1px solid var(--border-color);padding-right:.35rem;margin-right:.35rem}#grid-tools-container .grid-input{background-color:transparent;border:1px solid transparent;color:var(--text-color);width:45px;font-size:.8rem;border-radius:.25rem;padding:.2rem;text-align:center}#grid-tools-container .grid-input:hover{background-color:var(--bg-ui-hover)}#text-editor{position:absolute;z-index:1002;border:none;outline:0;padding:10px;margin:0;font-family:'Inter',sans-serif;resize:none;overflow:hidden;box-sizing:border-box;line-height:1.4}.flex{display:flex}.items-center{align-items:center}.gap-2{gap:.5rem}.border-t{border-top-width:1px}.my-2{margin-top:.5rem;margin-bottom:.5rem}
         #confirmation-modal-overlay{top:0;left:0;width:100%;height:100%;background-color:rgba(0,0,0,.5);display:none;align-items:center;justify-content:center;backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px)}#confirmation-modal{background:var(--bg-ui);color:var(--text-color);padding:1.5rem 2rem;border-radius:1rem;border:1px solid var(--border-color);box-shadow:0 8px 32px 0 rgba(0,0,0,.37);text-align:center;backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px)}#confirmation-modal h2{margin:0 0 .5rem;font-size:1.125rem;color:var(--text-color-strong)}#confirmation-modal p{margin:0 0 1.5rem;font-size:.875rem;color:var(--text-color-light);max-width:280px}.modal-buttons{display:flex;gap:.75rem;justify-content:center}.modal-button{padding:.5rem 1rem;border:1px solid transparent;border-radius:.375rem;font-size:.875rem;font-weight:500;cursor:pointer;transition:all .2s ease}.modal-button.confirm{background-color:#ef4444;color:#fff;border-color:transparent}.modal-button.confirm:hover{background-color:#dc2626}.modal-button.cancel{background-color:var(--bg-ui-hover);color:var(--text-color);border-color:var(--border-color)}.modal-button.cancel:hover{opacity:.8}
@@ -278,7 +278,7 @@
         #help-modal-overlay{top:0;left:0;width:100%;height:100%;background-color:rgba(0,0,0,.6);display:none;align-items:center;justify-content:center;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}#help-modal{background:var(--bg-ui);color:var(--text-color);padding:2rem 3rem;border-radius:1rem;border:1px solid var(--border-color);box-shadow:0 8px 32px 0 rgba(0,0,0,.37);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);width:90%;max-width:800px;height:80vh;position:relative;overflow:hidden;display:flex;flex-direction:column}#close-help-btn{position:absolute;top:1rem;right:1rem;background:transparent;border:none;color:var(--text-color-light);font-size:2rem;cursor:pointer;line-height:1}#help-modal h2{margin:0 0 1rem;font-size:1.5rem;color:var(--text-color-strong);text-align:center}.help-content{overflow-y:auto;padding-right:1rem}.help-content h3{color:var(--text-color-strong);margin-top:1.5rem;margin-bottom:.5rem;border-bottom:1px solid var(--border-color);padding-bottom:.25rem}.help-content p,.help-content li{color:var(--text-color);font-size:.9rem;line-height:1.6}.help-content ul{list-style-type:none;padding-left:0}.help-content li{padding-left:1.5rem;position:relative;margin-bottom:.5rem}.help-content li::before{content:'•';color:var(--switch-bg-checked);position:absolute;left:0}.help-content strong{color:var(--text-color-strong);font-weight:700}
         .footer-btn{background-color:var(--bg-ui);color:var(--text-color);width:25px;height:25px;border-radius:50%;display:flex;align-items:center;justify-content:center;border:1px solid var(--border-color);box-shadow:0 8px 32px 0 rgba(0,0,0,.37);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);transition:all .3s ease;text-decoration:none}.footer-btn:hover{transform:scale(1.1);box-shadow:0 12px 40px 0 rgba(0,0,0,.45);color:var(--switch-bg-checked)}
         #toast-container{bottom:1.5rem;right:1.5rem;display:flex;flex-direction:column;gap:.75rem;align-items:flex-end}.toast-notification{background:var(--bg-ui);color:var(--text-color);padding:.75rem 1.25rem;border-radius:.75rem;border:1px solid var(--border-color);box-shadow:0 8px 32px 0 rgba(0,0,0,.37);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);opacity:0;transform:translateX(100%);animation:slideIn .3s forwards,fadeOut .3s forwards 2.7s;display:flex;align-items:center;gap:.5rem}.toast-notification.success .icon{color:#4ade80}.toast-notification.error .icon{color:#f87171}.toast-notification .icon{width:20px;height:20px}@keyframes slideIn{to{opacity:1;transform:translateX(0)}}@keyframes fadeOut{from{opacity:1;transform:translateX(0)}to{opacity:0;transform:translateX(100%)}}
-        
+
         /* --- MOBILE TABS POPUP --- */
         #mobile-tabs-btn {
             display: none; /* Hidden by default */
@@ -353,7 +353,7 @@
 
             #context-menu { width: 220px; padding: .5rem; }
             .menu-label { font-size: .8rem; }
-            
+
             #selection-toolbar {
                 padding: .5rem;
                 gap: .25rem;
@@ -364,11 +364,11 @@
                 transform: translate(-50%, 15px); /* Add more space from item */
             }
             .selection-tool-btn { padding: .5rem; }
-            
+
             #help-modal { padding: 1.5rem; width: 95%; height: 85vh; }
             #help-modal h2 { font-size: 1.25rem; }
             .help-content p, .help-content li { font-size: .85rem; }
-            
+
             #footer-container {
                 /* Adjust footer to not overlap with the bottom toolbar */
                 bottom: calc(4.5rem + var(--safe-area-inset-bottom, 0rem));
@@ -376,7 +376,7 @@
                 gap: .5rem;
             }
             #version-info { display: none; }
-            
+
             #toast-container {
                 /* Adjust toasts to not overlap with the bottom toolbar */
                 bottom: calc(5rem + var(--safe-area-inset-bottom, 0rem));
@@ -388,7 +388,7 @@
                 width: 100%;
                 max-width: 400px;
             }
-            
+
             /* Responsive prompt cards */
             .prompt-card { padding: 1rem; }
             .prompt-header { flex-direction: column; align-items: stretch; gap: 1rem; }
@@ -411,7 +411,7 @@
             <img src="https://raw.githubusercontent.com/davidbrum25/moodinfinite/refs/heads/main/fav_icon_alternative.png" alt="Logo" style="width: 24px; height: 24px;">
         </div>
         <div style="width: 1px; background-color: var(--border-color); margin: 8px 4px; align-self: stretch;"></div>
-        
+
         <button id="load-project-btn" title="Open Project (Ctrl+O)" class="tab-add-btn">
             <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>
         </button>
@@ -427,7 +427,7 @@
             <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>
         </button>
         <div style="width: 1px; background-color: var(--border-color); margin: 8px 4px; align-self: stretch;"></div>
-        
+
         <div class="tabs-list-container">
             <div class="scroll-indicator left"></div>
             <div class="tabs-list" id="tabs-list"></div>
@@ -456,7 +456,7 @@
     <div id="content-area">
         <div id="moodinfinite-container" class="tab-content">
             <canvas id="moodboard-canvas"></canvas>
-            
+
             <textarea id="text-editor" style="display: none;"></textarea>
             <div id="left-bar">
                  <div id="toolbar-color-picker-container"><input type="color" id="toolbar-accent-color-picker" class="color-picker-input" title="Accent Color"></div><button id="eyedropper-btn" title="Eyedropper (E)" class="tool-button"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-eyedropper" viewBox="0 0 16 16"><path d="M13.354.646a1.207 1.207 0 0 0-1.708 0L8.5 3.793l-.646-.647a.5.5 0 1 0-.708.708L8.293 5l-7.147 7.146A.5.5 0 0 0 1 12.5v1.793l-.854.853a.5.5 0 1 0 .708.707L1.707 15H3.5a.5.5 0 0 0 .354-.146L11 7.707l1.146 1.147a.5.5 0 0 0 .708-.708l-.647-.646 3.147-3.146a1.207 1.207 0 0 0 0-1.708zM2 12.707l7-7L10.293 7l-7 7H2z"/></svg></button><div class="separator"></div><button id="add-image-btn" title="Add Image (I)" class="tool-button"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 15 9 5 19"></polyline></svg></button><div class="separator"></div><button id="select-tool-btn" title="Select (A)" class="tool-button active"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3l7.07 16.97 2.51-7.39 7.39-2.51L3 3z"></path><path d="M13 13l6 6"></path></svg></button><button id="add-text-btn" title="Add Text (T)" class="tool-button"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 7 4 4 20 4 20 7"></polyline><line x1="9" y1="20" x2="15" y2="20"></line><line x1="12" y1="4" x2="12" y2="20"></line></svg></button><button id="draw-btn" title="Draw (D)" class="tool-button"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19l7-7 3 3-7 7-3-3z"></path><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"></path><path d="M2 2l7.586 7.586"></path></svg></button><button id="add-arrow-btn" title="Add Arrow (Shift+A)" class="tool-button"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg></button><button id="add-box-btn" title="Add Box (B)" class="tool-button"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect></svg></button><button id="add-circle-btn" title="Add Circle (C)" class="tool-button"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle></svg></button><button id="add-measure-btn" title="Measure (M)" class="tool-button"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.19 5.81l-1.41-1.41a2 2 0 0 0-2.83 0L3.12 18.23a2 2 0 0 0 0 2.83l1.41 1.41a2 2 0 0 0 2.83 0L21.19 8.64a2 2 0 0 0 0-2.83z"></path><path d="m18 9 2-2"></path><path d="m2.12 21.88 5.66-5.66"></path><path d="m4.95 19.05 2.12-2.12"></path><path d="m10.58 13.41 2.12-2.12"></path></svg></button><button id="add-grid-btn" title="Add Grid (Alt+G)" class="tool-button"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="3" y1="9" x2="21" y2="9"></line><line x1="3" y1="15" x2="21" y2="15"></line><line x1="9" y1="3" x2="9" y2="21"></line><line x1="15" y1="3" x2="15" y2="21"></line></svg></button><div class="separator"></div><button id="align-btn" title="Auto Align Selection (Ctrl+Shift+A)" class="tool-button" disabled><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg></button>
@@ -476,14 +476,14 @@
                         <option value="in">Inches (in)</option>
                     </select>
                 </div>
-                <div id="text-tools-container"><select id="font-family-select" class="selection-tool-select" title="Font Family"><option value="Inter">Inter</option><option value="Roboto">Roboto</option><option value="Lato">Lato</option><option value="Montserrat">Montserrat</option><option value="Oswald">Oswald</option><option value="Nunito">Nunito</option><option value="Merriweather">Merriweather</option><option value="Playfair Display">Playfair</option><option value="Source Code Pro">Code</option></select><button id="text-align-left-btn" class="selection-tool-btn" title="Align Left"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="17" y1="10" x2="3" y2="10"></line><line x1="21" y1="6" x2="3" y2="6"></line><line x1="17" y1="14" x2="3" y2="14"></line><line x1="21" y1="18" x2="3" y2="18"></line></svg></button><button id="text-align-center-btn" class="selection-tool-btn" title="Align Center"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="10" x2="6" y2="10"></line><line x1="21" y1="6" x2="3" y2="6"></line><line x1="18" y1="14" x2="6" y2="14"></line><line x1="21" y1="18" x2="3" y2="18"></line></svg></button><button id="text-align-right-btn" class="selection-tool-btn" title="Align Right"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="21" y1="10" x2="7" y2="10"></line><line x1="21" y1="6" x2="3" y2="6"></line><line x1="21" y1="14" x2="7" y2="14"></line><line x1="21" y1="18" x2="3" y2="18"></line></svg></button><button id="text-style-bold-btn" class="selection-tool-btn" title="Bold"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 4h8a4 4 0 0 1 4 4 4 4 0 0 1-4 4H6z"></path><path d="M6 12h9a4 4 0 0 1 4 4 4 4 0 0 1-4 4H6z"></path></svg></button><button id="text-style-italic-btn" class="selection-tool-btn" title="Italic"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="4" x2="10" y2="4"></line><line x1="14" y1="20" x2="5" y2="20"></line><line x1="15" y1="4" x2="9" y2="20"></line></svg></button></div><div id="grid-tools-container"><label for="grid-rows-input" class="selection-tool-btn" title="Rows"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg></label><input type="number" id="grid-rows-input" class="grid-input" min="1"><label for="grid-cols-input" class="selection-tool-btn" title="Columns"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="3" x2="12" y2="21"></line><line x1="6" y1="3" x2="6" y2="21"></line><line x1="18" y1="3" x2="18" y2="21"></line></svg></label><input type="number" id="grid-cols-input" class="grid-input" min="1"></div><button id="toggle-box-style-btn" class="selection-tool-btn" title="Toggle Box Style"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect></svg></button><button id="group-btn" class="selection-tool-btn" title="Group (Ctrl+G)"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="12" height="12" rx="2" ry="2"></rect><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"></path></svg></button><button id="ungroup-btn" class="selection-tool-btn" title="Ungroup (Ctrl+Shift+G)"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="12" height="12" rx="2" ry="2" stroke-dasharray="2 2"></rect><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2v2"></path></svg></button><button id="bring-front-btn" class="selection-tool-btn" title="Bring to Front (Home)"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M21 21V8a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v13"/></svg></button><button id="send-back-btn" class="selection-tool-btn" title="Send to Back (End)"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V4a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-1"/><path d="M8 22v-4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v4"/></svg></button><button id="scale-btn" class="selection-tool-btn" title="Scale (S)"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 21l-6-6m6 6v-4m0 4h-4"></path><path d="M3 3l6 6m-6-6v4m0-4h4"></path></svg></button><button id="rotate-btn" class="selection-tool-btn" title="Rotate (R)"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 4v6h-6"></path><path d="M1 20v-6h6"></path><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg></button><button id="flip-horizontal-btn" class="selection-tool-btn" title="Flip Horizontal (H)"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="8 18 12 14 8 10"></polyline><polyline points="16 18 12 14 16 10"></polyline><line x1="12" y1="3" x2="12" y2="21"></line></svg></button><button id="flip-vertical-btn" class="selection-tool-btn" title="Flip Vertical (V)"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 16 14 12 10 16"></polyline><polyline points="18 8 14 12 10 8"></polyline><line x1="21" y1="12" x2="3" y2="12"></line></svg></button><button id="pin-btn" class="selection-tool-btn" title="Pin (P)"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15.05 5A5 5 0 0 1 19 8.95M15.05 1A9 9 0 0 1 23 8.94m-1 7.05A5 5 0 0 1 18 19.05M16 13l-6 6-4-4-6-6"></path></svg></button><button id="delete-selection-btn" class="selection-tool-btn" title="Delete (Del)"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-red-500"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg></button>
+                <div id="text-tools-container"><select id="font-family-select" class="selection-tool-select" title="Font Family"><option value="Inter">Inter</option><option value="Roboto">Roboto</option><option value="Lato">Lato</option><option value="Montserrat">Montserrat</option><option value="Oswald">Oswald</option><option value="Nunito">Nunito</option><option value="Merriweather">Merriweather</option><option value="Playfair Display">Playfair</option><option value="Source Code Pro">Code</option></select><button id="text-align-left-btn" class="selection-tool-btn" title="Align Left"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="17" y1="10" x2="3" y2="10"></line><line x1="21" y1="6" x2="3" y2="6"></line><line x1="17" y1="14" x2="3" y2="14"></line><line x1="21" y1="18" x2="3" y2="18"></line></svg></button><button id="text-align-center-btn" class="selection-tool-btn" title="Align Center"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="10" x2="6" y2="10"></line><line x1="21" y1="6" x2="3" y2="6"></line><line x1="18" y1="14" x2="6" y2="14"></line><line x1="21" y1="18" x2="3" y2="18"></line></svg></button><button id="text-align-right-btn" class="selection-tool-btn" title="Align Right"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="21" y1="10" x2="7" y2="10"></line><line x1="21" y1="6" x2="3" y2="6"></line><line x1="21" y1="14" x2="7" y2="14"></line><line x1="21" y1="18" x2="3" y2="18"></line></svg></button><button id="text-style-bold-btn" class="selection-tool-btn" title="Bold"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 4h8a4 4 0 0 1 4 4 4 4 0 0 1-4 4H6z"></path><path d="M6 12h9a4 4 0 0 1 4 4 4 4 0 0 1-4 4H6z"></path></svg></button><button id="text-style-italic-btn" class="selection-tool-btn" title="Italic"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="4" x2="10" y2="4"></line><line x1="14" y1="20" x2="5" y2="20"></line><line x1="15" y1="4" x2="9" y2="20"></line></svg></button></div><div id="grid-tools-container"><label for="grid-rows-input" class="selection-tool-btn" title="Rows"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg></label><input type="number" id="grid-rows-input" class="grid-input" min="1"><label for="grid-cols-input" class="selection-tool-btn" title="Columns"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="3" x2="12" y2="21"></line><line x1="6" y1="3" x2="6" y2="21"></line><line x1="18" y1="3" x2="18" y2="21"></line></svg></label><input type="number" id="grid-cols-input" class="grid-input" min="1"></div><button id="toggle-box-style-btn" class="selection-tool-btn" title="Toggle Box Style"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect></svg></button><button id="group-btn" class="selection-tool-btn" title="Group (Ctrl+G)"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="12" height="12" rx="2" ry="2"></rect><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"></path></svg></button><button id="ungroup-btn" class="selection-tool-btn" title="Ungroup (Ctrl+Shift+G)"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="12" height="12" rx="2" ry="2" stroke-dasharray="2 2"></rect><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2v2"></path></svg></button><button id="bring-front-btn" class="selection-tool-btn" title="Bring to Front (Home)"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M21 21V8a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v13"/></svg></button><button id="send-back-btn" class="selection-tool-btn" title="Send to Back (End)"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V4a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-1"/><path d="M8 22v-4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v4"/></svg></button><button id="scale-btn" class="selection-tool-btn" title="Scale (S)"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 21l-6-6m6 6v-4m0 4h-4"></path><path d="M3 3l6 6m-6-6v4m0-4h4"></path></svg></button><button id="rotate-btn" class="selection-tool-btn" title="Rotate (R)"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 4v6h-6"></path><path d="M1 20v-6h6"></path><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg></button><button id="reset-transform-btn" class="selection-tool-btn" title="Reset State (scale and rotation)"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 11A8.1 8.1 0 0 0 4.5 9M4 5v4h4"/><path d="M4 13a8.1 8.1 0 0 0 15.5 2m.5 4v-4h-4"/></svg></button><button id="flip-horizontal-btn" class="selection-tool-btn" title="Flip Horizontal (H)"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="8 18 12 14 8 10"></polyline><polyline points="16 18 12 14 16 10"></polyline><line x1="12" y1="3" x2="12" y2="21"></line></svg></button><button id="flip-vertical-btn" class="selection-tool-btn" title="Flip Vertical (V)"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 16 14 12 10 16"></polyline><polyline points="18 8 14 12 10 8"></polyline><line x1="21" y1="12" x2="3" y2="12"></line></svg></button><button id="pin-btn" class="selection-tool-btn" title="Pin (P)"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15.05 5A5 5 0 0 1 19 8.95M15.05 1A9 9 0 0 1 23 8.94m-1 7.05A5 5 0 0 1 18 19.05M16 13l-6 6-4-4-6-6"></path></svg></button><button id="delete-selection-btn" class="selection-tool-btn" title="Delete (Del)"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-red-500"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg></button>
             </div>
         </div>
-        
+
         <div id="moodprompt-container" class="tab-content" style="display: none;">
             </div>
     </div>
-    
+
     <input type="file" id="image-input" accept="image/png, image/jpeg, image/gif, image/svg+xml, image/webp" style="display: none;" multiple>
     <input type="file" id="project-input" accept=".json, .mood" style="display: none;">
     <input type="file" id="prompt-image-input" accept="image/png, image/jpeg, image/webp" style="display: none;">
@@ -491,7 +491,7 @@
     <div id="context-menu">
         <div class="menu-item"><label class="menu-label">Colors</label><div class="flex items-center gap-2"><input type="color" id="bg-color-picker" class="color-picker-input" value="#0d0d0d" title="Background Color"><input type="color" id="accent-color-picker" class="color-picker-input" value="#429eff" title="Accent Color"><input type="color" id="grid-color-picker" class="color-picker-input" value="#f9f8f6" title="Grid Color"></div></div><div class="menu-item"><label for="drop-shadow-toggle" class="menu-label">Drop Shadow</label><label class="switch"><input type="checkbox" id="drop-shadow-toggle" checked><span class="slider"></span></label></div><div class="menu-item"><label for="show-notifications-toggle" class="menu-label">Show Notifications</label><label class="switch"><input type="checkbox" id="show-notifications-toggle" checked><span class="slider"></span></label></div><div class="border-t my-2" id="opacity-separator" style="border-color:var(--border-color);display:none"></div><div class="menu-item" id="opacity-slider-container" style="display:none"><label for="item-opacity-slider" class="menu-label">Opacity</label><div class="flex items-center gap-2" style="width:60%"><input type="range" id="item-opacity-slider" min="0.05" max="1" step="0.05" value="1" class="slider-input"><div id="item-opacity-value" class="slider-value-box">100%</div></div></div><div class="border-t my-2" style="border-color:var(--border-color)"></div><div class="menu-item"><label for="show-grid-toggle" class="menu-label">Show Grid</label><label class="switch"><input type="checkbox" id="show-grid-toggle" checked><span class="slider"></span></label></div><div class="menu-item"><label for="snap-grid-toggle" class="menu-label">Snap to Grid</label><label class="switch"><input type="checkbox" id="snap-grid-toggle" checked><span class="slider"></span></label></div><div class="menu-item"><label for="grid-opacity-slider" class="menu-label">Grid Opacity</label><div class="flex items-center gap-2" style="width:60%"><input type="range" id="grid-opacity-slider" min="0" max="1" step="0.05" value="0.05" class="slider-input"><div id="grid-opacity-value" class="slider-value-box">5%</div></div></div><div class="menu-item"><label for="grid-size-slider" class="menu-label">Grid Size</label><div class="flex items-center gap-2" style="width:60%"><input type="range" id="grid-size-slider" min="10" max="200" value="50" class="slider-input"><div id="grid-size-value" class="slider-value-box">50px</div></div></div><div class="border-t my-2" id="download-separator" style="border-color:var(--border-color);display:none"></div><div class="menu-item" id="download-image-btn" style="display:none"><span class="menu-label">Download Source</span><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg></div><div class="border-t my-2" id="delete-separator" style="border-color:var(--border-color)"></div><div class="menu-item" id="delete-item-btn"><span class="menu-label text-red-500">Delete Selected</span><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-red-500"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg></div>
     </div>
-    
+
     <div id="tab-context-menu">
         <div class="menu-item" id="rename-tab-btn"><span class="menu-label">Rename</span></div>
         <div class="menu-item" id="close-context-tab-btn"><span class="menu-label text-red-500">Close Tab</span></div>
@@ -528,7 +528,7 @@
         const promptImageInput = document.getElementById('prompt-image-input');
         const mobileTabsBtn = document.getElementById('mobile-tabs-btn');
         const mobileTabsPopup = document.getElementById('mobile-tabs-popup');
-        
+
         const leftScrollIndicator = document.querySelector('.tabs-list-container .scroll-indicator.left');
         const rightScrollIndicator = document.querySelector('.tabs-list-container .scroll-indicator.right');
 
@@ -571,7 +571,7 @@
                     id: newId,
                     type: 'moodinfinite',
                     name: `Board ${projectCount + 1}`,
-                    data: { 
+                    data: {
                         items: [],
                         cameraOffset: { x: window.innerWidth / 2, y: (window.innerHeight - 48) / 2 },
                         cameraZoom: 1,
@@ -600,7 +600,7 @@
         }
 
         function switchTab(projectId) {
-            if (activeProjectId === projectId) return; 
+            if (activeProjectId === projectId) return;
 
             if (activeProjectId) {
                 const currentProject = projects.find(p => p.id === activeProjectId);
@@ -612,12 +612,12 @@
                     currentProject.data.historyIndex = historyIndex;
                 }
             }
-            
+
             activeProjectId = projectId;
             const newActiveProject = projects.find(p => p.id === projectId);
 
-            if (!newActiveProject) return; 
-            
+            if (!newActiveProject) return;
+
             canvasBackgroundColor = newActiveProject.data.canvasBackgroundColor;
 
             if (newActiveProject.type === 'moodinfinite') {
@@ -637,15 +637,15 @@
                 moodpromptContainer.style.display = 'block';
                 renderMoodpromptView(newActiveProject);
             }
-            
-            applySettingsToUI(); 
+
+            applySettingsToUI();
             mobileTabsPopup.style.display = 'none'; // Hide popup on tab switch
 
             document.querySelectorAll('.tab-item').forEach(t => {
                 t.classList.toggle('active', t.dataset.id == projectId);
             });
         }
-        
+
         function closeTab(projectId, event) {
             if (event) event.stopPropagation();
             const index = projects.findIndex(p => p.id === projectId);
@@ -665,7 +665,7 @@
                 renderTabs();
             }
         }
-        
+
         function updateTabName(projectId, newName) {
              const project = projects.find(p => p.id === projectId);
              if (project) {
@@ -687,10 +687,10 @@
                 tab.draggable = true;
 
                 const icon = document.createElement('span');
-                icon.innerHTML = project.type === 'moodinfinite' 
+                icon.innerHTML = project.type === 'moodinfinite'
                     ? `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 15 9 5 19"></polyline></svg>`
                     : `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>`;
-                
+
                 const nameSpan = document.createElement('span');
                 nameSpan.className = 'tab-name';
                 nameSpan.textContent = project.name;
@@ -699,7 +699,7 @@
                 nameInput.type = 'text';
                 nameInput.className = 'tab-name-input';
                 nameInput.value = project.name;
-                
+
                 const closeBtn = document.createElement('button');
                 closeBtn.className = 'tab-close-btn';
                 closeBtn.innerHTML = '&times;';
@@ -709,7 +709,7 @@
                 tab.appendChild(nameSpan);
                 tab.appendChild(nameInput);
                 tab.appendChild(closeBtn);
-                
+
                 let clickTimeout = null;
                 const startEditing = () => {
                     clearTimeout(clickTimeout);
@@ -731,7 +731,7 @@
                     nameInput.style.display = 'none';
                     nameSpan.style.display = 'inline';
                 };
-                
+
                 tab.addEventListener('click', (e) => {
                     if (e.target === nameInput) return;
                     clearTimeout(clickTimeout);
@@ -741,7 +741,7 @@
                 tab.addEventListener('dblclick', (e) => {
                     if (e.target !== nameInput) { clearTimeout(clickTimeout); startEditing(); }
                 });
-                
+
                 nameInput.addEventListener('blur', finishEditing);
                 nameInput.addEventListener('keydown', e => {
                     if (e.key === 'Enter') nameInput.blur();
@@ -756,7 +756,7 @@
                     menu.dataset.tabId = project.id;
                     showAndPositionMenu(menu, e);
                 });
-                
+
                 tab.addEventListener('dragstart', (e) => {
                     e.dataTransfer.setData('text/plain', project.id.toString());
                     e.dataTransfer.effectAllowed = 'move';
@@ -772,14 +772,14 @@
             });
             setTimeout(updateScrollIndicators, 0);
         }
-        
+
         function renderMoodpromptView(project) {
             moodpromptContainer.innerHTML = '';
             const promptList = document.createElement('div');
             promptList.className = 'prompt-list';
-            
+
             project.data.prompts.forEach((prompt, index) => { promptList.appendChild(createPromptCard(project, prompt, index)); });
-            
+
             promptList.addEventListener('dragover', (e) => { e.preventDefault(); });
 
             promptList.addEventListener('drop', (e) => {
@@ -932,10 +932,10 @@
                 item.className = 'mobile-tab-item';
                 item.classList.toggle('active', project.id === activeProjectId);
 
-                const icon = project.type === 'moodinfinite' 
+                const icon = project.type === 'moodinfinite'
                     ? `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 15 9 5 19"></polyline></svg>`
                     : `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>`;
-                
+
                 item.innerHTML = `${icon} <span>${project.name}</span>`;
                 item.onclick = () => {
                     switchTab(project.id);
@@ -997,6 +997,7 @@
         const toggleBoxStyleBtn = document.getElementById('toggle-box-style-btn');
         const scaleBtn = document.getElementById('scale-btn');
         const rotateBtn = document.getElementById('rotate-btn');
+        const resetTransformBtn = document.getElementById('reset-transform-btn');
         const flipHorizontalBtn = document.getElementById('flip-horizontal-btn');
         const flipVerticalBtn = document.getElementById('flip-vertical-btn');
         const pinBtn = document.getElementById('pin-btn');
@@ -1035,7 +1036,7 @@
         const downloadSeparator = document.getElementById('download-separator');
 
         let cameraOffset, cameraZoom;
-        let items = [], selectedItems = []; 
+        let items = [], selectedItems = [];
         let historyStack, historyIndex;
 
         const MAX_ZOOM = 5, MIN_ZOOM = 0.1, SCROLL_SENSITIVITY = 0.0005;
@@ -1076,7 +1077,7 @@
             }, { offset: Number.NEGATIVE_INFINITY }).element;
         }
         function showAndPositionMenu(menu,event){menu.style.display='block';const menuWidth=menu.offsetWidth,menuHeight=menu.offsetHeight,screenWidth=window.innerWidth,screenHeight=window.innerHeight,padding=8;let left=event.clientX,top=event.clientY;if(left+menuWidth>screenWidth-padding){left=screenWidth-menuWidth-padding}if(top+menuHeight>screenHeight-padding){top=screenHeight-menuHeight-padding}left=Math.max(padding,left);top=Math.max(padding,top);menu.style.left=`${left}px`;menu.style.top=`${top}px`}
-        
+
         function saveSettings() {
             try {
                 const settings = { showGrid, snapToGrid, showDropShadow, showNotifications, gridSize, gridOpacity };
@@ -1131,7 +1132,7 @@
         function drawTextItem(e,t){e.save();const o=t.x+t.width/2,a=t.y+t.height/2;e.translate(o,a);e.rotate(t.rotation);e.scale(t.scaleX||1,t.scaleY||1);e.globalAlpha=(t.opacity??1)*.05;e.fillStyle=t.color;e.fillRect(-t.width/2,-t.height/2,t.width,t.height);e.globalAlpha=t.opacity??1;e.fillStyle=t.color;const i=t.fontStyle||'normal',r=t.fontWeight||'bold',s=t.fontFamily||'Inter';e.font=`${i} ${r} ${t.fontSize}px '${s}', sans-serif`;e.textAlign=t.textAlign||'center';e.textBaseline='middle';const n=t.text.split(' '),l=[],c='';let d=c;for(let o=0;o<n.length;o++){const a=d+n[o]+' ';if(e.measureText(a).width>t.width-20&&o>0){l.push(d.trim());d=n[o]+' '}else{d=a}}l.push(d.trim());const h=t.fontSize*1.4;let p=-l.length*h/2+h/2,m=0;if(e.textAlign==='left'){m=-t.width/2+10}else if(e.textAlign==='right'){m=t.width/2-10}l.forEach((t,o)=>{e.fillText(t,m,p+o*h)});e.restore()}
         function drawBoxItem(e,t){e.save();const o=t.x+t.width/2,a=t.y+t.height/2;e.translate(o,a);e.rotate(t.rotation);e.scale(t.scaleX||1,t.scaleY||1);if(!t.style||t.style==='fill'){e.fillStyle=t.color;e.fillRect(-t.width/2,-t.height/2,t.width,t.height)}else{e.strokeStyle=t.color;e.lineWidth=4/cameraZoom;e.strokeRect(-t.width/2,-t.height/2,t.width,t.height)}e.restore()}
         function drawCircleItem(e, t) { e.save(); const o = t.x + t.width / 2, a = t.y + t.height / 2, i = t.width / 2, r = t.height / 2; e.translate(o, a); e.rotate(t.rotation); e.scale(t.scaleX || 1, t.scaleY || 1); e.beginPath(); e.ellipse(0, 0, i, r, 0, 0, Math.PI * 2); if (!t.style || t.style === "fill") { e.fillStyle = t.color; e.fill(); } else { e.strokeStyle = t.color; e.lineWidth = 4 / cameraZoom; e.stroke(); } e.restore(); }
-        
+
         function drawMeasureItem(ctx,item){
             const PIXELS_PER_INCH=96, PIXELS_PER_CM=PIXELS_PER_INCH/2.54;
             ctx.save();
@@ -1223,7 +1224,7 @@
         function drawGridItem(e,t){e.save();const o=t.x+t.width/2,a=t.y+t.height/2;e.translate(o,a);e.rotate(t.rotation);e.scale(t.scaleX||1,t.scaleY||1);e.strokeStyle=t.color;e.lineWidth=2/cameraZoom;const i=t.width/t.cols,r=t.height/t.rows;e.beginPath();for(let o=0;o<=t.cols;o++){const a=-t.width/2+o*i;e.moveTo(a,-t.height/2);e.lineTo(a,t.height/2)}for(let o=0;o<=t.rows;o++){const a=-t.height/2+o*r;e.moveTo(-t.width/2,a);e.lineTo(t.width/2,a)}e.stroke();e.restore()}
         function drawStrokeItem(e,t){if(t.points.length<2)return;e.save();e.strokeStyle=t.color;e.lineWidth=4/cameraZoom;e.lineCap='round';e.lineJoin='round';e.beginPath();e.moveTo(t.points[0].x,t.points[0].y);for(let o=1;o<t.points.length;o++){e.lineTo(t.points[o].x,t.points[o].y)}e.stroke();e.restore()}
         function drawGroupItem(e,t){e.save();e.globalAlpha*=(t.opacity??1);const o=t.x+t.width/2,a=t.y+t.height/2;e.translate(o,a);e.rotate(t.rotation||0);e.scale(t.scaleX||1,t.scaleY||1);t.items.forEach(o=>{const a={...o,x:o.x-t.width/2,y:o.y-t.height/2};if(a.type==="arrow"||a.type==='measure'){a.startX=o.startX-t.width/2;a.startY=o.startY-t.height/2;a.endX=o.endX-t.width/2;a.endY=o.endY-t.height/2}if(a.type==="stroke"){a.points=o.points.map(e=>({x:e.x-t.width/2,y:e.y-t.height/2}))}if(o.type==="image"){e.save();const t=a.x+a.width/2,i=a.y+a.height/2;e.translate(t,i);e.rotate(a.rotation||0);e.scale(a.scaleX||1,a.scaleY||1);if(o.img&&o.img.complete)e.drawImage(o.img,-a.width/2,-a.height/2,a.width,a.height);e.restore()}else if(o.type==="arrow")drawArrow(e,a);else if(o.type==="text")drawTextItem(e,a);else if(o.type==="box")drawBoxItem(e,a);else if(o.type==='circle')drawCircleItem(e,a);else if(o.type==='measure')drawMeasureItem(e,a);else if(o.type==="stroke")drawStrokeItem(e,a);else if(o.type==="grid")drawGridItem(e,a)});e.restore()}
-        
+
         function handleKeyDown(e) {
             const activeEl = document.activeElement;
             if (currentlyEditingText || (activeEl && (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA'))) { return; }
@@ -1519,13 +1520,13 @@
                 pasteItems();
             }
         }
-        
+
         function handleDragOver(e){e.preventDefault();canvas.style.outline=`2px dashed ${accentColor}`;canvas.style.outlineOffset='-10px'}
         function handleDragLeave(e){e.preventDefault();canvas.style.outline='none'}
         function handleDrop(e){e.preventDefault();handleDragLeave(e);if(!e.dataTransfer.files)return;const t=e.dataTransfer.files[0];if(t&&(t.name.endsWith('.json')||t.name.endsWith('.mood'))){const o=new FileReader;o.onload=e=>{loadFileAsNewTab(e.target.result,t.name)};o.readAsText(t)}else{processFiles(e.dataTransfer.files,screenToWorld(getEventLocation(e)))}}
         function processFiles(e,t){Array.from(e).forEach((e,o)=>{if(!e.type.startsWith('image/'))return;const a=new FileReader;a.onload=e=>{const a=new Image;a.onload=()=>{const e=a.width/a.height,i=250,r=i/e;items.push({id:Date.now()+o,type:'image',img:a,x:t.x-i/2+o*20,y:t.y-r/2+o*20,width:i,height:r,rotation:0,isPinned:!1,opacity:1,scaleX:1,scaleY:1});bringSelectedToFront()};a.src=e.target.result};a.readAsDataURL(e)});setTimeout(saveStateForUndo,500)}
         function downloadSourceImage(){if(selectedItems.length!==1||selectedItems[0].type!=='image')return;const e=selectedItems[0],t=document.createElement('a');t.href=e.img.src;try{const e=new URL(t.href),o=e.pathname.split('/');t.download=o[o.length-1]||'source_image'}catch(e){t.download='source_image.png'}document.body.appendChild(t);t.click();document.body.removeChild(t);showToast("Source image download started.")}
-        
+
         function copyItems(e=!0){
             if(selectedItems.length===0)return;
             clipboard=selectedItems.map(e=>{
@@ -1537,7 +1538,7 @@
             internalClipboardTimestamp = Date.now();
             if(e){showToast(`${selectedItems.length} item${selectedItems.length>1?'s':''} copied.`)}
         }
-        
+
         function cutItems(){
             if(selectedItems.length===0)return;
             copyItems(!1);
@@ -1554,8 +1555,67 @@
         function moveSelectedUp(){if(selectedItems.length!==1)return;const e=selectedItems[0],t=items.findIndex(t=>t.id===e.id);if(t>-1&&t<items.length-1){[items[t],items[t+1]]=[items[t+1],items[t]];saveStateForUndo()}}
         function moveSelectedDown(){if(selectedItems.length!==1)return;const e=selectedItems[0],t=items.findIndex(t=>t.id===e.id);if(t>0){[items[t],items[t-1]]=[items[t-1],items[t]];saveStateForUndo()}}
         function toggleBoxStyle(){let e=!1;selectedItems.forEach(t=>{if(t.type==='box'||t.type==='circle'){t.style=t.style==='fill'?'outline':'fill';e=!0}});if(e){saveStateForUndo()}}
-        function flipHorizontal(){if(selectedItems.length===0)return;selectedItems.forEach(item=>{if(item.type==='arrow'||item.type==='stroke'||item.type==='measure'){const bbox=getItemBoundingBox(item);const centerX=bbox.x+bbox.width/2;if(item.type==='arrow'||item.type==='measure'){item.startX=centerX-(item.startX-centerX);item.endX=centerX-(item.endX-centerX)}else{item.points.forEach(p=>{p.x=centerX-(p.x-centerX)})}}else{item.scaleX=(item.scaleX||1)*-1}});saveStateForUndo()}
-        function flipVertical(){if(selectedItems.length===0)return;selectedItems.forEach(item=>{if(item.type==='arrow'||item.type==='stroke'||item.type==='measure'){const bbox=getItemBoundingBox(item);const centerY=bbox.y+bbox.height/2;if(item.type==='arrow'||item.type==='measure'){item.startY=centerY-(item.startY-centerY);item.endY=centerY-(item.endY-centerY)}else{item.points.forEach(p=>{p.y=centerY-(p.y-centerY)})}}else{item.scaleY=(item.scaleY||1)*-1}});saveStateForUndo()}
+        function resetItemTransform() {
+            if (selectedItems.length === 0) return;
+            selectedItems.forEach(item => {
+                if (item.isPinned) return;
+
+                // Reset rotation
+                item.rotation = 0;
+
+                // Reset scale to default
+                item.scaleX = 1;
+                item.scaleY = 1;
+            });
+            saveStateForUndo();
+        }
+        function flipHorizontal() {
+            if (selectedItems.length === 0) return;
+            selectedItems.forEach(item => {
+                if (item.isPinned) return;
+
+                if (item.type === 'group') {
+                    // For groups, flip the scaleX of the group itself
+                    item.scaleX = (item.scaleX || 1) * -1;
+                } else if (item.type === 'arrow' || item.type === 'stroke' || item.type === 'measure') {
+                    // Handle line-based items by flipping their points
+                    const bbox = getItemBoundingBox(item);
+                    const centerX = bbox.x + bbox.width / 2;
+                    if (item.type === 'arrow' || item.type === 'measure') {
+                        item.startX = centerX - (item.startX - centerX);
+                        item.endX = centerX - (item.endX - centerX);
+                    } else { // stroke
+                        item.points.forEach(p => { p.x = centerX - (p.x - centerX); });
+                    }
+                } else {
+                    // For all other items, flip their individual scaleX
+                    item.scaleX = (item.scaleX || 1) * -1;
+                }
+            });
+            saveStateForUndo();
+        }
+        function flipVertical() {
+            if (selectedItems.length === 0) return;
+            selectedItems.forEach(item => {
+                if (item.isPinned) return;
+
+                if (item.type === 'group') {
+                    item.scaleY = (item.scaleY || 1) * -1;
+                } else if (item.type === 'arrow' || item.type === 'stroke' || item.type === 'measure') {
+                    const bbox = getItemBoundingBox(item);
+                    const centerY = bbox.y + bbox.height / 2;
+                    if (item.type === 'arrow' || item.type === 'measure') {
+                        item.startY = centerY - (item.startY - centerY);
+                        item.endY = centerY - (item.endY - centerY);
+                    } else { // stroke
+                        item.points.forEach(p => { p.y = centerY - (p.y - centerY); });
+                    }
+                } else {
+                    item.scaleY = (item.scaleY || 1) * -1;
+                }
+            });
+            saveStateForUndo();
+        }
         function autoAlignSelection(){if(selectedItems.length<2)return;let e=0,t=0;selectedItems.forEach(o=>{e+=getItemBoundingBox(o).width;t+=getItemBoundingBox(o).height});const o=e/selectedItems.length,a=t/selectedItems.length,i=Math.ceil(Math.sqrt(selectedItems.length)),r=getCollectiveBoundingBox(selectedItems),s=r.x,n=r.y;selectedItems.forEach((e,t)=>{const r=Math.floor(t/i),l=t%i,c=s+l*(o+20),d=n+r*(a+20),h=c-e.x,p=d-e.y;e.x+=h;e.y+=p;if(e.type==='arrow'||e.type==='measure'){e.startX+=h;e.startY+=p;e.endX+=h;e.endY+=p}else if(e.type==='stroke'){e.points.forEach(e=>{e.x+=h;e.y+=p})}});saveStateForUndo()}
         function updateLeftBarState(){alignBtn.disabled=selectedItems.length<2}
         function getContrastColor(hex){if(hex.indexOf('#')===0){hex=hex.slice(1)}if(hex.length===3){hex=hex[0]+hex[0]+hex[1]+hex[1]+hex[2]+hex[2]}if(hex.length!==6){return'#0d0d0d'}const r=parseInt(hex.slice(0,2),16),g=parseInt(hex.slice(2,4),16),b=parseInt(hex.slice(4,6),16),yiq=((r*299)+(g*587)+(b*114))/1000;return(yiq>=128)?'#262626':'#ffffff'}
@@ -1569,7 +1629,7 @@
         function setTextFontFamily(e){if(selectedItems.length===1&&selectedItems[0].type==='text'){selectedItems[0].fontFamily=e.target.value;saveStateForUndo()}}
         function toggleTextStyleBold(){if(selectedItems.length===1&&selectedItems[0].type==='text'){const e=selectedItems[0];e.fontWeight=e.fontWeight==='bold'?'normal':'bold';updateSelectionToolbar();saveStateForUndo()}}
         function toggleTextStyleItalic(){if(selectedItems.length===1&&selectedItems[0].type==='text'){const e=selectedItems[0];e.fontStyle=e.fontStyle==='italic'?'normal':'italic';updateSelectionToolbar();saveStateForUndo()}}
-        function updateSelectionToolbar(){const e=selectedItems.some(item=>item.type==='box'||item.type==='circle'),t=selectedItems.length>0,o=selectedItems.length>0,a=selectedItems.length>0,i=selectedItems.length>1,r=selectedItems.length===1&&selectedItems[0].type==='group',s=selectedItems.length===1&&selectedItems[0].type==='text',n=selectedItems.length===1&&selectedItems[0].type==='grid',l=selectedItems.length===1&&selectedItems[0].type==='measure',c=selectedItems.length===1&&(selectedItems[0].type==='box'||selectedItems[0].type==='circle'||selectedItems[0].type==='text'||selectedItems[0].type==='measure');if(selectedItems.length>0){selectionToolbar.style.display='flex';textToolsContainer.style.display=s?'flex':'none';gridToolsContainer.style.display=n?'flex':'none';measureToolsContainer.style.display=l?'flex':'none';itemColorToolContainer.style.display=c?'flex':'none';if(s){const e=selectedItems[0];fontFamilySelect.value=e.fontFamily||'Inter';[textAlignLeftBtn,textAlignCenterBtn,textAlignRightBtn].forEach(e=>e.classList.remove('active'));if(e.textAlign==='left')textAlignLeftBtn.classList.add('active');else if(e.textAlign==='right')textAlignRightBtn.classList.add('active');else textAlignCenterBtn.classList.add('active');textStyleBoldBtn.classList.toggle('active',e.fontWeight==='bold');textStyleItalicBtn.classList.toggle('active',e.fontStyle==='italic')}if(n){const e=selectedItems[0];gridRowsInput.value=e.rows;gridColsInput.value=e.cols}if(l){measureUnitSelect.value=selectedItems[0].unit||'px'}if(c){itemColorPicker.value=selectedItems[0].color || accentColor}toggleBoxStyleBtn.style.display=e?'flex':'none';scaleBtn.style.display=t?'flex':'none';rotateBtn.style.display=t?'flex':'none';flipHorizontalBtn.style.display=t?'flex':'none';flipVerticalBtn.style.display=t?'flex':'none';pinBtn.style.display=o?'flex':'none';bringFrontBtn.style.display=a?'flex':'none';sendBackBtn.style.display=a?'flex':'none';groupBtn.style.display=i?'flex':'none';ungroupBtn.style.display=r?'flex':'none';scaleBtn.classList.toggle('active',activeGizmo==='scale');rotateBtn.classList.toggle('active',activeGizmo==='rotate');pinBtn.classList.toggle('pinned',o&&selectedItems.every(e=>e.isPinned))}else{selectionToolbar.style.display='none';itemColorToolContainer.style.display='none';textToolsContainer.style.display='none';gridToolsContainer.style.display='none';measureToolsContainer.style.display='none';activeGizmo=null}}
+        function updateSelectionToolbar(){const e=selectedItems.some(item=>item.type==='box'||item.type==='circle'),t=selectedItems.length>0,o=selectedItems.length>0,a=selectedItems.length>0,i=selectedItems.length>1,r=selectedItems.length===1&&selectedItems[0].type==='group',s=selectedItems.length===1&&selectedItems[0].type==='text',n=selectedItems.length===1&&selectedItems[0].type==='grid',l=selectedItems.length===1&&selectedItems[0].type==='measure',c=selectedItems.length===1&&(selectedItems[0].type==='box'||selectedItems[0].type==='circle'||selectedItems[0].type==='text'||selectedItems[0].type==='measure');if(selectedItems.length>0){selectionToolbar.style.display='flex';textToolsContainer.style.display=s?'flex':'none';gridToolsContainer.style.display=n?'flex':'none';measureToolsContainer.style.display=l?'flex':'none';itemColorToolContainer.style.display=c?'flex':'none';if(s){const e=selectedItems[0];fontFamilySelect.value=e.fontFamily||'Inter';[textAlignLeftBtn,textAlignCenterBtn,textAlignRightBtn].forEach(e=>e.classList.remove('active'));if(e.textAlign==='left')textAlignLeftBtn.classList.add('active');else if(e.textAlign==='right')textAlignRightBtn.classList.add('active');else textAlignCenterBtn.classList.add('active');textStyleBoldBtn.classList.toggle('active',e.fontWeight==='bold');textStyleItalicBtn.classList.toggle('active',e.fontStyle==='italic')}if(n){const e=selectedItems[0];gridRowsInput.value=e.rows;gridColsInput.value=e.cols}if(l){measureUnitSelect.value=selectedItems[0].unit||'px'}if(c){itemColorPicker.value=selectedItems[0].color || accentColor}toggleBoxStyleBtn.style.display=e?'flex':'none';scaleBtn.style.display=t?'flex':'none';rotateBtn.style.display=t?'flex':'none';resetTransformBtn.style.display = t ? 'flex' : 'none';flipHorizontalBtn.style.display=t?'flex':'none';flipVerticalBtn.style.display=t?'flex':'none';pinBtn.style.display=o?'flex':'none';bringFrontBtn.style.display=a?'flex':'none';sendBackBtn.style.display=a?'flex':'none';groupBtn.style.display=i?'flex':'none';ungroupBtn.style.display=r?'flex':'none';scaleBtn.classList.toggle('active',activeGizmo==='scale');rotateBtn.classList.toggle('active',activeGizmo==='rotate');pinBtn.classList.toggle('pinned',o&&selectedItems.every(e=>e.isPinned))}else{selectionToolbar.style.display='none';itemColorToolContainer.style.display='none';textToolsContainer.style.display='none';gridToolsContainer.style.display='none';measureToolsContainer.style.display='none';activeGizmo=null}}
         function updateToolbarPosition(){if(selectedItems.length>0){const e=getCollectiveBoundingBox(selectedItems),t=worldToScreen({x:e.x+e.width/2,y:e.y+e.height});selectionToolbar.style.left=`${t.x}px`;selectionToolbar.style.top=`${t.y}px`}}
         function editText(e){currentlyEditingText=e;e.isHidden=!0;const t=worldToScreen({x:e.x,y:e.y}),o=e.width*cameraZoom;Object.assign(textEditor.style,{display:'block',left:`${t.x}px`,top:`${t.y}px`,width:`${o}px`,height:'auto',transform:`rotate(${e.rotation}rad)`,transformOrigin:'top left',color:e.color,backgroundColor:hexToRgba(e.color,.1),fontSize:`${e.fontSize*cameraZoom}px`,fontFamily:e.fontFamily||'Inter',textAlign:e.textAlign||'center',fontWeight:e.fontWeight||'bold',fontStyle:e.fontStyle||'normal'});textEditor.value=e.text==="Type..."?"":e.text;textEditor.focus();autoResizeTextEditor();selectedItems=[];updateToolbarPosition();updateLeftBarState()}
         function finishEditingText(){if(currentlyEditingText){currentlyEditingText.text=textEditor.value.trim()||"Type...";const e=currentlyEditingText,t=e.fontStyle||'normal',o=e.fontWeight||'bold',a=e.fontFamily||'Inter';ctx.font=`${t} ${o} ${e.fontSize}px '${a}', sans-serif`;const i=textEditor.value.split('\n');let r=0;i.forEach(e=>{const t=ctx.measureText(e);if(t.width>r)r=t.width});currentlyEditingText.width=r+20;currentlyEditingText.height=textEditor.scrollHeight/cameraZoom;currentlyEditingText.isHidden=!1;selectedItems=[currentlyEditingText];saveStateForUndo();currentlyEditingText=null}textEditor.style.display='none'}
@@ -1582,7 +1642,7 @@
         function ungroupSelectedItems(){const e=selectedItems.filter(e=>e.type==='group');if(e.length===0)return;saveStateForUndo();const t=[],o=new Set;e.forEach(e=>{o.add(e.id);const a=e.x+e.width/2,i=e.y+e.height/2,r=Math.cos(e.rotation),s=Math.sin(e.rotation);e.items.forEach(o=>{const n=JSON.parse(JSON.stringify(o));reattachImages(o,n);if(n.type==='arrow'||n.type==='stroke'||n.type==='measure'){const t=(t,l)=>{const c=e.x+t.x,d=e.y+t.y,h=c-a,p=d-i,m=h*r-p*s,u=h*s+p*r;return{x:a+m,y:i+u}};if(n.type==='arrow'||n.type==='measure'){const e=t({x:o.startX-o.x,y:o.startY-o.y}),a=t({x:o.endX-o.x,y:o.endY-o.y});n.startX=e.x;n.startY=e.y;n.endX=a.x;n.endY=a.y}else{n.points=o.points.map(e=>t({x:e.x-o.x,y:e.y-o.y}))}}const l=o.x+o.width/2,c=o.y+o.height/2,d=l-e.width/2,h=c-e.height/2,p=d*r-h*s,m=d*s+h*r,u=a+p,g=i+m;n.x=u-o.width/2;n.y=g-o.height/2;n.rotation=(o.rotation||0)+e.rotation;items.push(n);t.push(n)})});items=items.filter(e=>!o.has(e.id));selectedItems=t;updateSelectionToolbar();updateLeftBarState()}
         function buildPaletteMenu(){palettePanel.innerHTML='';colorPalettes.forEach(palette=>{const option=document.createElement('div');option.className='palette-option';option.innerHTML=`<div class="palette-color" style="background-color: ${palette.bg}"></div><div class="palette-color" style="background-color: ${palette.accent}"></div><div class="palette-color" style="background-color: ${palette.grid}"></div>`;option.addEventListener('click',()=>{const activeProject=projects.find(p=>p.id===activeProjectId);if(activeProject&&(activeProject.type==='moodinfinite'||activeProject.type==='moodprompt')){activeProject.data.canvasBackgroundColor=palette.bg;canvasBackgroundColor=palette.bg;if(activeProject.type==='moodinfinite'){activeProject.data.accentColor=palette.accent;activeProject.data.gridColor=palette.grid;accentColor=palette.accent;gridColor=palette.grid}updateUIColors()}palettePanel.classList.remove('open')});palettePanel.appendChild(option)})}
         function showToast(e,t='success'){if(!showNotifications)return;const o=document.getElementById('toast-container');if(!o)return;const a=document.createElement('div');a.className=`toast-notification ${t}`;let i='';if(t==='success'){i=`<svg xmlns="http://www.w3.org/2000/svg" class="icon" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" /></svg>`}else if(t==='error'){i=`<svg xmlns="http://www.w3.org/2000/svg" class="icon" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd" /></svg>`}a.innerHTML=`${i}<span>${e}</span>`;o.appendChild(a);setTimeout(()=>{a.remove()},3e3)}
-        
+
         let lastTap = 0, longPressTimer = null, isPinching = false, initialPinchDistance = null, lastPinchCenter = null, initialCameraZoomOnPinch = 1;
         function onTouchStart(e) {
             e.preventDefault(); clearTimeout(longPressTimer);
@@ -1590,7 +1650,7 @@
                 const currentTime = new Date().getTime(); const tapLength = currentTime - lastTap;
                 if (tapLength < 300 && tapLength > 0) { onDoubleClick(normalizeTouchEvent(e)); lastTap = 0; return; }
                 lastTap = currentTime;
-                longPressTimer = setTimeout(() => { const contextEvent = { preventDefault: () => {}, ...normalizeTouchEvent(e) }; onContextMenu(contextEvent); if (navigator.vibrate) { navigator.vibrate(50); } }, 750); 
+                longPressTimer = setTimeout(() => { const contextEvent = { preventDefault: () => {}, ...normalizeTouchEvent(e) }; onContextMenu(contextEvent); if (navigator.vibrate) { navigator.vibrate(50); } }, 750);
                 onMouseDown(normalizeTouchEvent(e));
             } else if (e.touches.length === 2) {
                 isDrawing = false; isMovingItems = false; isTransforming = false; isTransformingArrow = false; isSelectingBox = false; isPinching = true;
@@ -1598,7 +1658,7 @@
             }
         }
         function onTouchMove(e) {
-            e.preventDefault(); clearTimeout(longPressTimer); 
+            e.preventDefault(); clearTimeout(longPressTimer);
             if (e.touches.length === 1 && !isPinching) { onMouseMove(normalizeTouchEvent(e));
             } else if (e.touches.length === 2 && isPinching) {
                 const center = getPinchCenter(e);
@@ -1611,11 +1671,11 @@
             }
         }
         function onTouchEnd(e) {
-            e.preventDefault(); clearTimeout(longPressTimer); 
+            e.preventDefault(); clearTimeout(longPressTimer);
             if (e.touches.length < 2) { isPinching = false; initialPinchDistance = null; lastPinchCenter = null; }
             if (e.touches.length === 0) { onMouseUp(normalizeTouchEvent(e)); }
         }
-        
+
         function getPinchDistance(e){const t=e.touches[0],o=e.touches[1];return Math.hypot(t.clientX-o.clientX,t.clientY-o.clientY)}
         function getPinchCenter(e){const t=e.touches[0],o=e.touches[1];return{x:(t.clientX+o.clientX)/2,y:(t.clientY+o.clientY)/2}}
         function normalizeTouchEvent(e){let t;if(e.touches&&e.touches.length>0){t=e.touches[0]}else if(e.changedTouches&&e.changedTouches.length>0){t=e.changedTouches[0]}else{return{clientX:0,clientY:0,button:0,target:e.target}}return{clientX:t.clientX,clientY:t.clientY,button:0,target:e.target}}
