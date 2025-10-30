@@ -1524,7 +1524,39 @@
         function handleDragOver(e){e.preventDefault();canvas.style.outline=`2px dashed ${accentColor}`;canvas.style.outlineOffset='-10px'}
         function handleDragLeave(e){e.preventDefault();canvas.style.outline='none'}
         function handleDrop(e){e.preventDefault();handleDragLeave(e);if(!e.dataTransfer.files)return;const t=e.dataTransfer.files[0];if(t&&(t.name.endsWith('.json')||t.name.endsWith('.mood'))){const o=new FileReader;o.onload=e=>{loadFileAsNewTab(e.target.result,t.name)};o.readAsText(t)}else{processFiles(e.dataTransfer.files,screenToWorld(getEventLocation(e)))}}
-        function processFiles(e,t){Array.from(e).forEach((e,o)=>{if(!e.type.startsWith('image/'))return;const a=new FileReader;a.onload=e=>{const a=new Image;a.onload=()=>{const e=a.width/a.height,i=250,r=i/e;items.push({id:Date.now()+o,type:'image',img:a,x:t.x-i/2+o*20,y:t.y-r/2+o*20,width:i,height:r,rotation:0,isPinned:!1,opacity:1,scaleX:1,scaleY:1});bringSelectedToFront()};a.src=e.target.result};a.readAsDataURL(e)});setTimeout(saveStateForUndo,500)}
+        function processFiles(e, t) {
+            Array.from(e).forEach((e, o) => {
+                if (!e.type.startsWith('image/')) return;
+                const a = new FileReader;
+                a.onload = e => {
+                    const a = new Image;
+                    a.onload = () => {
+                        const e = a.width / a.height, i = 250, r = i / e;
+                        const newItem = {
+                            id: Date.now() + o,
+                            type: 'image',
+                            img: a,
+                            x: t.x - i / 2 + o * 20,
+                            y: t.y - r / 2 + o * 20,
+                            width: i,
+                            height: r,
+                            originalWidth: i,
+                            originalHeight: r,
+                            rotation: 0,
+                            isPinned: !1,
+                            opacity: 1,
+                            scaleX: 1,
+                            scaleY: 1
+                        };
+                        items.push(newItem);
+                        bringSelectedToFront()
+                    };
+                    a.src = e.target.result
+                };
+                a.readAsDataURL(e)
+            });
+            setTimeout(saveStateForUndo, 500)
+        }
         function downloadSourceImage(){if(selectedItems.length!==1||selectedItems[0].type!=='image')return;const e=selectedItems[0],t=document.createElement('a');t.href=e.img.src;try{const e=new URL(t.href),o=e.pathname.split('/');t.download=o[o.length-1]||'source_image'}catch(e){t.download='source_image.png'}document.body.appendChild(t);t.click();document.body.removeChild(t);showToast("Source image download started.")}
 
         function copyItems(e=!0){
@@ -1566,6 +1598,13 @@
                 // Reset scale to default
                 item.scaleX = 1;
                 item.scaleY = 1;
+
+                if (item.originalWidth) {
+                    item.width = item.originalWidth;
+                }
+                if (item.originalHeight) {
+                    item.height = item.originalHeight;
+                }
             });
             saveStateForUndo();
         }
