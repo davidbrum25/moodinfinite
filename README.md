@@ -1,4 +1,4 @@
-# Moodinfinite v0.8.7
+# Moodinfinite v0.8.9
 
 <div align="center">
   <img src="https://github.com/davidbrum25/moodinfinite/blob/main/_branding/_png/moodinfinite__Logotipo_alpha.png?raw=true" alt="Moodinfinite Logo" width="400"/>
@@ -7,6 +7,17 @@
 <p align="center">
   <strong>A versatile, infinite digital canvas for your ideas. Create moodboards, brainstorm, organize thoughts, and now, craft the perfect AI prompts.</strong>
 </p>
+
+---
+
+## ✨ What's New in Version 0.8.9
+
+This update brings several bug fixes and usability improvements.
+
+*   **Visual Tab Connection:** Eliminated the visual gap between the top bar tabs and the canvas, ensuring a seamless connection.
+*   **Mobile Tab Deletion:** Added a delete button to each board in the mobile tabs popup, allowing for easy removal of open tabs on mobile devices.
+*   **Intuitive Scaling:** Inverted the scaling behavior: now, scaling maintains the aspect ratio by default, and holding `Shift` enables free-form scaling.
+*   **Enhanced Reset Button:** The reset button for selected elements now fully resets position (to the center of the view), rotation, and flip state. (Note: Resetting to original size is not yet supported as original dimensions are not stored.)
 
 ---
 
