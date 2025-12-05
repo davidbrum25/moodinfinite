@@ -18,6 +18,7 @@ This update brings several bug fixes and usability improvements.
 *   **Mobile Tab Deletion:** Added a delete button to each board in the mobile tabs popup, allowing for easy removal of open tabs on mobile devices.
 *   **Intuitive Scaling:** Inverted the scaling behavior: now, scaling maintains the aspect ratio by default, and holding `Shift` enables free-form scaling.
 *   **Enhanced Reset Button:** The reset button for selected elements now fully resets position (to the center of the view), rotation, and flip state. (Note: Resetting to original size is not yet supported as original dimensions are not stored.)
+*   **Codebase Refactoring:** The application structure has been modernized by separating the single `index.html` file into modular `index.html`, `style.css`, and `script.js` files, improving maintainability and organization.
 
 ---
 
