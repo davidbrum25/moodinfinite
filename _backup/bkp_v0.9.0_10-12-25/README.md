@@ -1,4 +1,4 @@
-# Moodinfinite v0.9.1
+# Moodinfinite v0.9.0
 
 <div align="center">
   <img src="https://github.com/davidbrum25/moodinfinite/blob/main/_branding/_png/moodinfinite__Logotipo_alpha.png?raw=true" alt="Moodinfinite Logo" width="400"/>
@@ -10,14 +10,6 @@
 
 ---
 
-## ✨ What's New in Version 0.9.1
-
-This update addresses a specific usability issue on Linux systems.
-
-*   **🐧 Linux Middle-Click Fix:** Prevented the middle mouse button from triggering the "paste" action on Linux, ensuring it only performs the intended panning operation.
-
----
-
 ## ✨ What's New in Version 0.9.0
 
 This update brings critical performance optimizations and stability improvements for heavy workflows.
@@ -25,7 +17,6 @@ This update brings critical performance optimizations and stability improvements
 *   **🚀 Performance Optimization:** Implemented a global image cache to significantly reduce memory usage and prevent crashes when working with multiple high-resolution images.
 *   **🛡️ Stability Improvements:** Fixed a critical issue where large images in the undo/redo history could cause the application to crash.
 *   **💾 Project Format Update:** Updated the project save format to include the image cache, ensuring faster loads and smaller file sizes for projects with many duplicate images.
-*   **🔢 Group Ordered:** A new feature to automatically group and number selected images from top-left to bottom-right. Perfect for creating ordered sequences or storyboards. (Shortcut: `Ctrl+Shift+O`)
 
 ---
 
@@ -119,6 +110,19 @@ Each Moodprompt file consists of "Prompt Cards," which feature:
     * **Draw (D):** A freehand drawing tool.
     * **Eyedropper (E):** Pick colors directly from the canvas.
 
+### Item Manipulation
+
+A powerful floating toolbar appears when you select items, giving you context-aware options.
+
+* **Transformations:** Scale **(S)**, Rotate **(R)**, Flip Horizontally **(H)**, and Flip Vertically **(V)**.
+* **Layering:** Bring items to the front (**Home**) or send them to the back (**End**).
+* **Grouping (Ctrl+G):** Group multiple items to move and transform them as a single object.
+* **Pinning (P):** Lock items in place to prevent accidental edits.
+* **Auto-Align (Ctrl+Shift+A):** Neatly arrange selected items into a grid.
+
+### General Hotkeys
+
+* **Save/Load:** `Ctrl+S` to Save, `Ctrl+O` to Open a project file.
 * **Clipboard:** `Ctrl+C` (Copy), `Ctrl+X` (Cut), `Ctrl+V` (Paste), `Ctrl+D` (Duplicate).
 * **History:** `Ctrl+Z` (Undo), `Ctrl+Shift+Z` (Redo).
 * **Export:** `Shift+S` to export the current board as a PNG.
