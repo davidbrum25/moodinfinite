@@ -1,4 +1,4 @@
-# Moodinfinite v0.9.1
+# Moodinfinite v0.9.2
 
 <div align="center">
   <img src="https://github.com/davidbrum25/moodinfinite/blob/main/_branding/_png/moodinfinite__Logotipo_alpha.png?raw=true" alt="Moodinfinite Logo" width="400"/>
@@ -7,6 +7,23 @@
 <p align="center">
   <strong>A versatile, infinite digital canvas for your ideas. Create moodboards, brainstorm, organize thoughts, and now, craft the perfect AI prompts.</strong>
 </p>
+
+---
+
+## ✨ What's New in Version 0.9.2
+
+This major update introduces the **Link** element, modernizes the icon system, and refines the **Notes** tool for a more premium experience.
+
+*   **🔗 New "Link" Element:** Place interactive hyperlinks on the canvas!
+    *   **Favicon Integration:** Automatically fetches the website's favicon for a branded look.
+    *   **Quick Go Button:** A dedicated hover-sensitive button to launch links instantly in a new tab.
+    *   **Smart Truncation:** Titles automatically truncate to fit the container without overlapping actions.
+*   **🎭 Icon Modernization:** Replaced individual icon assets with a unified **Iconify** system, ensuring pixel-perfect icons across all tools and menus.
+*   **💬 Notes Tool Refinements:**
+    *   **Improved Layout:** Better vertical centering and padding for a cleaner "one-liner" look.
+    *   **Icon Support:** Icons now integrate seamlessly with text without breaking the layout.
+    *   **Selection Toolbar:** Cleaned up the notes-specific toolbar to focus on essential creative actions.
+*   **🛡️ Stability & Bug Fixes:** Fixed a critical crash during element duplication and optimized the hover detection engine.
 
 ---
 

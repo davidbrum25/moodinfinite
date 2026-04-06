@@ -5,7 +5,7 @@
 <head>
     <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0">
-    <title>Moodinfinite v0.9.1</title>
+    <title>Moodinfinite v0.9.2</title>
     <link rel="icon"
         href="https://raw.githubusercontent.com/davidbrum25/moodinfinite/refs/heads/main/fav_icon_alternative.png"
         type="image/png">
@@ -17,11 +17,12 @@
         rel="stylesheet">
 
     <link rel="stylesheet" href="style.css">
+    <script src="https://code.iconify.design/iconify-icon/2.1.0/iconify-icon.min.js"></script>
 </head>
 
 <body>
     <div id="tabs-bar">
-        <div id="app-logo" title="Moodinfinite v0.9.0"
+        <div id="app-logo" title="Moodinfinite v0.9.2"
             style="display: flex; align-items: center; padding: 0 0.25rem; cursor: default;">
             <img src="https://raw.githubusercontent.com/davidbrum25/moodinfinite/refs/heads/main/fav_icon_alternative.png"
                 alt="Logo" style="width: 24px; height: 24px;">
@@ -29,52 +30,27 @@
         <div style="width: 1px; background-color: var(--border-color); margin: 8px 4px; align-self: stretch;"></div>
 
         <button id="load-project-btn" title="Open Project (Ctrl+O)" class="tab-add-btn">
-            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
-                stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
-            </svg>
+            <iconify-icon icon="lucide:folder-open" width="20" height="20"></iconify-icon>
         </button>
         <button id="save-project-btn" title="Save Project (Ctrl+S)" class="tab-add-btn">
-            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
-                stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path>
-                <polyline points="17 21 17 13 7 13 7 21"></polyline>
-                <polyline points="7 3 7 8 15 8"></polyline>
-            </svg>
+            <iconify-icon icon="lucide:save" width="20" height="20"></iconify-icon>
         </button>
         <div style="width: 1px; background-color: var(--border-color); margin: 8px 4px; align-self: stretch;"></div>
 
         <button id="add-moodinfinite-tab-btn" class="tab-add-btn" title="New Moodinfinite Board">
-            <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none"
-                stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
-                <circle cx="8.5" cy="8.5" r="1.5"></circle>
-                <polyline points="21 15 15 9 5 19"></polyline>
-            </svg>
+            <iconify-icon icon="lucide:image" width="22" height="22"></iconify-icon>
         </button>
         <button id="add-moodprompt-tab-btn" class="tab-add-btn" title="New Moodprompt File">
-            <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none"
-                stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M12 20h9"></path>
-                <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path>
-            </svg>
+            <iconify-icon icon="lucide:pen-tool" width="22" height="22"></iconify-icon>
         </button>
 
         <div style="width: 1px; background-color: var(--border-color); margin: 8px 4px; align-self: stretch;"></div>
 
         <button id="undo-btn" class="tab-add-btn" title="Undo (Ctrl+Z)" onclick="undoLastAction()">
-            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
-                stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M9 14 4 9l5-5" />
-                <path d="M4 9h10.5a5.5 5.5 0 0 1 5.5 5.5v0a5.5 5.5 0 0 1-5.5 5.5H11" />
-            </svg>
+            <iconify-icon icon="lucide:undo-2" width="20" height="20"></iconify-icon>
         </button>
         <button id="redo-btn" class="tab-add-btn" title="Redo (Ctrl+Shift+Z)" onclick="redoLastAction()">
-            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
-                stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="m15 14 5-5-5-5" />
-                <path d="M20 9H9.5A5.5 5.5 0 0 0 4 14.5v0A5.5 5.5 0 0 0 9.5 20H13" />
-            </svg>
+            <iconify-icon icon="lucide:redo-2" width="20" height="20"></iconify-icon>
         </button>
 
         <div style="width: 1px; background-color: var(--border-color); margin: 8px 4px; align-self: stretch;"></div>
@@ -86,36 +62,18 @@
         </div>
 
         <button id="mobile-tabs-btn" class="tab-add-btn" title="Open Boards">
-            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
-                stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <line x1="3" y1="12" x2="21" y2="12"></line>
-                <line x1="3" y1="6" x2="21" y2="6"></line>
-                <line x1="3" y1="18" x2="21" y2="18"></line>
-            </svg>
+            <iconify-icon icon="lucide:menu" width="20" height="20"></iconify-icon>
         </button>
 
         <div style="margin-left: auto; display: flex; align-items: center; gap: 4px;">
             <button id="save-png-btn" title="Export as PNG (Shift+S)" class="tab-add-btn">
-                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
-                    stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                    <polyline points="7 10 12 15 17 10"></polyline>
-                    <line x1="12" y1="15" x2="12" y2="3"></line>
-                </svg>
+                <iconify-icon icon="lucide:download" width="20" height="20"></iconify-icon>
             </button>
             <button id="copy-to-clipboard-btn" title="Copy to Clipboard (Shift+C)" class="tab-add-btn">
-                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
-                    stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
-                </svg>
+                <iconify-icon icon="lucide:copy" width="20" height="20"></iconify-icon>
             </button>
             <button id="palette-btn" title="Color Palettes" class="tab-add-btn">
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor"
-                    class="bi bi-palette2" viewBox="0 0 16 16">
-                    <path
-                        d="M0 .5A.5.5 0 0 1 .5 0h5a.5.5 0 0 1 .5.5v5.277l4.147-4.131a.5.5 0 0 1 .707 0l3.535 3.536a.5.5 0 0 1 0 .708L10.261 10H15.5a.5.5 0 0 1 .5.5v5a.5.5 0 0 1-.5.5H3a3 3 0 0 1-2.121-.879A3 3 0 0 1 0 13.044m6-.21 7.328-7.3-2.829-2.828L6 7.188zM4.5 13a1.5 1.5 0 1 0-3 0 1.5 1.5 0 0 0 3 0M15 15v-4H9.258l-4.015 4zM0 .5v12.495zm0 12.495V13z" />
-                </svg>
+                <iconify-icon icon="lucide:palette" width="20" height="20"></iconify-icon>
             </button>
         </div>
     </div>
@@ -130,85 +88,15 @@
             <div id="left-bar">
                 <div id="toolbar-color-picker-container"><input type="color" id="toolbar-accent-color-picker"
                         class="color-picker-input" title="Accent Color"></div><button id="eyedropper-btn"
-                    title="Eyedropper (E)" class="tool-button"><svg xmlns="http://www.w3.org/2000/svg" width="16"
-                        height="16" fill="currentColor" class="bi bi-eyedropper" viewBox="0 0 16 16">
-                        <path
-                            d="M13.354.646a1.207 1.207 0 0 0-1.708 0L8.5 3.793l-.646-.647a.5.5 0 1 0-.708.708L8.293 5l-7.147 7.146A.5.5 0 0 0 1 12.5v1.793l-.854.853a.5.5 0 1 0 .708.707L1.707 15H3.5a.5.5 0 0 0 .354-.146L11 7.707l1.146 1.147a.5.5 0 0 0 .708-.708l-.647-.646 3.147-3.146a1.207 1.207 0 0 0 0-1.708zM2 12.707l7-7L10.293 7l-7 7H2z" />
-                    </svg></button>
-                <div class="separator"></div><button id="add-image-btn" title="Add Image (I)" class="tool-button"><svg
-                        xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
-                        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
-                        <circle cx="8.5" cy="8.5" r="1.5"></circle>
-                        <polyline points="21 15 15 9 5 19"></polyline>
-                    </svg></button>
+                    title="Eyedropper (E)" class="tool-button"><iconify-icon icon="lucide:pipette" width="18" height="18"></iconify-icon></button>
+                <div class="separator"></div><button id="add-image-btn" title="Add Image (I)" class="tool-button"><iconify-icon icon="lucide:image" width="20" height="20"></iconify-icon></button>
                 <div class="separator"></div><button id="select-tool-btn" title="Select (A)"
-                    class="tool-button active"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20"
-                        viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
-                        stroke-linejoin="round">
-                        <path d="M3 3l7.07 16.97 2.51-7.39 7.39-2.51L3 3z"></path>
-                        <path d="M13 13l6 6"></path>
-                    </svg></button><button id="add-text-btn" title="Add Text (T)" class="tool-button"><svg
-                        xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
-                        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <polyline points="4 7 4 4 20 4 20 7"></polyline>
-                        <line x1="9" y1="20" x2="15" y2="20"></line>
-                        <line x1="12" y1="4" x2="12" y2="20"></line>
-                    </svg></button><button id="draw-btn" title="Draw (D)" class="tool-button"><svg
-                        xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
-                        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M12 19l7-7 3 3-7 7-3-3z"></path>
-                        <path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"></path>
-                        <path d="M2 2l7.586 7.586"></path>
-                    </svg></button><button id="add-arrow-btn" title="Add Arrow (Shift+A)" class="tool-button"><svg
-                        xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
-                        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <line x1="5" y1="12" x2="19" y2="12"></line>
-                        <polyline points="12 5 19 12 12 19"></polyline>
-                    </svg></button><button id="add-box-btn" title="Add Box (B)" class="tool-button"><svg
-                        xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
-                        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
-                    </svg></button><button id="add-circle-btn" title="Add Circle (C)" class="tool-button"><svg
-                        xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
-                        stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                        <circle cx="12" cy="12" r="9"></circle>
-                    </svg></button><button id="add-measure-btn" title="Measure (M)" class="tool-button"><svg
-                        xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
-                        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <path
-                            d="M21.19 5.81l-1.41-1.41a2 2 0 0 0-2.83 0L3.12 18.23a2 2 0 0 0 0 2.83l1.41 1.41a2 2 0 0 0 2.83 0L21.19 8.64a2 2 0 0 0 0-2.83z">
-                        </path>
-                        <path d="m18 9 2-2"></path>
-                        <path d="m2.12 21.88 5.66-5.66"></path>
-                        <path d="m4.95 19.05 2.12-2.12"></path>
-                        <path d="m10.58 13.41 2.12-2.12"></path>
-                    </svg></button><button id="add-grid-btn" title="Add Grid (Alt+G)" class="tool-button"><svg
-                        xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
-                        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
-                        <line x1="3" y1="9" x2="21" y2="9"></line>
-                        <line x1="3" y1="15" x2="21" y2="15"></line>
-                        <line x1="9" y1="3" x2="9" y2="21"></line>
-                        <line x1="15" y1="3" x2="15" y2="21"></line>
-                    </svg></button>
+                    class="tool-button active"><iconify-icon icon="lucide:mouse-pointer-2" width="20" height="20"></iconify-icon></button><button id="add-text-btn" title="Add Text (T)" class="tool-button"><iconify-icon icon="lucide:type" width="20" height="20"></iconify-icon></button><button id="add-comment-btn" title="Add Comment (N)" class="tool-button"><iconify-icon icon="lucide:message-square" width="20" height="20"></iconify-icon></button><button id="add-link-btn" title="Add Link (K)" class="tool-button"><iconify-icon icon="lucide:link" width="20" height="20"></iconify-icon></button><button id="draw-btn" title="Draw (D)" class="tool-button"><iconify-icon icon="lucide:pencil" width="20" height="20"></iconify-icon></button><button id="add-arrow-btn" title="Add Arrow (Shift+A)" class="tool-button"><iconify-icon icon="lucide:arrow-up-right" width="20" height="20"></iconify-icon></button><button id="add-box-btn" title="Add Box (B)" class="tool-button"><iconify-icon icon="lucide:square" width="20" height="20"></iconify-icon></button><button id="add-circle-btn" title="Add Circle (C)" class="tool-button"><iconify-icon icon="lucide:circle" width="20" height="20"></iconify-icon></button><button id="add-measure-btn" title="Measure (M)" class="tool-button"><iconify-icon icon="lucide:ruler" width="20" height="20"></iconify-icon></button><button id="add-grid-btn" title="Add Grid (Alt+G)" class="tool-button"><iconify-icon icon="lucide:grid-3x3" width="20" height="20"></iconify-icon></button>
                 <div class="separator"></div><button id="align-btn" title="Auto Align Selection (Ctrl+Shift+A)"
-                    class="tool-button" disabled><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20"
-                        viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
-                        stroke-linejoin="round">
-                        <rect x="3" y="3" width="7" height="7"></rect>
-                        <rect x="14" y="3" width="7" height="7"></rect>
-                        <rect x="14" y="14" width="7" height="7"></rect>
-                        <rect x="3" y="14" width="7" height="7"></rect>
-                    </svg></button>
+                    class="tool-button" disabled><iconify-icon icon="lucide:layout-grid" width="22" height="22"></iconify-icon></button>
                 <div class="separator"></div>
                 <button id="open-help-btn" title="Help" class="tool-button">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
-                        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <circle cx="12" cy="12" r="10"></circle>
-                        <line x1="12" y1="16" x2="12" y2="12"></line>
-                        <line x1="12" y1="8" x2="12.01" y2="8"></line>
-                    </svg>
+                    <iconify-icon icon="lucide:info" width="20" height="20"></iconify-icon>
                 </button>
             </div>
             <div id="selection-toolbar">
@@ -225,6 +113,19 @@
                         <option value="in">Inches (in)</option>
                     </select>
                 </div>
+                <div id="icon-tools-container" style="display: none; align-items: center; gap: 0.35rem; border-right: 1px solid var(--border-color); padding-right: 0.35rem; margin-right: 0.35rem;">
+                    <button id="comment-icon-btn" class="selection-tool-btn" title="Choose Icon">
+                        <iconify-icon icon="lucide:star" width="18" height="18"></iconify-icon>
+                    </button>
+                </div>
+                <div id="link-tools-container" style="display: none; align-items: center; gap: 0.35rem; border-right: 1px solid var(--border-color); padding-right: 0.35rem; margin-right: 0.35rem;">
+                    <button id="edit-link-btn" class="selection-tool-btn" title="Edit Link">
+                        <iconify-icon icon="lucide:pencil" width="18" height="18"></iconify-icon>
+                    </button>
+                    <button id="open-link-btn" class="selection-tool-btn" title="Open Link">
+                        <iconify-icon icon="lucide:external-link" width="18" height="18"></iconify-icon>
+                    </button>
+                </div>
                 <div id="text-tools-container"><select id="font-family-select" class="selection-tool-select"
                         title="Font Family">
                         <option value="Inter">Inter</option>
@@ -236,135 +137,19 @@
                         <option value="Merriweather">Merriweather</option>
                         <option value="Playfair Display">Playfair</option>
                         <option value="Source Code Pro">Code</option>
-                    </select><button id="text-align-left-btn" class="selection-tool-btn" title="Align Left"><svg
-                            xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none"
-                            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                            <line x1="17" y1="10" x2="3" y2="10"></line>
-                            <line x1="21" y1="6" x2="3" y2="6"></line>
-                            <line x1="17" y1="14" x2="3" y2="14"></line>
-                            <line x1="21" y1="18" x2="3" y2="18"></line>
-                        </svg></button><button id="text-align-center-btn" class="selection-tool-btn"
-                        title="Align Center"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18"
-                            viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                            stroke-linecap="round" stroke-linejoin="round">
-                            <line x1="18" y1="10" x2="6" y2="10"></line>
-                            <line x1="21" y1="6" x2="3" y2="6"></line>
-                            <line x1="18" y1="14" x2="6" y2="14"></line>
-                            <line x1="21" y1="18" x2="3" y2="18"></line>
-                        </svg></button><button id="text-align-right-btn" class="selection-tool-btn"
-                        title="Align Right"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18"
-                            viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                            stroke-linecap="round" stroke-linejoin="round">
-                            <line x1="21" y1="10" x2="7" y2="10"></line>
-                            <line x1="21" y1="6" x2="3" y2="6"></line>
-                            <line x1="21" y1="14" x2="7" y2="14"></line>
-                            <line x1="21" y1="18" x2="3" y2="18"></line>
-                        </svg></button><button id="text-style-bold-btn" class="selection-tool-btn" title="Bold"><svg
-                            xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none"
-                            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                            <path d="M6 4h8a4 4 0 0 1 4 4 4 4 0 0 1-4 4H6z"></path>
-                            <path d="M6 12h9a4 4 0 0 1 4 4 4 4 0 0 1-4 4H6z"></path>
-                        </svg></button><button id="text-style-italic-btn" class="selection-tool-btn" title="Italic"><svg
-                            xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none"
-                            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                            <line x1="19" y1="4" x2="10" y2="4"></line>
-                            <line x1="14" y1="20" x2="5" y2="20"></line>
-                            <line x1="15" y1="4" x2="9" y2="20"></line>
-                        </svg></button></div>
-                <div id="grid-tools-container"><label for="grid-rows-input" class="selection-tool-btn" title="Rows"><svg
-                            xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none"
-                            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                            <line x1="3" y1="12" x2="21" y2="12"></line>
-                            <line x1="3" y1="6" x2="21" y2="6"></line>
-                            <line x1="3" y1="18" x2="21" y2="18"></line>
-                        </svg></label><input type="number" id="grid-rows-input" class="grid-input" min="1"><label
-                        for="grid-cols-input" class="selection-tool-btn" title="Columns"><svg
-                            xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none"
-                            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                            <line x1="12" y1="3" x2="12" y2="21"></line>
-                            <line x1="6" y1="3" x2="6" y2="21"></line>
-                            <line x1="18" y1="3" x2="18" y2="21"></line>
-                        </svg></label><input type="number" id="grid-cols-input" class="grid-input" min="1"></div><button
-                    id="toggle-box-style-btn" class="selection-tool-btn" title="Toggle Box Style"><svg
-                        xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none"
-                        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
-                    </svg></button><button id="group-btn" class="selection-tool-btn" title="Group (Ctrl+G)"><svg
-                        xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none"
-                        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <rect x="8" y="8" width="12" height="12" rx="2" ry="2"></rect>
-                        <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"></path>
-                    </svg></button><button id="group-ordered-btn" class="selection-tool-btn"
-                    title="Group Ordered (Ctrl+Shift+O)"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18"
-                        viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
-                        stroke-linejoin="round">
-                        <line x1="10" y1="6" x2="21" y2="6"></line>
-                        <line x1="10" y1="12" x2="21" y2="12"></line>
-                        <line x1="10" y1="18" x2="21" y2="18"></line>
-                        <path d="M4 6h1v4"></path>
-                        <path d="M4 10h2"></path>
-                        <path d="M6 18H4c0-1 2-2 2-3s-1-1.5-2-1"></path>
-                    </svg></button><button id="ungroup-btn" class="selection-tool-btn"
-                    title="Ungroup (Ctrl+Shift+G)"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18"
-                        viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
-                        stroke-linejoin="round">
-                        <rect x="8" y="8" width="12" height="12" rx="2" ry="2" stroke-dasharray="2 2"></rect>
-                        <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2v2"></path>
-                    </svg></button><button id="bring-front-btn" class="selection-tool-btn"
-                    title="Bring to Front (Home)"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18"
-                        viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
-                        stroke-linejoin="round">
-                        <path d="M3 3v18h18" />
-                        <path d="M21 21V8a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v13" />
-                    </svg></button><button id="send-back-btn" class="selection-tool-btn" title="Send to Back (End)"><svg
-                        xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none"
-                        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M21 16V4a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-1" />
-                        <path d="M8 22v-4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v4" />
-                    </svg></button><button id="scale-btn" class="selection-tool-btn" title="Scale (S)"><svg
-                        xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none"
-                        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M21 21l-6-6m6 6v-4m0 4h-4"></path>
-                        <path d="M3 3l6 6m-6-6v4m0-4h4"></path>
-                    </svg></button><button id="rotate-btn" class="selection-tool-btn" title="Rotate (R)"><svg
-                        xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none"
-                        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M23 4v6h-6"></path>
-                        <path d="M1 20v-6h6"></path>
-                        <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
-                    </svg></button><button id="reset-transform-btn" class="selection-tool-btn"
-                    title="Reset State (scale and rotation)"><svg xmlns="http://www.w3.org/2000/svg" width="18"
-                        height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                        stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M20 11A8.1 8.1 0 0 0 4.5 9M4 5v4h4" />
-                        <path d="M4 13a8.1 8.1 0 0 0 15.5 2m.5 4v-4h-4" />
-                    </svg></button><button id="flip-horizontal-btn" class="selection-tool-btn"
-                    title="Flip Horizontal (H)"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18"
-                        viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
-                        stroke-linejoin="round">
-                        <polyline points="8 18 12 14 8 10"></polyline>
-                        <polyline points="16 18 12 14 16 10"></polyline>
-                        <line x1="12" y1="3" x2="12" y2="21"></line>
-                    </svg></button><button id="flip-vertical-btn" class="selection-tool-btn"
-                    title="Flip Vertical (V)"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18"
-                        viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
-                        stroke-linejoin="round">
-                        <polyline points="18 16 14 12 10 16"></polyline>
-                        <polyline points="18 8 14 12 10 8"></polyline>
-                        <line x1="21" y1="12" x2="3" y2="12"></line>
-                    </svg></button><button id="pin-btn" class="selection-tool-btn" title="Pin (P)"><svg
-                        xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none"
-                        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <path
-                            d="M15.05 5A5 5 0 0 1 19 8.95M15.05 1A9 9 0 0 1 23 8.94m-1 7.05A5 5 0 0 1 18 19.05M16 13l-6 6-4-4-6-6">
-                        </path>
-                    </svg></button><button id="delete-selection-btn" class="selection-tool-btn"
-                    title="Delete (Del)"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18"
-                        viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
-                        stroke-linejoin="round" class="text-red-500">
-                        <polyline points="3 6 5 6 21 6"></polyline>
-                        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-                    </svg></button>
+                    </select><button id="text-align-left-btn" class="selection-tool-btn" title="Align Left"><iconify-icon icon="lucide:align-left" width="18" height="18"></iconify-icon></button><button id="text-align-center-btn" class="selection-tool-btn"
+                        title="Align Center"><iconify-icon icon="lucide:align-center" width="18" height="18"></iconify-icon></button><button id="text-align-right-btn" class="selection-tool-btn"
+                        title="Align Right"><iconify-icon icon="lucide:align-right" width="18" height="18"></iconify-icon></button><button id="text-style-bold-btn" class="selection-tool-btn" title="Bold"><iconify-icon icon="lucide:bold" width="18" height="18"></iconify-icon></button><button id="text-style-italic-btn" class="selection-tool-btn" title="Italic"><iconify-icon icon="lucide:italic" width="18" height="18"></iconify-icon></button></div>
+                <div id="grid-tools-container"><label for="grid-rows-input" class="selection-tool-btn" title="Rows"><iconify-icon icon="lucide:rows-3" width="18" height="18"></iconify-icon></label><input type="number" id="grid-rows-input" class="grid-input" min="1"><label
+                        for="grid-cols-input" class="selection-tool-btn" title="Columns"><iconify-icon icon="lucide:columns-3" width="18" height="18"></iconify-icon></label><input type="number" id="grid-cols-input" class="grid-input" min="1"></div><button
+                    id="toggle-box-style-btn" class="selection-tool-btn" title="Toggle Box Style"><iconify-icon icon="lucide:square" width="18" height="18"></iconify-icon></button><button id="group-btn" class="selection-tool-btn" title="Group (Ctrl+G)"><iconify-icon icon="lucide:layers" width="18" height="18"></iconify-icon></button><button id="group-ordered-btn" class="selection-tool-btn"
+                    title="Group Ordered (Ctrl+Shift+O)"><iconify-icon icon="lucide:list-ordered" width="18" height="18"></iconify-icon></button><button id="ungroup-btn" class="selection-tool-btn"
+                    title="Ungroup (Ctrl+Shift+G)"><iconify-icon icon="lucide:copy-minus" width="18" height="18"></iconify-icon></button><button id="bring-front-btn" class="selection-tool-btn"
+                    title="Bring to Front (Home)"><iconify-icon icon="lucide:move-up" width="18" height="18"></iconify-icon></button><button id="send-back-btn" class="selection-tool-btn" title="Send to Back (End)"><iconify-icon icon="lucide:move-down" width="18" height="18"></iconify-icon></button><button id="scale-btn" class="selection-tool-btn" title="Scale (S)"><iconify-icon icon="lucide:maximize-2" width="18" height="18"></iconify-icon></button><button id="rotate-btn" class="selection-tool-btn" title="Rotate (R)"><iconify-icon icon="lucide:rotate-cw" width="18" height="18"></iconify-icon></button><button id="reset-transform-btn" class="selection-tool-btn"
+                    title="Reset State (scale and rotation)"><iconify-icon icon="lucide:refresh-cw" width="18" height="18"></iconify-icon></button><button id="flip-horizontal-btn" class="selection-tool-btn"
+                    title="Flip Horizontal (H)"><iconify-icon icon="lucide:flip-horizontal-2" width="18" height="18"></iconify-icon></button><button id="flip-vertical-btn" class="selection-tool-btn"
+                    title="Flip Vertical (V)"><iconify-icon icon="lucide:flip-vertical-2" width="18" height="18"></iconify-icon></button><button id="pin-btn" class="selection-tool-btn" title="Pin (P)"><iconify-icon icon="lucide:pin" width="18" height="18"></iconify-icon></button><button id="delete-selection-btn" class="selection-tool-btn"
+                    title="Delete (Del)"><iconify-icon icon="lucide:trash-2" width="18" height="18" class="text-red-500"></iconify-icon></button>
             </div>
         </div>
 
@@ -419,20 +204,9 @@
         </div>
         <div class="border-t my-2" id="download-separator" style="border-color:var(--border-color);display:none"></div>
         <div class="menu-item" id="download-image-btn" style="display:none"><span class="menu-label">Download
-                Source</span><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24"
-                fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                <polyline points="7 10 12 15 17 10"></polyline>
-                <line x1="12" y1="15" x2="12" y2="3"></line>
-            </svg></div>
+                Source</span><iconify-icon icon="lucide:download" width="18" height="18"></iconify-icon></div>
         <div class="border-t my-2" id="delete-separator" style="border-color:var(--border-color)"></div>
-        <div class="menu-item" id="delete-item-btn"><span class="menu-label text-red-500">Delete Selected</span><svg
-                xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none"
-                stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
-                class="text-red-500">
-                <polyline points="3 6 5 6 21 6"></polyline>
-                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-            </svg></div>
+        <div class="menu-item" id="delete-item-btn"><span class="menu-label text-red-500">Delete Selected</span><iconify-icon icon="lucide:trash-2" width="18" height="18" class="text-red-500"></iconify-icon></div>
     </div>
 
     <div id="tab-context-menu">
@@ -441,12 +215,30 @@
     </div>
 
     <div id="palette-panel"></div>
+    <div id="icon-picker-panel"></div>
     <div id="confirmation-modal-overlay">
         <div id="confirmation-modal">
             <h2>Create New Board?</h2>
             <p>All unsaved changes will be lost. Are you sure you want to continue?</p>
             <div class="modal-buttons"><button id="cancel-new-btn" class="modal-button cancel">Cancel</button><button
                     id="confirm-new-btn" class="modal-button confirm">Yes, Clear Board</button></div>
+        </div>
+    </div>
+    <div id="input-modal-overlay">
+        <div id="input-modal">
+            <h2 id="input-modal-title">Add Link</h2>
+            <div class="input-modal-group">
+                <label for="link-url-input">URL (Hyperlink)</label>
+                <input type="text" id="link-url-input" placeholder="https://example.com" autofocus>
+            </div>
+            <div class="input-modal-group">
+                <label for="link-title-input">Title (Optional)</label>
+                <input type="text" id="link-title-input" placeholder="My Website">
+            </div>
+            <div class="modal-buttons">
+                <button id="cancel-input-btn" class="modal-button cancel">Cancel</button>
+                <button id="confirm-input-btn" class="modal-button confirm">Confirm</button>
+            </div>
         </div>
     </div>
     <div id="help-modal-overlay">
@@ -531,22 +323,12 @@
                         style="color:var(--switch-bg-checked);text-decoration:none">davidbrum@gmail.com</a><br><a
                         href="https://linktr.ee/davidbrum" target="_blank"
                         style="color:var(--switch-bg-checked);text-decoration:none">linktr.ee/davidbrum</a></p>
-                <path
-                    d="M15.48 2.49C10.97 2.49 7.32 6.14 7.32 10.65C7.32 15.16 10.97 18.81 15.48 18.81C19.99 18.81 23.64 15.16 23.64 10.65C23.64 6.14 19.99 2.49 15.48 2.49ZM0.36 2.49V18.81H4.2V2.49H0.36Z" />
-                </svg></a>
+                <div style="display:flex;gap:1.5rem;justify-content:center;margin-top:2rem;">
                 <a href="https://linktr.ee/davidbrum" target="_blank" class="footer-btn"
-                    title="H. David Brum Links"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24"
-                        viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
-                        stroke-linejoin="round" class="feather feather-link" style="width:60%">
-                        <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.72"></path>
-                        <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.72-1.72"></path>
-                    </svg></a>
+                    title="H. David Brum Links"><iconify-icon icon="lucide:link" width="24" height="24" style="width:60%"></iconify-icon></a>
                 <a href="https://github.com/davidbrum25/moodinfinite" target="_blank" class="footer-btn"
-                    title="View on GitHub"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24"
-                        viewBox="0 0 24 24" fill="currentColor" style="width:60%">
-                        <path
-                            d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.91 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z" />
-                    </svg></a>
+                    title="View on GitHub"><iconify-icon icon="logos:github-icon" width="24" height="24" style="width:60%"></iconify-icon></a>
+                </div>
             </div>
             <div id="toast-container"></div>
 
