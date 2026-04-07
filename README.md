@@ -1,4 +1,4 @@
-# Moodinfinite v0.9.2
+# Moodinfinite v0.9.3
 
 <div align="center">
   <img src="https://github.com/davidbrum25/moodinfinite/blob/main/_branding/_png/moodinfinite__Logotipo_alpha.png?raw=true" alt="Moodinfinite Logo" width="400"/>
@@ -7,6 +7,19 @@
 <p align="center">
   <strong>A versatile, infinite digital canvas for your ideas. Create moodboards, brainstorm, organize thoughts, and now, craft the perfect AI prompts.</strong>
 </p>
+
+---
+
+## ✨ What's New in Version 0.9.3
+
+This update introduces powerful node-based visual connections and functional Checklists!
+
+*   **🔌 Node Connectors:** You can now visually link elements together!
+    *   **Drag and Drop Wires:** Hover over any selectable element to reveal 4 edge connection ports. Drag from one port to another to draw dynamic, auto-updating bezier curves between elements.
+    *   **Reroute Nodes:** Double-click anywhere on a connector line to split it and spawn a circular reroute node for clean visual organization.
+    *   **Smart Deletion:** Hold `Ctrl` or `Cmd` while hovering over wires or reroute nodes. Your cursor will turn into a distinctive red scissor, allowing you to instantly cut connections with a click.
+*   **✅ Checklist Element:** Add robust list elements natively to your boards. Based loosely on classic checklist notes, each row has a checkbox that lets you toggle items as done or pending.
+    *   **Color & Font Editing:** Easily change checklist background colors or typography via the localized element toolbar without confusing extra options.
 
 ---
 

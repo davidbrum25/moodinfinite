@@ -473,6 +473,7 @@ const addBoxBtn = document.getElementById('add-box-btn');
 const addCircleBtn = document.getElementById('add-circle-btn');
 const addMeasureBtn = document.getElementById('add-measure-btn');
 const addGridBtn = document.getElementById('add-grid-btn');
+const addTextListBtn = document.getElementById('add-text-list-btn');
 const drawBtn = document.getElementById('draw-btn');
 const alignBtn = document.getElementById('align-btn');
 const contextMenu = document.getElementById('context-menu');
@@ -569,6 +570,8 @@ let transformingHandle = null, transformStart = { x: 0, y: 0 }, originalItemStat
 let hoveredGizmo = null, hoveredArrowHandle = null;
 let isSelectingBox = false, selectionBox = { startX: 0, startY: 0, endX: 0, endY: 0 };
 let currentlyEditingText = null;
+let hoveredItem = null;
+let isDraggingConnector = false, tempConnector = null, hoveredPort = null, hoveredConnector = null;
 let showGrid = true, snapToGrid = true, showDropShadow = true, showNotifications = true;
 let gridSize = 50, gridOpacity = 0.05;
 let currentProjectName = 'moodinfinite';
@@ -709,7 +712,8 @@ function setupEventListeners() {
     canvas.addEventListener('touchcancel', onTouchEnd, { passive: !1 });
 
     window.addEventListener('resize', resizeCanvas);
-    window.addEventListener('keydown', handleKeyDown);
+    document.addEventListener('keydown', handleKeyDown);
+    document.addEventListener('keyup', handleKeyUp);
 
     document.addEventListener('click', e => {
         if (contextMenu && !contextMenu.contains(e.target)) contextMenu.style.display = 'none';
@@ -764,6 +768,7 @@ function setupEventListeners() {
     if (addCircleBtn) addCircleBtn.addEventListener('click', () => setCurrentTool('circle'));
     if (addMeasureBtn) addMeasureBtn.addEventListener('click', () => setCurrentTool('measure'));
     if (addGridBtn) addGridBtn.addEventListener('click', () => setCurrentTool('grid'));
+    if (addTextListBtn) addTextListBtn.addEventListener('click', () => setCurrentTool('textList'));
     if (drawBtn) drawBtn.addEventListener('click', () => setCurrentTool('draw'));
     if (eyedropperBtn) eyedropperBtn.addEventListener('click', () => setCurrentTool('eyedropper'));
     if (selectToolBtn) selectToolBtn.addEventListener('click', () => setCurrentTool(null));
@@ -944,16 +949,45 @@ function draw() {
         else if (e.type === 'group') { drawGroupItem(ctx, e) }
         else if (e.type === 'comment') { drawCommentItem(ctx, e) }
         else if (e.type === 'link') { drawLinkItem(ctx, e) }
+        else if (e.type === 'textList') { drawTextListItem(ctx, e) }
+        else if (e.type === 'reroute') { drawRerouteItem(ctx, e) }
         ctx.restore();
     };
 
+    // Layer 0: Connectors
+    items.forEach(e => { if (e.type === 'connector') drawConnectorItem(e); });
     // Layer 1: Regular elements
-    items.forEach(e => { if (e.type !== 'comment' && e.type !== 'link') drawItem(e); });
+    items.forEach(e => { if (e.type !== 'comment' && e.type !== 'link' && e.type !== 'connector') drawItem(e); });
     // Layer 2: Links & Comments (Always on top)
     items.forEach(e => { if (e.type === 'link') drawItem(e); });
     items.forEach(e => { if (e.type === 'comment') drawItem(e); });
 
     selectedItems.forEach(e => { drawSelection(e) });
+    
+    if (typeof isDraggingConnector !== 'undefined' && isDraggingConnector && typeof tempConnector !== 'undefined' && tempConnector) {
+        drawConnectorItem(tempConnector);
+    }
+
+    if (hoveredItem && (!isDragging || (typeof isDraggingConnector !== 'undefined' && isDraggingConnector))) {
+        const ports = getItemPorts(hoveredItem);
+        ports.forEach(p => {
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, 6 / cameraZoom, 0, Math.PI * 2);
+            ctx.fillStyle = canvasBackgroundColor;
+            ctx.fill();
+            ctx.lineWidth = 2 / cameraZoom;
+            ctx.strokeStyle = accentColor;
+            ctx.stroke();
+        });
+    }
+
+    if (typeof hoveredPort !== 'undefined' && hoveredPort) {
+        ctx.beginPath();
+        ctx.arc(hoveredPort.x, hoveredPort.y, 8 / cameraZoom, 0, Math.PI * 2);
+        ctx.fillStyle = accentColor;
+        ctx.fill();
+    }
+    
     if (isSelectingBox) drawSelectionBox();
     ctx.restore();
 }
@@ -1098,12 +1132,192 @@ function drawMeasureItem(ctx, item) {
 }
 
 function drawGridItem(e, t) { e.save(); const o = t.x + t.width / 2, a = t.y + t.height / 2; e.translate(o, a); e.rotate(t.rotation); e.scale(t.scaleX || 1, t.scaleY || 1); e.strokeStyle = t.color; e.lineWidth = 2 / cameraZoom; const i = t.width / t.cols, r = t.height / t.rows; e.beginPath(); for (let o = 0; o <= t.cols; o++) { const a = -t.width / 2 + o * i; e.moveTo(a, -t.height / 2); e.lineTo(a, t.height / 2) } for (let o = 0; o <= t.rows; o++) { const a = -t.height / 2 + o * r; e.moveTo(-t.width / 2, a); e.lineTo(t.width / 2, a) } e.stroke(); e.restore() }
+
+function drawTextListItem(e, t) { 
+    e.save(); 
+    const o = t.x + t.width / 2, a = t.y + t.height / 2; 
+    e.translate(o, a); 
+    e.rotate(t.rotation); 
+    e.scale(t.scaleX || 1, t.scaleY || 1); 
+    e.globalAlpha = t.opacity ?? 1; 
+    
+    // Draw Box
+    e.fillStyle = t.color; 
+    e.beginPath(); 
+    if (e.roundRect) { 
+        e.roundRect(-t.width / 2, -t.height / 2, t.width, t.height, 12 / cameraZoom); 
+    } else { 
+        e.rect(-t.width / 2, -t.height / 2, t.width, t.height); 
+    } 
+    e.fill(); 
+
+    const lum = getLuminance(t.color); 
+    const textColor = lum > 0.5 ? '#111111' : '#ffffff'; 
+    e.fillStyle = textColor; 
+    const i = t.fontStyle || 'normal', r = t.fontWeight || 'bold', s = t.fontFamily || 'Inter'; 
+    e.font = `${i} ${r} ${t.fontSize}px '${s}', sans-serif`; 
+    e.textAlign = 'left'; 
+    e.textBaseline = 'top'; 
+
+    const h = t.fontSize * 1.5; 
+    const padding = 15;
+    const checkboxSize = t.fontSize * 1.1;
+    const checkboxMargin = 10;
+
+    (t.items || []).forEach((item, idx) => {
+        const itemY = -t.height / 2 + padding + idx * h;
+        
+        // Draw Checkbox
+        e.strokeStyle = textColor;
+        e.lineWidth = 2 / cameraZoom;
+        const cbX = -t.width / 2 + padding;
+        const cbY = itemY + (h - checkboxSize) / 2;
+        
+        e.strokeRect(cbX, cbY, checkboxSize, checkboxSize);
+        if (item.completed) {
+            e.beginPath();
+            e.moveTo(cbX + checkboxSize * 0.2, cbY + checkboxSize * 0.5);
+            e.lineTo(cbX + checkboxSize * 0.45, cbY + checkboxSize * 0.75);
+            e.lineTo(cbX + checkboxSize * 0.8, cbY + checkboxSize * 0.25);
+            e.stroke();
+        }
+
+        // Draw Text
+        e.save();
+        if (item.completed) {
+            e.globalAlpha *= 0.5;
+        }
+        e.fillText(item.text, cbX + checkboxSize + checkboxMargin, itemY + (h - t.fontSize) / 2);
+        
+        if (item.completed) {
+            const metrics = e.measureText(item.text);
+            e.beginPath();
+            e.moveTo(cbX + checkboxSize + checkboxMargin, itemY + h / 2);
+            e.lineTo(cbX + checkboxSize + checkboxMargin + metrics.width, itemY + h / 2);
+            e.stroke();
+        }
+        e.restore();
+    });
+    e.restore(); 
+}
 function drawStrokeItem(e, t) { if (t.points.length < 2) return; e.save(); e.strokeStyle = t.color; e.lineWidth = 4 / cameraZoom; e.lineCap = 'round'; e.lineJoin = 'round'; e.beginPath(); e.moveTo(t.points[0].x, t.points[0].y); for (let o = 1; o < t.points.length; o++) { e.lineTo(t.points[o].x, t.points[o].y) } e.stroke(); e.restore() }
-function drawGroupItem(e, t) { e.save(); e.globalAlpha *= (t.opacity ?? 1); const o = t.x + t.width / 2, a = t.y + t.height / 2; e.translate(o, a); e.rotate(t.rotation || 0); e.scale(t.scaleX || 1, t.scaleY || 1); t.items.forEach(o => { const a = { ...o, x: o.x - t.width / 2, y: o.y - t.height / 2 }; if (a.type === "arrow" || a.type === 'measure') { a.startX = o.startX - t.width / 2; a.startY = o.startY - t.height / 2; a.endX = o.endX - t.width / 2; a.endY = o.endY - t.height / 2 } if (a.type === "stroke") { a.points = o.points.map(e => ({ x: e.x - t.width / 2, y: e.y - t.height / 2 })) } if (o.type === "image") { drawImageItem(e, a) } else if (o.type === "arrow") drawArrow(e, a); else if (o.type === "text") drawTextItem(e, a); else if (o.type === "box") drawBoxItem(e, a); else if (o.type === 'circle') drawCircleItem(e, a); else if (o.type === 'measure') drawMeasureItem(e, a); else if (o.type === "stroke") drawStrokeItem(e, a); else if (o.type === "grid") drawGridItem(e, a) }); e.restore() }
+function getItemPorts(e) {
+    if (!['group', 'image', 'box', 'circle', 'textList', 'comment', 'text', 'reroute'].includes(e.type)) return [];
+    if (e.type === 'reroute') {
+        return [
+            { side: 'left', x: e.x, y: e.y, item: e },
+            { side: 'right', x: e.x, y: e.y, item: e },
+            { side: 'top', x: e.x, y: e.y, item: e },
+            { side: 'bottom', x: e.x, y: e.y, item: e }
+        ];
+    }
+    const t = e.width * (e.scaleX || 1), o = e.height * (e.scaleY || 1);
+    const cx = e.x + e.width / 2, cy = e.y + e.height / 2;
+    const r = e.rotation || 0, s = Math.cos(r), n = Math.sin(r);
+    return [
+        { side: 'left', x: cx + (-t/2)*s, y: cy + (-t/2)*n, item: e },
+        { side: 'right', x: cx + (t/2)*s, y: cy + (t/2)*n, item: e },
+        { side: 'top', x: cx + (o/2)*n, y: cy + (-o/2)*s, item: e },
+        { side: 'bottom', x: cx + (-o/2)*n, y: cy + (o/2)*s, item: e }
+    ];
+}
+
+function getGlobalPortPos(item, side) {
+    const ports = getItemPorts(item);
+    return ports.find(p => p.side === side);
+}
+
+function drawConnectorItem(e) {
+    const sourceItem = items.find(i => i.id === e.sourceId);
+    if (!sourceItem) return;
+    const sourcePortPos = getGlobalPortPos(sourceItem, e.sourcePort);
+    if (!sourcePortPos) return;
+
+    let endX = e.endX, endY = e.endY;
+    let targetPortPos = null;
+    let targetSide = null;
+    
+    if (e.targetId) {
+        const targetItem = items.find(i => i.id === e.targetId);
+        if (targetItem) {
+            targetPortPos = getGlobalPortPos(targetItem, e.targetPort);
+            if (targetPortPos) {
+                endX = targetPortPos.x;
+                endY = targetPortPos.y;
+                targetSide = e.targetPort;
+            }
+        }
+    }
+    
+    e.computedStartX = sourcePortPos.x;
+    e.computedStartY = sourcePortPos.y;
+    e.computedEndX = endX;
+    e.computedEndY = endY;
+
+    const pushStrength = Math.min(Math.max(Math.hypot(endX - sourcePortPos.x, endY - sourcePortPos.y) / 2, 50), 200);
+    
+    const getControlPoint = (portX, portY, side, item) => {
+        let dx = 0, dy = 0;
+        if (side === 'left') dx = -1;
+        if (side === 'right') dx = 1;
+        if (side === 'top') dy = -1;
+        if (side === 'bottom') dy = 1;
+        if (item && item.type !== 'reroute') {
+           const s = Math.cos(item.rotation || 0);
+           const n = Math.sin(item.rotation || 0);
+           const rotDx = dx * s - dy * n;
+           const rotDy = dx * n + dy * s;
+           return { x: portX + rotDx * pushStrength, y: portY + rotDy * pushStrength };
+        }
+        return { x: portX + dx * pushStrength, y: portY + dy * pushStrength };
+    };
+
+    const cp1 = getControlPoint(sourcePortPos.x, sourcePortPos.y, e.sourcePort, sourceItem);
+    const cp2 = targetPortPos ? getControlPoint(endX, endY, targetSide, items.find(i => i.id === e.targetId)) : { x: endX, y: endY };
+    
+    e.cp1 = cp1;
+    e.cp2 = cp2;
+
+    ctx.save();
+    ctx.beginPath();
+    ctx.moveTo(sourcePortPos.x, sourcePortPos.y);
+    ctx.bezierCurveTo(cp1.x, cp1.y, cp2.x, cp2.y, endX, endY);
+    
+    ctx.lineWidth = 4 / cameraZoom;
+    ctx.strokeStyle = e.color || accentColor;
+    
+    if (selectedItems.includes(e) || (typeof hoveredConnector !== 'undefined' && hoveredConnector === e)) {
+        ctx.save();
+        ctx.strokeStyle = invertColor(canvasBackgroundColor);
+        ctx.lineWidth = 8 / cameraZoom;
+        ctx.stroke();
+        ctx.restore();
+    }
+    
+    ctx.stroke();
+    ctx.restore();
+}
+
+function drawRerouteItem(e, t) {
+    e.save();
+    e.translate(t.x, t.y);
+    e.beginPath();
+    e.arc(0, 0, 8 / cameraZoom, 0, Math.PI * 2);
+    e.fillStyle = t.color || accentColor;
+    e.fill();
+    e.restore();
+}
+
+function drawGroupItem(e, t) { e.save(); e.globalAlpha *= (t.opacity ?? 1); const o = t.x + t.width / 2, a = t.y + t.height / 2; e.translate(o, a); e.rotate(t.rotation || 0); e.scale(t.scaleX || 1, t.scaleY || 1); t.items.forEach(o => { const a = { ...o, x: o.x - t.width / 2, y: o.y - t.height / 2 }; if (a.type === "arrow" || a.type === 'measure') { a.startX = o.startX - t.width / 2; a.startY = o.startY - t.height / 2; a.endX = o.endX - t.width / 2; a.endY = o.endY - t.height / 2 } if (a.type === "stroke") { a.points = o.points.map(e => ({ x: e.x - t.width / 2, y: e.y - t.height / 2 })) } if (o.type === "image") { drawImageItem(e, a) } else if (o.type === "arrow") drawArrow(e, a); else if (o.type === "text") drawTextItem(e, a); else if (o.type === "box") drawBoxItem(e, a); else if (o.type === 'circle') drawCircleItem(e, a); else if (o.type === 'measure') drawMeasureItem(e, a); else if (o.type === "stroke") drawStrokeItem(e, a); else if (o.type === "grid") drawGridItem(e, a); else if (o.type === "reroute") drawRerouteItem(e, a) }); e.restore() }
 
 function handleKeyDown(e) {
     const activeEl = document.activeElement;
     if (currentlyEditingText || (activeEl && (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA'))) { return; }
+    
+    if (e.key === 'Control' || e.key === 'Meta') {
+        updateCursor(e);
+    }
+    
     const key = e.key.toLowerCase();
     if (key === 'escape') { e.preventDefault(); if (helpModalOverlay.style.display === 'flex') { helpModalOverlay.style.display = 'none'; return; } if (currentTool) { setCurrentTool(null); } else if (selectedItems.length > 0) { selectedItems = []; updateSelectionToolbar(); updateLeftBarState(); } return; }
     if (e.shiftKey && key === 'n') { e.preventDefault(); confirmNewBoard(); return; }
@@ -1153,7 +1367,55 @@ function handleKeyDown(e) {
     switch (key) { case 'r': setActiveGizmo('rotate'); break; case 's': setActiveGizmo('scale'); break; }
 }
 
-function onDoubleClick(e) { const t = screenToWorld(getEventLocation(e)), o = getItemAtPosition(t); if (o && (o.type === 'text' || o.type === 'comment') && !o.isPinned) editText(o) }
+function handleKeyUp(e) {
+    if (e.key === 'Control' || e.key === 'Meta') {
+        updateCursor(e);
+    }
+}
+
+function onDoubleClick(e) { 
+    const t = screenToWorld(getEventLocation(e)), o = getItemAtPosition(t); 
+    if (o && (o.type === 'text' || o.type === 'comment' || o.type === 'textList') && !o.isPinned) {
+        editText(o);
+        return;
+    }
+    
+    const hoveredConn = getHoveredConnector(t);
+    if (hoveredConn) {
+        const rerouteNode = {
+            id: Date.now(),
+            type: 'reroute',
+            x: t.x,
+            y: t.y,
+            width: 0,
+            height: 0,
+            color: accentColor,
+            isPinned: false
+        };
+        addItemToLayeredItems(rerouteNode);
+        
+        const newConn = {
+            id: Date.now() + 1,
+            type: 'connector',
+            sourceId: rerouteNode.id,
+            sourcePort: 'right',
+            targetId: hoveredConn.targetId,
+            targetPort: hoveredConn.targetPort,
+            endX: hoveredConn.computedEndX,
+            endY: hoveredConn.computedEndY,
+            color: hoveredConn.color
+        };
+        hoveredConn.targetId = rerouteNode.id;
+        hoveredConn.targetPort = 'left';
+        
+        if (newConn.targetId) {
+            addItemToLayeredItems(newConn);
+        }
+        
+        selectedItems = [rerouteNode];
+        saveStateForUndo();
+    }
+}
 function getEventLocation(e) {
     if (!e) return { x: 0, y: 0 };
     const rect = canvas.getBoundingClientRect();
@@ -1182,6 +1444,45 @@ function onMouseDown(e) {
     }
 
     if (e.button === 0) {
+        if ((e.ctrlKey || e.metaKey) && hoveredConnector) {
+            e.preventDefault();
+            items = items.filter(i => i.id !== hoveredConnector.id);
+            selectedItems = selectedItems.filter(i => i.id !== hoveredConnector.id);
+            updateSelectionToolbar();
+            updateLeftBarState();
+            saveStateForUndo();
+            return;
+        }
+
+        if ((e.ctrlKey || e.metaKey) && hoveredItem && hoveredItem.type === 'reroute') {
+             e.preventDefault();
+             items = items.filter(i => i.id !== hoveredItem.id);
+             selectedItems = selectedItems.filter(i => i.id !== hoveredItem.id);
+             items = items.filter(i => !(i.type === 'connector' && (i.sourceId === hoveredItem.id || i.targetId === hoveredItem.id)));
+             updateSelectionToolbar();
+             updateLeftBarState();
+             saveStateForUndo();
+             return;
+        }
+
+        if (hoveredPort) {
+            e.preventDefault();
+            isDraggingConnector = true;
+            tempConnector = {
+                id: Date.now(),
+                type: 'connector',
+                sourceId: hoveredPort.item.id,
+                sourcePort: hoveredPort.side,
+                computedStartX: hoveredPort.x,
+                computedStartY: hoveredPort.y,
+                endX: o.x,
+                endY: o.y,
+                color: accentColor
+            };
+            selectedItems = [];
+            return;
+        }
+
         // Handle Gizmos and Handles first
         if (selectedItems.length === 1) {
             const item = selectedItems[0];
@@ -1241,6 +1542,9 @@ function onMouseDown(e) {
                 newItem = { id: Date.now(), type: 'measure', startX: o.x, startY: o.y, endX: o.x, endY: o.y, unit: 'px', color: accentColor, isPinned: false, x: o.x, y: o.y, width: 0, height: 0, rotation: 0, opacity: 1 };
             } else if (currentTool === 'grid') {
                 newItem = { id: Date.now(), type: 'grid', color: accentColor, x: o.x, y: o.y, width: 0, height: 0, rotation: 0, isPinned: false, opacity: 1, rows: 3, cols: 3, scaleX: 1, scaleY: 1 };
+            } else if (currentTool === 'textList') {
+                newItem = { id: Date.now(), type: 'textList', items: [{ text: 'Item 1', completed: false }], text: 'Item 1', x: o.x, y: o.y, width: 0, height: 0, fontSize: 18, rotation: 0, isPinned: false, opacity: 1, fontFamily: 'Inter', textAlign: 'left', fontWeight: 'bold', fontStyle: 'normal', color: accentColor, scaleX: 1, scaleY: 1 };
+                updateTextListDimensions(newItem);
             } else if (currentTool === 'draw') {
                 newItem = { id: Date.now(), type: 'stroke', points: [{ x: o.x, y: o.y }], color: accentColor, isPinned: false, x: o.x, y: o.y, width: 0, height: 0, opacity: 1, scaleX: 1, scaleY: 1 };
             }
@@ -1249,6 +1553,9 @@ function onMouseDown(e) {
                 addItemToLayeredItems(newItem);
                 selectedItems = [newItem];
                 bringSelectedToFront();
+                if (newItem.type === 'textList') {
+                    setCurrentTool(null);
+                }
             }
         } else {
             // Selection / Moving logic
@@ -1256,6 +1563,14 @@ function onMouseDown(e) {
             if (itemUnderMouse && itemUnderMouse.type === 'link') {
                 if (isLinkButtonHit(itemUnderMouse, o)) {
                     window.open(itemUnderMouse.url, '_blank');
+                    return;
+                }
+            }
+            if (itemUnderMouse && itemUnderMouse.type === 'textList') {
+                const hitIndex = getCheckboxHitIndex(itemUnderMouse, o);
+                if (hitIndex !== -1) {
+                    itemUnderMouse.items[hitIndex].completed = !itemUnderMouse.items[hitIndex].completed;
+                    saveStateForUndo();
                     return;
                 }
             }
@@ -1309,9 +1624,47 @@ function onMouseDown(e) {
         canvas.classList.add('grabbing');
     }
 }
-function onMouseUp(e) { if (e.button === 0) { if (isDrawing || isMovingItems || isTransforming || isTransformingArrow) { if (isDrawing) { const e = selectedItems[0]; if (e && (e.type === 'box' || e.type === 'circle' || e.type === 'grid') && (Math.abs(e.width) < 10 || Math.abs(e.height) < 10)) { items = items.filter(t => t.id !== e.id); selectedItems = [] } else if (e && (e.type === 'text' || e.type === 'comment')) { editText(e) } } saveStateForUndo() } if (isSelectingBox) { isSelectingBox = !1; const e = getNormalizedSelectionBox(); selectedItems = items.filter(t => rectsIntersect(getItemBoundingBox(t), e)); updateSelectionToolbar(); updateLeftBarState() } isDrawing = !1; isMovingItems = !1; isTransforming = !1; isTransformingArrow = !1; transformingHandle = null; originalItemState = null } else if (e.button === 1) { isDragging = !1; canvas.classList.remove('grabbing') } }
+function onMouseUp(e) { 
+    if (e.button === 0) { 
+        if (isDraggingConnector) {
+            isDraggingConnector = false;
+            if (tempConnector) {
+                if (tempConnector.targetId && tempConnector.targetPort && 
+                    (tempConnector.sourceId !== tempConnector.targetId || tempConnector.sourcePort !== tempConnector.targetPort)) {
+                    let newConnector = { ...tempConnector };
+                    addItemToLayeredItems(newConnector);
+                    saveStateForUndo();
+                }
+                tempConnector = null;
+            }
+            return;
+        }
+        if (isDrawing || isMovingItems || isTransforming || isTransformingArrow) { if (isDrawing) { const e = selectedItems[0]; if (e && (e.type === 'box' || e.type === 'circle' || e.type === 'grid') && (Math.abs(e.width) < 10 || Math.abs(e.height) < 10)) { items = items.filter(t => t.id !== e.id); selectedItems = [] } else if (e && (e.type === 'text' || e.type === 'comment')) { editText(e) } } saveStateForUndo() } if (isSelectingBox) { isSelectingBox = !1; const e = getNormalizedSelectionBox(); selectedItems = items.filter(t => rectsIntersect(getItemBoundingBox(t), e)); updateSelectionToolbar(); updateLeftBarState() } isDrawing = !1; isMovingItems = !1; isTransforming = !1; isTransformingArrow = !1; transformingHandle = null; originalItemState = null 
+    } else if (e.button === 1) { 
+        isDragging = !1; canvas.classList.remove('grabbing') 
+    } 
+}
 function onMouseMove(e) {
     const worldPos = screenToWorld(getEventLocation(e));
+    hoveredItem = getItemAtPosition(worldPos);
+    hoveredPort = getHoveredPort(worldPos);
+    if (hoveredPort) {
+        hoveredItem = hoveredPort.item;
+    }
+    hoveredConnector = getHoveredConnector(worldPos);
+
+    if (isDraggingConnector && typeof tempConnector !== 'undefined' && tempConnector) {
+        tempConnector.endX = worldPos.x;
+        tempConnector.endY = worldPos.y;
+        tempConnector.targetId = null;
+        tempConnector.targetPort = null;
+        if (hoveredPort) {
+            tempConnector.targetId = hoveredPort.item.id;
+            tempConnector.targetPort = hoveredPort.side;
+        }
+        return;
+    }
+
     if (isSelectingBox) {
         selectionBox.endX = worldPos.x;
         selectionBox.endY = worldPos.y;
@@ -1534,21 +1887,30 @@ function onMouseMove(e) {
 
         hoveredGizmo = currentGizmo;
         hoveredArrowHandle = currentArrowHandle;
+        updateCursor(e);
+    }
+}
 
-        if (hoveredGizmo || hoveredArrowHandle) {
+function updateCursor(e) {
+    if (hoveredConnector && (e.ctrlKey || e.metaKey)) {
+        canvas.style.cursor = `url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="red" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="3"></circle><circle cx="6" cy="18" r="3"></circle><line x1="20" y1="4" x2="8.12" y2="15.88"></line><line x1="14.47" y1="14.48" x2="20" y2="20"></line><line x1="8.12" y1="8.12" x2="12" y2="12"></line></svg>') 10 10, crosshair`;
+    } else if (hoveredPort) {
+        canvas.style.cursor = 'crosshair';
+    } else if (hoveredConnector) {
+        canvas.style.cursor = 'pointer';
+    } else if (hoveredGizmo || hoveredArrowHandle) {
+        canvas.style.cursor = 'pointer';
+    } else if (hoveredItem) {
+        if (hoveredItem.type === 'link' && isLinkButtonHit(hoveredItem, screenToWorld(getEventLocation(e)))) {
+            hoveredItem.isHovered = true;
             canvas.style.cursor = 'pointer';
-        } else if (itemUnderMouse) {
-            if (itemUnderMouse.type === 'link' && isLinkButtonHit(itemUnderMouse, worldPos)) {
-                itemUnderMouse.isHovered = true;
-                canvas.style.cursor = 'pointer';
-            } else {
-                canvas.style.cursor = 'move';
-            }
-        } else if (currentTool) {
-            canvas.style.cursor = 'crosshair';
         } else {
-            canvas.style.cursor = 'grab';
+            canvas.style.cursor = 'move';
         }
+    } else if (currentTool) {
+        canvas.style.cursor = 'crosshair';
+    } else {
+        canvas.style.cursor = 'default';
     }
 }
 function isLinkButtonHit(item, pos) {
@@ -2033,6 +2395,8 @@ function setCurrentTool(e) {
         if (addMeasureBtn) addMeasureBtn.classList.add('active');
     } else if (currentTool === 'grid') {
         if (addGridBtn) addGridBtn.classList.add('active');
+    } else if (currentTool === 'textList') {
+        if (addTextListBtn) addTextListBtn.classList.add('active');
     } else if (currentTool === 'draw') {
         if (drawBtn) drawBtn.classList.add('active');
     } else if (currentTool === 'eyedropper') {
@@ -2068,62 +2432,85 @@ function resetItemTransform() {
         if (item.type === 'comment') {
             updateCommentDimensions(item);
         }
+        if (item.type === 'textList') {
+            updateTextListDimensions(item);
+        }
     });
     updateSelectionToolbar();
     saveStateForUndo();
 }
 
 function togglePin() { if (selectedItems.length > 0) { const e = !selectedItems[0].isPinned; selectedItems.forEach(t => t.isPinned = e); updateSelectionToolbar(); saveStateForUndo() } }
-function setTextAlign(e) { if (selectedItems.length === 1 && (selectedItems[0].type === 'text' || selectedItems[0].type === 'comment')) { selectedItems[0].textAlign = e; updateSelectionToolbar(); saveStateForUndo() } }
+function setTextAlign(e) { if (selectedItems.length === 1 && (selectedItems[0].type === 'text' || selectedItems[0].type === 'comment' || selectedItems[0].type === 'textList')) { selectedItems[0].textAlign = e; updateSelectionToolbar(); saveStateForUndo() } }
 function updateGridDimension(e, t) { if (selectedItems.length === 1 && selectedItems[0].type === 'grid') { const o = selectedItems[0], a = parseInt(t, 10); if (a > 0) { o[e] = a; saveStateForUndo() } } }
 function updateMeasureUnit(e) { if (selectedItems.length === 1 && selectedItems[0].type === 'measure') { selectedItems[0].unit = e.target.value; saveStateForUndo() } }
-function setTextFontFamily(e) { if (selectedItems.length === 1 && (selectedItems[0].type === 'text' || selectedItems[0].type === 'comment')) { selectedItems[0].fontFamily = e.target.value; updateCommentDimensions(selectedItems[0]); saveStateForUndo() } }
-function toggleTextStyleBold() { if (selectedItems.length === 1 && (selectedItems[0].type === 'text' || selectedItems[0].type === 'comment')) { const e = selectedItems[0]; e.fontWeight = e.fontWeight === 'bold' ? 'normal' : 'bold'; updateCommentDimensions(e); updateSelectionToolbar(); saveStateForUndo() } }
-function toggleTextStyleItalic() { if (selectedItems.length === 1 && (selectedItems[0].type === 'text' || selectedItems[0].type === 'comment')) { const e = selectedItems[0]; e.fontStyle = e.fontStyle === 'italic' ? 'normal' : 'italic'; updateCommentDimensions(e); updateSelectionToolbar(); saveStateForUndo() } }
+function setTextFontFamily(e) { if (selectedItems.length === 1 && (selectedItems[0].type === 'text' || selectedItems[0].type === 'comment' || selectedItems[0].type === 'textList')) { selectedItems[0].fontFamily = e.target.value; if (selectedItems[0].type === 'comment') updateCommentDimensions(selectedItems[0]); else if (selectedItems[0].type === 'textList') updateTextListDimensions(selectedItems[0]); saveStateForUndo() } }
+function toggleTextStyleBold() { if (selectedItems.length === 1 && (selectedItems[0].type === 'text' || selectedItems[0].type === 'comment' || selectedItems[0].type === 'textList')) { const e = selectedItems[0]; e.fontWeight = e.fontWeight === 'bold' ? 'normal' : 'bold'; if (e.type === 'comment') updateCommentDimensions(e); else if (e.type === 'textList') updateTextListDimensions(e); updateSelectionToolbar(); saveStateForUndo() } }
+function toggleTextStyleItalic() { if (selectedItems.length === 1 && (selectedItems[0].type === 'text' || selectedItems[0].type === 'comment' || selectedItems[0].type === 'textList')) { const e = selectedItems[0]; e.fontStyle = e.fontStyle === 'italic' ? 'normal' : 'italic'; if (e.type === 'comment') updateCommentDimensions(e); else if (e.type === 'textList') updateTextListDimensions(e); updateSelectionToolbar(); saveStateForUndo() } }
 function updateCommentDimensions(e) { if (e.type !== 'comment') return; const t = e.fontStyle || 'normal', o = e.fontWeight || 'bold', a = e.fontFamily || 'Inter'; ctx.save(); ctx.font = `${t} ${o} ${e.fontSize}px '${a}', sans-serif`; const i = e.text.split('\n'); let r = 0; i.forEach(e => { const t = ctx.measureText(e); if (t.width > r) r = t.width }); let extraW = 30; if (e.icon && e.icon !== 'none') extraW += e.fontSize * 1.2 + 10; e.width = r + extraW; const numLines = i.length || 1; e.height = numLines * (e.fontSize * 1.4) + 16; ctx.restore(); }
+function updateTextListDimensions(e) { 
+    if (e.type !== 'textList') return; 
+    const t = e.fontStyle || 'normal', o = e.fontWeight || 'bold', a = e.fontFamily || 'Inter'; 
+    ctx.save(); 
+    ctx.font = `${t} ${o} ${e.fontSize}px '${a}', sans-serif`; 
+    let maxW = 0; 
+    (e.items || []).forEach(item => { 
+        const m = ctx.measureText(item.text); 
+        if (m.width > maxW) maxW = m.width; 
+    }); 
+    const checkboxArea = e.fontSize * 1.1 + 10;
+    e.width = maxW + checkboxArea + 30; 
+    const h = e.fontSize * 1.5;
+    e.height = (e.items || []).length * h + 30; 
+    ctx.restore(); 
+}
 function updateSelectionToolbar() {
     const isBoxOrCircle = selectedItems.some(item => item.type === 'box' || item.type === 'circle');
     const isLink = selectedItems.length === 1 && selectedItems[0].type === 'link';
     const isComment = selectedItems.length === 1 && selectedItems[0].type === 'comment';
+    const isTextList = selectedItems.length === 1 && selectedItems[0].type === 'textList';
     const isTextOrComment = selectedItems.length === 1 && (selectedItems[0].type === 'text' || selectedItems[0].type === 'comment');
+    const isTextOrCommentOrList = isTextOrComment || isTextList;
     const isGrid = selectedItems.length === 1 && selectedItems[0].type === 'grid';
     const isMeasure = selectedItems.length === 1 && selectedItems[0].type === 'measure';
-    const canHaveColor = selectedItems.length === 1 && (['box', 'circle', 'text', 'measure', 'comment', 'link'].includes(selectedItems[0].type));
+    const canHaveColor = selectedItems.length === 1 && (['box', 'circle', 'text', 'measure', 'comment', 'link', 'textList'].includes(selectedItems[0].type));
     const isMultiple = selectedItems.length > 1;
     const isGroup = selectedItems.length === 1 && selectedItems[0].type === 'group';
 
     if (selectedItems.length > 0) {
         selectionToolbar.style.display = 'flex';
-        textToolsContainer.style.display = isTextOrComment ? 'flex' : 'none';
+        textToolsContainer.style.display = isTextOrCommentOrList ? 'flex' : 'none';
         iconToolsContainer.style.display = isComment ? 'flex' : 'none';
         linkToolsContainer.style.display = isLink ? 'flex' : 'none';
         gridToolsContainer.style.display = isGrid ? 'flex' : 'none';
         measureToolsContainer.style.display = isMeasure ? 'flex' : 'none';
         itemColorToolContainer.style.display = canHaveColor ? 'flex' : 'none';
 
-        if (isTextOrComment) {
+        if (isTextOrCommentOrList) {
             const e = selectedItems[0];
             fontFamilySelect.value = e.fontFamily || 'Inter';
             [textAlignLeftBtn, textAlignCenterBtn, textAlignRightBtn].forEach(el => {
                 el.classList.remove('active');
-                el.style.display = isComment ? 'none' : 'flex';
+                el.style.display = (isComment || isTextList) ? 'none' : 'flex';
             });
             if (e.textAlign === 'left') textAlignLeftBtn.classList.add('active');
             else if (e.textAlign === 'right') textAlignRightBtn.classList.add('active');
             else textAlignCenterBtn.classList.add('active');
             textStyleBoldBtn.classList.toggle('active', e.fontWeight === 'bold');
-            textStyleItalicBtn.classList.toggle('active', e.fontStyle === 'italic')
+            textStyleItalicBtn.classList.toggle('active', e.fontStyle === 'italic');
+            textStyleBoldBtn.style.display = isTextList ? 'none' : 'flex';
+            textStyleItalicBtn.style.display = isTextList ? 'none' : 'flex';
         }
         if (canHaveColor) {
             itemColorPicker.value = selectedItems[0].color || accentColor;
         }
         
         toggleBoxStyleBtn.style.display = isBoxOrCircle ? 'flex' : 'none';
-        scaleBtn.style.display = (selectedItems.length > 0 && !isComment && !isLink) ? 'flex' : 'none';
-        rotateBtn.style.display = (selectedItems.length > 0) ? 'flex' : 'none';
-        resetTransformBtn.style.display = (selectedItems.length > 0) ? 'flex' : 'none';
-        flipHorizontalBtn.style.display = (selectedItems.length > 0 && !isComment && !isLink) ? 'flex' : 'none';
-        flipVerticalBtn.style.display = (selectedItems.length > 0 && !isComment && !isLink) ? 'flex' : 'none';
+        scaleBtn.style.display = (selectedItems.length > 0 && !isComment && !isLink && !isTextList) ? 'flex' : 'none';
+        rotateBtn.style.display = (selectedItems.length > 0 && !isTextList) ? 'flex' : 'none';
+        resetTransformBtn.style.display = (selectedItems.length > 0 && !isTextList) ? 'flex' : 'none';
+        flipHorizontalBtn.style.display = (selectedItems.length > 0 && !isComment && !isLink && !isTextList) ? 'flex' : 'none';
+        flipVerticalBtn.style.display = (selectedItems.length > 0 && !isComment && !isLink && !isTextList) ? 'flex' : 'none';
         pinBtn.style.display = (selectedItems.length > 0) ? 'flex' : 'none';
         bringFrontBtn.style.display = (selectedItems.length > 0) ? 'flex' : 'none';
         sendBackBtn.style.display = (selectedItems.length > 0) ? 'flex' : 'none';
@@ -2158,9 +2545,9 @@ openLinkBtn.onclick = () => {
     }
 };
 
-function updateToolbarPosition() { if (selectedItems.length > 0) { const e = getCollectiveBoundingBox(selectedItems), t = worldToScreen({ x: e.x + e.width / 2, y: e.y + e.height }); selectionToolbar.style.left = `${t.x}px`; selectionToolbar.style.top = `${t.y}px` } }
-function editText(e) { currentlyEditingText = e; e.isHidden = !0; const t = worldToScreen({ x: e.x, y: e.y }), o = Math.max(Math.abs(e.width * cameraZoom), 150); let paddingWidthAdjust = e.type === 'comment' ? 30 * cameraZoom : 0; if (e.type === 'comment' && e.icon && e.icon !== 'none') { paddingWidthAdjust += e.fontSize * 1.2 * cameraZoom + 10; } Object.assign(textEditor.style, { display: 'block', left: `${t.x}px`, top: `${t.y}px`, width: `${o}px`, height: 'auto', transform: `rotate(${e.rotation}rad)`, transformOrigin: 'top left', color: e.type === 'comment' ? (getLuminance(e.color) > 0.5 ? '#111' : '#fff') : e.color, backgroundColor: e.type === 'comment' ? e.color : hexToRgba(e.color, .1), borderRadius: e.type === 'comment' ? `${12 * cameraZoom}px` : '0px', padding: e.type === 'comment' ? '8px 15px' : '0px', paddingLeft: e.type === 'comment' && e.icon && e.icon !== 'none' ? `${e.fontSize * 1.2 * cameraZoom  + 20}px` : (e.type === 'comment' ? '15px' : '0px'), fontSize: `${e.fontSize * cameraZoom}px`, fontFamily: e.fontFamily || 'Inter', textAlign: e.textAlign || 'center', fontWeight: e.fontWeight || 'bold', fontStyle: e.fontStyle || 'normal', lineHeight: e.type === 'comment' ? '1.4' : 'normal' }); textEditor.value = e.text === "Type..." || e.text === "Note..." ? "" : e.text; textEditor.focus(); autoResizeTextEditor(); selectedItems = []; updateToolbarPosition(); updateLeftBarState() }
-function finishEditingText() { if (currentlyEditingText) { currentlyEditingText.text = textEditor.value.trim() || (currentlyEditingText.type === 'comment' ? "Note..." : "Type..."); const e = currentlyEditingText; if (e.type === 'comment') { updateCommentDimensions(e); } else { const t = e.fontStyle || 'normal', o = e.fontWeight || 'bold', a = e.fontFamily || 'Inter'; ctx.font = `${t} ${o} ${e.fontSize}px '${a}', sans-serif`; const i = textEditor.value.split('\n'); let r = 0; i.forEach(e => { const t = ctx.measureText(e); if (t.width > r) r = t.width }); e.width = r + 20; e.height = textEditor.scrollHeight / cameraZoom; } currentlyEditingText.isHidden = !1; selectedItems = [currentlyEditingText]; saveStateForUndo(); currentlyEditingText = null } textEditor.style.display = 'none'; textEditor.style.padding = '0'; textEditor.style.lineHeight = 'normal'; }
+function updateToolbarPosition() { if (selectedItems.length > 0) { const e = getCollectiveBoundingBox(selectedItems), t = worldToScreen({ x: e.x + e.width / 2, y: e.y }); selectionToolbar.style.left = `${t.x}px`; selectionToolbar.style.top = `${t.y}px` } }
+function editText(e) { currentlyEditingText = e; e.isHidden = !0; const t = worldToScreen({ x: e.x, y: e.y }), o = Math.max(Math.abs(e.width * cameraZoom), 150); let paddingWidthAdjust = e.type === 'comment' ? 30 * cameraZoom : 0; if (e.type === 'comment' && e.icon && e.icon !== 'none') { paddingWidthAdjust += e.fontSize * 1.2 * cameraZoom + 10; } Object.assign(textEditor.style, { display: 'block', left: `${t.x}px`, top: `${t.y}px`, width: `${o}px`, height: 'auto', transform: `rotate(${e.rotation}rad)`, transformOrigin: 'top left', color: e.type === 'comment' ? (getLuminance(e.color) > 0.5 ? '#111' : '#fff') : e.color, backgroundColor: e.type === 'comment' ? e.color : hexToRgba(e.color, .1), borderRadius: e.type === 'comment' ? `${12 * cameraZoom}px` : '0px', padding: e.type === 'comment' ? '8px 15px' : '0px', paddingLeft: e.type === 'comment' && e.icon && e.icon !== 'none' ? `${e.fontSize * 1.2 * cameraZoom  + 20}px` : (e.type === 'comment' ? '15px' : '0px'), fontSize: `${e.fontSize * cameraZoom}px`, fontFamily: e.fontFamily || 'Inter', textAlign: e.textAlign || 'center', fontWeight: e.fontWeight || 'bold', fontStyle: e.fontStyle || 'normal', lineHeight: e.type === 'comment' ? '1.4' : 'normal' }); textEditor.value = e.text === "Type..." || e.text === "Note..." ? "" : e.text; textEditor.focus(); autoResizeTextEditor(); selectedItems = []; updateSelectionToolbar(); updateToolbarPosition(); updateLeftBarState() }
+function finishEditingText() { if (currentlyEditingText) { currentlyEditingText.text = textEditor.value.trim() || (currentlyEditingText.type === 'comment' ? "Note..." : "Type..."); const e = currentlyEditingText; if (e.type === 'comment') { updateCommentDimensions(e); } else if (e.type === 'textList') { const lines = textEditor.value.split('\n').filter(l => l.trim() !== ""); if (lines.length === 0) lines.push("Item 1"); const oldItems = e.items || []; e.items = lines.map((l, i) => ({ text: l, completed: (oldItems[i] && oldItems[i].text === l) ? oldItems[i].completed : false })); updateTextListDimensions(e); } else { const t = e.fontStyle || 'normal', o = e.fontWeight || 'bold', a = e.fontFamily || 'Inter'; ctx.font = `${t} ${o} ${e.fontSize}px '${a}', sans-serif`; const i = textEditor.value.split('\n'); let r = 0; i.forEach(e => { const t = ctx.measureText(e); if (t.width > r) r = t.width }); e.width = r + 20; e.height = textEditor.scrollHeight / cameraZoom; } currentlyEditingText.isHidden = !1; selectedItems = [currentlyEditingText]; saveStateForUndo(); currentlyEditingText = null } textEditor.style.display = 'none'; textEditor.style.padding = '0'; textEditor.style.lineHeight = 'normal'; }
 function autoResizeTextEditor() { textEditor.style.height = 'auto'; textEditor.style.height = textEditor.scrollHeight + 'px' }
 function saveStateForUndo() { const e = JSON.stringify(items, (e, t) => { if (e === 'img') { return undefined } return t }); if (historyIndex < historyStack.length - 1) { historyStack = historyStack.slice(0, historyIndex + 1) } if (historyStack.length > 0 && historyStack[historyStack.length - 1] === e) return; historyStack.push(e); historyIndex++; if (historyStack.length > HISTORY_LIMIT) { historyStack.shift(); historyIndex-- } }
 function loadStateFromHistory(e) {
@@ -2281,6 +2668,46 @@ function reattachImages(e, t) {
         }
     }
 }
+function getHoveredPort(mousePos) {
+    const hitRadius = 15 / cameraZoom;
+    if (hoveredItem || selectedItems.length > 0) {
+        const itemToCheck = hoveredItem || selectedItems[0];
+        const ports = getItemPorts(itemToCheck);
+        for (const p of ports) {
+            if (Math.hypot(p.x - mousePos.x, p.y - mousePos.y) <= hitRadius) {
+                return p;
+            }
+        }
+    }
+    for (let i = items.length - 1; i >= 0; i--) {
+        const item = items[i];
+        const ports = getItemPorts(item);
+        for (const p of ports) {
+            if (Math.hypot(p.x - mousePos.x, p.y - mousePos.y) <= hitRadius) {
+                return p;
+            }
+        }
+    }
+    return null;
+}
+
+function getHoveredConnector(mousePos) {
+    const hitRadius = 10 / cameraZoom;
+    for (let i = items.length - 1; i >= 0; i--) {
+        const item = items[i];
+        if (item.type === 'connector' && item.cp1 && item.cp2) {
+            const steps = 20;
+            for (let s = 0; s <= steps; s++) {
+                const t = s / steps;
+                const x = (1-t)**3 * item.computedStartX + 3*(1-t)**2 * t * item.cp1.x + 3*(1-t) * t**2 * item.cp2.x + t**3 * item.computedEndX;
+                const y = (1-t)**3 * item.computedStartY + 3*(1-t)**2 * t * item.cp1.y + 3*(1-t) * t**2 * item.cp2.y + t**3 * item.computedEndY;
+                if (Math.hypot(x - mousePos.x, y - mousePos.y) <= hitRadius) return item;
+            }
+        }
+    }
+    return null;
+}
+
 function getItemAtPosition(e) {
     if (!e) return null;
     const checkItem = (o) => {
@@ -2317,7 +2744,7 @@ function getItemAtPosition(e) {
 function getGizmoAtPosition(e) { if (!e || selectedItems.length !== 1 || !activeGizmo) return null; const t = selectedItems[0]; if (t.isPinned || t.type === 'arrow' || t.type === 'stroke' || t.type === 'measure') return null; const o = 14 / cameraZoom, a = t.x + t.width / 2, i = t.y + t.height / 2; if (activeGizmo === 'rotate') { const r = t.width / 2, s = -t.height / 2 - 20 / cameraZoom, n = r * Math.cos(t.rotation) - s * Math.sin(t.rotation), l = r * Math.sin(t.rotation) + s * Math.cos(t.rotation); if (Math.hypot(e.x - (a + n), e.y - (i + l)) < o) return 'rotate' } else if (activeGizmo === 'scale') { const r = t.width / 2, s = t.height / 2, n = r * Math.cos(t.rotation) - s * Math.sin(t.rotation), l = r * Math.sin(t.rotation) + s * Math.cos(t.rotation); if (Math.hypot(e.x - (a + n), e.y - (i + l)) < o) return 'scale' } return null }
 function getArrowHandleAtPosition(e) { if (!e || selectedItems.length !== 1) return null; const t = selectedItems[0]; if (t.isPinned || (t.type !== 'arrow' && t.type !== 'measure')) return null; const o = 12 / cameraZoom; if (Math.hypot(e.x - t.startX, e.y - t.startY) < o) return 'start'; if (Math.hypot(e.x - t.endX, e.y - t.endY) < o) return 'end'; return null }
 function getCollectiveBoundingBox(e) { if (e.length === 0) return { x: 0, y: 0, width: 0, height: 0 }; let t = Infinity, o = Infinity, a = -Infinity, i = -Infinity; e.forEach(e => { const r = getItemBoundingBox(e); t = Math.min(t, r.x); o = Math.min(o, r.y); a = Math.max(a, r.x + r.width); i = Math.max(i, r.y + r.height) }); return { x: t, y: o, width: a - t, height: i - o } }
-function getItemBoundingBox(e) { if (e.type === 'group') { if (!e.items || e.items.length === 0) { return { x: e.x, y: e.y, width: e.width, height: e.height } } let t = Infinity, o = Infinity, a = -Infinity, i = -Infinity; const r = e.x + e.width / 2, s = e.y + e.height / 2, n = Math.cos(e.rotation), l = Math.sin(e.rotation); e.items.forEach(c => { const d = getItemBoundingBox(c), h = [{ x: d.x, y: d.y }, { x: d.x + d.width, y: d.y }, { x: d.x + d.width, y: d.y + d.height }, { x: d.x, y: d.y + d.height }]; h.forEach(c => { const d = (e.x + c.x) - r, h = (e.y + c.y) - s, p = d * n - h * l, m = d * l + h * n, u = r + p, g = s + m; t = Math.min(t, u); o = Math.min(o, g); a = Math.max(a, u); i = Math.max(i, g) }) }); return { x: t, y: o, width: a - t, height: i - o } } if (e.type === 'stroke') { let t = Infinity, o = Infinity, a = -Infinity, i = -Infinity; if (e.points && e.points.length > 0) { e.points.forEach(e => { t = Math.min(t, e.x); o = Math.min(o, e.y); a = Math.max(a, e.x); i = Math.max(i, e.y) }); return { x: t, y: o, width: a - t, height: i - o } } return { x: e.x, y: e.y, width: 0, height: 0 } } if (e.type === 'arrow' || e.type === 'measure') { return { x: Math.min(e.startX, e.endX), y: Math.min(e.startY, e.endY), width: Math.abs(e.startX - e.endX), height: Math.abs(e.startY - e.endY) } } const t = e.width, o = e.height, a = e.x + t / 2, i = e.y + o / 2, r = e.rotation, s = Math.cos(r), n = Math.sin(r); let l = Infinity, c = Infinity, d = -Infinity, h = -Infinity;[{ x: -t / 2, y: -o / 2 }, { x: t / 2, y: -o / 2 }, { x: t / 2, y: o / 2 }, { x: -t / 2, y: o / 2 }].forEach(e => { const t = e.x * s - e.y * n + a, o = e.x * n + e.y * s + i; l = Math.min(l, t); c = Math.min(c, o); d = Math.max(d, t); h = Math.max(h, o) }); return { x: l, y: c, width: d - l, height: h - c } }
+function getItemBoundingBox(e) { if (e.type === 'connector') { return { x: -999999, y: -999999, width: 0, height: 0 } } if (e.type === 'group') { if (!e.items || e.items.length === 0) { return { x: e.x, y: e.y, width: e.width, height: e.height } } let t = Infinity, o = Infinity, a = -Infinity, i = -Infinity; const r = e.x + e.width / 2, s = e.y + e.height / 2, n = Math.cos(e.rotation), l = Math.sin(e.rotation); e.items.forEach(c => { const d = getItemBoundingBox(c), h = [{ x: d.x, y: d.y }, { x: d.x + d.width, y: d.y }, { x: d.x + d.width, y: d.y + d.height }, { x: d.x, y: d.y + d.height }]; h.forEach(c => { const d = (e.x + c.x) - r, h = (e.y + c.y) - s, p = d * n - h * l, m = d * l + h * n, u = r + p, g = s + m; t = Math.min(t, u); o = Math.min(o, g); a = Math.max(a, u); i = Math.max(i, g) }) }); return { x: t, y: o, width: a - t, height: i - o } } if (e.type === 'stroke') { let t = Infinity, o = Infinity, a = -Infinity, i = -Infinity; if (e.points && e.points.length > 0) { e.points.forEach(e => { t = Math.min(t, e.x); o = Math.min(o, e.y); a = Math.max(a, e.x); i = Math.max(i, e.y) }); return { x: t, y: o, width: a - t, height: i - o } } return { x: e.x, y: e.y, width: 0, height: 0 } } if (e.type === 'arrow' || e.type === 'measure') { return { x: Math.min(e.startX, e.endX), y: Math.min(e.startY, e.endY), width: Math.abs(e.startX - e.endX), height: Math.abs(e.startY - e.endY) } } const t = e.width, o = e.height, a = e.x + t / 2, i = e.y + o / 2, r = e.rotation, s = Math.cos(r), n = Math.sin(r); let l = Infinity, c = Infinity, d = -Infinity, h = -Infinity;[{ x: -t / 2, y: -o / 2 }, { x: t / 2, y: -o / 2 }, { x: t / 2, y: o / 2 }, { x: -t / 2, y: o / 2 }].forEach(e => { const t = e.x * s - e.y * n + a, o = e.x * n + e.y * s + i; l = Math.min(l, t); c = Math.min(c, o); d = Math.max(d, t); h = Math.max(h, o) }); return { x: l, y: c, width: d - l, height: h - c } }
 function rectsIntersect(e, t) { return !(t.x > e.x + e.width || t.x + t.width < e.x || t.y > e.y + e.height || t.y + t.height < e.y) }
 function getNormalizedSelectionBox() { return { x: Math.min(selectionBox.startX, selectionBox.endX), y: Math.min(selectionBox.startY, selectionBox.endY), width: Math.abs(selectionBox.startX - selectionBox.endX), height: Math.abs(selectionBox.startY - selectionBox.endY) } }
 function hexToRgba(e, t) { let o = 0, a = 0, i = 0; if (e.length == 4) { o = "0x" + e[1] + e[1]; a = "0x" + e[2] + e[2]; i = "0x" + e[3] + e[3] } else if (e.length == 7) { o = "0x" + e[1] + e[2]; a = "0x" + e[3] + e[4]; i = "0x" + e[5] + e[6] } return `rgba(${+o},${+a},${+i},${t})` }
@@ -2347,6 +2774,32 @@ function showLinkInputModal(x, y, existingItem = null) {
 function hideLinkInputModal() {
     inputModalOverlay.style.display = 'none';
     activeLinkEdit = null;
+}
+
+function getCheckboxHitIndex(item, worldPos) {
+    if (item.type !== 'textList') return -1;
+    const dx = worldPos.x - (item.x + item.width / 2);
+    const dy = worldPos.y - (item.y + item.height / 2);
+    const cos = Math.cos(-item.rotation);
+    const sin = Math.sin(-item.rotation);
+    const localX = dx * cos - dy * sin + item.width / 2;
+    const localY = dx * sin + dy * cos + item.height / 2;
+
+    const padding = 15;
+    const h = item.fontSize * 1.5;
+    const checkboxSize = item.fontSize * 1.1;
+
+    for (let i = 0; i < (item.items || []).length; i++) {
+        const itemY = padding + i * h;
+        const cbY = itemY + (h - checkboxSize) / 2;
+        const cbX = padding;
+        
+        if (localX >= cbX - 5 && localX <= cbX + checkboxSize + 5 && 
+            localY >= cbY - 5 && localY <= cbY + checkboxSize + 5) {
+            return i;
+        }
+    }
+    return -1;
 }
 
 cancelInputBtn.onclick = hideLinkInputModal;

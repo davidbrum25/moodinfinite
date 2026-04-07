@@ -734,7 +734,7 @@
             display: none;
             gap: .35rem;
             border: 1px solid var(--border-color);
-            transform: translate(-50%, 10px);
+            transform: translate(-50%, calc(-100% - 10px));
             backdrop-filter: blur(16px);
             -webkit-backdrop-filter: blur(16px)
         }
