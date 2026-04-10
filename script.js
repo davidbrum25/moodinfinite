@@ -15,11 +15,11 @@ const mobileTabsPopup = document.getElementById('mobile-tabs-popup');
 const leftScrollIndicator = document.querySelector('.tabs-list-container .scroll-indicator.left');
 const rightScrollIndicator = document.querySelector('.tabs-list-container .scroll-indicator.right');
 
-const genericIcon = `<iconify-icon icon="lucide:zap" width="20" height="20"></iconify-icon>`;
+const genericIcon = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"/></svg>`;
 const platformData = {
     higgsfield: { name: 'Higgsfield', icon: genericIcon },
     openai_sora: { name: 'OpenAI Sora', icon: genericIcon },
-    midjourney: { name: 'Midjourney', icon: `<iconify-icon icon="lucide:mountain" width="20" height="20"></iconify-icon>` },
+    midjourney: { name: 'Midjourney', icon: `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="m8 3l4 8l5-5l5 15H2z"/></svg>` },
     wanz_5: { name: 'Wan2.5', icon: genericIcon },
     wanz_2: { name: 'Wan2.2', icon: genericIcon },
     minimax: { name: 'Minimax', icon: genericIcon },
@@ -596,11 +596,11 @@ function getLuminance(hex) {
 
 const commentIcons = {
     'none': '',
-    'star': '<polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>',
-    'eyedropper': '<path d="m2 22 .71-7.29 10-10a2.82 2.82 0 1 1 4 4l-10 10Z"></path><path d="m11 5 4 4"></path><path d="m11 11 1 1"></path><path d="m18 2 4 4"></path><path d="m14 6 4 4"></path>',
-    'sparkles': '<path d="m12 3 1.91 5.89L21 10.8l-5.99 2.09L13 18.78 11.09 12.89 4 10.8l7.09-2.09L12 3Z"></path>',
-    'cursor': '<path d="m3 3 7.07 16.97 2.51-7.39 7.39-2.51L3 3z"></path><path d="m13 13 6 6"></path>',
-    'info': '<circle cx="12" cy="12" r="10"></circle><path d="M12 16v-4"></path><path d="M12 8h.01"></path>'
+    'star': '<path d="M11.525 2.295a.53.53 0 0 1 .95 0l2.31 4.679a2.12 2.12 0 0 0 1.595 1.16l5.166.756a.53.53 0 0 1 .294.904l-3.736 3.638a2.12 2.12 0 0 0-.611 1.878l.882 5.14a.53.53 0 0 1-.771.56l-4.618-2.428a2.12 2.12 0 0 0-1.973 0L6.396 21.01a.53.53 0 0 1-.77-.56l.881-5.139a2.12 2.12 0 0 0-.611-1.879L2.16 9.795a.53.53 0 0 1 .294-.906l5.165-.755a2.12 2.12 0 0 0 1.597-1.16z"></path>',
+    'eyedropper': '<path d="m12 9l-8.414 8.414A2 2 0 0 0 3 18.828v1.344a2 2 0 0 1-.586 1.414A2 2 0 0 1 3.828 21h1.344a2 2 0 0 0 1.414-.586L15 12"></path><path d="m18 9l.4.4a1 1 0 1 1-3 3l-3.8-3.8a1 1 0 1 1 3-3l.4.4l3.4-3.4a1 1 0 1 1 3 3zM2 22l.414-.414"></path>',
+    'sparkles': '<path d="M11.017 2.814a1 1 0 0 1 1.966 0l1.051 5.558a2 2 0 0 0 1.594 1.594l5.558 1.051a1 1 0 0 1 0 1.966l-5.558 1.051a2 2 0 0 0-1.594 1.594l-1.051 5.558a1 1 0 0 1-1.966 0l-1.051-5.558a2 2 0 0 0-1.594-1.594l-5.558-1.051a1 1 0 0 1 0-1.966l5.558-1.051a2 2 0 0 0 1.594-1.594zM20 2v4m2-2h-4"></path><circle cx="4" cy="20" r="2"></circle>',
+    'cursor': '<path d="M4.037 4.688a.495.495 0 0 1 .651-.651l16 6.5a.5.5 0 0 1-.063.947l-6.124 1.58a2 2 0 0 0-1.438 1.435l-1.579 6.126a.5.5 0 0 1-.947.063z"></path>',
+    'info': '<circle cx="12" cy="12" r="10"></circle><path d="M12 16v-4m0-4h.01"></path>'
 };
 
 let svgCache = {};
