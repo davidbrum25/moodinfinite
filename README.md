@@ -1,4 +1,4 @@
-# Moodinfinite v0.9.3
+# Moodinfinite v0.9.4
 
 <div align="center">
   <img src="https://github.com/davidbrum25/moodinfinite/blob/main/_branding/_png/moodinfinite__Logotipo_alpha.png?raw=true" alt="Moodinfinite Logo" width="400"/>
@@ -7,6 +7,20 @@
 <p align="center">
   <strong>A versatile, infinite digital canvas for your ideas. Create moodboards, brainstorm, organize thoughts, and now, craft the perfect AI prompts.</strong>
 </p>
+
+---
+
+## ✨ What's New in Version 0.9.4
+
+This update focuses on polishing the mobile user experience and squashing several functional bugs.
+
+*   **📱 Mobile Quality of Life Improvements:**
+    *   **Reliable Connectors:** The "Connect" (tap-to-connect) button logic has been entirely rebuilt to use native `pointerdown` events. This completely eliminates duplicate tap triggers and ghost-firing on mobile and tablet devices, guaranteeing flawless connections.
+    *   **Smart Interactions:** The app reliably handles "tap-outside" captures across all floating panels (Context Menu, Icon Picker, and Palette Panel) before they interfere with desktop or mobile canvases.
+    *   **Live Color Previews:** Hovering your mouse over any Color Palette option will now instantly preview the style across the entire app UI without permanently altering your workflow.
+*   **🐛 Bug Fixes & Stability:**
+    *   **Group Transformation Preservation:** Fixed an issue where items that were scaled inside a parent group would "snap back" to their unscaled dimensions when ungrouped. The coordinate matrix translation now flawlessly applies the exact scale properties to all primitive elements and drawn paths during ungrouping.
+    *   **Event Crash Prevention:** Sanitized synthetic pointer events internally to halt an `Undefined preventDefault` crash that would abruptly cancel the underlying touch framework when finishing a wire trace between elements on iOS/Android.
 
 ---
 

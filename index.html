@@ -65,6 +65,10 @@
             <iconify-icon icon="lucide:menu" width="20" height="20"></iconify-icon>
         </button>
 
+        <button id="mobile-context-btn" class="tab-add-btn" title="Actions">
+            <iconify-icon icon="lucide:more-vertical" width="20" height="20"></iconify-icon>
+        </button>
+
         <div style="margin-left: auto; display: flex; align-items: center; gap: 4px;">
             <button id="save-png-btn" title="Export as PNG (Shift+S)" class="tab-add-btn">
                 <iconify-icon icon="lucide:download" width="20" height="20"></iconify-icon>
@@ -143,7 +147,7 @@
                 <div id="grid-tools-container"><label for="grid-rows-input" class="selection-tool-btn" title="Rows"><iconify-icon icon="lucide:rows-3" width="18" height="18"></iconify-icon></label><input type="number" id="grid-rows-input" class="grid-input" min="1"><label
                         for="grid-cols-input" class="selection-tool-btn" title="Columns"><iconify-icon icon="lucide:columns-3" width="18" height="18"></iconify-icon></label><input type="number" id="grid-cols-input" class="grid-input" min="1"></div><button
                     id="toggle-box-style-btn" class="selection-tool-btn" title="Toggle Box Style"><iconify-icon icon="lucide:square" width="18" height="18"></iconify-icon></button><button id="group-btn" class="selection-tool-btn" title="Group (Ctrl+G)"><iconify-icon icon="lucide:layers" width="18" height="18"></iconify-icon></button><button id="group-ordered-btn" class="selection-tool-btn"
-                    title="Group Ordered (Ctrl+Shift+O)"><iconify-icon icon="lucide:list-ordered" width="18" height="18"></iconify-icon></button><button id="ungroup-btn" class="selection-tool-btn"
+                    title="Group Ordered (Ctrl+Shift+O)"><iconify-icon icon="lucide:list-ordered" width="18" height="18"></iconify-icon></button><button id="connect-btn" class="selection-tool-btn" title="Connect (Mobile helper)"><iconify-icon icon="lucide:share-2" width="18" height="18"></iconify-icon></button><button id="ungroup-btn" class="selection-tool-btn"
                     title="Ungroup (Ctrl+Shift+G)"><iconify-icon icon="lucide:copy-minus" width="18" height="18"></iconify-icon></button><button id="bring-front-btn" class="selection-tool-btn"
                     title="Bring to Front (Home)"><iconify-icon icon="lucide:move-up" width="18" height="18"></iconify-icon></button><button id="send-back-btn" class="selection-tool-btn" title="Send to Back (End)"><iconify-icon icon="lucide:move-down" width="18" height="18"></iconify-icon></button><button id="scale-btn" class="selection-tool-btn" title="Scale (S)"><iconify-icon icon="lucide:maximize-2" width="18" height="18"></iconify-icon></button><button id="rotate-btn" class="selection-tool-btn" title="Rotate (R)"><iconify-icon icon="lucide:rotate-cw" width="18" height="18"></iconify-icon></button><button id="reset-transform-btn" class="selection-tool-btn"
                     title="Reset State (scale and rotation)"><iconify-icon icon="lucide:refresh-cw" width="18" height="18"></iconify-icon></button><button id="flip-horizontal-btn" class="selection-tool-btn"
@@ -205,6 +209,7 @@
         <div class="border-t my-2" id="download-separator" style="border-color:var(--border-color);display:none"></div>
         <div class="menu-item" id="download-image-btn" style="display:none"><span class="menu-label">Download
                 Source</span><iconify-icon icon="lucide:download" width="18" height="18"></iconify-icon></div>
+        <div class="menu-item" id="context-connect-btn" style="display:none"><span class="menu-label">Connect to...</span><iconify-icon icon="lucide:share-2" width="18" height="18"></iconify-icon></div>
         <div class="border-t my-2" id="delete-separator" style="border-color:var(--border-color)"></div>
         <div class="menu-item" id="delete-item-btn"><span class="menu-label text-red-500">Delete Selected</span><iconify-icon icon="lucide:trash-2" width="18" height="18" class="text-red-500"></iconify-icon></div>
     </div>
@@ -248,75 +253,56 @@
             <h2>Moodinfinite Help</h2>
             <div class="help-content">
                 <h3>Welcome!</h3>
-                <p>Moodinfinite is a digital canvas for your ideas. Add images, text, arrows, and more to create
-                    moodboards, brainstorm, or organize your thoughts.</p>
+                <p>Moodinfinite is a professional digital canvas for your ideas. Add images, text, arrows, connectors, checklist, measurements and more to create moodboards, brainstorm, or organize your thoughts with absolute freedom.</p>
+                
                 <h3>Core Concepts</h3>
                 <ul>
-                    <li><strong>Panning & Zooming:</strong> On Desktop, use the mouse wheel to zoom and middle-click (or
-                        Space + left-click) to pan. On Touch devices, <strong>pinch with two fingers</strong> to zoom
-                        and <strong>drag with two fingers</strong> to pan.</li>
-                    <li><strong>Context Menu:</strong> Right-click on Desktop. <strong>Long press</strong> on a Touch
-                        device.</li>
-                    <li><strong>Selecting:</strong> Tap or Click on an item to select it. Hold <strong>Shift</strong>
-                        and click to select multiple items. Click and drag on an empty area to create a selection box.
-                    </li>
-                    <li><strong>Deselect:</strong> Press <strong>Escape</strong> to clear your current selection.</li>
+                    <li><strong>Panning & Zooming:</strong> Use the <strong>mouse wheel</strong> to zoom and <strong>middle-click</strong> (or <strong>Space + left-click</strong>) to pan. On Touch, <strong>pinch</strong> to zoom and <strong>drag with two fingers</strong> to pan.</li>
+                    <li><strong>Selection:</strong> Click an item to select. Hold <strong>Shift</strong> to select multiple. Drag on empty space to create a <strong>selection box</strong>.</li>
+                    <li><strong>Context Menu:</strong> <strong>Right-click</strong> (or <strong>Long press</strong> on touch) anywhere to access canvas and item settings.</li>
+                    <li><strong>Connectors:</strong> Select an item to reveal <strong>blue connection ports</strong>. Drag from a port to another item to create a dynamic connector line.</li>
+                    <li><strong>Reroute Nodes:</strong> <strong>Double-click</strong> a connector line to add a reroute node, allowing you to shape the connection path.</li>
                 </ul>
+
                 <h3>Tools & Hotkeys</h3>
                 <ul>
-                    <li><strong>Select (A):</strong> The default tool for selecting, moving, and interacting with items.
-                    </li>
-                    <li><strong>Add Image (I):</strong> Opens a file dialog to add images. You can also paste images
-                        directly or drag-and-drop them onto the canvas.</li>
-                    <li><strong>Add Text (T):</strong> Tap and drag to create a text box. Double-tap an existing text
-                        box to edit it. Finish editing with <strong>Ctrl+Enter</strong>.</li>
-                    <li><strong>Add Arrow (Shift+A):</strong> Tap and drag to draw an arrow. Hold <strong>Shift</strong>
-                        while drawing to snap to 45-degree angles.</li>
-                    <li><strong>Add Box (B):</strong> Tap and drag to create a colored rectangle.</li>
-                    <li><strong>Add Grid (Alt+G):</strong> Tap and drag to create a grid. Adjust rows and columns from
-                        the selection toolbar.</li>
-                    <li><strong>Draw (D):</strong> Freehand drawing tool.</li>
-                    <li><strong>Eyedropper (E):</strong> Pick a color from the canvas to set as your current accent
-                        color.</li>
+                    <li><strong>Select (A):</strong> Default tool for interacting with the canvas.</li>
+                    <li><strong>Add Image (I):</strong> Upload images from your device. You can also <strong>Paste (Ctrl+V)</strong> or <strong>Drag & Drop</strong> files directly.</li>
+                    <li><strong>Add Text (T):</strong> Create text boxes for titles and descriptions. <strong>Double-click</strong> to edit.</li>
+                    <li><strong>Add Comment (N):</strong> Create sticky-note style comments for annotations.</li>
+                    <li><strong>Add Link (K):</strong> Add hyperlinks to your board. Click the <strong>external link icon</strong> on the item or toolar to open the URL.</li>
+                    <li><strong>Add Text List (L):</strong> Create interactive checklists. <strong>Click checkboxes</strong> to toggle items and <strong>double-click</strong> to edit the list.</li>
+                    <li><strong>Draw (D):</strong> Freehand drawing and sketching.</li>
+                    <li><strong>Add Arrow (Shift+A):</strong> Draw directional arrows. Hold <strong>Shift</strong> to snap to 45° angles.</li>
+                    <li><strong>Add Box (B) & Circle (C):</strong> Create geometric shapes. Toggle between <strong>Fill</strong> and <strong>Stroke</strong> in the toolbar.</li>
+                    <li><strong>Measure (M):</strong> Draw a line to measure distances. Switch units (<strong>px, cm, in</strong>) from the selection toolbar.</li>
+                    <li><strong>Add Grid (Alt+G):</strong> Create customizable grids. Adjust rows and columns in the toolbar.</li>
+                    <li><strong>Eyedropper (E):</strong> Pick any color from the canvas to use as your current accent color.</li>
                 </ul>
+
                 <h3>Item Manipulation</h3>
-                <p>When you select an item, a floating toolbar appears with context-specific actions.</p>
+                <p>When an item is selected, a context-aware toolbar appears with specific actions:</p>
                 <ul>
-                    <li><strong>Layering:</strong> Bring an item to the very front with <strong>Home</strong> or send it
-                        to the very back with <strong>End</strong>. Move one layer at a time with <strong>Page
-                            Up</strong> and <strong>Page Down</strong>.</li>
-                    <li><strong>Grouping:</strong> Select multiple items and press <strong>Ctrl+G</strong> to group
-                        them. A group can be moved, rotated, and scaled as a single object.</li>
-                    <li><strong>Ungrouping:</strong> Select a group and press <strong>Ctrl+Shift+G</strong> to break it
-                        back into its individual items.</li>
-                    <li><strong>Scale (S):</strong> With a single item selected, press <strong>S</strong> to activate
-                        scale mode. Drag the handle that appears on the bottom-right corner. Hold <strong>Shift</strong>
-                        while scaling to maintain the original aspect ratio.</li>
-                    <li><strong>Rotate (R):</strong> With a single item selected, press <strong>R</strong> to activate
-                        rotate mode. Drag the handle that appears on the top. Hold <strong>Shift</strong> to snap
-                        rotation to 15-degree increments.</li>
-                    <li><strong>Flip Horizontal (H):</strong> Flips the selected item(s) horizontally.</li>
-                    <li><strong>Flip Vertical (V):</strong> Flips the selected item(s) vertically.</li>
-                    <li><strong>Pin (P):</strong> Lock an item in place to prevent accidental movement or editing.</li>
-                    <li><strong>Delete (Del / Backspace):</strong> Remove the selected item(s).</li>
-                    <li><strong>Auto Align (Ctrl+Shift+A):</strong> Neatly arranges two or more selected items into a
-                        grid.</li>
+                    <li><strong>Layering:</strong> Use <strong>Home/End</strong> to move items to the very front/back. Use <strong>Page Up/Down</strong> to move one layer at a time.</li>
+                    <li><strong>Grouping (Ctrl+G):</strong> Combine items to move and transform them together. <strong>Ctrl+Shift+G</strong> to ungroup.</li>
+                    <li><strong>Group Ordered (Ctrl+Shift+O):</strong> Select multiple images and use this to neatly align and group them horizontally.</li>
+                    <li><strong>Transform:</strong> Press <strong>S</strong> for Scale or <strong>R</strong> for Rotate. Drag the handles to modify. Hold <strong>Shift</strong> to maintain aspect ratio or snap rotation.</li>
+                    <li><strong>Flipping:</strong> Press <strong>H</strong> to flip horizontally or <strong>V</strong> to flip vertically.</li>
+                    <li><strong>Pin (P):</strong> Lock an item to prevent accidental movement or changes.</li>
+                    <li><strong>Auto Align (Ctrl+Shift+A):</strong> Neatly arrange multiple selected items into a grid.</li>
+                    <li><strong>Delete (Del / Backspace):</strong> Remove selected items. Use <strong>Ctrl + Click</strong> to delete connectors or reroute nodes.</li>
                 </ul>
+
                 <h3>General Hotkeys</h3>
                 <ul>
                     <li><strong>New Board:</strong> Shift+N</li>
-                    <li><strong>Open Project:</strong> Ctrl+O</li>
-                    <li><strong>Save Project:</strong> Ctrl+S</li>
-                    <li><strong>Export as PNG:</strong> Shift+S</li>
-                    <li><strong>Copy:</strong> Ctrl+C</li>
-                    <li><strong>Cut:</strong> Ctrl+X</li>
-                    <li><strong>Paste:</strong> Ctrl+V</li>
-                    <li><strong>Duplicate:</strong> Ctrl+D</li>
-                    <li><strong>Undo:</strong> Ctrl+Z</li>
-                    <li><strong>Redo:</strong> Ctrl+Shift+Z</li>
-                    <li><strong>Select All:</strong> Ctrl+A</li>
-                    <li><strong>Invert Selection:</strong> Ctrl+I</li>
-                    <li><strong>Toggle Background Grid:</strong> G</li>
+                    <li><strong>Open / Save Project:</strong> Ctrl+O / Ctrl+S</li>
+                    <li><strong>Export PNG:</strong> Shift+S (Download) or <strong>Shift+C</strong> (Copy to Clipboard)</li>
+                    <li><strong>Edit Operations:</strong> Ctrl+C (Copy), Ctrl+X (Cut), Ctrl+V (Paste), Ctrl+D (Duplicate)</li>
+                    <li><strong>Undo / Redo:</strong> Ctrl+Z / Ctrl+Shift+Z</li>
+                    <li><strong>Select All / Invert:</strong> Ctrl+A / Ctrl+I</li>
+                    <li><strong>Toggle Grid:</strong> G (Toggle visibility), Alt+G (Grid Tool)</li>
+                    <li><strong>Deselect / Cancel:</strong> Escape</li>
                 </ul>
                 <h3>Credits</h3>
                 <p style="line-height:1.8">Made by H. David Brum<br><a href="mailto:davidbrum@gmail.com" target="_blank"

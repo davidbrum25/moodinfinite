@@ -60,9 +60,9 @@ function createNewProject(type) {
                 cameraZoom: 1,
                 historyStack: [],
                 historyIndex: -1,
-                canvasBackgroundColor: '#0d0d0d',
-                accentColor: '#429eff',
-                gridColor: '#f9f8f6'
+                canvasBackgroundColor: defaultCanvasBg,
+                accentColor: defaultAccent,
+                gridColor: defaultGridColor
             }
         };
     } else {
@@ -73,7 +73,7 @@ function createNewProject(type) {
             name: `Prompts ${projectCount + 1}`,
             data: {
                 prompts: [],
-                canvasBackgroundColor: '#0d0d0d',
+                canvasBackgroundColor: defaultCanvasBg,
             }
         };
     }
@@ -520,6 +520,7 @@ const palettePanel = document.getElementById('palette-panel');
 const eyedropperBtn = document.getElementById('eyedropper-btn');
 const groupBtn = document.getElementById('group-btn');
 const groupOrderedBtn = document.getElementById('group-ordered-btn');
+const connectBtn = document.getElementById('connect-btn');
 const ungroupBtn = document.getElementById('ungroup-btn');
 const textToolsContainer = document.getElementById('text-tools-container');
 const iconToolsContainer = document.getElementById('icon-tools-container');
@@ -541,6 +542,7 @@ const helpModalOverlay = document.getElementById('help-modal-overlay');
 const closeHelpBtn = document.getElementById('close-help-btn');
 const selectToolBtn = document.getElementById('select-tool-btn');
 const downloadImageBtn = document.getElementById('download-image-btn');
+const contextConnectBtn = document.getElementById('context-connect-btn');
 const downloadSeparator = document.getElementById('download-separator');
 const addLinkBtn = document.getElementById('add-link-btn');
 const inputModalOverlay = document.getElementById('input-modal-overlay');
@@ -552,6 +554,7 @@ const confirmInputBtn = document.getElementById('confirm-input-btn');
 const linkToolsContainer = document.getElementById('link-tools-container');
 const editLinkBtn = document.getElementById('edit-link-btn');
 const openLinkBtn = document.getElementById('open-link-btn');
+const mobileContextBtn = document.getElementById('mobile-context-btn');
 
 let cameraOffset, cameraZoom;
 let items = [], selectedItems = [];
@@ -564,7 +567,10 @@ let clipboard = [];
 let internalClipboardTimestamp = 0;
 let isMovingItems = false, moveStart = { x: 0, y: 0 };
 let currentTool = null, isDrawing = false;
-let canvasBackgroundColor = '#0d0d0d', accentColor = '#429eff', gridColor = '#f9f8f6';
+let defaultCanvasBg = '#0d0d0d', defaultAccent = '#429eff', defaultGridColor = '#f9f8f6';
+let canvasBackgroundColor = defaultCanvasBg, accentColor = defaultAccent, gridColor = defaultGridColor;
+let isConnectionMode = false;
+let connectionSourceItem = null;
 let activeGizmo = null, isTransforming = false, isTransformingArrow = false;
 let transformingHandle = null, transformStart = { x: 0, y: 0 }, originalItemState = null;
 let hoveredGizmo = null, hoveredArrowHandle = null;
@@ -648,8 +654,27 @@ function loadSettings() {
             showNotifications = settings.showNotifications ?? showNotifications;
             gridSize = settings.gridSize ?? gridSize;
             gridOpacity = settings.gridOpacity ?? gridOpacity;
+            defaultCanvasBg = settings.defaultCanvasBg ?? defaultCanvasBg;
+            defaultAccent = settings.defaultAccent ?? defaultAccent;
+            defaultGridColor = settings.defaultGridColor ?? defaultGridColor;
+            canvasBackgroundColor = defaultCanvasBg;
+            accentColor = defaultAccent;
+            gridColor = defaultGridColor;
         }
     } catch (error) { console.error("Could not load settings from localStorage:", error); }
+}
+
+function saveDefaultTheme() {
+    defaultCanvasBg = canvasBackgroundColor;
+    defaultAccent = accentColor;
+    defaultGridColor = gridColor;
+    const savedSettings = localStorage.getItem('moodinfinite-settings');
+    let settings = savedSettings ? JSON.parse(savedSettings) : {};
+    settings.defaultCanvasBg = defaultCanvasBg;
+    settings.defaultAccent = defaultAccent;
+    settings.defaultGridColor = defaultGridColor;
+    localStorage.setItem('moodinfinite-settings', JSON.stringify(settings));
+    showToast("Current theme set as default for new boards.");
 }
 
 function applySettingsToUI() {
@@ -726,6 +751,17 @@ function setupEventListeners() {
         }
     });
 
+    document.addEventListener('touchstart', e => {
+        if (contextMenu && !contextMenu.contains(e.target)) contextMenu.style.display = 'none';
+        if (tabContextMenu && !tabContextMenu.contains(e.target)) tabContextMenu.style.display = 'none';
+        if (palettePanel && palettePanel.classList.contains('open') && !palettePanel.contains(e.target) && e.target !== paletteBtn && !paletteBtn.contains(e.target)) {
+            palettePanel.classList.remove('open')
+        }
+        if (iconPickerPanel && iconPickerPanel.style.display === 'flex' && !iconPickerPanel.contains(e.target) && e.target !== commentIconBtn && !commentIconBtn.contains(e.target)) {
+            iconPickerPanel.style.display = 'none'
+        }
+    }, { capture: true, passive: true });
+
     window.addEventListener('paste', handlePaste);
     canvas.addEventListener('dragover', handleDragOver);
     canvas.addEventListener('dragleave', handleDragLeave);
@@ -759,6 +795,28 @@ function setupEventListeners() {
     if (imageInput) imageInput.addEventListener('change', handleImageUpload);
     if (projectInput) projectInput.addEventListener('change', handleProjectUpload);
     if (mobileTabsBtn) mobileTabsBtn.addEventListener('click', toggleMobileTabsPopup);
+    if (connectBtn) {
+        connectBtn.addEventListener('pointerdown', (ev) => {
+            ev.stopPropagation();
+            toggleConnectionMode();
+        });
+    }
+    if (contextConnectBtn) {
+        contextConnectBtn.addEventListener('click', (ev) => {
+            ev.stopPropagation();
+            toggleConnectionMode();
+        });
+    }
+    if (mobileContextBtn) mobileContextBtn.addEventListener('click', (ev) => {
+        ev.stopPropagation();
+        const fakeEvent = {
+            preventDefault: () => { },
+            clientX: window.innerWidth / 2,
+            clientY: window.innerHeight / 2,
+            isFake: true
+        };
+        onContextMenu(fakeEvent);
+    });
 
     if (addArrowBtn) addArrowBtn.addEventListener('click', () => setCurrentTool('arrow'));
     if (addTextBtn) addTextBtn.addEventListener('click', () => setCurrentTool('text'));
@@ -1222,6 +1280,56 @@ function getItemPorts(e) {
     ];
 }
 
+function createSimpleConnector(source, target) {
+    saveStateForUndo();
+    const portsS = getItemPorts(source);
+    const portsT = getItemPorts(target);
+    if (!portsS.length || !portsT.length) return;
+    
+    let minDist = Infinity;
+    let bestS = 'right', bestT = 'left';
+    
+    portsS.forEach(ps => {
+        portsT.forEach(pt => {
+            const d = Math.hypot(ps.x - pt.x, ps.y - pt.y);
+            if (d < minDist) {
+                minDist = d;
+                bestS = ps.side;
+                bestT = pt.side;
+            }
+        });
+    });
+
+    const newConn = {
+        id: Date.now(),
+        type: 'connector',
+        sourceId: source.id,
+        sourcePort: bestS,
+        targetId: target.id,
+        targetPort: bestT,
+        color: accentColor
+    };
+    addItemToLayeredItems(newConn);
+    updateSelectionToolbar();
+    updateLeftBarState();
+}
+
+function toggleConnectionMode() {
+    if (selectedItems.length !== 1) {
+        showToast("Select one item to start connecting.", "error");
+        return;
+    }
+    const item = selectedItems[0];
+    if (['connector', 'stroke', 'measure'].includes(item.type)) {
+        showToast("Cannot start connection from this item type.", "error");
+        return;
+    }
+    isConnectionMode = true;
+    connectionSourceItem = item;
+    if (connectBtn) connectBtn.classList.add('active');
+    showToast("Connection mode: Tap a target item", "success");
+}
+
 function getGlobalPortPos(item, side) {
     const ports = getItemPorts(item);
     return ports.find(p => p.side === side);
@@ -1414,6 +1522,8 @@ function onDoubleClick(e) {
         
         selectedItems = [rerouteNode];
         saveStateForUndo();
+    } else if (e.isTouch) {
+        onContextMenu(e);
     }
 }
 function getEventLocation(e) {
@@ -1425,6 +1535,29 @@ function getEventLocation(e) {
     };
 }
 function onMouseDown(e) {
+    if (contextMenu) contextMenu.style.display = 'none';
+    if (tabContextMenu) tabContextMenu.style.display = 'none';
+    if (iconPickerPanel) iconPickerPanel.style.display = 'none';
+    if (palettePanel) palettePanel.classList.remove('open');
+
+    if (isConnectionMode) {
+        const t = getEventLocation(e);
+        const mouseWorld = screenToWorld(t);
+        const target = getItemAtPosition(mouseWorld);
+        
+        if (target && target.id !== connectionSourceItem.id) {
+            if (e.preventDefault) e.preventDefault();
+            createSimpleConnector(connectionSourceItem, target);
+        } else {
+            showToast(target ? "Cannot connect an item to itself." : "Connection mode cancelled.");
+        }
+        
+        isConnectionMode = false;
+        connectionSourceItem = null;
+        if (connectBtn) connectBtn.classList.remove('active');
+        return;
+    }
+
     if (currentlyEditingText) {
         finishEditingText();
         return;
@@ -1445,7 +1578,7 @@ function onMouseDown(e) {
 
     if (e.button === 0) {
         if ((e.ctrlKey || e.metaKey) && hoveredConnector) {
-            e.preventDefault();
+            if (e.preventDefault) e.preventDefault();
             items = items.filter(i => i.id !== hoveredConnector.id);
             selectedItems = selectedItems.filter(i => i.id !== hoveredConnector.id);
             updateSelectionToolbar();
@@ -1455,7 +1588,7 @@ function onMouseDown(e) {
         }
 
         if ((e.ctrlKey || e.metaKey) && hoveredItem && hoveredItem.type === 'reroute') {
-             e.preventDefault();
+             if (e.preventDefault) e.preventDefault();
              items = items.filter(i => i.id !== hoveredItem.id);
              selectedItems = selectedItems.filter(i => i.id !== hoveredItem.id);
              items = items.filter(i => !(i.type === 'connector' && (i.sourceId === hoveredItem.id || i.targetId === hoveredItem.id)));
@@ -1466,7 +1599,7 @@ function onMouseDown(e) {
         }
 
         if (hoveredPort) {
-            e.preventDefault();
+            if (e.preventDefault) e.preventDefault();
             isDraggingConnector = true;
             tempConnector = {
                 id: Date.now(),
@@ -1929,7 +2062,42 @@ function isLinkButtonHit(item, pos) {
     const ry = dx * sin + dy * cos;
     return rx >= btnX_rel && rx <= btnX_rel + btnSize && ry >= btnY_rel && ry <= btnY_rel + btnSize;
 }
-function onContextMenu(e) { e.preventDefault(); const t = getItemAtPosition(screenToWorld(getEventLocation(e))); if (t && !selectedItems.includes(t)) { selectedItems = [t]; updateSelectionToolbar(); updateLeftBarState() } if (selectedItems.length > 0) { opacitySliderContainer.style.display = 'flex'; opacitySeparator.style.display = 'block'; const e = selectedItems[0].opacity ?? 1; itemOpacitySlider.value = e; itemOpacityValue.textContent = `${Math.round(e * 100)}%`; deleteItemBtn.style.display = 'flex'; document.getElementById('delete-separator').style.display = 'block' } else { opacitySliderContainer.style.display = 'none'; opacitySeparator.style.display = 'none'; deleteItemBtn.style.display = 'none'; document.getElementById('delete-separator').style.display = 'none' } const o = selectedItems.length === 1 && selectedItems[0].type === 'image'; downloadImageBtn.style.display = o ? 'flex' : 'none'; downloadSeparator.style.display = o ? 'block' : 'none'; showAndPositionMenu(contextMenu, e) }
+function onContextMenu(e) { 
+    if (e && e.preventDefault) e.preventDefault(); 
+    let t;
+    if (e && e.isFake && selectedItems.length > 0) {
+        t = selectedItems[0];
+    } else {
+        t = getItemAtPosition(screenToWorld(getEventLocation(e))); 
+    }
+    if (t && !selectedItems.includes(t)) { 
+        selectedItems = [t]; 
+        updateSelectionToolbar(); 
+        updateLeftBarState() 
+    } 
+    if (selectedItems.length > 0) { 
+        opacitySliderContainer.style.display = 'flex'; 
+        opacitySeparator.style.display = 'block'; 
+        const op = selectedItems[0].opacity ?? 1; 
+        itemOpacitySlider.value = op; 
+        itemOpacityValue.textContent = `${Math.round(op * 100)}%`; 
+        deleteItemBtn.style.display = 'flex'; 
+        document.getElementById('delete-separator').style.display = 'block' 
+    } else { 
+        opacitySliderContainer.style.display = 'none'; 
+        opacitySeparator.style.display = 'none'; 
+        deleteItemBtn.style.display = 'none'; 
+        document.getElementById('delete-separator').style.display = 'none' 
+    } 
+    const isImg = selectedItems.length === 1 && selectedItems[0].type === 'image'; 
+    downloadImageBtn.style.display = isImg ? 'flex' : 'none'; 
+    downloadSeparator.style.display = isImg ? 'block' : 'none'; 
+    
+    const canConnect = selectedItems.length === 1 && !['connector', 'stroke', 'measure'].includes(selectedItems[0].type);
+    contextConnectBtn.style.display = canConnect ? 'flex' : 'none';
+
+    showAndPositionMenu(contextMenu, e) 
+}
 function confirmNewBoard() { if (items.length > 0) { showConfirmationModal() } else { resetBoard() } }
 function resetBoard() { const e = projects.find(e => e.id === activeProjectId); if (!e) return; e.data.items = []; e.data.cameraOffset = { x: window.innerWidth / 2, y: (window.innerHeight - 48) / 2 }; e.data.cameraZoom = 1; e.data.historyStack = []; e.data.historyIndex = -1; e.data.canvasBackgroundColor = '#0d0d0d'; e.data.accentColor = '#429eff'; e.data.gridColor = '#f9f8f6'; switchTab(activeProjectId); saveStateForUndo() }
 function showConfirmationModal() { confirmationModalOverlay.style.display = 'flex' }
@@ -2516,6 +2684,7 @@ function updateSelectionToolbar() {
         sendBackBtn.style.display = (selectedItems.length > 0) ? 'flex' : 'none';
         groupBtn.style.display = isMultiple ? 'flex' : 'none';
         groupOrderedBtn.style.display = isMultiple ? 'flex' : 'none';
+        connectBtn.style.display = (selectedItems.length === 1 && !['connector', 'stroke', 'measure'].includes(selectedItems[0].type)) ? 'flex' : 'none';
         ungroupBtn.style.display = isGroup ? 'flex' : 'none';
 
         scaleBtn.classList.toggle('active', activeGizmo === 'scale');
@@ -2610,8 +2779,135 @@ function groupOrderedItems() {
     groupSelectedItems();
 }
 
-function ungroupSelectedItems() { const e = selectedItems.filter(e => e.type === 'group'); if (e.length === 0) return; saveStateForUndo(); const t = [], o = new Set; e.forEach(e => { o.add(e.id); const a = e.x + e.width / 2, i = e.y + e.height / 2, r = Math.cos(e.rotation), s = Math.sin(e.rotation); e.items.forEach(o => { const n = JSON.parse(JSON.stringify(o)); reattachImages(o, n); if (n.type === 'arrow' || n.type === 'stroke' || n.type === 'measure') { const t = (t, l) => { const c = e.x + t.x, d = e.y + t.y, h = c - a, p = d - i, m = h * r - p * s, u = h * s + p * r; return { x: a + m, y: i + u } }; if (n.type === 'arrow' || n.type === 'measure') { const e = t({ x: o.startX - o.x, y: o.startY - o.y }), a = t({ x: o.endX - o.x, y: o.endY - o.y }); n.startX = e.x; n.startY = e.y; n.endX = a.x; n.endY = a.y } else { n.points = o.points.map(e => t({ x: e.x - o.x, y: e.y - o.y })) } } const l = o.x + o.width / 2, c = o.y + o.height / 2, d = l - e.width / 2, h = c - e.height / 2, p = d * r - h * s, m = d * s + h * r, u = a + p, g = i + m; n.x = u - o.width / 2; n.y = g - o.height / 2; n.rotation = (o.rotation || 0) + e.rotation; items.push(n); t.push(n) }) }); items = items.filter(e => !o.has(e.id)); selectedItems = t; updateSelectionToolbar(); updateLeftBarState() }
-function buildPaletteMenu() { palettePanel.innerHTML = ''; colorPalettes.forEach(palette => { const option = document.createElement('div'); option.className = 'palette-option'; option.innerHTML = `<div class="palette-color" style="background-color: ${palette.bg}"></div><div class="palette-color" style="background-color: ${palette.accent}"></div><div class="palette-color" style="background-color: ${palette.grid}"></div>`; option.addEventListener('click', () => { const activeProject = projects.find(p => p.id === activeProjectId); if (activeProject && (activeProject.type === 'moodinfinite' || activeProject.type === 'moodprompt')) { activeProject.data.canvasBackgroundColor = palette.bg; canvasBackgroundColor = palette.bg; if (activeProject.type === 'moodinfinite') { activeProject.data.accentColor = palette.accent; activeProject.data.gridColor = palette.grid; accentColor = palette.accent; gridColor = palette.grid } updateUIColors() } palettePanel.classList.remove('open') }); palettePanel.appendChild(option) }) }
+function ungroupSelectedItems() { 
+    const groups = selectedItems.filter(e => e.type === 'group'); 
+    if (groups.length === 0) return; 
+    saveStateForUndo(); 
+    
+    const newItems = [];
+    const groupIds = new Set();
+    
+    groups.forEach(group => { 
+        groupIds.add(group.id); 
+        const a = group.x + group.width / 2;
+        const i = group.y + group.height / 2;
+        const r = Math.cos(group.rotation || 0);
+        const s = Math.sin(group.rotation || 0);
+        const gScaleX = group.scaleX || 1;
+        const gScaleY = group.scaleY || 1;
+        
+        const transformPoint = (localX, localY) => { 
+            const cx = localX - group.width / 2;
+            const cy = localY - group.height / 2;
+            const scaledX = cx * gScaleX;
+            const scaledY = cy * gScaleY;
+            const rotX = scaledX * r - scaledY * s;
+            const rotY = scaledX * s + scaledY * r;
+            return { x: a + rotX, y: i + rotY };
+        };
+        
+        group.items.forEach(child => { 
+            const n = JSON.parse(JSON.stringify(child)); 
+            reattachImages(child, n); 
+            
+            n.scaleX = (child.scaleX || 1) * gScaleX;
+            n.scaleY = (child.scaleY || 1) * gScaleY;
+            
+            if (n.type === 'arrow' || n.type === 'measure') { 
+                const globalStart = transformPoint(child.startX, child.startY);
+                const globalEnd = transformPoint(child.endX, child.endY);
+                n.startX = globalStart.x; 
+                n.startY = globalStart.y; 
+                n.endX = globalEnd.x; 
+                n.endY = globalEnd.y;
+            } else if (n.type === 'stroke') { 
+                n.points = child.points.map(pt => transformPoint(pt.x, pt.y));
+            } 
+            
+            const childLocalCenter = {
+                x: child.x + child.width / 2,
+                y: child.y + child.height / 2
+            };
+            const globalCenter = transformPoint(childLocalCenter.x, childLocalCenter.y);
+            
+            n.x = globalCenter.x - child.width / 2; 
+            n.y = globalCenter.y - child.height / 2; 
+            n.rotation = (child.rotation || 0) + (group.rotation || 0); 
+            
+            items.push(n); 
+            newItems.push(n);
+        });
+    }); 
+    
+    items = items.filter(e => !groupIds.has(e.id)); 
+    selectedItems = newItems; 
+    updateSelectionToolbar(); 
+    updateLeftBarState();
+}
+function buildPaletteMenu() { 
+    palettePanel.innerHTML = ''; 
+    colorPalettes.forEach(palette => { 
+        const option = document.createElement('div'); 
+        option.className = 'palette-option'; 
+        option.innerHTML = `<div class="palette-color" style="background-color: ${palette.bg}"></div><div class="palette-color" style="background-color: ${palette.accent}"></div><div class="palette-color" style="background-color: ${palette.grid}"></div>`; 
+        option.addEventListener('mouseenter', () => {
+            const activeProject = projects.find(p => p.id === activeProjectId); 
+            if (activeProject && (activeProject.type === 'moodinfinite' || activeProject.type === 'moodprompt')) { 
+                canvasBackgroundColor = palette.bg; 
+                if (activeProject.type === 'moodinfinite') { 
+                    accentColor = palette.accent; 
+                    gridColor = palette.grid; 
+                } 
+                updateUIColors();
+            }
+        });
+
+        option.addEventListener('mouseleave', () => {
+            const activeProject = projects.find(p => p.id === activeProjectId); 
+            if (activeProject && (activeProject.type === 'moodinfinite' || activeProject.type === 'moodprompt')) {
+                canvasBackgroundColor = activeProject.data.canvasBackgroundColor || '#0d0d0d';
+                if (activeProject.type === 'moodinfinite') {
+                    accentColor = activeProject.data.accentColor || '#429eff';
+                    gridColor = activeProject.data.gridColor || '#f9f8f6';
+                }
+                updateUIColors();
+            }
+        });
+
+        option.addEventListener('click', () => { 
+            const activeProject = projects.find(p => p.id === activeProjectId); 
+            if (activeProject && (activeProject.type === 'moodinfinite' || activeProject.type === 'moodprompt')) { 
+                activeProject.data.canvasBackgroundColor = palette.bg; 
+                canvasBackgroundColor = palette.bg; 
+                if (activeProject.type === 'moodinfinite') { 
+                    activeProject.data.accentColor = palette.accent; 
+                    activeProject.data.gridColor = palette.grid; 
+                    accentColor = palette.accent; 
+                    gridColor = palette.grid; 
+                } 
+                saveProjects();
+                updateUIColors(); 
+            } 
+            palettePanel.classList.remove('open'); 
+        }); 
+        palettePanel.appendChild(option);
+    });
+    
+    const separator = document.createElement('div');
+    separator.style.borderTop = '1px solid var(--border-color)';
+    separator.style.margin = '4px 0';
+    palettePanel.appendChild(separator);
+
+    const setDefaultBtn = document.createElement('button');
+    setDefaultBtn.className = 'set-default-btn';
+    setDefaultBtn.innerHTML = `<iconify-icon icon="lucide:save" width="14" height="14"></iconify-icon> Set current as default`;
+    setDefaultBtn.onclick = (e) => {
+        e.stopPropagation();
+        saveDefaultTheme();
+        palettePanel.classList.remove('open');
+    };
+    palettePanel.appendChild(setDefaultBtn);
+}
 function showToast(e, t = 'success') { if (!showNotifications) return; const o = document.getElementById('toast-container'); if (!o) return; const a = document.createElement('div'); a.className = `toast-notification ${t}`; let i = ''; if (t === 'success') { i = `<iconify-icon icon="lucide:check-circle" width="20" height="20" class="icon"></iconify-icon>` } else if (t === 'error') { i = `<iconify-icon icon="lucide:alert-circle" width="20" height="20" class="icon"></iconify-icon>` } a.innerHTML = `${i}<span>${e}</span>`; o.appendChild(a); setTimeout(() => { a.remove() }, 3e3) }
 
 let lastTap = 0, longPressTimer = null, isPinching = false, initialPinchDistance = null, lastPinchCenter = null, initialCameraZoomOnPinch = 1;
@@ -2652,7 +2948,13 @@ function onTouchEnd(e) {
 
 function getPinchDistance(e) { const t = e.touches[0], o = e.touches[1]; return Math.hypot(t.clientX - o.clientX, t.clientY - o.clientY) }
 function getPinchCenter(e) { const t = e.touches[0], o = e.touches[1]; return { x: (t.clientX + o.clientX) / 2, y: (t.clientY + o.clientY) / 2 } }
-function normalizeTouchEvent(e) { let t; if (e.touches && e.touches.length > 0) { t = e.touches[0] } else if (e.changedTouches && e.changedTouches.length > 0) { t = e.changedTouches[0] } else { return { clientX: 0, clientY: 0, button: 0, target: e.target } } return { clientX: t.clientX, clientY: t.clientY, button: 0, target: e.target } }
+function normalizeTouchEvent(e) { 
+    let t; 
+    if (e.touches && e.touches.length > 0) { t = e.touches[0] } 
+    else if (e.changedTouches && e.changedTouches.length > 0) { t = e.changedTouches[0] } 
+    else { return { clientX: 0, clientY: 0, button: 0, target: e.target, isTouch: true } } 
+    return { clientX: t.clientX, clientY: t.clientY, button: 0, target: e.target, isTouch: true } 
+}
 function screenToWorld(e) { if (!e) return { x: 0, y: 0 }; return { x: (e.x - canvas.width / 2) / cameraZoom - cameraOffset.x + canvas.width / 2, y: (e.y - canvas.height / 2) / cameraZoom - cameraOffset.y + canvas.height / 2 } }
 function worldToScreen(e) { if (!e) return { x: 0, y: 0 }; return { x: (e.x + cameraOffset.x - canvas.width / 2) * cameraZoom + canvas.width / 2, y: (e.y + cameraOffset.y - canvas.height / 2) * cameraZoom + canvas.height / 2 } }
 function reattachImages(e, t) {

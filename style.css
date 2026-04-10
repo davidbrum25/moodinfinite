@@ -1037,6 +1037,33 @@
             border: 1px solid rgba(0, 0, 0, .2)
         }
 
+        .set-default-btn {
+            margin-top: 0.25rem;
+            padding: 0.6rem;
+            background: var(--switch-bg-checked);
+            color: #fff;
+            border: none;
+            border-radius: 0.5rem;
+            cursor: pointer;
+            font-size: 0.75rem;
+            font-weight: 600;
+            transition: all 0.2s ease;
+            text-align: center;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+        }
+
+        .set-default-btn:hover {
+            filter: brightness(1.1);
+            transform: translateY(-1px);
+        }
+
+        .set-default-btn:active {
+            transform: translateY(0);
+        }
+
         #toolbar-color-picker-container {
             padding: .25rem 0;
             display: flex;
@@ -1224,7 +1251,7 @@
         }
 
         /* --- MOBILE TABS POPUP --- */
-        #mobile-tabs-btn {
+        #mobile-tabs-btn, #mobile-context-btn {
             display: none;
             /* Hidden by default */
             margin-left: 4px;
@@ -1285,7 +1312,7 @@
                 display: none;
             }
 
-            #mobile-tabs-btn {
+            #mobile-tabs-btn, #mobile-context-btn {
                 display: flex;
             }
 
