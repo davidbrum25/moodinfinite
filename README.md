@@ -1,4 +1,4 @@
-# Moodinfinite v1.0.4
+# Moodinfinite v0.9.5
 
 <div align="center">
   <img src="https://github.com/davidbrum25/moodinfinite/blob/main/_branding/_png/moodinfinite__Logotipo_alpha.png?raw=true" alt="Moodinfinite Logo" width="400"/>
@@ -10,7 +10,7 @@
 
 ---
 
-## ✨ What's New in Version 1.0.4
+## ✨ What's New in Version 0.9.5
 
 This update brings a significant evolution to the Post-it Note experience, premium UI refinements, and professional confirmation workflows.
 
