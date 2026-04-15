@@ -1,4 +1,4 @@
-# Moodinfinite v0.9.5
+# Moodinfinite v0.9.6
 
 <div align="center">
   <img src="https://github.com/davidbrum25/moodinfinite/blob/main/_branding/_png/moodinfinite__Logotipo_alpha.png?raw=true" alt="Moodinfinite Logo" width="400"/>
@@ -9,6 +9,15 @@
 </p>
 
 ---
+
+## ✨ What's New in Version 0.9.6
+
+This update brings a massive overhaul to the storage architecture, focusing on reliability, performance, and seamless offline data persistence.
+
+*   **🧠 LocalForage Auto-Saving:** The app now silently and automatically saves your entire workspace (projects, tabs, images, and history) natively in your browser's database. Your boards will instantly load exactly where you left them across page reloads.
+*   **🗜️ Compressed .mood Exports:** Replaced legacy JSON exports with a robust `.mood` export pipeline. Hitting save securely generates a ZIP archive containing your raw project state and your images dynamically compressed as `.webp` binaries, vastly reducing file payload sizes.
+*   **🖼️ Refined Text Elements Scaling:** Text elements now actively word-wrap instead of scaling the source font, and automatically lock their minimum dimensions to effectively contain the exact dimensions of the typed text constraints during resize actions. 
+*   **🎨 Layering & Grouping Fixes:** Corrected the rendering loop order so that connections and arrows correctly adhere to natural layer ordering. Fixed an invisible element bug where 'Comment', 'Link', and 'Text List' elements would vanish when grouped together.
 
 ## ✨ What's New in Version 0.9.5
 

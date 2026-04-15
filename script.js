@@ -20,6 +20,58 @@ let projectPendingClose = null;
 const leftScrollIndicator = document.querySelector('.tabs-list-container .scroll-indicator.left');
 const rightScrollIndicator = document.querySelector('.tabs-list-container .scroll-indicator.right');
 
+let autoSaveTimeout = null;
+function scheduleAutoSave() {
+    clearTimeout(autoSaveTimeout);
+    autoSaveTimeout = setTimeout(saveToBrowser, 1500);
+}
+
+function serializeItems(itemArray) {
+    return itemArray.map(t => {
+        const e = { ...t };
+        if (e.type === 'image') delete e.img;
+        else if (e.type === 'group' && e.items) e.items = serializeItems(e.items);
+        return e;
+    });
+}
+
+function restoreImages(itemArray) {
+    itemArray.forEach(t => {
+        if (t.type === 'image') {
+            const img = new Image();
+            if (t.imageId && globalImageCache[t.imageId]) img.src = globalImageCache[t.imageId];
+            else if (t.img) img.src = t.img;
+            t.img = img;
+        } else if (t.type === 'group' && t.items) {
+            restoreImages(t.items);
+        }
+    });
+}
+
+function saveToBrowser() {
+    if (activeProjectId) {
+        const currentProject = projects.find(p => p.id === activeProjectId);
+        if (currentProject && currentProject.type === 'moodinfinite') {
+            currentProject.data.items = items;
+            currentProject.data.cameraOffset = cameraOffset;
+            currentProject.data.cameraZoom = cameraZoom;
+            currentProject.data.historyStack = historyStack;
+            currentProject.data.historyIndex = historyIndex;
+        }
+    }
+    const projectsToSave = projects.map(p => {
+        const copy = JSON.parse(JSON.stringify(p));
+        if (copy.type === 'moodinfinite' && copy.data && copy.data.items) {
+            copy.data.items = serializeItems(p.data.items);
+        }
+        return copy;
+    });
+    window.localforage.setItem('moodinfinite_projects', projectsToSave);
+    window.localforage.setItem('moodinfinite_cache', globalImageCache);
+    window.localforage.setItem('moodinfinite_active_tab', activeProjectId);
+}
+
+
 const genericIcon = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"/></svg>`;
 const platformData = {
     higgsfield: { name: 'Higgsfield', icon: genericIcon },
@@ -132,6 +184,7 @@ function switchTab(projectId) {
     document.querySelectorAll('.tab-item').forEach(t => {
         t.classList.toggle('active', t.dataset.id == projectId);
     });
+    scheduleAutoSave();
 }
 
 function closeTab(projectId, event) {
@@ -156,6 +209,7 @@ function actuallyCloseTab() {
                 createNewProject('moodinfinite');
                 projectPendingClose = null;
                 if (closeBoardModalOverlay) closeBoardModalOverlay.style.display = 'none';
+                scheduleAutoSave();
                 return;
             }
         }
@@ -163,6 +217,7 @@ function actuallyCloseTab() {
     }
     projectPendingClose = null;
     if (closeBoardModalOverlay) closeBoardModalOverlay.style.display = 'none';
+    scheduleAutoSave();
 }
 
 function hideCloseBoardModal() {
@@ -1056,13 +1111,15 @@ function draw() {
         else if (e.type === 'link') { drawLinkItem(ctx, e) }
         else if (e.type === 'textList') { drawTextListItem(ctx, e) }
         else if (e.type === 'reroute') { drawRerouteItem(ctx, e) }
+        else if (e.type === 'connector') { drawConnectorItem(e) }
         ctx.restore();
     };
 
-    // Layer 0: Connectors
-    items.forEach(e => { if (e.type === 'connector') drawConnectorItem(e); });
-    // Layer 1: Regular elements
-    items.forEach(e => { if (e.type !== 'comment' && e.type !== 'link' && e.type !== 'connector') drawItem(e); });
+    // Unified Rendering Pass (respects array order)
+    // We still draw comments and links on top of "regular" items for convenience,
+    // but connectors and reroutes now mingle with regular items.
+    items.forEach(e => { if (e.type !== 'comment' && e.type !== 'link') drawItem(e); });
+    
     // Layer 2: Links & Comments (Always on top)
     items.forEach(e => { if (e.type === 'link') drawItem(e); });
     items.forEach(e => { if (e.type === 'comment') drawItem(e); });
@@ -1174,6 +1231,10 @@ function drawTextItem(ctx, item) {
         const consumedH = renderMarkdownLine(ctx, line, x + pX, currY, item.width - pX * 2, baseSize, item.fontFamily, textPrimary, textSecondary);
         currY += consumedH;
     });
+
+    const necessaryHeight = (currY - y) + 15;
+    if (item.height < necessaryHeight) item.height = necessaryHeight;
+    if (item.width < 120) item.width = 120; // Enforce minimum width for readability
 
     ctx.restore();
 }
@@ -1666,7 +1727,39 @@ function drawRerouteItem(e, t) {
     e.restore();
 }
 
-function drawGroupItem(e, t) { e.save(); e.globalAlpha *= (t.opacity ?? 1); const o = t.x + t.width / 2, a = t.y + t.height / 2; e.translate(o, a); e.rotate(t.rotation || 0); e.scale(t.scaleX || 1, t.scaleY || 1); t.items.forEach(o => { const a = { ...o, x: o.x - t.width / 2, y: o.y - t.height / 2 }; if (a.type === "arrow" || a.type === 'measure') { a.startX = o.startX - t.width / 2; a.startY = o.startY - t.height / 2; a.endX = o.endX - t.width / 2; a.endY = o.endY - t.height / 2 } if (a.type === "stroke") { a.points = o.points.map(e => ({ x: e.x - t.width / 2, y: e.y - t.height / 2 })) } if (o.type === "image") { drawImageItem(e, a) } else if (o.type === "arrow") drawArrow(e, a); else if (o.type === "text") drawTextItem(e, a); else if (o.type === "box") drawBoxItem(e, a); else if (o.type === 'circle') drawCircleItem(e, a); else if (o.type === 'measure') drawMeasureItem(e, a); else if (o.type === "stroke") drawStrokeItem(e, a); else if (o.type === "grid") drawGridItem(e, a); else if (o.type === "reroute") drawRerouteItem(e, a) }); e.restore() }
+function drawGroupItem(e, t) {
+    e.save();
+    e.globalAlpha *= (t.opacity ?? 1);
+    const o = t.x + t.width / 2, a = t.y + t.height / 2;
+    e.translate(o, a);
+    e.rotate(t.rotation || 0);
+    e.scale(t.scaleX || 1, t.scaleY || 1);
+    t.items.forEach(o => {
+        const a = { ...o, x: o.x - t.width / 2, y: o.y - t.height / 2 };
+        if (a.type === "arrow" || a.type === 'measure') {
+            a.startX = o.startX - t.width / 2;
+            a.startY = o.startY - t.height / 2;
+            a.endX = o.endX - t.width / 2;
+            a.endY = o.endY - t.height / 2;
+        }
+        if (a.type === "stroke") {
+            a.points = o.points.map(e => ({ x: e.x - t.width / 2, y: e.y - t.height / 2 }));
+        }
+        if (o.type === "image") { drawImageItem(e, a); }
+        else if (o.type === "arrow") drawArrow(e, a);
+        else if (o.type === "text") drawTextItem(e, a);
+        else if (o.type === "box") drawBoxItem(e, a);
+        else if (o.type === 'circle') drawCircleItem(e, a);
+        else if (o.type === 'measure') drawMeasureItem(e, a);
+        else if (o.type === "stroke") drawStrokeItem(e, a);
+        else if (o.type === "grid") drawGridItem(e, a);
+        else if (o.type === "reroute") drawRerouteItem(e, a);
+        else if (o.type === "comment") drawCommentItem(e, a);
+        else if (o.type === "link") drawLinkItem(e, a);
+        else if (o.type === "textList") drawTextListItem(e, a);
+    });
+    e.restore();
+}
 
 function handleKeyDown(e) {
     const activeEl = document.activeElement;
@@ -2169,8 +2262,6 @@ function onMouseMove(e) {
                         }
                     });
                 }
-            } else if (item.type === 'text') { // Scale font size for text items
-                item.fontSize = originalItemState.fontSize * scaleRatio;
             }
         }
     } else if (isMovingItems && selectedItems.length > 0) {
@@ -2462,28 +2553,163 @@ function saveAsPng() {
     l.click();
     showToast("Image exported as PNG.")
 }
-function saveProject() { const t = projects.find(e => e.id === activeProjectId); if (!t) { showToast("No active project to save.", "error"); return } let e; const o = `${t.name}.json`; if (t.type === 'moodinfinite') { const o = projects.find(e => e.id === activeProjectId); if (o) { o.data.items = items; o.data.cameraOffset = cameraOffset; o.data.cameraZoom = cameraZoom; o.data.historyStack = historyStack; o.data.historyIndex = historyIndex; o.data.globalImageCache = globalImageCache; } e = { items: items.map(t => { const e = { ...t }; if (t.type === 'image') { delete e.img; } else if (t.type === 'group' && t.items) { e.items = t.items.map(e => { const o = { ...e }; if (e.type === 'image') { delete o.img; } return o }) } return e }), cameraOffset: cameraOffset, cameraZoom: cameraZoom, canvasBackgroundColor: canvasBackgroundColor, accentColor: accentColor, gridColor: gridColor, showGrid: showGrid, snapToGrid: snapToGrid, showDropShadow: showDropShadow, gridSize: gridSize, gridOpacity: gridOpacity, globalImageCache: globalImageCache } } else if (t.type === 'moodprompt') { e = t.data } else { showToast("Unknown project type, cannot save.", "error"); return } const a = new Blob([JSON.stringify(e, null, 2)], { type: 'application/json' }), n = document.createElement('a'); n.href = URL.createObjectURL(a); n.download = o; document.body.appendChild(n); n.click(); document.body.removeChild(n); URL.revokeObjectURL(n.href); showToast("Project saved successfully.") }
+function saveProject() { 
+    const t = projects.find(e => e.id === activeProjectId); 
+    if (!t) { showToast("No active project to save.", "error"); return; } 
+    const o = `${t.name}.mood`; 
+    
+    const zip = new window.JSZip();
+    const folderName = t.name.replace(/[^a-z0-9]/gi, '_').toLowerCase() || 'moodboard';
+    const rootDir = zip.folder(folderName);
+    const imgFolder = rootDir.folder("images");
+    let eJSON;
+    
+    if (t.type === 'moodinfinite') { 
+        t.data.items = items; 
+        t.data.cameraOffset = cameraOffset; 
+        t.data.cameraZoom = cameraZoom; 
+        t.data.historyStack = historyStack; 
+        t.data.historyIndex = historyIndex; 
+        
+        eJSON = { 
+            items: serializeItems(items),
+            cameraOffset: cameraOffset, 
+            cameraZoom: cameraZoom, 
+            canvasBackgroundColor: canvasBackgroundColor, 
+            accentColor: accentColor, 
+            gridColor: gridColor, 
+            showGrid: showGrid, 
+            snapToGrid: snapToGrid, 
+            showDropShadow: showDropShadow, 
+            gridSize: gridSize, 
+            gridOpacity: gridOpacity 
+        };
+        
+        const localCache = {};
+        const usedImageIds = new Set();
+        const extractUsedIds = (arr) => {
+            arr.forEach(item => {
+                if (item.type === 'image' && item.imageId) usedImageIds.add(item.imageId);
+                if (item.type === 'group' && item.items) extractUsedIds(item.items);
+            });
+        };
+        extractUsedIds(items);
+        
+        showToast("Generating project export...", "info");
+        
+        const promises = Array.from(usedImageIds).map(id => {
+            return new Promise((resolve) => {
+                const base64Str = globalImageCache[id];
+                if (!base64Str || !base64Str.startsWith('data:image')) {
+                    // Legacy URL or broken ref
+                    localCache[id] = base64Str;
+                    return resolve();
+                }
+                
+                const img = new Image();
+                img.onload = () => {
+                    const canvas = document.createElement('canvas');
+                    canvas.width = img.width;
+                    canvas.height = img.height;
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(img, 0, 0);
+                    canvas.toBlob(blob => {
+                        if(blob) {
+                            imgFolder.file(`${id}.webp`, blob);
+                            localCache[id] = `images/${id}.webp`;
+                        } else {
+                            localCache[id] = base64Str; // fallback on fail
+                        }
+                        resolve();
+                    }, 'image/webp', 0.9);
+                };
+                img.onerror = resolve; // Skip failures quietly
+                img.src = base64Str;
+            });
+        });
+        
+        Promise.all(promises).then(() => {
+            eJSON.globalImageCache = localCache;
+            rootDir.file("data.json", JSON.stringify(eJSON, null, 2));
+            zip.generateAsync({type:"blob"}).then(function(content) {
+                const n = document.createElement('a'); 
+                n.href = URL.createObjectURL(content); 
+                n.download = o; 
+                document.body.appendChild(n); 
+                n.click(); 
+                document.body.removeChild(n); 
+                URL.revokeObjectURL(n.href); 
+                showToast("Project exported successfully.");
+            });
+        });
+    } else if (t.type === 'moodprompt') { 
+        eJSON = t.data;
+        rootDir.file("data.json", JSON.stringify(eJSON, null, 2));
+        zip.generateAsync({type:"blob"}).then(function(content) {
+            const n = document.createElement('a'); 
+            n.href = URL.createObjectURL(content); 
+            n.download = o; 
+            document.body.appendChild(n); 
+            n.click(); 
+            document.body.removeChild(n); 
+            URL.revokeObjectURL(n.href); 
+            showToast("Project exported successfully.");
+        });
+    }
+}
 function loadFileAsNewTab(fileContent, fileName) { try { const data = JSON.parse(fileContent); const name = fileName.split('.').slice(0, -1).join('.') || 'Loaded Project'; if (data.prompts && Array.isArray(data.prompts)) { const newId = Date.now(); const newProject = { id: newId, type: 'moodprompt', name: name, data: { prompts: data.prompts, canvasBackgroundColor: data.canvasBackgroundColor || '#0d0d0d' } }; projects.push(newProject); renderTabs(); switchTab(newId); showToast("Prompt file loaded successfully."); return } if (data.items && Array.isArray(data.items)) { const newId = Date.now(); const newProject = { id: newId, type: 'moodinfinite', name: name, data: { items: [], cameraOffset: {}, cameraZoom: 1, historyStack: [], historyIndex: -1 } }; projects.push(newProject); activeProjectId = newId; renderTabs(); loadProject(fileContent); return } showToast("Failed to load project. Unknown format.", "error") } catch (err) { console.error("Failed to load project:", err); showToast("Failed to load project. Invalid JSON.", "error") } }
 function loadProject(e) {
     try {
-        const t = JSON.parse(e); const o = projects.find(e => e.id === activeProjectId); if (!o || o.type !== 'moodinfinite') return; o.data.cameraOffset = t.cameraOffset || { x: window.innerWidth / 2, y: window.innerHeight / 2 }; o.data.cameraZoom = t.cameraZoom || 1; canvasBackgroundColor = t.canvasBackgroundColor || '#0d0d0d'; accentColor = t.accentColor || '#429eff'; gridColor = t.gridColor || '#f9f8f6'; o.data.canvasBackgroundColor = canvasBackgroundColor; o.data.accentColor = accentColor; o.data.gridColor = gridColor; showGrid = t.showGrid ?? true; snapToGrid = t.snapToGrid ?? true; showDropShadow = t.showDropShadow ?? true; gridSize = t.gridSize || 50; gridOpacity = t.gridOpacity || .05; if (t.globalImageCache) { globalImageCache = { ...globalImageCache, ...t.globalImageCache }; } const a = e => {
-            return e.map(e => {
-                const t = { ...(e.scaleX !== void 0 ? {} : { scaleX: 1, scaleY: 1 }), ...e }; if (t.type === 'image') {
-                    const img = new Image; if (t.imageId && globalImageCache[t.imageId]) { img.src = globalImageCache[t.imageId]; } else if (t.img) { /* Fallback for old projects */ img.src = t.img; } t.img = img
-                } else if (t.type === 'group') { t.items = a(e.items) } return t
-            })
-        };
-        const processedItems = a(t.items);
+        const t = JSON.parse(e); const o = projects.find(e => e.id === activeProjectId); if (!o || o.type !== 'moodinfinite') return; o.data.cameraOffset = t.cameraOffset || { x: window.innerWidth / 2, y: window.innerHeight / 2 }; o.data.cameraZoom = t.cameraZoom || 1; canvasBackgroundColor = t.canvasBackgroundColor || '#0d0d0d'; accentColor = t.accentColor || '#429eff'; gridColor = t.gridColor || '#f9f8f6'; o.data.canvasBackgroundColor = canvasBackgroundColor; o.data.accentColor = accentColor; o.data.gridColor = gridColor; showGrid = t.showGrid ?? true; snapToGrid = t.snapToGrid ?? true; showDropShadow = t.showDropShadow ?? true; gridSize = t.gridSize || 50; gridOpacity = t.gridOpacity || .05; if (t.globalImageCache) { globalImageCache = { ...globalImageCache, ...t.globalImageCache }; } 
+        const processedItems = t.items || [];
+        restoreImages(processedItems);
         o.data.items = [
             ...processedItems.filter(i => i.type !== 'comment'),
             ...processedItems.filter(i => i.type === 'comment')
         ];
         items = o.data.items;
-        o.data.historyStack = []; o.data.historyIndex = -1; switchTab(activeProjectId); updateUIColors(); saveStateForUndo(); showToast("Project loaded successfully.")
+        o.data.historyStack = []; o.data.historyIndex = -1; switchTab(activeProjectId); updateUIColors(); saveStateForUndo(); showToast("Project loaded successfully.");
     } catch (e) { console.error("Failed to load project:", e); showToast("Failed to load project. Invalid file.", "error") }
 }
+
+function loadFileFromObject(t) {
+    if (t.name.endsWith('.zip') || t.name.endsWith('.mood')) {
+        window.JSZip.loadAsync(t).then(zip => {
+            const rootKey = Object.keys(zip.files).find(k => k.endsWith('data.json'));
+            if (!rootKey) { showToast("Invalid project format", "error"); return; }
+            const rootDirName = rootKey.split('data.json')[0];
+            zip.file(rootKey).async("string").then(jsonStr => {
+                const data = JSON.parse(jsonStr);
+                const promises = Object.keys(data.globalImageCache || {}).map(id => {
+                    const relativePath = data.globalImageCache[id];
+                    if (relativePath.startsWith('images/')) {
+                        const file = zip.file(rootDirName + relativePath);
+                        if (file) {
+                            return file.async("base64").then(b64 => {
+                                globalImageCache[id] = "data:image/webp;base64," + b64;
+                            });
+                        }
+                    } else {
+                        globalImageCache[id] = relativePath;
+                    }
+                    return Promise.resolve();
+                });
+                Promise.all(promises).then(() => {
+                    data.globalImageCache = globalImageCache;
+                    loadFileAsNewTab(JSON.stringify(data), t.name);
+                    scheduleAutoSave();
+                });
+            });
+        }).catch(() => showToast("Failed to unpack project", "error"));
+    } else {
+        const o = new FileReader; 
+        o.onload = e => { loadFileAsNewTab(e.target.result, t.name); scheduleAutoSave(); }; 
+        o.readAsText(t); 
+    }
+}
+
 function handleImageUpload(e) { if (!e.target.files) return; const t = screenToWorld({ x: canvas.width / 2, y: canvas.height / 2 }); processFiles(e.target.files, t); imageInput.value = '' }
-function handleProjectUpload(e) { const t = e.target.files[0]; if (!t) return; const o = new FileReader; o.onload = e => { loadFileAsNewTab(e.target.result, t.name) }; o.readAsText(t); projectInput.value = '' }
+function handleProjectUpload(e) { const t = e.target.files[0]; if (!t) return; loadFileFromObject(t); projectInput.value = '' }
 
 function handlePaste(e) {
     const files = Array.from(e.clipboardData.items)
@@ -2501,7 +2727,7 @@ function handlePaste(e) {
 
 function handleDragOver(e) { e.preventDefault(); canvas.style.outline = `2px dashed ${accentColor}`; canvas.style.outlineOffset = '-10px' }
 function handleDragLeave(e) { e.preventDefault(); canvas.style.outline = 'none' }
-function handleDrop(e) { e.preventDefault(); handleDragLeave(e); if (!e.dataTransfer.files) return; const t = e.dataTransfer.files[0]; if (t && (t.name.endsWith('.json') || t.name.endsWith('.mood'))) { const o = new FileReader; o.onload = e => { loadFileAsNewTab(e.target.result, t.name) }; o.readAsText(t) } else { processFiles(e.dataTransfer.files, screenToWorld(getEventLocation(e))) } }
+function handleDrop(e) { e.preventDefault(); handleDragLeave(e); if (!e.dataTransfer.files) return; const t = e.dataTransfer.files[0]; if (t && (t.name.endsWith('.json') || t.name.endsWith('.zip') || t.name.endsWith('.mood'))) { loadFileFromObject(t); } else { processFiles(e.dataTransfer.files, screenToWorld(getEventLocation(e))) } }
 function processFiles(files, worldPos) {
     Array.from(files).forEach((file, index) => {
         if (!file.type.startsWith('image/')) return;
@@ -2897,7 +3123,9 @@ function updateSelectionToolbar() {
     const isMultiple = selectedItems.length > 1;
     const isGroup = selectedItems.length === 1 && selectedItems[0].type === 'group';
 
-    if (selectedItems.length > 0) {
+    const hasToolbarItems = selectedItems.some(item => item.type !== 'reroute' && item.type !== 'connector');
+
+    if (selectedItems.length > 0 && hasToolbarItems) {
         selectionToolbar.style.display = 'flex';
         textToolsContainer.style.display = isTextOrCommentOrList ? 'flex' : 'none';
         iconToolsContainer.style.display = isComment ? 'flex' : 'none';
@@ -3075,7 +3303,7 @@ function updateNoteDimensions(item) {
 }
 function finishEditingText() { if (currentlyEditingText) { if (currentlyEditingText.type === 'text') return; currentlyEditingText.text = textEditor.value.trim() || (currentlyEditingText.type === 'comment' ? "Note..." : "Type..."); const e = currentlyEditingText; if (e.type === 'comment') { updateCommentDimensions(e); } else if (e.type === 'textList') { const lines = textEditor.value.split('\n').filter(l => l.trim() !== ""); if (lines.length === 0) lines.push("Item 1"); const oldItems = e.items || []; e.items = lines.map((l, i) => ({ text: l, completed: (oldItems[i] && oldItems[i].text === l) ? oldItems[i].completed : false })); updateTextListDimensions(e); } else { const t = e.fontStyle || 'normal', o = e.fontWeight || 'bold', a = e.fontFamily || 'Nunito'; ctx.font = `${t} ${o} ${e.fontSize}px '${a}', sans-serif`; const i = textEditor.value.split('\n'); let r = 0; i.forEach(e => { const t = ctx.measureText(e); if (t.width > r) r = t.width }); e.width = r + 20; e.height = textEditor.scrollHeight / cameraZoom; } currentlyEditingText.isHidden = !1; selectedItems = [currentlyEditingText]; saveStateForUndo(); currentlyEditingText = null } textEditor.style.display = 'none'; textEditor.style.padding = '0'; textEditor.style.lineHeight = 'normal'; }
 function autoResizeTextEditor() { textEditor.style.height = 'auto'; textEditor.style.height = textEditor.scrollHeight + 'px' }
-function saveStateForUndo() { const e = JSON.stringify(items, (e, t) => { if (e === 'img') { return undefined } return t }); if (historyIndex < historyStack.length - 1) { historyStack = historyStack.slice(0, historyIndex + 1) } if (historyStack.length > 0 && historyStack[historyStack.length - 1] === e) return; historyStack.push(e); historyIndex++; if (historyStack.length > HISTORY_LIMIT) { historyStack.shift(); historyIndex-- } }
+function saveStateForUndo() { const e = JSON.stringify(items, (e, t) => { if (e === 'img') { return undefined } return t }); if (historyIndex < historyStack.length - 1) { historyStack = historyStack.slice(0, historyIndex + 1) } if (historyStack.length > 0 && historyStack[historyStack.length - 1] === e) return; historyStack.push(e); historyIndex++; if (historyStack.length > HISTORY_LIMIT) { historyStack.shift(); historyIndex-- } scheduleAutoSave(); }
 function loadStateFromHistory(e) {
     const t = JSON.parse(e);
     selectedItems = [];
@@ -3477,8 +3705,36 @@ if (noteTitleInput) {
 loadSettings();
 setupEventListeners();
 buildPaletteMenu();
-createNewProject('moodinfinite');
-gameLoop();
+
+window.localforage.getItem('moodinfinite_cache').then(cache => {
+    if (cache) globalImageCache = cache;
+    return window.localforage.getItem('moodinfinite_projects');
+}).then(savedProjects => {
+    if (savedProjects && savedProjects.length > 0) {
+        savedProjects.forEach(p => {
+            if (p.type === 'moodinfinite' && p.data && p.data.items) {
+                restoreImages(p.data.items);
+            }
+        });
+        projects = savedProjects;
+        renderTabs();
+        window.localforage.getItem('moodinfinite_active_tab').then(actId => {
+            if (actId && projects.find(p => p.id === actId)) switchTab(actId);
+            else switchTab(projects[0].id);
+            gameLoop();
+        }).catch(() => {
+            switchTab(projects[0].id);
+            gameLoop();
+        });
+    } else {
+        createNewProject('moodinfinite');
+        gameLoop();
+    }
+}).catch(err => {
+    console.error("Failed to load from indexedDB", err);
+    createNewProject('moodinfinite');
+    gameLoop();
+});
 
 let activeLinkEdit = null;
 function showLinkInputModal(x, y, existingItem = null) {
