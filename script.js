@@ -12,6 +12,11 @@ const promptImageInput = document.getElementById('prompt-image-input');
 const mobileTabsBtn = document.getElementById('mobile-tabs-btn');
 const mobileTabsPopup = document.getElementById('mobile-tabs-popup');
 
+const closeBoardModalOverlay = document.getElementById('close-board-modal-overlay');
+const cancelCloseBtn = document.getElementById('cancel-close-btn');
+const confirmCloseBtn = document.getElementById('confirm-close-btn');
+let projectPendingClose = null;
+
 const leftScrollIndicator = document.querySelector('.tabs-list-container .scroll-indicator.left');
 const rightScrollIndicator = document.querySelector('.tabs-list-container .scroll-indicator.right');
 
@@ -131,6 +136,13 @@ function switchTab(projectId) {
 
 function closeTab(projectId, event) {
     if (event) event.stopPropagation();
+    projectPendingClose = projectId;
+    if (closeBoardModalOverlay) closeBoardModalOverlay.style.display = 'flex';
+}
+
+function actuallyCloseTab() {
+    if (projectPendingClose === null) return;
+    const projectId = projectPendingClose;
     const index = projects.findIndex(p => p.id === projectId);
     if (index > -1) {
         const wasActive = activeProjectId === projectId;
@@ -142,11 +154,20 @@ function closeTab(projectId, event) {
                 switchTab(projects[newActiveIndex].id);
             } else {
                 createNewProject('moodinfinite');
+                projectPendingClose = null;
+                if (closeBoardModalOverlay) closeBoardModalOverlay.style.display = 'none';
                 return;
             }
         }
         renderTabs();
     }
+    projectPendingClose = null;
+    if (closeBoardModalOverlay) closeBoardModalOverlay.style.display = 'none';
+}
+
+function hideCloseBoardModal() {
+    projectPendingClose = null;
+    if (closeBoardModalOverlay) closeBoardModalOverlay.style.display = 'none';
 }
 
 function updateTabName(projectId, newName) {
@@ -555,6 +576,13 @@ const linkToolsContainer = document.getElementById('link-tools-container');
 const editLinkBtn = document.getElementById('edit-link-btn');
 const openLinkBtn = document.getElementById('open-link-btn');
 const mobileContextBtn = document.getElementById('mobile-context-btn');
+const noteEditorOverlay = document.getElementById('note-editor-overlay');
+const noteTitleInput = document.getElementById('note-title-input');
+const noteBodyInput = document.getElementById('note-body-input');
+const cancelNoteBtn = document.getElementById('cancel-note-btn');
+const confirmNoteBtn = document.getElementById('confirm-note-btn');
+const noteFmtBtns = document.querySelectorAll('.note-fmt-btn');
+const noteBgColorInput = document.getElementById('note-bg-color-input');
 
 let cameraOffset, cameraZoom;
 let items = [], selectedItems = [];
@@ -908,13 +936,32 @@ function setupEventListeners() {
     if (itemColorPicker) {
         itemColorPicker.addEventListener('input', e => {
             if (selectedItems.length === 1 && (['box', 'circle', 'text', 'measure', 'comment', 'link'].includes(selectedItems[0].type))) {
-                selectedItems[0].color = e.target.value
+                selectedItems[0].color = e.target.value;
+                saveStateForUndo();
+            }
+        });
+    }
+    
+    if (noteBgColorInput) {
+        noteBgColorInput.addEventListener('input', e => {
+            if (selectedItems.length === 1 && selectedItems[0].type === 'text') {
+                selectedItems[0].bgColor = e.target.value;
+                saveStateForUndo();
             }
         });
     }
 
     if (confirmNewBtn) confirmNewBtn.addEventListener('click', () => { resetBoard(); hideConfirmationModal() });
     if (cancelNewBtn) cancelNewBtn.addEventListener('click', hideConfirmationModal);
+    
+    if (confirmCloseBtn) confirmCloseBtn.addEventListener('click', actuallyCloseTab);
+    if (cancelCloseBtn) cancelCloseBtn.addEventListener('click', hideCloseBoardModal);
+    if (closeBoardModalOverlay) {
+        closeBoardModalOverlay.addEventListener('click', (e) => {
+            if (e.target === closeBoardModalOverlay) hideCloseBoardModal();
+        });
+    }
+
     if (downloadImageBtn) downloadImageBtn.addEventListener('click', downloadSourceImage);
     
     // Modal confirmation is handled at the end of the file
@@ -1054,10 +1101,213 @@ function drawSelectionOutline(e) { ctx.save(); const t = getItemBoundingBox(e); 
 function drawSelectionBox() { ctx.save(); ctx.fillStyle = hexToRgba(accentColor, .1); ctx.strokeStyle = accentColor; ctx.lineWidth = 1 / cameraZoom; const { x: e, y: t, width: o, height: a } = getNormalizedSelectionBox(); ctx.fillRect(e, t, o, a); ctx.strokeRect(e, t, o, a); ctx.restore() }
 function drawGrid() { const e = (0 - canvas.width / 2) / cameraZoom - cameraOffset.x + canvas.width / 2, t = (0 - canvas.height / 2) / cameraZoom - cameraOffset.y + canvas.height / 2, o = (canvas.width - canvas.width / 2) / cameraZoom - cameraOffset.x + canvas.width / 2, a = (canvas.height - canvas.height / 2) / cameraZoom - cameraOffset.y + canvas.height / 2, i = Math.floor(e / gridSize) * gridSize, r = Math.floor(t / gridSize) * gridSize; ctx.save(); ctx.globalAlpha = gridOpacity; ctx.beginPath(); ctx.strokeStyle = gridColor; ctx.lineWidth = 1 / cameraZoom; for (let s = i; s < o; s += gridSize) { ctx.moveTo(s, t); ctx.lineTo(s, a) } for (let s = r; s < a; s += gridSize) { ctx.moveTo(e, s); ctx.lineTo(o, s) } ctx.stroke(); ctx.restore() }
 function drawArrow(e, t) { const o = 10 / cameraZoom, a = t.endX - t.startX, i = t.endY - t.startY, r = Math.atan2(i, a); e.save(); e.beginPath(); e.moveTo(t.startX, t.startY); e.lineTo(t.endX, t.endY); e.lineTo(t.endX - o * Math.cos(r - Math.PI / 6), t.endY - o * Math.sin(r - Math.PI / 6)); e.moveTo(t.endX, t.endY); e.lineTo(t.endX - o * Math.cos(r + Math.PI / 6), t.endY - o * Math.sin(r + Math.PI / 6)); e.strokeStyle = t.color || accentColor; e.lineWidth = 3 / cameraZoom; e.stroke(); e.restore() }
-function drawTextItem(e, t) { e.save(); const o = t.x + t.width / 2, a = t.y + t.height / 2; e.translate(o, a); e.rotate(t.rotation); e.scale(t.scaleX || 1, t.scaleY || 1); e.globalAlpha = (t.opacity ?? 1) * .05; e.fillStyle = t.color; e.fillRect(-t.width / 2, -t.height / 2, t.width, t.height); e.globalAlpha = t.opacity ?? 1; e.fillStyle = t.color; const i = t.fontStyle || 'normal', r = t.fontWeight || 'bold', s = t.fontFamily || 'Inter'; e.font = `${i} ${r} ${t.fontSize}px '${s}', sans-serif`; e.textAlign = t.textAlign || 'center'; e.textBaseline = 'middle'; const n = t.text.split(' '), l = [], c = ''; let d = c; for (let o = 0; o < n.length; o++) { const a = d + n[o] + ' '; if (e.measureText(a).width > t.width - 20 && o > 0) { l.push(d.trim()); d = n[o] + ' ' } else { d = a } } l.push(d.trim()); const h = t.fontSize * 1.4; let p = -l.length * h / 2 + h / 2, m = 0; if (e.textAlign === 'left') { m = -t.width / 2 + 10 } else if (e.textAlign === 'right') { m = t.width / 2 - 10 } l.forEach((t, o) => { e.fillText(t, m, p + o * h) }); e.restore() }
+function drawTextItem(ctx, item) {
+    ctx.save();
+    const cx = item.x + item.width / 2;
+    const cy = item.y + item.height / 2;
+    ctx.translate(cx, cy);
+    ctx.rotate(item.rotation);
+    ctx.scale(item.scaleX || 1, item.scaleY || 1);
+    ctx.globalAlpha = item.opacity ?? 1;
+
+    const x = -item.width / 2;
+    const y = -item.height / 2;
+
+    // Post-it Card Rendering
+    ctx.shadowColor = 'rgba(0,0,0,0.15)';
+    ctx.shadowBlur = 10;
+    ctx.shadowOffsetX = 2;
+    ctx.shadowOffsetY = 4;
+
+    // Card Background
+    ctx.fillStyle = item.bgColor || '#ffffff';
+    ctx.beginPath();
+    if (ctx.roundRect) ctx.roundRect(x, y, item.width, item.height, 8);
+    else ctx.rect(x, y, item.width, item.height);
+    ctx.fill();
+
+    ctx.shadowBlur = 0;
+    ctx.shadowOffsetX = 0;
+    ctx.shadowOffsetY = 0;
+
+    // Accent Header Strip
+    ctx.fillStyle = item.color || accentColor;
+    ctx.beginPath();
+    const radius = 8;
+    if (ctx.roundRect) ctx.roundRect(x, y, item.width, 12, [radius, radius, 0, 0]);
+    else ctx.rect(x, y, item.width, 12);
+    ctx.fill();
+
+    // Content Drawing
+    // Smart Color Logic
+    const isDark = getLuminance(item.bgColor || '#ffffff') < 0.5;
+    const textPrimary = isDark ? '#f1f5f9' : '#0f172a';
+    const textSecondary = isDark ? '#cbd5e1' : '#475569';
+    const accentColorLocal = item.color || accentColor;
+
+    // Content Drawing
+    const pX = 15;
+    let currY = y + 35; // Increased top padding
+
+    // Title Section
+    if (item.title && item.title.trim() !== "") {
+        ctx.fillStyle = textPrimary;
+        ctx.font = `bold 16px '${item.fontFamily || 'Nunito'}', sans-serif`;
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'top';
+        
+        const titleLines = wrapText(ctx, item.title, item.width - pX * 2);
+        titleLines.forEach(line => {
+            ctx.fillText(line, x + pX, currY);
+            currY += 22; // Slightly more line height for title
+        });
+        currY += 10;
+    }
+
+    // Body Section (Markdown Lite)
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'top';
+    
+    const baseSize = item.fontSize || 14;
+    const lines = item.text.replace(/\r/g, '').split('\n');
+    lines.forEach(line => {
+        const consumedH = renderMarkdownLine(ctx, line, x + pX, currY, item.width - pX * 2, baseSize, item.fontFamily, textPrimary, textSecondary);
+        currY += consumedH;
+    });
+
+    ctx.restore();
+}
+
+function renderMarkdownLine(ctx, text, x, y, maxWidth, baseSize, fontFamily, primaryColor, secondaryColor) {
+    let cleanText = text.trimStart();
+    let lineScale = 1.0;
+    let isHeadingBold = false;
+    let isBullet = false;
+    let color = secondaryColor;
+
+    if (cleanText.startsWith('# ')) {
+        lineScale = 1.4;
+        isHeadingBold = true;
+        cleanText = cleanText.substring(2);
+        color = primaryColor;
+    } else if (cleanText.startsWith('## ')) {
+        lineScale = 1.25;
+        isHeadingBold = true;
+        cleanText = cleanText.substring(3);
+        color = primaryColor;
+    } else if (cleanText.startsWith('### ')) {
+        lineScale = 1.1;
+        isHeadingBold = true;
+        cleanText = cleanText.substring(4);
+        color = primaryColor;
+    } else if (cleanText.startsWith('- ')) {
+        isBullet = true;
+        cleanText = '•  ' + cleanText.substring(2);
+    } else if (cleanText.startsWith('* ')) {
+        // Also support * for bullets!
+        isBullet = true;
+        cleanText = '•  ' + cleanText.substring(2);
+    }
+
+    const finalSize = baseSize * lineScale;
+    const lineHeight = finalSize * 1.5;
+    
+    // Indent bullets
+    const bulletIndent = isBullet ? 15 : 0;
+    
+    // MEASURE CAREFULLY: Set font before wrapping
+    const weightStr = isHeadingBold ? 'bold ' : '';
+    const safeFont = fontFamily ? fontFamily.replace(/'/g, "") : 'Nunito';
+    ctx.font = `${weightStr}${finalSize}px '${safeFont}', sans-serif`;
+    
+    const wrappedLines = wrapText(ctx, cleanText, maxWidth - bulletIndent);
+    
+    wrappedLines.forEach((lineText, lineIdx) => {
+        drawInlineFormattedText(ctx, lineText, x + bulletIndent, y + (lineIdx * lineHeight), finalSize, safeFont, isHeadingBold, color);
+    });
+
+    return wrappedLines.length * lineHeight;
+}
+
+function drawInlineFormattedText(ctx, text, x, y, size, fontFamily, forceBold, defaultColor) {
+    const regex = /(\*\*.*?\*\*|\*.*?\*|`.*?`|[^*`]+|[*`])/g;
+    const matches = text.match(regex);
+    if (!matches) {
+        ctx.fillText(text, x, y);
+        return;
+    }
+
+    let currentX = x;
+
+    matches.forEach(part => {
+        let isItalic = false;
+        let isBold = forceBold;
+        let isCode = false;
+        let color = defaultColor;
+        let font = fontFamily || 'Nunito';
+        let content = part;
+        let currentSize = size;
+
+        if (part.length >= 4 && part.startsWith('**') && part.endsWith('**')) {
+            isBold = true;
+            content = part.slice(2, -2);
+        } else if (part.length >= 2 && part.startsWith('*') && part.endsWith('*')) {
+            isItalic = true;
+            content = part.slice(1, -1);
+        } else if (part.length >= 2 && part.startsWith('`') && part.endsWith('`')) {
+            isCode = true;
+            currentSize = size * 0.85;
+            color = accentColor; 
+            content = part.slice(1, -1);
+            
+            ctx.save();
+            ctx.font = `${currentSize}px 'Source Code Pro', monospace`;
+            const w = ctx.measureText(content).width;
+            ctx.fillStyle = 'rgba(0,0,0,0.15)';
+            const bgH = currentSize * 1.35;
+            const bgY = y - (currentSize * 0.15);
+            if (ctx.roundRect) ctx.roundRect(currentX - 2, bgY, w + 4, bgH, 4);
+            else ctx.fillRect(currentX - 2, bgY, w + 4, bgH);
+            ctx.fill();
+            ctx.restore();
+        }
+
+        // Build a perfectly compliant CSS font string! No 'normal' keyword.
+        let fontStr = '';
+        if (isItalic) fontStr += 'italic ';
+        if (isBold) fontStr += 'bold ';
+        fontStr += `${currentSize}px `;
+        fontStr += isCode ? "'Source Code Pro', monospace" : `'${font}', sans-serif`;
+
+        ctx.font = fontStr.trim();
+        ctx.fillStyle = color;
+        ctx.fillText(content, currentX, y);
+        currentX += ctx.measureText(content).width;
+    });
+}
+
+function wrapText(ctx, text, maxWidth) {
+    const words = text.split(' ');
+    const lines = [];
+    let currentLine = words[0];
+
+    for (let i = 1; i < words.length; i++) {
+        const word = words[i];
+        const width = ctx.measureText(currentLine + " " + word).width;
+        if (width < maxWidth) {
+            currentLine += " " + word;
+        } else {
+            lines.push(currentLine);
+            currentLine = word;
+        }
+    }
+    lines.push(currentLine);
+    return lines;
+}
+
 function drawBoxItem(e, t) { e.save(); const o = t.x + t.width / 2, a = t.y + t.height / 2; e.translate(o, a); e.rotate(t.rotation); e.scale(t.scaleX || 1, t.scaleY || 1); if (!t.style || t.style === 'fill') { e.fillStyle = t.color; e.fillRect(-t.width / 2, -t.height / 2, t.width, t.height) } else { e.strokeStyle = t.color; e.lineWidth = 4 / cameraZoom; e.strokeRect(-t.width / 2, -t.height / 2, t.width, t.height) } e.restore() }
 function drawCircleItem(e, t) { e.save(); const o = t.x + t.width / 2, a = t.y + t.height / 2, i = t.width / 2, r = t.height / 2; e.translate(o, a); e.rotate(t.rotation); e.scale(t.scaleX || 1, t.scaleY || 1); e.beginPath(); e.ellipse(0, 0, i, r, 0, 0, Math.PI * 2); if (!t.style || t.style === "fill") { e.fillStyle = t.color; e.fill(); } else { e.strokeStyle = t.color; e.lineWidth = 4 / cameraZoom; e.stroke(); } e.restore(); }
-function drawCommentItem(e, t) { e.save(); const o = t.x + t.width / 2, a = t.y + t.height / 2; e.translate(o, a); e.rotate(t.rotation); e.scale(t.scaleX || 1, t.scaleY || 1); e.globalAlpha = t.opacity ?? 1; e.fillStyle = t.color; e.beginPath(); if (e.roundRect) { e.roundRect(-t.width / 2, -t.height / 2, t.width, t.height, 12 / cameraZoom); } else { e.rect(-t.width / 2, -t.height / 2, t.width, t.height); } e.fill(); const lum = getLuminance(t.color); const textColor = lum > 0.5 ? '#111111' : '#ffffff'; e.fillStyle = textColor; const i = t.fontStyle || 'normal', r = t.fontWeight || 'bold', s = t.fontFamily || 'Inter'; e.font = `${i} ${r} ${t.fontSize}px '${s}', sans-serif`; let iconOffset = 0; if (t.icon && t.icon !== 'none') { const img = getIconImage(t.icon, textColor); const iconSize = t.fontSize * 1.2; iconOffset = iconSize + 10; if (img.complete && img.naturalWidth !== 0) { e.drawImage(img, -t.width / 2 + 15, -iconSize / 2, iconSize, iconSize) } } e.textAlign = t.textAlign || 'left'; e.textBaseline = 'top'; const l = t.text.split('\n'); const h = t.fontSize * 1.4; let m = 0; if (e.textAlign === 'left') { m = -t.width / 2 + 15 + iconOffset } else if (e.textAlign === 'right') { m = t.width / 2 - 15 } else { m = iconOffset / 2 } l.forEach((txt, i) => { const yLineStart = -(l.length * h) / 2 + i * h; const yTextTop = yLineStart + (h - t.fontSize) / 2; e.fillText(txt, m, yTextTop); }); e.restore(); }
+function drawCommentItem(e, t) { e.save(); const o = t.x + t.width / 2, a = t.y + t.height / 2; e.translate(o, a); e.rotate(t.rotation); e.scale(t.scaleX || 1, t.scaleY || 1); e.globalAlpha = t.opacity ?? 1; e.fillStyle = t.color; e.beginPath(); if (e.roundRect) { e.roundRect(-t.width / 2, -t.height / 2, t.width, t.height, 12 / cameraZoom); } else { e.rect(-t.width / 2, -t.height / 2, t.width, t.height); } e.fill(); const lum = getLuminance(t.color); const textColor = lum > 0.5 ? '#111111' : '#ffffff'; e.fillStyle = textColor; const i = t.fontStyle || 'normal', r = t.fontWeight || 'bold', s = t.fontFamily || 'Nunito'; e.font = `${i} ${r} ${t.fontSize}px '${s}', sans-serif`; let iconOffset = 0; if (t.icon && t.icon !== 'none') { const img = getIconImage(t.icon, textColor); const iconSize = t.fontSize * 1.2; iconOffset = iconSize + 10; if (img.complete && img.naturalWidth !== 0) { e.drawImage(img, -t.width / 2 + 15, -iconSize / 2, iconSize, iconSize) } } e.textAlign = t.textAlign || 'left'; e.textBaseline = 'top'; const l = t.text.split('\n'); const h = t.fontSize * 1.4; let m = 0; if (e.textAlign === 'left') { m = -t.width / 2 + 15 + iconOffset } else if (e.textAlign === 'right') { m = t.width / 2 - 15 } else { m = iconOffset / 2 } l.forEach((txt, i) => { const yLineStart = -(l.length * h) / 2 + i * h; const yTextTop = yLineStart + (h - t.fontSize) / 2; e.fillText(txt, m, yTextTop); }); e.restore(); }
 
 function drawImageItem(ctx, item) {
     if (!item.img) return;
@@ -1212,7 +1462,7 @@ function drawTextListItem(e, t) {
     const lum = getLuminance(t.color); 
     const textColor = lum > 0.5 ? '#111111' : '#ffffff'; 
     e.fillStyle = textColor; 
-    const i = t.fontStyle || 'normal', r = t.fontWeight || 'bold', s = t.fontFamily || 'Inter'; 
+    const i = t.fontStyle || 'normal', r = t.fontWeight || 'bold', s = t.fontFamily || 'Nunito'; 
     e.font = `${i} ${r} ${t.fontSize}px '${s}', sans-serif`; 
     e.textAlign = 'left'; 
     e.textBaseline = 'top'; 
@@ -1453,6 +1703,7 @@ function handleKeyDown(e) {
     if (key === 't') { e.preventDefault(); setCurrentTool('text'); return; }
     if (key === 'n') { e.preventDefault(); setCurrentTool('comment'); return; }
     if (key === 'k' && !e.ctrlKey) { e.preventDefault(); setCurrentTool('link'); return; }
+    if (key === 'l') { e.preventDefault(); setCurrentTool('textList'); return; }
     if (key === 'i') { e.preventDefault(); imageInput.click(); return; }
     if (key === 'b') { e.preventDefault(); setCurrentTool('box'); return; }
     if (key === 'c') { e.preventDefault(); setCurrentTool('circle'); return; }
@@ -1664,9 +1915,10 @@ function onMouseDown(e) {
             if (currentTool === 'arrow') {
                 newItem = { id: Date.now(), type: 'arrow', startX: o.x, startY: o.y, endX: o.x, endY: o.y, rotation: 0, isPinned: false, x: o.x, y: o.y, width: 0, height: 0, opacity: 1, scaleX: 1, scaleY: 1, color: accentColor };
             } else if (currentTool === 'text') {
-                newItem = { id: Date.now(), type: 'text', text: 'Type...', x: o.x, y: o.y, width: 0, height: 0, fontSize: 32, rotation: 0, isPinned: false, opacity: 1, fontFamily: 'Inter', textAlign: 'center', fontWeight: 'bold', fontStyle: 'normal', color: accentColor, scaleX: 1, scaleY: 1 };
+                newItem = { id: Date.now(), type: 'text', text: 'Write your note here...', title: '', x: o.x, y: o.y, width: 220, height: 180, fontSize: 16, rotation: 0, isPinned: false, opacity: 1, fontFamily: 'Nunito', color: accentColor, scaleX: 1, scaleY: 1 };
+                updateNoteDimensions(newItem);
             } else if (currentTool === 'comment') {
-                newItem = { id: Date.now(), type: 'comment', text: 'Note...', x: o.x, y: o.y, width: 0, height: 0, fontSize: 16, rotation: 0, isPinned: false, opacity: 1, fontFamily: 'Inter', textAlign: 'left', fontWeight: 'bold', fontStyle: 'normal', color: accentColor, scaleX: 1, scaleY: 1, icon: 'none' };
+                newItem = { id: Date.now(), type: 'comment', text: 'Note...', x: o.x, y: o.y, width: 0, height: 0, fontSize: 16, rotation: 0, isPinned: false, opacity: 1, fontFamily: 'Nunito', textAlign: 'left', fontWeight: 'bold', fontStyle: 'normal', color: accentColor, scaleX: 1, scaleY: 1, icon: 'none' };
             } else if (currentTool === 'box') {
                 newItem = { id: Date.now(), type: 'box', color: accentColor, x: o.x, y: o.y, width: 0, height: 0, rotation: 0, isPinned: false, style: 'fill', opacity: 1, scaleX: 1, scaleY: 1 };
             } else if (currentTool === 'circle') {
@@ -1676,7 +1928,7 @@ function onMouseDown(e) {
             } else if (currentTool === 'grid') {
                 newItem = { id: Date.now(), type: 'grid', color: accentColor, x: o.x, y: o.y, width: 0, height: 0, rotation: 0, isPinned: false, opacity: 1, rows: 3, cols: 3, scaleX: 1, scaleY: 1 };
             } else if (currentTool === 'textList') {
-                newItem = { id: Date.now(), type: 'textList', items: [{ text: 'Item 1', completed: false }], text: 'Item 1', x: o.x, y: o.y, width: 0, height: 0, fontSize: 18, rotation: 0, isPinned: false, opacity: 1, fontFamily: 'Inter', textAlign: 'left', fontWeight: 'bold', fontStyle: 'normal', color: accentColor, scaleX: 1, scaleY: 1 };
+                newItem = { id: Date.now(), type: 'textList', items: [{ text: 'Item 1', completed: false }], text: 'Item 1', x: o.x, y: o.y, width: 0, height: 0, fontSize: 18, rotation: 0, isPinned: false, opacity: 1, fontFamily: 'Nunito', textAlign: 'left', fontWeight: 'bold', fontStyle: 'normal', color: accentColor, scaleX: 1, scaleY: 1 };
                 updateTextListDimensions(newItem);
             } else if (currentTool === 'draw') {
                 newItem = { id: Date.now(), type: 'stroke', points: [{ x: o.x, y: o.y }], color: accentColor, isPinned: false, x: o.x, y: o.y, width: 0, height: 0, opacity: 1, scaleX: 1, scaleY: 1 };
@@ -1686,7 +1938,7 @@ function onMouseDown(e) {
                 addItemToLayeredItems(newItem);
                 selectedItems = [newItem];
                 bringSelectedToFront();
-                if (newItem.type === 'textList') {
+                if (['textList', 'text', 'comment'].includes(newItem.type)) {
                     setCurrentTool(null);
                 }
             }
@@ -2615,10 +2867,10 @@ function updateMeasureUnit(e) { if (selectedItems.length === 1 && selectedItems[
 function setTextFontFamily(e) { if (selectedItems.length === 1 && (selectedItems[0].type === 'text' || selectedItems[0].type === 'comment' || selectedItems[0].type === 'textList')) { selectedItems[0].fontFamily = e.target.value; if (selectedItems[0].type === 'comment') updateCommentDimensions(selectedItems[0]); else if (selectedItems[0].type === 'textList') updateTextListDimensions(selectedItems[0]); saveStateForUndo() } }
 function toggleTextStyleBold() { if (selectedItems.length === 1 && (selectedItems[0].type === 'text' || selectedItems[0].type === 'comment' || selectedItems[0].type === 'textList')) { const e = selectedItems[0]; e.fontWeight = e.fontWeight === 'bold' ? 'normal' : 'bold'; if (e.type === 'comment') updateCommentDimensions(e); else if (e.type === 'textList') updateTextListDimensions(e); updateSelectionToolbar(); saveStateForUndo() } }
 function toggleTextStyleItalic() { if (selectedItems.length === 1 && (selectedItems[0].type === 'text' || selectedItems[0].type === 'comment' || selectedItems[0].type === 'textList')) { const e = selectedItems[0]; e.fontStyle = e.fontStyle === 'italic' ? 'normal' : 'italic'; if (e.type === 'comment') updateCommentDimensions(e); else if (e.type === 'textList') updateTextListDimensions(e); updateSelectionToolbar(); saveStateForUndo() } }
-function updateCommentDimensions(e) { if (e.type !== 'comment') return; const t = e.fontStyle || 'normal', o = e.fontWeight || 'bold', a = e.fontFamily || 'Inter'; ctx.save(); ctx.font = `${t} ${o} ${e.fontSize}px '${a}', sans-serif`; const i = e.text.split('\n'); let r = 0; i.forEach(e => { const t = ctx.measureText(e); if (t.width > r) r = t.width }); let extraW = 30; if (e.icon && e.icon !== 'none') extraW += e.fontSize * 1.2 + 10; e.width = r + extraW; const numLines = i.length || 1; e.height = numLines * (e.fontSize * 1.4) + 16; ctx.restore(); }
+function updateCommentDimensions(e) { if (e.type !== 'comment') return; const t = e.fontStyle || 'normal', o = e.fontWeight || 'bold', a = e.fontFamily || 'Nunito'; ctx.save(); ctx.font = `${t} ${o} ${e.fontSize}px '${a}', sans-serif`; const i = e.text.split('\n'); let r = 0; i.forEach(e => { const t = ctx.measureText(e); if (t.width > r) r = t.width }); let extraW = 30; if (e.icon && e.icon !== 'none') extraW += e.fontSize * 1.2 + 10; e.width = r + extraW; const numLines = i.length || 1; e.height = numLines * (e.fontSize * 1.4) + 16; ctx.restore(); }
 function updateTextListDimensions(e) { 
     if (e.type !== 'textList') return; 
-    const t = e.fontStyle || 'normal', o = e.fontWeight || 'bold', a = e.fontFamily || 'Inter'; 
+    const t = e.fontStyle || 'normal', o = e.fontWeight || 'bold', a = e.fontFamily || 'Nunito'; 
     ctx.save(); 
     ctx.font = `${t} ${o} ${e.fontSize}px '${a}', sans-serif`; 
     let maxW = 0; 
@@ -2656,21 +2908,27 @@ function updateSelectionToolbar() {
 
         if (isTextOrCommentOrList) {
             const e = selectedItems[0];
-            fontFamilySelect.value = e.fontFamily || 'Inter';
+            fontFamilySelect.value = e.fontFamily || 'Nunito';
             [textAlignLeftBtn, textAlignCenterBtn, textAlignRightBtn].forEach(el => {
                 el.classList.remove('active');
-                el.style.display = (isComment || isTextList) ? 'none' : 'flex';
+                el.style.display = (isComment || isTextList || selectedItems[0].type === 'text') ? 'none' : 'flex';
             });
             if (e.textAlign === 'left') textAlignLeftBtn.classList.add('active');
             else if (e.textAlign === 'right') textAlignRightBtn.classList.add('active');
             else textAlignCenterBtn.classList.add('active');
             textStyleBoldBtn.classList.toggle('active', e.fontWeight === 'bold');
             textStyleItalicBtn.classList.toggle('active', e.fontStyle === 'italic');
-            textStyleBoldBtn.style.display = isTextList ? 'none' : 'flex';
-            textStyleItalicBtn.style.display = isTextList ? 'none' : 'flex';
+            textStyleBoldBtn.style.display = (isTextList || selectedItems[0].type === 'text') ? 'none' : 'flex';
+            textStyleItalicBtn.style.display = (isTextList || selectedItems[0].type === 'text') ? 'none' : 'flex';
         }
         if (canHaveColor) {
             itemColorPicker.value = selectedItems[0].color || accentColor;
+            if (selectedItems[0].type === 'text') {
+                noteBgColorInput.style.display = 'block';
+                noteBgColorInput.value = selectedItems[0].bgColor || '#ffffff';
+            } else {
+                noteBgColorInput.style.display = 'none';
+            }
         }
         
         toggleBoxStyleBtn.style.display = isBoxOrCircle ? 'flex' : 'none';
@@ -2715,8 +2973,107 @@ openLinkBtn.onclick = () => {
 };
 
 function updateToolbarPosition() { if (selectedItems.length > 0) { const e = getCollectiveBoundingBox(selectedItems), t = worldToScreen({ x: e.x + e.width / 2, y: e.y }); selectionToolbar.style.left = `${t.x}px`; selectionToolbar.style.top = `${t.y}px` } }
-function editText(e) { currentlyEditingText = e; e.isHidden = !0; const t = worldToScreen({ x: e.x, y: e.y }), o = Math.max(Math.abs(e.width * cameraZoom), 150); let paddingWidthAdjust = e.type === 'comment' ? 30 * cameraZoom : 0; if (e.type === 'comment' && e.icon && e.icon !== 'none') { paddingWidthAdjust += e.fontSize * 1.2 * cameraZoom + 10; } Object.assign(textEditor.style, { display: 'block', left: `${t.x}px`, top: `${t.y}px`, width: `${o}px`, height: 'auto', transform: `rotate(${e.rotation}rad)`, transformOrigin: 'top left', color: e.type === 'comment' ? (getLuminance(e.color) > 0.5 ? '#111' : '#fff') : e.color, backgroundColor: e.type === 'comment' ? e.color : hexToRgba(e.color, .1), borderRadius: e.type === 'comment' ? `${12 * cameraZoom}px` : '0px', padding: e.type === 'comment' ? '8px 15px' : '0px', paddingLeft: e.type === 'comment' && e.icon && e.icon !== 'none' ? `${e.fontSize * 1.2 * cameraZoom  + 20}px` : (e.type === 'comment' ? '15px' : '0px'), fontSize: `${e.fontSize * cameraZoom}px`, fontFamily: e.fontFamily || 'Inter', textAlign: e.textAlign || 'center', fontWeight: e.fontWeight || 'bold', fontStyle: e.fontStyle || 'normal', lineHeight: e.type === 'comment' ? '1.4' : 'normal' }); textEditor.value = e.text === "Type..." || e.text === "Note..." ? "" : e.text; textEditor.focus(); autoResizeTextEditor(); selectedItems = []; updateSelectionToolbar(); updateToolbarPosition(); updateLeftBarState() }
-function finishEditingText() { if (currentlyEditingText) { currentlyEditingText.text = textEditor.value.trim() || (currentlyEditingText.type === 'comment' ? "Note..." : "Type..."); const e = currentlyEditingText; if (e.type === 'comment') { updateCommentDimensions(e); } else if (e.type === 'textList') { const lines = textEditor.value.split('\n').filter(l => l.trim() !== ""); if (lines.length === 0) lines.push("Item 1"); const oldItems = e.items || []; e.items = lines.map((l, i) => ({ text: l, completed: (oldItems[i] && oldItems[i].text === l) ? oldItems[i].completed : false })); updateTextListDimensions(e); } else { const t = e.fontStyle || 'normal', o = e.fontWeight || 'bold', a = e.fontFamily || 'Inter'; ctx.font = `${t} ${o} ${e.fontSize}px '${a}', sans-serif`; const i = textEditor.value.split('\n'); let r = 0; i.forEach(e => { const t = ctx.measureText(e); if (t.width > r) r = t.width }); e.width = r + 20; e.height = textEditor.scrollHeight / cameraZoom; } currentlyEditingText.isHidden = !1; selectedItems = [currentlyEditingText]; saveStateForUndo(); currentlyEditingText = null } textEditor.style.display = 'none'; textEditor.style.padding = '0'; textEditor.style.lineHeight = 'normal'; }
+function editText(e) {
+    if (e.type === 'text') {
+        currentlyEditingText = e;
+        e.isHidden = true;
+        noteEditorOverlay.style.display = 'flex';
+        noteTitleInput.value = e.title || '';
+        noteBodyInput.value = e.text === 'Write your note here...' ? '' : e.text;
+        noteTitleInput.focus();
+        return;
+    }
+    currentlyEditingText = e;
+    e.isHidden = !0;
+    const t = worldToScreen({ x: e.x, y: e.y }), o = Math.max(Math.abs(e.width * cameraZoom), 150);
+    let paddingWidthAdjust = e.type === 'comment' ? 30 * cameraZoom : 0;
+    if (e.type === 'comment' && e.icon && e.icon !== 'none') {
+        paddingWidthAdjust += e.fontSize * 1.2 * cameraZoom + 10;
+    }
+    Object.assign(textEditor.style, { display: 'block', left: `${t.x}px`, top: `${t.y}px`, width: `${o}px`, height: 'auto', transform: `rotate(${e.rotation}rad)`, transformOrigin: 'top left', color: e.type === 'comment' ? (getLuminance(e.color) > 0.5 ? '#111' : '#fff') : e.color, backgroundColor: e.type === 'comment' ? e.color : hexToRgba(e.color, .1), borderRadius: e.type === 'comment' ? `${12 * cameraZoom}px` : '0px', padding: e.type === 'comment' ? '8px 15px' : '0px', paddingLeft: e.type === 'comment' && e.icon && e.icon !== 'none' ? `${e.fontSize * 1.2 * cameraZoom  + 20}px` : (e.type === 'comment' ? '15px' : '0px'), fontSize: `${e.fontSize * cameraZoom}px`, fontFamily: e.fontFamily || 'Nunito', textAlign: e.textAlign || 'center', fontWeight: e.fontWeight || 'bold', fontStyle: e.fontStyle || 'normal', lineHeight: e.type === 'comment' ? '1.4' : 'normal' });
+    textEditor.value = e.text === "Type..." || e.text === "Note..." ? "" : e.text;
+    textEditor.focus();
+    autoResizeTextEditor();
+    selectedItems = [];
+    updateSelectionToolbar();
+    updateToolbarPosition();
+    updateLeftBarState()
+}
+
+function cancelNoteEditing() {
+    if (currentlyEditingText) {
+        currentlyEditingText.isHidden = false;
+        if ((!currentlyEditingText.text || currentlyEditingText.text.trim() === '') && (!currentlyEditingText.title || currentlyEditingText.title.trim() === '')) {
+            // Remove if empty new note
+            items = items.filter(i => i.id !== currentlyEditingText.id);
+        }
+        currentlyEditingText = null;
+    }
+    noteEditorOverlay.style.display = 'none';
+}
+
+function finishNoteEditing() {
+    if (currentlyEditingText) {
+        currentlyEditingText.title = noteTitleInput.value.trim();
+        currentlyEditingText.text = noteBodyInput.value.trim() || 'No content';
+        currentlyEditingText.isHidden = false;
+        
+        updateNoteDimensions(currentlyEditingText);
+        
+        saveStateForUndo();
+        selectedItems = [currentlyEditingText];
+        currentlyEditingText = null;
+    }
+    noteEditorOverlay.style.display = 'none';
+    updateSelectionToolbar();
+}
+
+function updateNoteDimensions(item) {
+    // Using a clear, unscaled approach for height calculation
+    const testCtx = canvas.getContext('2d');
+    testCtx.save();
+    testCtx.setTransform(1, 0, 0, 1, 0, 0); // RESET TRANSFORM for accurate measurement
+    
+    const pX = 15;
+    const maxWidth = item.width - pX * 2;
+    let totalH = 40; 
+
+    if (item.title && item.title.trim() !== "") {
+        testCtx.font = `bold 16px Nunito`;
+        const titleLines = wrapText(testCtx, item.title, maxWidth);
+        totalH += titleLines.length * 22;
+        totalH += 10;
+    }
+
+    const baseSize = item.fontSize || 14;
+    const lines = item.text.replace(/\r/g, '').split('\n');
+    lines.forEach(line => {
+        let cleanText = line.trimStart();
+        let scale = 1.0;
+        let isBullet = false;
+        let isBold = false;
+
+        if (cleanText.startsWith('# ')) {
+            scale = 1.4; isBold = true; cleanText = cleanText.substring(2);
+        } else if (cleanText.startsWith('## ')) {
+            scale = 1.25; isBold = true; cleanText = cleanText.substring(3);
+        } else if (cleanText.startsWith('### ')) {
+            scale = 1.1; isBold = true; cleanText = cleanText.substring(4);
+        } else if (cleanText.startsWith('- ') || cleanText.startsWith('* ')) {
+            isBullet = true; cleanText = '•  ' + cleanText.substring(2);
+        }
+
+        const finalSize = baseSize * scale;
+        testCtx.font = `${isBold ? 'bold ' : ''}${finalSize}px Nunito`;
+        const bulletIndent = isBullet ? 15 : 0;
+        const wrapped = wrapText(testCtx, cleanText, maxWidth - bulletIndent);
+        totalH += wrapped.length * (finalSize * 1.5);
+    });
+
+    testCtx.restore();
+    item.height = Math.max(120, totalH + 60); // Generous safety margin
+}
+function finishEditingText() { if (currentlyEditingText) { if (currentlyEditingText.type === 'text') return; currentlyEditingText.text = textEditor.value.trim() || (currentlyEditingText.type === 'comment' ? "Note..." : "Type..."); const e = currentlyEditingText; if (e.type === 'comment') { updateCommentDimensions(e); } else if (e.type === 'textList') { const lines = textEditor.value.split('\n').filter(l => l.trim() !== ""); if (lines.length === 0) lines.push("Item 1"); const oldItems = e.items || []; e.items = lines.map((l, i) => ({ text: l, completed: (oldItems[i] && oldItems[i].text === l) ? oldItems[i].completed : false })); updateTextListDimensions(e); } else { const t = e.fontStyle || 'normal', o = e.fontWeight || 'bold', a = e.fontFamily || 'Nunito'; ctx.font = `${t} ${o} ${e.fontSize}px '${a}', sans-serif`; const i = textEditor.value.split('\n'); let r = 0; i.forEach(e => { const t = ctx.measureText(e); if (t.width > r) r = t.width }); e.width = r + 20; e.height = textEditor.scrollHeight / cameraZoom; } currentlyEditingText.isHidden = !1; selectedItems = [currentlyEditingText]; saveStateForUndo(); currentlyEditingText = null } textEditor.style.display = 'none'; textEditor.style.padding = '0'; textEditor.style.lineHeight = 'normal'; }
 function autoResizeTextEditor() { textEditor.style.height = 'auto'; textEditor.style.height = textEditor.scrollHeight + 'px' }
 function saveStateForUndo() { const e = JSON.stringify(items, (e, t) => { if (e === 'img') { return undefined } return t }); if (historyIndex < historyStack.length - 1) { historyStack = historyStack.slice(0, historyIndex + 1) } if (historyStack.length > 0 && historyStack[historyStack.length - 1] === e) return; historyStack.push(e); historyIndex++; if (historyStack.length > HISTORY_LIMIT) { historyStack.shift(); historyIndex-- } }
 function loadStateFromHistory(e) {
@@ -3056,6 +3413,66 @@ function distToSegmentSquared(e, t, o) { const a = distSq(t, o); if (a === 0) re
 function invertColor(e) { if (e.indexOf('#') === 0) e = e.slice(1); if (e.length === 3) e = e[0] + e[0] + e[1] + e[1] + e[2] + e[2]; if (e.length !== 6) return '#ffffff'; const t = (255 - parseInt(e.slice(0, 2), 16)).toString(16), o = (255 - parseInt(e.slice(2, 4), 16)).toString(16), a = (255 - parseInt(e.slice(4, 6), 16)).toString(16); return '#' + padZero(t) + padZero(o) + padZero(a) }
 function padZero(e, t) { t = t || 2; const o = (new Array(t + 1)).join('0'); return (o + e).slice(-t) }
 function adjustZoom(e, t) { if (isDragging) return; const evLoc = getEventLocation(e); if (!evLoc) return; const o = screenToWorld(evLoc); cameraZoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, cameraZoom * (1 + t))); const a = screenToWorld(getEventLocation(e)); cameraOffset.x += a.x - o.x; cameraOffset.y += a.y - o.y }
+
+cancelNoteBtn.onclick = cancelNoteEditing;
+confirmNoteBtn.onclick = finishNoteEditing;
+
+function applyNoteFormat(fmt) {
+    if (!noteBodyInput) return;
+    const start = noteBodyInput.selectionStart;
+    const end = noteBodyInput.selectionEnd;
+    const text = noteBodyInput.value;
+    const selectedText = text.substring(start, end);
+    let replacement = "";
+
+    switch(fmt) {
+        case 'bold': replacement = `**${selectedText || 'text'}**`; break;
+        case 'italic': replacement = `*${selectedText || 'text'}*`; break;
+        case 'h1': replacement = `\n# ${selectedText || 'Heading 1'}`; break;
+        case 'h2': replacement = `\n## ${selectedText || 'Heading 2'}`; break;
+        case 'bullet': replacement = `\n- ${selectedText || 'Item'}`; break;
+        case 'code': replacement = `\`${selectedText || 'code'}\``; break;
+    }
+
+    noteBodyInput.value = text.substring(0, start) + replacement + text.substring(end);
+    noteBodyInput.focus();
+    noteBodyInput.setSelectionRange(start + replacement.length, start + replacement.length);
+}
+
+noteFmtBtns.forEach(btn => {
+    btn.onclick = () => {
+        applyNoteFormat(btn.dataset.fmt);
+    };
+});
+
+if (noteBodyInput) {
+    noteBodyInput.addEventListener('keydown', e => {
+        if (e.key === 'Escape') {
+            e.preventDefault();
+            cancelNoteEditing();
+            return;
+        }
+        if (e.ctrlKey || e.metaKey) {
+            if (e.key === 'b') { e.preventDefault(); applyNoteFormat('bold'); }
+            if (e.key === 'i') { e.preventDefault(); applyNoteFormat('italic'); }
+            if (e.key === 'Enter') { e.preventDefault(); finishNoteEditing(); }
+        }
+    });
+}
+
+if (noteTitleInput) {
+    noteTitleInput.addEventListener('keydown', e => {
+        if (e.key === 'Escape') {
+            e.preventDefault();
+            cancelNoteEditing();
+            return;
+        }
+        if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+            e.preventDefault();
+            finishNoteEditing();
+        }
+    });
+}
 
 loadSettings();
 setupEventListeners();

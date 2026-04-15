@@ -1,4 +1,4 @@
-# Moodinfinite v0.9.4
+# Moodinfinite v1.0.4
 
 <div align="center">
   <img src="https://github.com/davidbrum25/moodinfinite/blob/main/_branding/_png/moodinfinite__Logotipo_alpha.png?raw=true" alt="Moodinfinite Logo" width="400"/>
@@ -7,6 +7,26 @@
 <p align="center">
   <strong>A versatile, infinite digital canvas for your ideas. Create moodboards, brainstorm, organize thoughts, and now, craft the perfect AI prompts.</strong>
 </p>
+
+---
+
+## ✨ What's New in Version 1.0.4
+
+This update brings a significant evolution to the Post-it Note experience, premium UI refinements, and professional confirmation workflows.
+
+*   **📝 Next-Gen Post-it Note:**
+    *   **Full Markdown Engine:** The Text element is now a robust Keep-style Post-it note supporting headings (`#`, `##`, `###`), bullets (`-`, `*`), **bold**, *italic*, and monospaced `` `inline code` ``.
+    *   **Auto-Responsive Containers:** Notes now intelligently resize their boundaries to perfectly wrap your text exactly, eliminating overflows and wasted space.
+    *   **Smart Color Adaptive UI:** Background colors can now be changed instantly via the selection toolbar. The text color automatically flips between light and dark to ensure maximum readability against any background.
+*   **⌨️ Power-User Hotkeys:**
+    *   **Note Editor Shortcuts:** Use `Ctrl + B` for bold, `Ctrl + I` for italic, and `Ctrl + Enter` to instantly save and close your notes.
+    *   **Fast Discard:** Hit `Escape` while editing a note to cancel changes and exit the modal immediately.
+*   **💎 Premium Glassmorphism UI:**
+    *   **Redesigned Confirmation Modals:** All system alerts (Close Board & Clear Board) now feature a stunning glassmorphism design with immersive backdrop blurring and centered positioning.
+    *   **Safety Confirmation:** Added a specific confirmation step when closing board tabs to prevent accidental loss of important brainstorms.
+*   **🎨 Typography & Polishing:**
+    *   **Default Font (Nunito):** Set the modern, friendly 'Nunito' as the default font for all text-capable elements across the application.
+    *   **Rendering Fixes:** Refined the alignment of inline code blocks and corrected baseline issues for cleaner, more professional text rendering.
 
 ---
 
