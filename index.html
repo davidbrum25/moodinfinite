@@ -5,7 +5,7 @@
 <head>
     <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0">
-    <title>Moodinfinite v0.9.6</title>
+    <title>Moodinfinite v0.9.7</title>
     <link rel="icon"
         href="https://raw.githubusercontent.com/davidbrum25/moodinfinite/refs/heads/main/fav_icon_alternative.png"
         type="image/png">
@@ -24,7 +24,7 @@
 
 <body>
     <div id="tabs-bar">
-        <div id="app-logo" title="Moodinfinite v0.9.3"
+        <div id="app-logo" title="Moodinfinite v0.9.7"
             style="display: flex; align-items: center; padding: 0 0.25rem; cursor: default;">
             <img src="https://raw.githubusercontent.com/davidbrum25/moodinfinite/refs/heads/main/fav_icon_alternative.png"
                 alt="Logo" style="width: 24px; height: 24px;">
@@ -126,6 +126,9 @@
                     class="tool-button" disabled><iconify-icon icon="lucide:layout-grid" width="22"
                         height="22"></iconify-icon></button>
                 <div class="separator"></div>
+                <button id="center-view-btn" title="Center View (Home)" class="tool-button">
+                    <iconify-icon icon="lucide:crosshair" width="20" height="20"></iconify-icon>
+                </button>
                 <button id="open-help-btn" title="Help" class="tool-button">
                     <iconify-icon icon="lucide:info" width="20" height="20"></iconify-icon>
                 </button>
@@ -433,6 +436,8 @@
                     <li><strong>Undo / Redo:</strong> Ctrl+Z / Ctrl+Shift+Z</li>
                     <li><strong>Select All / Invert:</strong> Ctrl+A / Ctrl+I</li>
                     <li><strong>Toggle Grid:</strong> G (Toggle visibility), Alt+G (Grid Tool)</li>
+                    <li><strong>Center View (Home):</strong> Reset camera to origin at 1:1 zoom.</li>
+                    <li><strong>Focus on Selection (.):</strong> Zoom &amp; pan to fit all selected items (or all items if none selected) into view.</li>
                     <li><strong>Deselect / Cancel:</strong> Escape</li>
                 </ul>
                 <h3>Credits</h3>

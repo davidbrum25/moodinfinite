@@ -915,6 +915,8 @@ function setupEventListeners() {
     if (selectToolBtn) selectToolBtn.addEventListener('click', () => setCurrentTool(null));
 
     if (alignBtn) alignBtn.addEventListener('click', autoAlignSelection);
+    const centerViewBtn = document.getElementById('center-view-btn');
+    if (centerViewBtn) centerViewBtn.addEventListener('click', centerView);
 
     if (showGridToggle) showGridToggle.addEventListener('change', e => { showGrid = e.target.checked; saveSettings() });
     if (snapGridToggle) snapGridToggle.addEventListener('change', e => { snapToGrid = e.target.checked; saveSettings() });
@@ -990,7 +992,7 @@ function setupEventListeners() {
 
     if (itemColorPicker) {
         itemColorPicker.addEventListener('input', e => {
-            if (selectedItems.length === 1 && (['box', 'circle', 'text', 'measure', 'comment', 'link'].includes(selectedItems[0].type))) {
+            if (selectedItems.length === 1 && (['box', 'circle', 'text', 'measure', 'comment', 'link', 'textList'].includes(selectedItems[0].type))) {
                 selectedItems[0].color = e.target.value;
                 saveStateForUndo();
             }
@@ -1803,10 +1805,11 @@ function handleKeyDown(e) {
     if (key === 'm') { e.preventDefault(); setCurrentTool('measure'); return; }
     if (key === 'd') { e.preventDefault(); setCurrentTool('draw'); return; }
     if (key === 'e') { e.preventDefault(); setCurrentTool('eyedropper'); return; }
+    if (key === 'home') { e.preventDefault(); if (selectedItems.length === 0) { centerView(); } else { bringSelectedToFront(); } return; }
+    if (key === '.') { e.preventDefault(); focusOnSelection(); return; }
     if (selectedItems.length === 0) return;
     if (key === 'h') { e.preventDefault(); flipHorizontal(); return; }
     if (key === 'v') { e.preventDefault(); flipVertical(); return; }
-    if (key === 'home') { e.preventDefault(); bringSelectedToFront(); return; }
     if (key === 'end') { e.preventDefault(); sendSelectedToBack(); return; }
     if (key === 'pageup') { e.preventDefault(); moveSelectedUp(); return; }
     if (key === 'pagedown') { e.preventDefault(); moveSelectedDown(); return; }
@@ -3641,6 +3644,28 @@ function distToSegmentSquared(e, t, o) { const a = distSq(t, o); if (a === 0) re
 function invertColor(e) { if (e.indexOf('#') === 0) e = e.slice(1); if (e.length === 3) e = e[0] + e[0] + e[1] + e[1] + e[2] + e[2]; if (e.length !== 6) return '#ffffff'; const t = (255 - parseInt(e.slice(0, 2), 16)).toString(16), o = (255 - parseInt(e.slice(2, 4), 16)).toString(16), a = (255 - parseInt(e.slice(4, 6), 16)).toString(16); return '#' + padZero(t) + padZero(o) + padZero(a) }
 function padZero(e, t) { t = t || 2; const o = (new Array(t + 1)).join('0'); return (o + e).slice(-t) }
 function adjustZoom(e, t) { if (isDragging) return; const evLoc = getEventLocation(e); if (!evLoc) return; const o = screenToWorld(evLoc); cameraZoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, cameraZoom * (1 + t))); const a = screenToWorld(getEventLocation(e)); cameraOffset.x += a.x - o.x; cameraOffset.y += a.y - o.y }
+
+function centerView() {
+    cameraZoom = 1;
+    cameraOffset.x = canvas.width / 2;
+    cameraOffset.y = canvas.height / 2;
+    showToast('View centered.');
+}
+
+function focusOnSelection() {
+    const targets = selectedItems.length > 0 ? selectedItems : items;
+    if (targets.length === 0) { centerView(); return; }
+    const bbox = getCollectiveBoundingBox(targets);
+    if (bbox.width === 0 && bbox.height === 0) return;
+    const padding = 80;
+    const scaleX = (canvas.width - padding * 2) / bbox.width;
+    const scaleY = (canvas.height - padding * 2) / bbox.height;
+    cameraZoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, Math.min(scaleX, scaleY)));
+    const centerX = bbox.x + bbox.width / 2;
+    const centerY = bbox.y + bbox.height / 2;
+    cameraOffset.x = canvas.width / 2 - centerX;
+    cameraOffset.y = canvas.height / 2 - centerY;
+}
 
 cancelNoteBtn.onclick = cancelNoteEditing;
 confirmNoteBtn.onclick = finishNoteEditing;
