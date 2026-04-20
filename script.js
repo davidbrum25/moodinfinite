@@ -185,6 +185,7 @@ function switchTab(projectId) {
         t.classList.toggle('active', t.dataset.id == projectId);
     });
     scheduleAutoSave();
+    requestUpdate();
 }
 
 function closeTab(projectId, event) {
@@ -665,6 +666,8 @@ let showGrid = true, snapToGrid = true, showDropShadow = true, showNotifications
 let gridSize = 50, gridOpacity = 0.05;
 let currentProjectName = 'moodinfinite';
 const HISTORY_LIMIT = 50;
+let needsUpdate = true;
+function requestUpdate() { needsUpdate = true; }
 
 function getLuminance(hex) {
     if (!hex) return 0;
@@ -1078,10 +1081,26 @@ function setupEventListeners() {
         }
     });
 }
-function resizeCanvas() { if (!activeProjectId || projects.find(e => e.id === activeProjectId)?.type !== 'moodinfinite') return; const t = document.getElementById('content-area'), o = canvas.width, a = canvas.height, i = t.clientWidth, r = t.clientHeight; if (o === i && a === r) return; cameraOffset.x -= (i - o) / (2 * cameraZoom); cameraOffset.y -= (r - a) / (2 * cameraZoom); canvas.width = i; canvas.height = r }
-function gameLoop() { draw(); updateToolbarPosition(); requestAnimationFrame(gameLoop) }
+function resizeCanvas() { if (!activeProjectId || projects.find(e => e.id === activeProjectId)?.type !== 'moodinfinite') return; const t = document.getElementById('content-area'), o = canvas.width, a = canvas.height, i = t.clientWidth, r = t.clientHeight; if (o === i && a === r) return; cameraOffset.x -= (i - o) / (2 * cameraZoom); cameraOffset.y -= (r - a) / (2 * cameraZoom); canvas.width = i; canvas.height = r; requestUpdate(); }
+function gameLoop() {
+    draw();
+    requestAnimationFrame(gameLoop);
+}
+
 function draw() {
     if (!activeProjectId || projects.find(e => e.id === activeProjectId)?.type !== 'moodinfinite') return;
+    
+    // Culling: Calculate visible viewport in world coordinates
+    const padding = 50 / cameraZoom; // Extra margin to prevent flickering
+    const vStart = screenToWorld({ x: -padding, y: -padding });
+    const vEnd = screenToWorld({ x: canvas.width + padding, y: canvas.height + padding });
+    const viewport = {
+        minX: (vStart && vEnd) ? Math.min(vStart.x, vEnd.x) : -1e9,
+        minY: (vStart && vEnd) ? Math.min(vStart.y, vEnd.y) : -1e9,
+        maxX: (vStart && vEnd) ? Math.max(vStart.x, vEnd.x) : 1e9,
+        maxY: (vStart && vEnd) ? Math.max(vStart.y, vEnd.y) : 1e9
+    };
+
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     ctx.save();
@@ -1091,38 +1110,52 @@ function draw() {
     if (showGrid) drawGrid();
 
     const drawItem = (e) => {
-        if (e.isHidden) return;
-        ctx.save();
-        ctx.globalAlpha = e.opacity ?? 1;
-        if (showDropShadow) {
-            ctx.shadowColor = 'rgba(0, 0, 0, 0.4)';
-            ctx.shadowBlur = 15 / cameraZoom;
-            ctx.shadowOffsetX = 4 / cameraZoom;
-            ctx.shadowOffsetY = 4 / cameraZoom
+        if (!e || e.isHidden) return;
+        try {
+            // Culling Check
+            if (e.type !== 'connector') {
+                const box = getItemBoundingBox(e);
+                if (box.x + box.width < viewport.minX || box.x > viewport.maxX || 
+                    box.y + box.height < viewport.minY || box.y > viewport.maxY) {
+                    return;
+                }
+            }
+
+            ctx.save();
+            ctx.globalAlpha = e.opacity ?? 1;
+            
+            if (showDropShadow && selectedItems.includes(e)) {
+                ctx.shadowColor = 'rgba(0, 0, 0, 0.4)';
+                ctx.shadowBlur = 15 / cameraZoom;
+                ctx.shadowOffsetX = 4 / cameraZoom;
+                ctx.shadowOffsetY = 4 / cameraZoom;
+            }
+            
+            if (e.type === 'image') drawImageItem(ctx, e);
+            else if (e.type === 'arrow') drawArrow(ctx, e);
+            else if (e.type === 'text') drawTextItem(ctx, e);
+            else if (e.type === 'box') drawBoxItem(ctx, e);
+            else if (e.type === 'circle') drawCircleItem(ctx, e);
+            else if (e.type === 'measure') drawMeasureItem(ctx, e);
+            else if (e.type === 'stroke') drawStrokeItem(ctx, e);
+            else if (e.type === 'grid') drawGridItem(ctx, e);
+            else if (e.type === 'group') drawGroupItem(ctx, e);
+            else if (e.type === 'comment') drawCommentItem(ctx, e);
+            else if (e.type === 'link') drawLinkItem(ctx, e);
+            else if (e.type === 'textList') drawTextListItem(ctx, e);
+            else if (e.type === 'reroute') drawRerouteItem(ctx, e);
+            else if (e.type === 'connector') drawConnectorItem(e);
+            
+            ctx.restore();
+        } catch (err) {
+            console.error("Error drawing item:", e, err);
+            ctx.restore();
         }
-        if (e.type === 'image') { drawImageItem(ctx, e) }
-        else if (e.type === 'arrow') { drawArrow(ctx, e) }
-        else if (e.type === 'text') { drawTextItem(ctx, e) }
-        else if (e.type === 'box') { drawBoxItem(ctx, e) }
-        else if (e.type === 'circle') { drawCircleItem(ctx, e) }
-        else if (e.type === 'measure') { drawMeasureItem(ctx, e) }
-        else if (e.type === 'stroke') { drawStrokeItem(ctx, e) }
-        else if (e.type === 'grid') { drawGridItem(ctx, e) }
-        else if (e.type === 'group') { drawGroupItem(ctx, e) }
-        else if (e.type === 'comment') { drawCommentItem(ctx, e) }
-        else if (e.type === 'link') { drawLinkItem(ctx, e) }
-        else if (e.type === 'textList') { drawTextListItem(ctx, e) }
-        else if (e.type === 'reroute') { drawRerouteItem(ctx, e) }
-        else if (e.type === 'connector') { drawConnectorItem(e) }
-        ctx.restore();
     };
 
-    // Unified Rendering Pass (respects array order)
-    // We still draw comments and links on top of "regular" items for convenience,
-    // but connectors and reroutes now mingle with regular items.
-    items.forEach(e => { if (e.type !== 'comment' && e.type !== 'link') drawItem(e); });
-    
-    // Layer 2: Links & Comments (Always on top)
+    // Rendering order
+    items.forEach(e => { if (e.type !== 'comment' && e.type !== 'link' && e.type !== 'connector') drawItem(e); });
+    items.forEach(e => { if (e.type === 'connector') drawItem(e); });
     items.forEach(e => { if (e.type === 'link') drawItem(e); });
     items.forEach(e => { if (e.type === 'comment') drawItem(e); });
 
@@ -1817,9 +1850,10 @@ function handleKeyDown(e) {
     if (selectedItems.length !== 1) return;
     const item = selectedItems[0];
     e.preventDefault();
-    if (key === 'p') { togglePin(); return; }
+    if (key === 'p') { togglePin(); requestUpdate(); return; }
     if (item.isPinned) return;
     switch (key) { case 'r': setActiveGizmo('rotate'); break; case 's': setActiveGizmo('scale'); break; }
+    requestUpdate();
 }
 
 function handleKeyUp(e) {
@@ -1882,6 +1916,7 @@ function getEventLocation(e) {
     };
 }
 function onMouseDown(e) {
+    requestUpdate();
     if (contextMenu) contextMenu.style.display = 'none';
     if (tabContextMenu) tabContextMenu.style.display = 'none';
     if (iconPickerPanel) iconPickerPanel.style.display = 'none';
@@ -2097,6 +2132,7 @@ function onMouseDown(e) {
         dragStart.y = loc.y / cameraZoom - cameraOffset.y;
         canvas.classList.add('grabbing');
     }
+    requestUpdate();
 }
 function onMouseUp(e) { 
     if (e.button === 0) { 
@@ -2117,6 +2153,7 @@ function onMouseUp(e) {
     } else if (e.button === 1) { 
         isDragging = !1; canvas.classList.remove('grabbing') 
     } 
+    requestUpdate();
 }
 function onMouseMove(e) {
     const worldPos = screenToWorld(getEventLocation(e));
@@ -2126,6 +2163,10 @@ function onMouseMove(e) {
         hoveredItem = hoveredPort.item;
     }
     hoveredConnector = getHoveredConnector(worldPos);
+    
+    if (isMovingItems || isTransforming || isTransformingArrow || isDrawing) {
+        items.forEach(item => { item._isDirty = true; });
+    }
 
     if (isDraggingConnector && typeof tempConnector !== 'undefined' && tempConnector) {
         tempConnector.endX = worldPos.x;
@@ -2361,6 +2402,7 @@ function onMouseMove(e) {
         hoveredArrowHandle = currentArrowHandle;
         updateCursor(e);
     }
+    requestUpdate();
 }
 
 function updateCursor(e) {
@@ -3016,6 +3058,7 @@ function setCurrentTool(e) {
     console.log('setCurrentTool called with:', e);
     if (currentTool === e && e !== null) { return }
     currentTool = e;
+    requestUpdate();
     const buttons = document.querySelectorAll('#left-bar .tool-button');
     console.log('Found', buttons.length, 'tool buttons');
     buttons.forEach(btn => btn.classList.remove('active'));
@@ -3301,7 +3344,7 @@ function updateNoteDimensions(item) {
 }
 function finishEditingText() { if (currentlyEditingText) { if (currentlyEditingText.type === 'text') return; currentlyEditingText.text = textEditor.value.trim() || (currentlyEditingText.type === 'comment' ? "Note..." : "Type..."); const e = currentlyEditingText; if (e.type === 'comment') { updateCommentDimensions(e); } else if (e.type === 'textList') { const lines = textEditor.value.split('\n').filter(l => l.trim() !== ""); if (lines.length === 0) lines.push("Item 1"); const oldItems = e.items || []; e.items = lines.map((l, i) => ({ text: l, completed: (oldItems[i] && oldItems[i].text === l) ? oldItems[i].completed : false })); updateTextListDimensions(e); } else { const t = e.fontStyle || 'normal', o = e.fontWeight || 'bold', a = e.fontFamily || 'Nunito'; ctx.font = `${t} ${o} ${e.fontSize}px '${a}', sans-serif`; const i = textEditor.value.split('\n'); let r = 0; i.forEach(e => { const t = ctx.measureText(e); if (t.width > r) r = t.width }); e.width = r + 20; e.height = textEditor.scrollHeight / cameraZoom; } currentlyEditingText.isHidden = !1; selectedItems = [currentlyEditingText]; saveStateForUndo(); currentlyEditingText = null } textEditor.style.display = 'none'; textEditor.style.padding = '0'; textEditor.style.lineHeight = 'normal'; }
 function autoResizeTextEditor() { textEditor.style.height = 'auto'; textEditor.style.height = textEditor.scrollHeight + 'px' }
-function saveStateForUndo() { const e = JSON.stringify(items, (e, t) => { if (e === 'img') { return undefined } return t }); if (historyIndex < historyStack.length - 1) { historyStack = historyStack.slice(0, historyIndex + 1) } if (historyStack.length > 0 && historyStack[historyStack.length - 1] === e) return; historyStack.push(e); historyIndex++; if (historyStack.length > HISTORY_LIMIT) { historyStack.shift(); historyIndex-- } scheduleAutoSave(); }
+function saveStateForUndo() { items.forEach(i => i._isDirty = true); const e = JSON.stringify(items, (e, t) => { if (e === 'img') { return undefined } return t }); if (historyIndex < historyStack.length - 1) { historyStack = historyStack.slice(0, historyIndex + 1) } if (historyStack.length > 0 && historyStack[historyStack.length - 1] === e) return; historyStack.push(e); historyIndex++; if (historyStack.length > HISTORY_LIMIT) { historyStack.shift(); historyIndex-- } scheduleAutoSave(); requestUpdate(); }
 function loadStateFromHistory(e) {
     const t = JSON.parse(e);
     selectedItems = [];
@@ -3519,6 +3562,7 @@ function onTouchMove(e) {
         const worldPosBeforeZoom = screenToWorld(center); cameraZoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, newZoom)); const worldPosAfterZoom = screenToWorld(center);
         cameraOffset.x += worldPosAfterZoom.x - worldPosBeforeZoom.x; cameraOffset.y += worldPosAfterZoom.y - worldPosBeforeZoom.y;
         lastPinchCenter = center;
+        requestUpdate();
     }
 }
 function onTouchEnd(e) {
@@ -3593,31 +3637,31 @@ function getHoveredConnector(mousePos) {
     return null;
 }
 
-function getItemAtPosition(e) {
-    if (!e) return null;
-    const checkItem = (o) => {
-        const a = getItemBoundingBox(o);
-        if (e.x >= a.x && e.x <= a.x + a.width && e.y >= a.y && e.y <= a.y + a.height) {
-            if (o.type === 'group') {
-                const t = o.x + o.width / 2, a = o.y + o.height / 2, i = e.x - t, r = e.y - a, s = Math.cos(-o.rotation), n = Math.sin(-o.rotation), l = i * s - r * n, c = i * n + r * s, d = l + t - o.x, h = c + a - o.y;
-                for (let e = o.items.length - 1; e >= 0; e--) {
-                    const t = o.items[e], a = { x: t.x, y: t.y, width: t.width, height: t.height };
-                    if (d >= a.x && d <= a.x + a.width && h >= a.y && h <= a.y + a.height) return o;
+function getItemAtPosition(pos) {
+    if (!pos) return null;
+    const checkItem = (item) => {
+        const bbox = getItemBoundingBox(item);
+        if (pos.x >= bbox.x && pos.x <= bbox.x + bbox.width && pos.y >= bbox.y && pos.y <= bbox.y + bbox.height) {
+            if (item.type === 'group') {
+                const centerX = item.x + item.width / 2, centerY = item.y + item.height / 2, dx = pos.x - centerX, dy = pos.y - centerY, cos = Math.cos(-item.rotation), sin = Math.sin(-item.rotation), rx = dx * cos - dy * sin, ry = dx * sin + dy * cos, localX = rx + centerX - item.x, localY = ry + centerY - item.y;
+                for (let i = item.items.length - 1; i >= 0; i--) {
+                    const subItem = item.items[i], subBox = { x: subItem.x, y: subItem.y, width: subItem.width, height: subItem.height };
+                    if (localX >= subBox.x && localX <= subBox.x + subBox.width && localY >= subBox.y && localY <= subBox.y + subBox.height) return item;
                 }
             }
-            if (o.type === 'stroke' || o.type === 'arrow' || o.type === 'measure') {
-                const a = getItemBoundingBox(o);
-                if (e.x >= a.x - 10 / cameraZoom && e.x <= a.x + a.width + 10 / cameraZoom && e.y >= a.y - 10 / cameraZoom && e.y <= a.y + a.height + 10 / cameraZoom) {
-                    if (o.type === 'stroke') {
-                        for (let t = 0; t < o.points.length - 1; t++) { if (Math.sqrt(distToSegmentSquared(e, o.points[t], o.points[t + 1])) < 10 / cameraZoom) return o }
-                    } else if (o.type === 'arrow' || o.type === 'measure') {
-                        if (Math.sqrt(distToSegmentSquared(e, { x: o.startX, y: o.startY }, { x: o.endX, y: o.endY })) < 10 / cameraZoom) return o }
+            if (item.type === 'stroke' || item.type === 'arrow' || item.type === 'measure') {
+                const bboxExt = getItemBoundingBox(item);
+                if (pos.x >= bboxExt.x - 10 / cameraZoom && pos.x <= bboxExt.x + bboxExt.width + 10 / cameraZoom && pos.y >= bboxExt.y - 10 / cameraZoom && pos.y <= bboxExt.y + bboxExt.height + 10 / cameraZoom) {
+                    if (item.type === 'stroke') {
+                        for (let i = 0; i < item.points.length - 1; i++) { if (Math.sqrt(distToSegmentSquared(pos, item.points[i], item.points[i + 1])) < 10 / cameraZoom) return item }
+                    } else if (item.type === 'arrow' || item.type === 'measure') {
+                        if (Math.sqrt(distToSegmentSquared(pos, { x: item.startX, y: item.startY }, { x: item.endX, y: item.endY })) < 10 / cameraZoom) return item }
                 }
-            } else if (o.type === 'reroute') {
-                if (Math.hypot(e.x - o.x, e.y - o.y) <= 12 / cameraZoom) return o
+            } else if (item.type === 'reroute') {
+                if (Math.hypot(pos.x - item.x, pos.y - item.y) <= 12 / cameraZoom) return item
             } else {
-                const t = o.x + o.width / 2, a = o.y + o.height / 2, i = e.x - t, r = e.y - a, s = -o.rotation, n = i * Math.cos(s) - r * Math.sin(s), l = i * Math.sin(s) + r * Math.cos(s);
-                if (n > -o.width / 2 && n < o.width / 2 && l > -o.height / 2 && l < o.height / 2) return o
+                const centerX = item.x + item.width / 2, centerY = item.y + item.height / 2, dx = pos.x - centerX, dy = pos.y - centerY, sin = -item.rotation, rx = dx * Math.cos(sin) - dy * Math.sin(sin), ry = dx * Math.sin(sin) + dy * Math.cos(sin);
+                if (rx > -item.width / 2 && rx < item.width / 2 && ry > -item.height / 2 && ry < item.height / 2) return item
             }
         }
         return null;
@@ -3631,7 +3675,60 @@ function getItemAtPosition(e) {
 function getGizmoAtPosition(e) { if (!e || selectedItems.length !== 1 || !activeGizmo) return null; const t = selectedItems[0]; if (t.isPinned || t.type === 'arrow' || t.type === 'stroke' || t.type === 'measure') return null; const o = 14 / cameraZoom, a = t.x + t.width / 2, i = t.y + t.height / 2; if (activeGizmo === 'rotate') { const r = t.width / 2, s = -t.height / 2 - 20 / cameraZoom, n = r * Math.cos(t.rotation) - s * Math.sin(t.rotation), l = r * Math.sin(t.rotation) + s * Math.cos(t.rotation); if (Math.hypot(e.x - (a + n), e.y - (i + l)) < o) return 'rotate' } else if (activeGizmo === 'scale') { const r = t.width / 2, s = t.height / 2, n = r * Math.cos(t.rotation) - s * Math.sin(t.rotation), l = r * Math.sin(t.rotation) + s * Math.cos(t.rotation); if (Math.hypot(e.x - (a + n), e.y - (i + l)) < o) return 'scale' } return null }
 function getArrowHandleAtPosition(e) { if (!e || selectedItems.length !== 1) return null; const t = selectedItems[0]; if (t.isPinned || (t.type !== 'arrow' && t.type !== 'measure')) return null; const o = 12 / cameraZoom; if (Math.hypot(e.x - t.startX, e.y - t.startY) < o) return 'start'; if (Math.hypot(e.x - t.endX, e.y - t.endY) < o) return 'end'; return null }
 function getCollectiveBoundingBox(e) { if (e.length === 0) return { x: 0, y: 0, width: 0, height: 0 }; let t = Infinity, o = Infinity, a = -Infinity, i = -Infinity; e.forEach(e => { const r = getItemBoundingBox(e); t = Math.min(t, r.x); o = Math.min(o, r.y); a = Math.max(a, r.x + r.width); i = Math.max(i, r.y + r.height) }); return { x: t, y: o, width: a - t, height: i - o } }
-function getItemBoundingBox(e) { if (e.type === 'connector') { return { x: -999999, y: -999999, width: 0, height: 0 } } if (e.type === 'reroute') { return { x: e.x - 12 / cameraZoom, y: e.y - 12 / cameraZoom, width: 24 / cameraZoom, height: 24 / cameraZoom } } if (e.type === 'group') { if (!e.items || e.items.length === 0) { return { x: e.x, y: e.y, width: e.width, height: e.height } } let t = Infinity, o = Infinity, a = -Infinity, i = -Infinity; const r = e.x + e.width / 2, s = e.y + e.height / 2, n = Math.cos(e.rotation), l = Math.sin(e.rotation); e.items.forEach(c => { const d = getItemBoundingBox(c), h = [{ x: d.x, y: d.y }, { x: d.x + d.width, y: d.y }, { x: d.x + d.width, y: d.y + d.height }, { x: d.x, y: d.y + d.height }]; h.forEach(c => { const d = (e.x + c.x) - r, h = (e.y + c.y) - s, p = d * n - h * l, m = d * l + h * n, u = r + p, g = s + m; t = Math.min(t, u); o = Math.min(o, g); a = Math.max(a, u); i = Math.max(i, g) }) }); return { x: t, y: o, width: a - t, height: i - o } } if (e.type === 'stroke') { let t = Infinity, o = Infinity, a = -Infinity, i = -Infinity; if (e.points && e.points.length > 0) { e.points.forEach(e => { t = Math.min(t, e.x); o = Math.min(o, e.y); a = Math.max(a, e.x); i = Math.max(i, e.y) }); return { x: t, y: o, width: a - t, height: i - o } } return { x: e.x, y: e.y, width: 0, height: 0 } } if (e.type === 'arrow' || e.type === 'measure') { return { x: Math.min(e.startX, e.endX), y: Math.min(e.startY, e.endY), width: Math.abs(e.startX - e.endX), height: Math.abs(e.startY - e.endY) } } const t = e.width, o = e.height, a = e.x + t / 2, i = e.y + o / 2, r = e.rotation, s = Math.cos(r), n = Math.sin(r); let l = Infinity, c = Infinity, d = -Infinity, h = -Infinity;[{ x: -t / 2, y: -o / 2 }, { x: t / 2, y: -o / 2 }, { x: t / 2, y: o / 2 }, { x: -t / 2, y: o / 2 }].forEach(e => { const t = e.x * s - e.y * n + a, o = e.x * n + e.y * s + i; l = Math.min(l, t); c = Math.min(c, o); d = Math.max(d, t); h = Math.max(h, o) }); return { x: l, y: c, width: d - l, height: h - c } }
+function getItemBoundingBox(item) {
+    if (item.type === 'connector') {
+        const sX = item.computedStartX ?? 0, sY = item.computedStartY ?? 0, eX = item.computedEndX ?? 0, eY = item.computedEndY ?? 0;
+        return { x: Math.min(sX, eX), y: Math.min(sY, eY), width: Math.max(1, Math.abs(sX - eX)), height: Math.max(1, Math.abs(sY - eY)) };
+    }
+
+    if (item._cachedBox && !item._isDirty) return item._cachedBox;
+    
+    let box;
+    const itemRot = item.rotation || 0;
+    const itemW = item.width || 0;
+    const itemH = item.height || 0;
+
+    if (item.type === 'reroute') { 
+        box = { x: item.x - 12 / cameraZoom, y: item.y - 12 / cameraZoom, width: 24 / cameraZoom, height: 24 / cameraZoom };
+    } else if (item.type === 'group') { 
+        if (!item.items || item.items.length === 0) { 
+            box = { x: item.x, y: item.y, width: itemW, height: itemH };
+        } else {
+            let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity; 
+            const centerX = item.x + itemW / 2, centerY = item.y + itemH / 2, cos = Math.cos(itemRot), sin = Math.sin(itemRot); 
+            item.items.forEach(child => { 
+                const childBox = getItemBoundingBox(child), vertices = [{ x: childBox.x, y: childBox.y }, { x: childBox.x + childBox.width, y: childBox.y }, { x: childBox.x + childBox.width, y: childBox.y + childBox.height }, { x: childBox.x, y: childBox.y + childBox.height }]; 
+                vertices.forEach(v => { 
+                    const dx = (item.x + v.x) - centerX, dy = (item.y + v.y) - centerY, rx = dx * cos - dy * sin, ry = dx * sin + dy * cos, x = centerX + rx, y = centerY + ry; 
+                    minX = Math.min(minX, x); minY = Math.min(minY, y); maxX = Math.max(maxX, x); maxY = Math.max(maxY, y) 
+                }) 
+            }); 
+            box = { x: minX, y: minY, width: Math.max(1, maxX - minX), height: Math.max(1, maxY - minY) };
+        }
+    } else if (item.type === 'stroke') { 
+        let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity; 
+        if (item.points && item.points.length > 0) { 
+            item.points.forEach(p => { minX = Math.min(minX, p.x); minY = Math.min(minY, p.y); maxX = Math.max(maxX, p.x); maxY = Math.max(maxY, p.y) }); 
+            box = { x: minX, y: minY, width: Math.max(1, maxX - minX), height: Math.max(1, maxY - minY) };
+        } else {
+            box = { x: item.x, y: item.y, width: 0, height: 0 };
+        }
+    } else if (item.type === 'arrow' || item.type === 'measure') { 
+        box = { x: Math.min(item.startX, item.endX), y: Math.min(item.startY, item.endY), width: Math.abs(item.startX - item.endX), height: Math.abs(item.startY - item.endY) };
+    } else {
+        const centerX = item.x + itemW / 2, centerY = item.y + itemH / 2, cos = Math.cos(itemRot), sin = Math.sin(itemRot); 
+        let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+        [{ x: -itemW / 2, y: -itemH / 2 }, { x: itemW / 2, y: -itemH / 2 }, { x: itemW / 2, y: itemH / 2 }, { x: -itemW / 2, y: itemH / 2 }].forEach(v => { 
+            const x = v.x * cos - v.y * sin + centerX, y = v.x * sin + v.y * cos + centerY; 
+            minX = Math.min(minX, x); minY = Math.min(minY, y); maxX = Math.max(maxX, x); maxY = Math.max(maxY, y) 
+        }); 
+        box = { x: minX, y: minY, width: Math.max(1, maxX - minX), height: Math.max(1, maxY - minY) };
+    }
+    
+    item._cachedBox = box;
+    item._isDirty = false;
+    return box;
+}
 function rectsIntersect(e, t) { return !(t.x > e.x + e.width || t.x + t.width < e.x || t.y > e.y + e.height || t.y + t.height < e.y) }
 function getNormalizedSelectionBox() { return { x: Math.min(selectionBox.startX, selectionBox.endX), y: Math.min(selectionBox.startY, selectionBox.endY), width: Math.abs(selectionBox.startX - selectionBox.endX), height: Math.abs(selectionBox.startY - selectionBox.endY) } }
 function hexToRgba(e, t) { let o = 0, a = 0, i = 0; if (e.length == 4) { o = "0x" + e[1] + e[1]; a = "0x" + e[2] + e[2]; i = "0x" + e[3] + e[3] } else if (e.length == 7) { o = "0x" + e[1] + e[2]; a = "0x" + e[3] + e[4]; i = "0x" + e[5] + e[6] } return `rgba(${+o},${+a},${+i},${t})` }
@@ -3640,7 +3737,7 @@ function distSq(e, t) { return Math.pow(e.x - t.x, 2) + Math.pow(e.y - t.y, 2) }
 function distToSegmentSquared(e, t, o) { const a = distSq(t, o); if (a === 0) return distSq(e, t); let i = ((e.x - t.x) * (o.x - t.x) + (e.y - t.y) * (o.y - t.y)) / a; i = Math.max(0, Math.min(1, i)); return distSq(e, { x: t.x + i * (o.x - t.x), y: t.y + i * (o.y - t.y) }) }
 function invertColor(e) { if (e.indexOf('#') === 0) e = e.slice(1); if (e.length === 3) e = e[0] + e[0] + e[1] + e[1] + e[2] + e[2]; if (e.length !== 6) return '#ffffff'; const t = (255 - parseInt(e.slice(0, 2), 16)).toString(16), o = (255 - parseInt(e.slice(2, 4), 16)).toString(16), a = (255 - parseInt(e.slice(4, 6), 16)).toString(16); return '#' + padZero(t) + padZero(o) + padZero(a) }
 function padZero(e, t) { t = t || 2; const o = (new Array(t + 1)).join('0'); return (o + e).slice(-t) }
-function adjustZoom(e, t) { if (isDragging) return; const evLoc = getEventLocation(e); if (!evLoc) return; const o = screenToWorld(evLoc); cameraZoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, cameraZoom * (1 + t))); const a = screenToWorld(getEventLocation(e)); cameraOffset.x += a.x - o.x; cameraOffset.y += a.y - o.y }
+function adjustZoom(e, t) { if (isDragging) return; const evLoc = getEventLocation(e); if (!evLoc) return; const o = screenToWorld(evLoc); cameraZoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, cameraZoom * (1 + t))); const a = screenToWorld(getEventLocation(e)); cameraOffset.x += a.x - o.x; cameraOffset.y += a.y - o.y; requestUpdate(); }
 
 function centerView() {
     cameraZoom = 1;
