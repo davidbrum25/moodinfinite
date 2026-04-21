@@ -1212,7 +1212,8 @@
             display: flex;
             flex-direction: column;
             gap: .75rem;
-            align-items: flex-end
+            align-items: flex-end;
+            pointer-events: none;
         }
 
         .toast-notification {
@@ -1226,10 +1227,11 @@
             -webkit-backdrop-filter: blur(16px);
             opacity: 0;
             transform: translateX(100%);
-            animation: slideIn .3s forwards, fadeOut .3s forwards 2.7s;
+            animation: toastInOut 3s ease-in-out forwards;
             display: flex;
             align-items: center;
-            gap: .5rem
+            gap: .5rem;
+            pointer-events: auto;
         }
 
         .toast-notification.success .icon {
@@ -1245,22 +1247,22 @@
             height: 20px
         }
 
-        @keyframes slideIn {
-            to {
-                opacity: 1;
-                transform: translateX(0)
-            }
-        }
-
-        @keyframes fadeOut {
-            from {
-                opacity: 1;
-                transform: translateX(0)
-            }
-
-            to {
+        @keyframes toastInOut {
+            0% {
                 opacity: 0;
-                transform: translateX(100%)
+                transform: translateX(100%);
+            }
+            10% {
+                opacity: 1;
+                transform: translateX(0);
+            }
+            90% {
+                opacity: 1;
+                transform: translateX(0);
+            }
+            100% {
+                opacity: 0;
+                transform: translateX(100%);
             }
         }
 
