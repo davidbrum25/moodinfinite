@@ -333,17 +333,18 @@
             <div id="note-editor-header">
                 <input type="text" id="note-title-input" placeholder="Title (optional)" spellcheck="true" autocomplete="off">
                 <div id="note-editor-toolbar">
-                    <button class="note-fmt-btn" data-fmt="bold" title="Bold (**text**)"><b>B</b></button>
-                    <button class="note-fmt-btn" data-fmt="italic" title="Italic (*text*)"><i>I</i></button>
-                    <button class="note-fmt-btn" data-fmt="h1" title="Heading 1">H1</button>
-                    <button class="note-fmt-btn" data-fmt="h2" title="Heading 2">H2</button>
-                    <button class="note-fmt-btn" data-fmt="bullet" title="Bullet List">•</button>
-                    <button class="note-fmt-btn" data-fmt="code" title="Inline Code">&lt;/&gt;</button>
+                    <button class="note-fmt-btn" data-fmt="bold" title="Bold (**text**)" tabindex="-1"><iconify-icon icon="lucide:bold" width="16" height="16"></iconify-icon></button>
+                    <button class="note-fmt-btn" data-fmt="italic" title="Italic (*text*)" tabindex="-1"><iconify-icon icon="lucide:italic" width="16" height="16"></iconify-icon></button>
+                    <button class="note-fmt-btn" data-fmt="h1" title="Heading 1" tabindex="-1"><iconify-icon icon="lucide:heading-1" width="16" height="16"></iconify-icon></button>
+                    <button class="note-fmt-btn" data-fmt="h2" title="Heading 2" tabindex="-1"><iconify-icon icon="lucide:heading-2" width="16" height="16"></iconify-icon></button>
+                    <button class="note-fmt-btn" data-fmt="bullet" title="Bullet List" tabindex="-1"><iconify-icon icon="lucide:list" width="16" height="16"></iconify-icon></button>
+                    <button class="note-fmt-btn" data-fmt="code" title="Inline Code" tabindex="-1"><iconify-icon icon="lucide:code" width="16" height="16"></iconify-icon></button>
                 </div>
             </div>
             <textarea id="note-body-input" placeholder="Write your note here... (Markdown supported)&#10;&#10;**bold**, *italic*, # Heading 1, ## Heading 2, - bullet" spellcheck="true"></textarea>
             <div id="note-editor-footer">
-                <div style="display:flex; align-items:center; gap:0.5rem;">
+                <div style="display:flex; align-items:center; gap:0.5rem; color: var(--text-color-light); font-size: 0.8rem;">
+                    <iconify-icon icon="lucide:info" width="14" height="14"></iconify-icon>
                     <span id="note-md-hint">Markdown: **bold** · *italic* · # H1 · ## H2 · - list</span>
                 </div>
                 <div class="modal-buttons" style="margin:0; padding:0; background:none; border:none;">

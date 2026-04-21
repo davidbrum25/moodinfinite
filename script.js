@@ -178,6 +178,25 @@ function switchTab(projectId) {
         renderMoodpromptView(newActiveProject);
     }
 
+    // Reset all interaction states to prevent cross-tab contamination
+    selectedItems = [];
+    isDragging = false;
+    isMovingItems = false;
+    isSelectingBox = false;
+    activeGizmo = null;
+    isTransforming = false;
+    isTransformingArrow = false;
+    hoveredItem = null;
+    hoveredGizmo = null;
+    hoveredArrowHandle = null;
+    hoveredPort = null;
+    hoveredConnector = null;
+    isDrawing = false;
+    isConnectionMode = false;
+    connectionSourceItem = null;
+    currentlyEditingText = false;
+    ctx.setLineDash([]); // Prevent any dashed line leakage
+
     applySettingsToUI();
     mobileTabsPopup.style.display = 'none'; // Hide popup on tab switch
 
@@ -191,7 +210,11 @@ function switchTab(projectId) {
 function closeTab(projectId, event) {
     if (event) event.stopPropagation();
     projectPendingClose = projectId;
-    if (closeBoardModalOverlay) closeBoardModalOverlay.style.display = 'flex';
+    if (event && event.shiftKey) {
+        actuallyCloseTab();
+    } else {
+        if (closeBoardModalOverlay) closeBoardModalOverlay.style.display = 'flex';
+    }
 }
 
 function actuallyCloseTab() {
@@ -677,7 +700,7 @@ function getLuminance(hex) {
     const g = parseInt(hex.substring(2, 4), 16) / 255;
     const b = parseInt(hex.substring(4, 6), 16) / 255;
     const a = [r, g, b].map(v => v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4));
-    return a[0] * 0.2126 + a[1] * 0.7152 + a[2] * 0.0722;
+    return a[0] * 0.2126 + a[1] * 0.7152 + a[2] * 0.722;
 }
 
 const commentIcons = {
@@ -779,6 +802,7 @@ function setupEventListeners() {
     tabsList.addEventListener('dragover', e => { e.preventDefault(); const t = document.querySelector('.tab-item.dragging'); if (!t) return; const o = getDragAfterElement(tabsList, e.clientX); if (o == null) { tabsList.appendChild(t) } else { tabsList.insertBefore(t, o) } });
     tabsList.addEventListener('drop', e => { e.preventDefault(); const t = parseInt(e.dataTransfer.getData('text/plain')); if (isNaN(t)) return; const o = Array.from(tabsList.querySelectorAll('.tab-item')).map(e => parseInt(e.dataset.id)); projects.sort((e, t) => o.indexOf(e.id) - o.indexOf(t.id)); renderTabs() });
     tabsList.addEventListener('wheel', e => { if (tabsList.scrollWidth <= tabsList.clientWidth || e.deltaY === 0) return; e.preventDefault(); tabsList.scrollLeft += e.deltaY; });
+    tabsList.addEventListener('dblclick', e => { if (e.target === tabsList) createNewProject('moodinfinite'); });
     tabsList.addEventListener('scroll', updateScrollIndicators);
     const tabObserver = new ResizeObserver(updateScrollIndicators);
     tabObserver.observe(tabsList);
@@ -1104,6 +1128,8 @@ function draw() {
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     ctx.save();
+    ctx.setLineDash([]); // Ensure line dash is reset at the start of each frame
+    if (cameraZoom === 0 || isNaN(cameraZoom)) cameraZoom = 1;
     ctx.translate(canvas.width / 2, canvas.height / 2);
     ctx.scale(cameraZoom, cameraZoom);
     ctx.translate(-canvas.width / 2 + cameraOffset.x, -canvas.height / 2 + cameraOffset.y);
@@ -1186,12 +1212,28 @@ function draw() {
     }
     
     if (isSelectingBox) drawSelectionBox();
+    
+    // Update toolbar position every frame to stay in sync with camera and moving items
+    if (selectedItems.length > 0 && selectionToolbar.style.display === 'flex') {
+        updateToolbarPosition();
+    }
+    
     ctx.restore();
 }
 function drawSelection(e) { if (e.type === 'reroute') { ctx.save(); ctx.strokeStyle = accentColor; ctx.lineWidth = 2 / cameraZoom; ctx.beginPath(); ctx.arc(e.x, e.y, 12 / cameraZoom, 0, Math.PI * 2); ctx.stroke(); ctx.restore(); return } if (selectedItems.length > 1) { drawSelectionOutline(e); return } if ((e.type === 'arrow' || e.type === 'measure') && !e.isPinned) { const t = 8 / cameraZoom, o = invertColor(canvasBackgroundColor); ctx.save(); ctx.fillStyle = o; ctx.shadowColor = 'rgba(0, 0, 0, 0.4)'; ctx.shadowBlur = 4 / cameraZoom; ctx.beginPath(); ctx.arc(e.startX, e.startY, t, 0, Math.PI * 2); ctx.fill(); if (hoveredArrowHandle === 'start') { ctx.strokeStyle = accentColor; ctx.lineWidth = 2 / cameraZoom; ctx.stroke() } ctx.beginPath(); ctx.arc(e.endX, e.endY, t, 0, Math.PI * 2); ctx.fill(); if (hoveredArrowHandle === 'end') { ctx.strokeStyle = accentColor; ctx.lineWidth = 2 / cameraZoom; ctx.stroke() } ctx.restore(); return } if (e.type === 'stroke') { if (!isDrawing) drawSelectionOutline(e); return } ctx.save(); const t = e.x + e.width / 2, o = e.y + e.height / 2; ctx.translate(t, o); ctx.rotate(e.rotation); ctx.strokeStyle = accentColor; ctx.lineWidth = 2 / cameraZoom; ctx.strokeRect(-e.width / 2, -e.height / 2, e.width, e.height); if (activeGizmo && !e.isPinned) { const t = invertColor(canvasBackgroundColor), o = 8 / cameraZoom; ctx.shadowColor = 'rgba(0, 0, 0, 0.4)'; ctx.shadowBlur = 4 / cameraZoom; ctx.fillStyle = t; ctx.strokeStyle = t; if (activeGizmo === 'scale') { const t = e.width / 2, a = e.height / 2; ctx.beginPath(); ctx.arc(t, a, o, 0, Math.PI * 2); ctx.fill(); if (hoveredGizmo === 'scale') { ctx.strokeStyle = accentColor; ctx.lineWidth = 2 / cameraZoom; ctx.stroke() } } else if (activeGizmo === 'rotate') { const t = e.width / 2, a = -e.height / 2, i = a - 20 / cameraZoom; ctx.beginPath(); ctx.moveTo(t, a); ctx.lineTo(t, i); ctx.stroke(); ctx.beginPath(); ctx.arc(t, i, o, 0, Math.PI * 2); ctx.fill(); if (hoveredGizmo === 'rotate') { ctx.strokeStyle = accentColor; ctx.lineWidth = 2 / cameraZoom; ctx.stroke() } } } ctx.restore() }
 function drawSelectionOutline(e) { ctx.save(); const t = getItemBoundingBox(e); ctx.strokeStyle = accentColor; ctx.lineWidth = 2 / cameraZoom; ctx.setLineDash([6 / cameraZoom, 4 / cameraZoom]); ctx.strokeRect(t.x, t.y, t.width, t.height); ctx.restore() }
-function drawSelectionBox() { ctx.save(); ctx.fillStyle = hexToRgba(accentColor, .1); ctx.strokeStyle = accentColor; ctx.lineWidth = 1 / cameraZoom; const { x: e, y: t, width: o, height: a } = getNormalizedSelectionBox(); ctx.fillRect(e, t, o, a); ctx.strokeRect(e, t, o, a); ctx.restore() }
-function drawGrid() { const e = (0 - canvas.width / 2) / cameraZoom - cameraOffset.x + canvas.width / 2, t = (0 - canvas.height / 2) / cameraZoom - cameraOffset.y + canvas.height / 2, o = (canvas.width - canvas.width / 2) / cameraZoom - cameraOffset.x + canvas.width / 2, a = (canvas.height - canvas.height / 2) / cameraZoom - cameraOffset.y + canvas.height / 2, i = Math.floor(e / gridSize) * gridSize, r = Math.floor(t / gridSize) * gridSize; ctx.save(); ctx.globalAlpha = gridOpacity; ctx.beginPath(); ctx.strokeStyle = gridColor; ctx.lineWidth = 1 / cameraZoom; for (let s = i; s < o; s += gridSize) { ctx.moveTo(s, t); ctx.lineTo(s, a) } for (let s = r; s < a; s += gridSize) { ctx.moveTo(e, s); ctx.lineTo(o, s) } ctx.stroke(); ctx.restore() }
+function drawSelectionBox() { 
+    ctx.save(); 
+    ctx.fillStyle = hexToRgba(accentColor, .1); 
+    ctx.strokeStyle = accentColor; 
+    ctx.lineWidth = 1 / cameraZoom; 
+    ctx.setLineDash([]); 
+    const { x: e, y: t, width: o, height: a } = getNormalizedSelectionBox(); 
+    ctx.fillRect(e, t, o, a); 
+    ctx.strokeRect(e, t, o, a); 
+    ctx.restore() 
+}
+function drawGrid() { const e = (0 - canvas.width / 2) / cameraZoom - cameraOffset.x + canvas.width / 2, t = (0 - canvas.height / 2) / cameraZoom - cameraOffset.y + canvas.height / 2, o = (canvas.width - canvas.width / 2) / cameraZoom - cameraOffset.x + canvas.width / 2, a = (canvas.height - canvas.height / 2) / cameraZoom - cameraOffset.y + canvas.height / 2, i = Math.floor(e / gridSize) * gridSize, r = Math.floor(t / gridSize) * gridSize; ctx.save(); ctx.globalAlpha = gridOpacity; ctx.beginPath(); ctx.strokeStyle = gridColor; ctx.lineWidth = 1 / cameraZoom; ctx.setLineDash([]); for (let s = i; s < o; s += gridSize) { ctx.moveTo(s, t); ctx.lineTo(s, a) } for (let s = r; s < a; s += gridSize) { ctx.moveTo(e, s); ctx.lineTo(o, s) } ctx.stroke(); ctx.restore() }
 function drawArrow(e, t) { const o = 10 / cameraZoom, a = t.endX - t.startX, i = t.endY - t.startY, r = Math.atan2(i, a); e.save(); e.beginPath(); e.moveTo(t.startX, t.startY); e.lineTo(t.endX, t.endY); e.lineTo(t.endX - o * Math.cos(r - Math.PI / 6), t.endY - o * Math.sin(r - Math.PI / 6)); e.moveTo(t.endX, t.endY); e.lineTo(t.endX - o * Math.cos(r + Math.PI / 6), t.endY - o * Math.sin(r + Math.PI / 6)); e.strokeStyle = t.color || accentColor; e.lineWidth = 3 / cameraZoom; e.stroke(); e.restore() }
 function drawTextItem(ctx, item) {
     ctx.save();
@@ -2149,7 +2191,34 @@ function onMouseUp(e) {
             }
             return;
         }
-        if (isDrawing || isMovingItems || isTransforming || isTransformingArrow) { if (isDrawing) { const e = selectedItems[0]; if (e && (e.type === 'box' || e.type === 'circle' || e.type === 'grid') && (Math.abs(e.width) < 10 || Math.abs(e.height) < 10)) { items = items.filter(t => t.id !== e.id); selectedItems = [] } else if (e && (e.type === 'text' || e.type === 'comment')) { editText(e) } } saveStateForUndo() } if (isSelectingBox) { isSelectingBox = !1; const e = getNormalizedSelectionBox(); selectedItems = items.filter(t => rectsIntersect(getItemBoundingBox(t), e)); updateSelectionToolbar(); updateLeftBarState() } isDrawing = !1; isMovingItems = !1; isTransforming = !1; isTransformingArrow = !1; transformingHandle = null; originalItemState = null 
+        if (isDrawing || isMovingItems || isTransforming || isTransformingArrow) { 
+            if (isDrawing) { 
+                const e = selectedItems[0]; 
+                if (e && (e.type === 'box' || e.type === 'circle' || e.type === 'grid') && (Math.abs(e.width) < 10 || Math.abs(e.height) < 10)) { 
+                    items = items.filter(t => t.id !== e.id); 
+                    selectedItems = [];
+                } else if (e && (e.type === 'text' || e.type === 'comment')) { 
+                    editText(e);
+                } 
+            } 
+            saveStateForUndo();
+            if (isMovingItems || isTransforming || isTransformingArrow) {
+                updateSelectionToolbar(); // Re-open toolbar after movement/transform
+            }
+        } 
+        if (isSelectingBox) { 
+            isSelectingBox = false; 
+            const e = getNormalizedSelectionBox(); 
+            selectedItems = items.filter(t => rectsIntersect(getItemBoundingBox(t), e)); 
+            updateSelectionToolbar(); 
+            updateLeftBarState();
+        } 
+        isDrawing = false; 
+        isMovingItems = false; 
+        isTransforming = false; 
+        isTransformingArrow = false; 
+        transformingHandle = null; 
+        originalItemState = null;
     } else if (e.button === 1) { 
         isDragging = !1; canvas.classList.remove('grabbing') 
     } 
@@ -2165,6 +2234,7 @@ function onMouseMove(e) {
     hoveredConnector = getHoveredConnector(worldPos);
     
     if (isMovingItems || isTransforming || isTransformingArrow || isDrawing) {
+        if (selectionToolbar.style.display !== 'none') selectionToolbar.style.display = 'none';
         items.forEach(item => { item._isDirty = true; });
     }
 
@@ -3217,6 +3287,9 @@ function updateSelectionToolbar() {
         scaleBtn.classList.toggle('active', activeGizmo === 'scale');
         rotateBtn.classList.toggle('active', activeGizmo === 'rotate');
         pinBtn.classList.toggle('pinned', selectedItems.every(e => e.isPinned));
+        
+        // Ensure position is updated when toolbar is shown
+        updateToolbarPosition();
     } else {
         selectionToolbar.style.display = 'none';
         itemColorToolContainer.style.display = 'none';
@@ -3241,12 +3314,26 @@ openLinkBtn.onclick = () => {
     }
 };
 
-function updateToolbarPosition() { if (selectedItems.length > 0) { const e = getCollectiveBoundingBox(selectedItems), t = worldToScreen({ x: e.x + e.width / 2, y: e.y }); selectionToolbar.style.left = `${t.x}px`; selectionToolbar.style.top = `${t.y}px` } }
+function updateToolbarPosition() { 
+    if (selectedItems.length > 0) { 
+        const e = getCollectiveBoundingBox(selectedItems), 
+        // Use the bottom of the bounding box for "under" alignment
+        t = worldToScreen({ x: e.x + e.width / 2, y: e.y + e.height }); 
+        selectionToolbar.style.left = `${t.x}px`; 
+        selectionToolbar.style.top = `${t.y}px` 
+    } 
+}
 function editText(e) {
     if (e.type === 'text') {
         currentlyEditingText = e;
         e.isHidden = true;
         noteEditorOverlay.style.display = 'flex';
+        noteBodyInput.style.height = 'auto';
+        setTimeout(() => { 
+            noteBodyInput.style.height = noteBodyInput.scrollHeight + 'px'; 
+            noteBodyInput.focus(); 
+            noteBodyInput.setSelectionRange(noteBodyInput.value.length, noteBodyInput.value.length);
+        }, 10);
         noteTitleInput.value = e.title || '';
         noteBodyInput.value = e.text === 'Write your note here...' ? '' : e.text;
         noteTitleInput.focus();
@@ -3793,6 +3880,10 @@ noteFmtBtns.forEach(btn => {
 });
 
 if (noteBodyInput) {
+    noteBodyInput.addEventListener('input', () => {
+        noteBodyInput.style.height = 'auto';
+        noteBodyInput.style.height = noteBodyInput.scrollHeight + 'px';
+    });
     noteBodyInput.addEventListener('keydown', e => {
         if (e.key === 'Escape') {
             e.preventDefault();
@@ -3812,6 +3903,11 @@ if (noteTitleInput) {
         if (e.key === 'Escape') {
             e.preventDefault();
             cancelNoteEditing();
+            return;
+        }
+        if (e.key === 'Tab') {
+            e.preventDefault();
+            noteBodyInput.focus();
             return;
         }
         if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {

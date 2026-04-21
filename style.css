@@ -96,6 +96,7 @@
         .tabs-list {
             display: flex;
             height: 100%;
+            flex-grow: 1;
             align-items: flex-end;
             overflow-x: auto;
             -ms-overflow-style: none;
@@ -734,7 +735,7 @@
             display: none;
             gap: .35rem;
             border: 1px solid var(--border-color);
-            transform: translate(-50%, calc(-100% - 10px));
+            transform: translate(-50%, 10px);
             backdrop-filter: blur(16px);
             -webkit-backdrop-filter: blur(16px)
         }
@@ -1573,7 +1574,9 @@
         }
 
         #note-editor-modal {
-            background: #1a1d2e;
+            background: var(--bg-ui);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
             border: 1px solid var(--border-color);
             border-radius: 16px;
             box-shadow: 0 24px 64px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(255,255,255,0.04);
