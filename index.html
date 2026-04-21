@@ -43,7 +43,10 @@
             <iconify-icon icon="lucide:image" width="22" height="22"></iconify-icon>
         </button>
         <button id="add-moodprompt-tab-btn" class="tab-add-btn" title="New Moodprompt File">
-            <iconify-icon icon="lucide:pen-tool" width="22" height="22"></iconify-icon>
+            <iconify-icon icon="lucide:pen-tool" width="20" height="20"></iconify-icon>
+        </button>
+        <button id="add-colorseeker-tab-btn" class="tab-add-btn" title="New Color Seeker">
+            <iconify-icon icon="lucide:swatch-book" width="20" height="20"></iconify-icon>
         </button>
 
         <div style="width: 1px; background-color: var(--border-color); margin: 8px 4px; align-self: stretch;"></div>
@@ -226,6 +229,44 @@
 
         <div id="moodprompt-container" class="tab-content" style="display: none;">
         </div>
+
+        <div id="colorseeker-container" class="tab-content"
+            style="display: none; height: 100%; width: 100%; position: relative;">
+            <div id="colorseeker-sidebar"
+                style="position: absolute; left: 1.5rem; top: 1.5rem; background: var(--bg-ui); border: 1px solid var(--border-color); border-radius: 0.75rem; padding: 1.5rem; z-index: 10; display: flex; flex-direction: column; gap: 1rem; box-shadow: 0 8px 32px rgba(0,0,0,0.3); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); width: 220px;">
+                <div style="display: flex; align-items: center; gap: 0.5rem;">
+                    <iconify-icon icon="lucide:swatch-book" width="20" height="20"
+                        style="color: var(--text-color)"></iconify-icon>
+                    <h3 style="margin: 0; color: var(--text-color); font-size: 1rem; font-weight: 600;">Color Seeker
+                    </h3>
+                </div>
+                <div style="display: flex; flex-direction: column; gap: 0.5rem;">
+                    <label style="color: var(--text-color-light); font-size: 0.85rem;">Mode</label>
+                    <select id="colorseeker-mode-select"
+                        style="background: rgba(0,0,0,0.2); border: 1px solid var(--border-color); color: var(--text-color); padding: 0.5rem; border-radius: 0.5rem; outline: none; cursor: pointer; font-family: inherit;">
+                        <option value="shades">Color Shades</option>
+                        <option value="tones">Color Tones</option>
+                        <option value="harmonies">Color Harmonies</option>
+                    </select>
+                </div>
+                <div style="display: flex; flex-direction: column; gap: 0.5rem;">
+                    <label style="color: var(--text-color-light); font-size: 0.85rem;">Base Color</label>
+                    <input type="color" id="colorseeker-base-picker" style="width: 100%; height: 36px; border: none; padding: 0; cursor: pointer; border-radius: 0.5rem; overflow: hidden; background: transparent;">
+                </div>
+                <div style="color: var(--text-color-light); font-size: 0.8rem; line-height: 1.6; margin-top: 0.5rem;">
+                    <p style="margin: 0 0 0.25rem 0;"><strong style="color: var(--text-color);">SPACE</strong> Randomize
+                    </p>
+                    <p style="margin: 0 0 0.25rem 0;"><strong style="color: var(--text-color);">Click</strong> Copy HEX
+                    </p>
+                    <p style="margin: 0 0 0.25rem 0;"><strong style="color: var(--text-color);">Shift+Click</strong> Set
+                        as Base</p>
+                    <p style="margin: 0;"><strong style="color: var(--text-color);">Shift+S</strong> Download PNG</p>
+                </div>
+            </div>
+            <div id="colorseeker-palette" style="display: flex; width: 100%; height: 100%;">
+                <!-- Palette bars injected here -->
+            </div>
+        </div>
     </div>
 
     <input type="file" id="image-input" accept="image/png, image/jpeg, image/gif, image/svg+xml, image/webp"
@@ -331,19 +372,29 @@
     <div id="note-editor-overlay">
         <div id="note-editor-modal">
             <div id="note-editor-header">
-                <input type="text" id="note-title-input" placeholder="Title (optional)" spellcheck="true" autocomplete="off">
+                <input type="text" id="note-title-input" placeholder="Title (optional)" spellcheck="true"
+                    autocomplete="off">
                 <div id="note-editor-toolbar">
-                    <button class="note-fmt-btn" data-fmt="bold" title="Bold (**text**)" tabindex="-1"><iconify-icon icon="lucide:bold" width="16" height="16"></iconify-icon></button>
-                    <button class="note-fmt-btn" data-fmt="italic" title="Italic (*text*)" tabindex="-1"><iconify-icon icon="lucide:italic" width="16" height="16"></iconify-icon></button>
-                    <button class="note-fmt-btn" data-fmt="h1" title="Heading 1" tabindex="-1"><iconify-icon icon="lucide:heading-1" width="16" height="16"></iconify-icon></button>
-                    <button class="note-fmt-btn" data-fmt="h2" title="Heading 2" tabindex="-1"><iconify-icon icon="lucide:heading-2" width="16" height="16"></iconify-icon></button>
-                    <button class="note-fmt-btn" data-fmt="bullet" title="Bullet List" tabindex="-1"><iconify-icon icon="lucide:list" width="16" height="16"></iconify-icon></button>
-                    <button class="note-fmt-btn" data-fmt="code" title="Inline Code" tabindex="-1"><iconify-icon icon="lucide:code" width="16" height="16"></iconify-icon></button>
+                    <button class="note-fmt-btn" data-fmt="bold" title="Bold (**text**)" tabindex="-1"><iconify-icon
+                            icon="lucide:bold" width="16" height="16"></iconify-icon></button>
+                    <button class="note-fmt-btn" data-fmt="italic" title="Italic (*text*)" tabindex="-1"><iconify-icon
+                            icon="lucide:italic" width="16" height="16"></iconify-icon></button>
+                    <button class="note-fmt-btn" data-fmt="h1" title="Heading 1" tabindex="-1"><iconify-icon
+                            icon="lucide:heading-1" width="16" height="16"></iconify-icon></button>
+                    <button class="note-fmt-btn" data-fmt="h2" title="Heading 2" tabindex="-1"><iconify-icon
+                            icon="lucide:heading-2" width="16" height="16"></iconify-icon></button>
+                    <button class="note-fmt-btn" data-fmt="bullet" title="Bullet List" tabindex="-1"><iconify-icon
+                            icon="lucide:list" width="16" height="16"></iconify-icon></button>
+                    <button class="note-fmt-btn" data-fmt="code" title="Inline Code" tabindex="-1"><iconify-icon
+                            icon="lucide:code" width="16" height="16"></iconify-icon></button>
                 </div>
             </div>
-            <textarea id="note-body-input" placeholder="Write your note here... (Markdown supported)&#10;&#10;**bold**, *italic*, # Heading 1, ## Heading 2, - bullet" spellcheck="true"></textarea>
+            <textarea id="note-body-input"
+                placeholder="Write your note here... (Markdown supported)&#10;&#10;**bold**, *italic*, # Heading 1, ## Heading 2, - bullet"
+                spellcheck="true"></textarea>
             <div id="note-editor-footer">
-                <div style="display:flex; align-items:center; gap:0.5rem; color: var(--text-color-light); font-size: 0.8rem;">
+                <div
+                    style="display:flex; align-items:center; gap:0.5rem; color: var(--text-color-light); font-size: 0.8rem;">
                     <iconify-icon icon="lucide:info" width="14" height="14"></iconify-icon>
                     <span id="note-md-hint">Markdown: **bold** · *italic* · # H1 · ## H2 · - list</span>
                 </div>
@@ -369,7 +420,8 @@
                 <ul>
                     <li><strong>Panning & Zooming:</strong> Use the <strong>mouse wheel</strong> to zoom and
                         <strong>middle-click</strong> (or <strong>Space + left-click</strong>) to pan. On Touch,
-                        <strong>pinch</strong> to zoom and <strong>drag with two fingers</strong> to pan.</li>
+                        <strong>pinch</strong> to zoom and <strong>drag with two fingers</strong> to pan.
+                    </li>
                     <li><strong>Selection:</strong> Click an item to select. Hold <strong>Shift</strong> to select
                         multiple. Drag on empty space to create a <strong>selection box</strong>.</li>
                     <li><strong>Context Menu:</strong> <strong>Right-click</strong> (or <strong>Long press</strong> on
@@ -386,7 +438,8 @@
                     <li><strong>Add Image (I):</strong> Upload images from your device. You can also <strong>Paste
                             (Ctrl+V)</strong> or <strong>Drag & Drop</strong> files directly.</li>
                     <li><strong>Add Text (T):</strong> Create text boxes for titles and descriptions.
-                        <strong>Double-click</strong> to edit.</li>
+                        <strong>Double-click</strong> to edit.
+                    </li>
                     <li><strong>Add Comment (N):</strong> Create sticky-note style comments for annotations.</li>
                     <li><strong>Add Link (K):</strong> Add hyperlinks to your board. Click the <strong>external link
                             icon</strong> on the item or toolar to open the URL.</li>
@@ -396,7 +449,8 @@
                     <li><strong>Add Arrow (Shift+A):</strong> Draw directional arrows. Hold <strong>Shift</strong> to
                         snap to 45° angles.</li>
                     <li><strong>Add Box (B) & Circle (C):</strong> Create geometric shapes. Toggle between
-                        <strong>Fill</strong> and <strong>Stroke</strong> in the toolbar.</li>
+                        <strong>Fill</strong> and <strong>Stroke</strong> in the toolbar.
+                    </li>
                     <li><strong>Measure (M):</strong> Draw a line to measure distances. Switch units (<strong>px, cm,
                             in</strong>) from the selection toolbar.</li>
                     <li><strong>Add Grid (Alt+G):</strong> Create customizable grids. Adjust rows and columns in the
@@ -411,7 +465,8 @@
                     <li><strong>Layering:</strong> Use <strong>Home/End</strong> to move items to the very front/back.
                         Use <strong>Page Up/Down</strong> to move one layer at a time.</li>
                     <li><strong>Grouping (Ctrl+G):</strong> Combine items to move and transform them together.
-                        <strong>Ctrl+Shift+G</strong> to ungroup.</li>
+                        <strong>Ctrl+Shift+G</strong> to ungroup.
+                    </li>
                     <li><strong>Group Ordered (Ctrl+Shift+O):</strong> Select multiple images and use this to neatly
                         align and group them horizontally.</li>
                     <li><strong>Transform:</strong> Press <strong>S</strong> for Scale or <strong>R</strong> for Rotate.
@@ -438,7 +493,8 @@
                     <li><strong>Select All / Invert:</strong> Ctrl+A / Ctrl+I</li>
                     <li><strong>Toggle Grid:</strong> G (Toggle visibility), Alt+G (Grid Tool)</li>
                     <li><strong>Center View (Home):</strong> Reset camera to origin at 1:1 zoom.</li>
-                    <li><strong>Focus on Selection (.):</strong> Zoom &amp; pan to fit all selected items (or all items if none selected) into view.</li>
+                    <li><strong>Focus on Selection (.):</strong> Zoom &amp; pan to fit all selected items (or all items
+                        if none selected) into view.</li>
                     <li><strong>Deselect / Cancel:</strong> Escape</li>
                 </ul>
                 <h3>Credits</h3>
@@ -459,7 +515,7 @@
     </div>
     <div id="toast-container"></div>
 
-            <script src="script.js"></script>
+    <script src="script.js"></script>
 </body>
 
 </html>

@@ -6,8 +6,10 @@ const tabsBar = document.getElementById('tabs-bar');
 const tabsList = document.getElementById('tabs-list');
 const addMoodinfiniteTabBtn = document.getElementById('add-moodinfinite-tab-btn');
 const addMoodpromptTabBtn = document.getElementById('add-moodprompt-tab-btn');
+const addColorseekerTabBtn = document.getElementById('add-colorseeker-tab-btn');
 const moodinfiniteContainer = document.getElementById('moodinfinite-container');
 const moodpromptContainer = document.getElementById('moodprompt-container');
+const colorseekerContainer = document.getElementById('colorseeker-container');
 const promptImageInput = document.getElementById('prompt-image-input');
 const mobileTabsBtn = document.getElementById('mobile-tabs-btn');
 const mobileTabsPopup = document.getElementById('mobile-tabs-popup');
@@ -122,6 +124,19 @@ function createNewProject(type) {
                 gridColor: defaultGridColor
             }
         };
+    } else if (type === 'colorseeker') {
+        const projectCount = projects.filter(p => p.type === 'colorseeker').length;
+        const randomHex = '#' + Math.floor(Math.random() * 16777215).toString(16).padStart(6, '0');
+        newProject = {
+            id: newId,
+            type: 'colorseeker',
+            name: `Palette ${projectCount + 1}`,
+            data: {
+                baseColor: randomHex,
+                mode: 'shades',
+                canvasBackgroundColor: defaultCanvasBg
+            }
+        };
     } else {
         const projectCount = projects.filter(p => p.type === 'moodprompt').length;
         newProject = {
@@ -171,9 +186,16 @@ function switchTab(projectId) {
         gridColor = newActiveProject.data.gridColor;
         moodinfiniteContainer.style.display = 'block';
         moodpromptContainer.style.display = 'none';
+        if (colorseekerContainer) colorseekerContainer.style.display = 'none';
         resizeCanvas();
+    } else if (newActiveProject.type === 'colorseeker') {
+        moodinfiniteContainer.style.display = 'none';
+        moodpromptContainer.style.display = 'none';
+        if (colorseekerContainer) colorseekerContainer.style.display = 'block';
+        renderColorSeeker(projectId);
     } else {
         moodinfiniteContainer.style.display = 'none';
+        if (colorseekerContainer) colorseekerContainer.style.display = 'none';
         moodpromptContainer.style.display = 'block';
         renderMoodpromptView(newActiveProject);
     }
@@ -273,7 +295,9 @@ function renderTabs() {
         icon.className = 'tab-icon';
         icon.innerHTML = project.type === 'moodinfinite'
             ? `<iconify-icon icon="lucide:image" width="16" height="16"></iconify-icon>`
-            : `<iconify-icon icon="lucide:pen-tool" width="16" height="16"></iconify-icon>`;
+            : project.type === 'colorseeker'
+                ? `<iconify-icon icon="lucide:swatch-book" width="16" height="16"></iconify-icon>`
+                : `<iconify-icon icon="lucide:pen-tool" width="16" height="16"></iconify-icon>`;
 
         const nameSpan = document.createElement('span');
         nameSpan.className = 'tab-name';
@@ -949,7 +973,7 @@ function setupEventListeners() {
     if (snapGridToggle) snapGridToggle.addEventListener('change', e => { snapToGrid = e.target.checked; saveSettings() });
     if (dropShadowToggle) dropShadowToggle.addEventListener('change', e => { showDropShadow = e.target.checked; saveSettings() });
     if (showNotificationsToggle) showNotificationsToggle.addEventListener('change', e => { showNotifications = e.target.checked; saveSettings() });
-    
+
     if (gridSizeSlider) gridSizeSlider.addEventListener('input', e => { gridSize = parseInt(e.target.value); gridSizeValue.textContent = `${gridSize}px`; saveSettings() });
     if (gridOpacitySlider) gridOpacitySlider.addEventListener('input', e => { gridOpacity = parseFloat(e.target.value); gridOpacityValue.textContent = `${Math.round(gridOpacity * 100)}%`; saveSettings() });
 
@@ -1025,7 +1049,7 @@ function setupEventListeners() {
             }
         });
     }
-    
+
     if (noteBgColorInput) {
         noteBgColorInput.addEventListener('input', e => {
             if (selectedItems.length === 1 && selectedItems[0].type === 'text') {
@@ -1037,7 +1061,7 @@ function setupEventListeners() {
 
     if (confirmNewBtn) confirmNewBtn.addEventListener('click', () => { resetBoard(); hideConfirmationModal() });
     if (cancelNewBtn) cancelNewBtn.addEventListener('click', hideConfirmationModal);
-    
+
     if (confirmCloseBtn) confirmCloseBtn.addEventListener('click', actuallyCloseTab);
     if (cancelCloseBtn) cancelCloseBtn.addEventListener('click', hideCloseBoardModal);
     if (closeBoardModalOverlay) {
@@ -1047,7 +1071,7 @@ function setupEventListeners() {
     }
 
     if (downloadImageBtn) downloadImageBtn.addEventListener('click', downloadSourceImage);
-    
+
     // Modal confirmation is handled at the end of the file
 
     window.addEventListener('keydown', e => {
@@ -1063,7 +1087,7 @@ function setupEventListeners() {
         const btn = document.createElement('button');
         btn.className = 'icon-picker-btn';
         btn.dataset.icon = icon;
-        if(icon === 'none') {
+        if (icon === 'none') {
             btn.innerHTML = `<iconify-icon icon="lucide:ban" width="18" height="18"></iconify-icon><span>None</span>`;
         } else {
             const lucideMap = {
@@ -1096,7 +1120,7 @@ function setupEventListeners() {
         const rect = commentIconBtn.getBoundingClientRect();
         iconPickerPanel.style.display = 'flex';
         iconPickerPanel.style.left = `${rect.left}px`;
-        iconPickerPanel.style.top = `${rect.bottom + 5}px`; 
+        iconPickerPanel.style.top = `${rect.bottom + 5}px`;
     });
 
     document.addEventListener('click', (e) => {
@@ -1113,7 +1137,7 @@ function gameLoop() {
 
 function draw() {
     if (!activeProjectId || projects.find(e => e.id === activeProjectId)?.type !== 'moodinfinite') return;
-    
+
     // Culling: Calculate visible viewport in world coordinates
     const padding = 50 / cameraZoom; // Extra margin to prevent flickering
     const vStart = screenToWorld({ x: -padding, y: -padding });
@@ -1141,7 +1165,7 @@ function draw() {
             // Culling Check
             if (e.type !== 'connector') {
                 const box = getItemBoundingBox(e);
-                if (box.x + box.width < viewport.minX || box.x > viewport.maxX || 
+                if (box.x + box.width < viewport.minX || box.x > viewport.maxX ||
                     box.y + box.height < viewport.minY || box.y > viewport.maxY) {
                     return;
                 }
@@ -1149,14 +1173,14 @@ function draw() {
 
             ctx.save();
             ctx.globalAlpha = e.opacity ?? 1;
-            
+
             if (showDropShadow && selectedItems.includes(e)) {
                 ctx.shadowColor = 'rgba(0, 0, 0, 0.4)';
                 ctx.shadowBlur = 15 / cameraZoom;
                 ctx.shadowOffsetX = 4 / cameraZoom;
                 ctx.shadowOffsetY = 4 / cameraZoom;
             }
-            
+
             if (e.type === 'image') drawImageItem(ctx, e);
             else if (e.type === 'arrow') drawArrow(ctx, e);
             else if (e.type === 'text') drawTextItem(ctx, e);
@@ -1171,7 +1195,7 @@ function draw() {
             else if (e.type === 'textList') drawTextListItem(ctx, e);
             else if (e.type === 'reroute') drawRerouteItem(ctx, e);
             else if (e.type === 'connector') drawConnectorItem(e);
-            
+
             ctx.restore();
         } catch (err) {
             console.error("Error drawing item:", e, err);
@@ -1186,7 +1210,7 @@ function draw() {
     items.forEach(e => { if (e.type === 'comment') drawItem(e); });
 
     selectedItems.forEach(e => { drawSelection(e) });
-    
+
     if (typeof isDraggingConnector !== 'undefined' && isDraggingConnector && typeof tempConnector !== 'undefined' && tempConnector) {
         drawConnectorItem(tempConnector);
     }
@@ -1210,28 +1234,28 @@ function draw() {
         ctx.fillStyle = accentColor;
         ctx.fill();
     }
-    
+
     if (isSelectingBox) drawSelectionBox();
-    
+
     // Update toolbar position every frame to stay in sync with camera and moving items
     if (selectedItems.length > 0 && selectionToolbar.style.display === 'flex') {
         updateToolbarPosition();
     }
-    
+
     ctx.restore();
 }
 function drawSelection(e) { if (e.type === 'reroute') { ctx.save(); ctx.strokeStyle = accentColor; ctx.lineWidth = 2 / cameraZoom; ctx.beginPath(); ctx.arc(e.x, e.y, 12 / cameraZoom, 0, Math.PI * 2); ctx.stroke(); ctx.restore(); return } if (selectedItems.length > 1) { drawSelectionOutline(e); return } if ((e.type === 'arrow' || e.type === 'measure') && !e.isPinned) { const t = 8 / cameraZoom, o = invertColor(canvasBackgroundColor); ctx.save(); ctx.fillStyle = o; ctx.shadowColor = 'rgba(0, 0, 0, 0.4)'; ctx.shadowBlur = 4 / cameraZoom; ctx.beginPath(); ctx.arc(e.startX, e.startY, t, 0, Math.PI * 2); ctx.fill(); if (hoveredArrowHandle === 'start') { ctx.strokeStyle = accentColor; ctx.lineWidth = 2 / cameraZoom; ctx.stroke() } ctx.beginPath(); ctx.arc(e.endX, e.endY, t, 0, Math.PI * 2); ctx.fill(); if (hoveredArrowHandle === 'end') { ctx.strokeStyle = accentColor; ctx.lineWidth = 2 / cameraZoom; ctx.stroke() } ctx.restore(); return } if (e.type === 'stroke') { if (!isDrawing) drawSelectionOutline(e); return } ctx.save(); const t = e.x + e.width / 2, o = e.y + e.height / 2; ctx.translate(t, o); ctx.rotate(e.rotation); ctx.strokeStyle = accentColor; ctx.lineWidth = 2 / cameraZoom; ctx.strokeRect(-e.width / 2, -e.height / 2, e.width, e.height); if (activeGizmo && !e.isPinned) { const t = invertColor(canvasBackgroundColor), o = 8 / cameraZoom; ctx.shadowColor = 'rgba(0, 0, 0, 0.4)'; ctx.shadowBlur = 4 / cameraZoom; ctx.fillStyle = t; ctx.strokeStyle = t; if (activeGizmo === 'scale') { const t = e.width / 2, a = e.height / 2; ctx.beginPath(); ctx.arc(t, a, o, 0, Math.PI * 2); ctx.fill(); if (hoveredGizmo === 'scale') { ctx.strokeStyle = accentColor; ctx.lineWidth = 2 / cameraZoom; ctx.stroke() } } else if (activeGizmo === 'rotate') { const t = e.width / 2, a = -e.height / 2, i = a - 20 / cameraZoom; ctx.beginPath(); ctx.moveTo(t, a); ctx.lineTo(t, i); ctx.stroke(); ctx.beginPath(); ctx.arc(t, i, o, 0, Math.PI * 2); ctx.fill(); if (hoveredGizmo === 'rotate') { ctx.strokeStyle = accentColor; ctx.lineWidth = 2 / cameraZoom; ctx.stroke() } } } ctx.restore() }
 function drawSelectionOutline(e) { ctx.save(); const t = getItemBoundingBox(e); ctx.strokeStyle = accentColor; ctx.lineWidth = 2 / cameraZoom; ctx.setLineDash([6 / cameraZoom, 4 / cameraZoom]); ctx.strokeRect(t.x, t.y, t.width, t.height); ctx.restore() }
-function drawSelectionBox() { 
-    ctx.save(); 
-    ctx.fillStyle = hexToRgba(accentColor, .1); 
-    ctx.strokeStyle = accentColor; 
-    ctx.lineWidth = 1 / cameraZoom; 
-    ctx.setLineDash([]); 
-    const { x: e, y: t, width: o, height: a } = getNormalizedSelectionBox(); 
-    ctx.fillRect(e, t, o, a); 
-    ctx.strokeRect(e, t, o, a); 
-    ctx.restore() 
+function drawSelectionBox() {
+    ctx.save();
+    ctx.fillStyle = hexToRgba(accentColor, .1);
+    ctx.strokeStyle = accentColor;
+    ctx.lineWidth = 1 / cameraZoom;
+    ctx.setLineDash([]);
+    const { x: e, y: t, width: o, height: a } = getNormalizedSelectionBox();
+    ctx.fillRect(e, t, o, a);
+    ctx.strokeRect(e, t, o, a);
+    ctx.restore()
 }
 function drawGrid() { const e = (0 - canvas.width / 2) / cameraZoom - cameraOffset.x + canvas.width / 2, t = (0 - canvas.height / 2) / cameraZoom - cameraOffset.y + canvas.height / 2, o = (canvas.width - canvas.width / 2) / cameraZoom - cameraOffset.x + canvas.width / 2, a = (canvas.height - canvas.height / 2) / cameraZoom - cameraOffset.y + canvas.height / 2, i = Math.floor(e / gridSize) * gridSize, r = Math.floor(t / gridSize) * gridSize; ctx.save(); ctx.globalAlpha = gridOpacity; ctx.beginPath(); ctx.strokeStyle = gridColor; ctx.lineWidth = 1 / cameraZoom; ctx.setLineDash([]); for (let s = i; s < o; s += gridSize) { ctx.moveTo(s, t); ctx.lineTo(s, a) } for (let s = r; s < a; s += gridSize) { ctx.moveTo(e, s); ctx.lineTo(o, s) } ctx.stroke(); ctx.restore() }
 function drawArrow(e, t) { const o = 10 / cameraZoom, a = t.endX - t.startX, i = t.endY - t.startY, r = Math.atan2(i, a); e.save(); e.beginPath(); e.moveTo(t.startX, t.startY); e.lineTo(t.endX, t.endY); e.lineTo(t.endX - o * Math.cos(r - Math.PI / 6), t.endY - o * Math.sin(r - Math.PI / 6)); e.moveTo(t.endX, t.endY); e.lineTo(t.endX - o * Math.cos(r + Math.PI / 6), t.endY - o * Math.sin(r + Math.PI / 6)); e.strokeStyle = t.color || accentColor; e.lineWidth = 3 / cameraZoom; e.stroke(); e.restore() }
@@ -1289,7 +1313,7 @@ function drawTextItem(ctx, item) {
         ctx.font = `bold 16px '${item.fontFamily || 'Nunito'}', sans-serif`;
         ctx.textAlign = 'left';
         ctx.textBaseline = 'top';
-        
+
         const titleLines = wrapText(ctx, item.title, item.width - pX * 2);
         titleLines.forEach(line => {
             ctx.fillText(line, x + pX, currY);
@@ -1301,7 +1325,7 @@ function drawTextItem(ctx, item) {
     // Body Section (Markdown Lite)
     ctx.textAlign = 'left';
     ctx.textBaseline = 'top';
-    
+
     const baseSize = item.fontSize || 14;
     const lines = item.text.replace(/\r/g, '').split('\n');
     lines.forEach(line => {
@@ -1349,17 +1373,17 @@ function renderMarkdownLine(ctx, text, x, y, maxWidth, baseSize, fontFamily, pri
 
     const finalSize = baseSize * lineScale;
     const lineHeight = finalSize * 1.5;
-    
+
     // Indent bullets
     const bulletIndent = isBullet ? 15 : 0;
-    
+
     // MEASURE CAREFULLY: Set font before wrapping
     const weightStr = isHeadingBold ? 'bold ' : '';
     const safeFont = fontFamily ? fontFamily.replace(/'/g, "") : 'Nunito';
     ctx.font = `${weightStr}${finalSize}px '${safeFont}', sans-serif`;
-    
+
     const wrappedLines = wrapText(ctx, cleanText, maxWidth - bulletIndent);
-    
+
     wrappedLines.forEach((lineText, lineIdx) => {
         drawInlineFormattedText(ctx, lineText, x + bulletIndent, y + (lineIdx * lineHeight), finalSize, safeFont, isHeadingBold, color);
     });
@@ -1395,9 +1419,9 @@ function drawInlineFormattedText(ctx, text, x, y, size, fontFamily, forceBold, d
         } else if (part.length >= 2 && part.startsWith('`') && part.endsWith('`')) {
             isCode = true;
             currentSize = size * 0.85;
-            color = accentColor; 
+            color = accentColor;
             content = part.slice(1, -1);
-            
+
             ctx.save();
             ctx.font = `${currentSize}px 'Source Code Pro', monospace`;
             const w = ctx.measureText(content).width;
@@ -1579,46 +1603,46 @@ function drawMeasureItem(ctx, item) {
 
 function drawGridItem(e, t) { e.save(); const o = t.x + t.width / 2, a = t.y + t.height / 2; e.translate(o, a); e.rotate(t.rotation); e.scale(t.scaleX || 1, t.scaleY || 1); e.strokeStyle = t.color; e.lineWidth = 2 / cameraZoom; const i = t.width / t.cols, r = t.height / t.rows; e.beginPath(); for (let o = 0; o <= t.cols; o++) { const a = -t.width / 2 + o * i; e.moveTo(a, -t.height / 2); e.lineTo(a, t.height / 2) } for (let o = 0; o <= t.rows; o++) { const a = -t.height / 2 + o * r; e.moveTo(-t.width / 2, a); e.lineTo(t.width / 2, a) } e.stroke(); e.restore() }
 
-function drawTextListItem(e, t) { 
-    e.save(); 
-    const o = t.x + t.width / 2, a = t.y + t.height / 2; 
-    e.translate(o, a); 
-    e.rotate(t.rotation); 
-    e.scale(t.scaleX || 1, t.scaleY || 1); 
-    e.globalAlpha = t.opacity ?? 1; 
-    
+function drawTextListItem(e, t) {
+    e.save();
+    const o = t.x + t.width / 2, a = t.y + t.height / 2;
+    e.translate(o, a);
+    e.rotate(t.rotation);
+    e.scale(t.scaleX || 1, t.scaleY || 1);
+    e.globalAlpha = t.opacity ?? 1;
+
     // Draw Box
-    e.fillStyle = t.color; 
-    e.beginPath(); 
-    if (e.roundRect) { 
-        e.roundRect(-t.width / 2, -t.height / 2, t.width, t.height, 12 / cameraZoom); 
-    } else { 
-        e.rect(-t.width / 2, -t.height / 2, t.width, t.height); 
-    } 
-    e.fill(); 
+    e.fillStyle = t.color;
+    e.beginPath();
+    if (e.roundRect) {
+        e.roundRect(-t.width / 2, -t.height / 2, t.width, t.height, 12 / cameraZoom);
+    } else {
+        e.rect(-t.width / 2, -t.height / 2, t.width, t.height);
+    }
+    e.fill();
 
-    const lum = getLuminance(t.color); 
-    const textColor = lum > 0.5 ? '#111111' : '#ffffff'; 
-    e.fillStyle = textColor; 
-    const i = t.fontStyle || 'normal', r = t.fontWeight || 'bold', s = t.fontFamily || 'Nunito'; 
-    e.font = `${i} ${r} ${t.fontSize}px '${s}', sans-serif`; 
-    e.textAlign = 'left'; 
-    e.textBaseline = 'top'; 
+    const lum = getLuminance(t.color);
+    const textColor = lum > 0.5 ? '#111111' : '#ffffff';
+    e.fillStyle = textColor;
+    const i = t.fontStyle || 'normal', r = t.fontWeight || 'bold', s = t.fontFamily || 'Nunito';
+    e.font = `${i} ${r} ${t.fontSize}px '${s}', sans-serif`;
+    e.textAlign = 'left';
+    e.textBaseline = 'top';
 
-    const h = t.fontSize * 1.5; 
+    const h = t.fontSize * 1.5;
     const padding = 15;
     const checkboxSize = t.fontSize * 1.1;
     const checkboxMargin = 10;
 
     (t.items || []).forEach((item, idx) => {
         const itemY = -t.height / 2 + padding + idx * h;
-        
+
         // Draw Checkbox
         e.strokeStyle = textColor;
         e.lineWidth = 2 / cameraZoom;
         const cbX = -t.width / 2 + padding;
         const cbY = itemY + (h - checkboxSize) / 2;
-        
+
         e.strokeRect(cbX, cbY, checkboxSize, checkboxSize);
         if (item.completed) {
             e.beginPath();
@@ -1634,7 +1658,7 @@ function drawTextListItem(e, t) {
             e.globalAlpha *= 0.5;
         }
         e.fillText(item.text, cbX + checkboxSize + checkboxMargin, itemY + (h - t.fontSize) / 2);
-        
+
         if (item.completed) {
             const metrics = e.measureText(item.text);
             e.beginPath();
@@ -1644,7 +1668,7 @@ function drawTextListItem(e, t) {
         }
         e.restore();
     });
-    e.restore(); 
+    e.restore();
 }
 function drawStrokeItem(e, t) { if (t.points.length < 2) return; e.save(); e.strokeStyle = t.color; e.lineWidth = 4 / cameraZoom; e.lineCap = 'round'; e.lineJoin = 'round'; e.beginPath(); e.moveTo(t.points[0].x, t.points[0].y); for (let o = 1; o < t.points.length; o++) { e.lineTo(t.points[o].x, t.points[o].y) } e.stroke(); e.restore() }
 function getItemPorts(e) {
@@ -1661,10 +1685,10 @@ function getItemPorts(e) {
     const cx = e.x + e.width / 2, cy = e.y + e.height / 2;
     const r = e.rotation || 0, s = Math.cos(r), n = Math.sin(r);
     return [
-        { side: 'left', x: cx + (-t/2)*s, y: cy + (-t/2)*n, item: e },
-        { side: 'right', x: cx + (t/2)*s, y: cy + (t/2)*n, item: e },
-        { side: 'top', x: cx + (o/2)*n, y: cy + (-o/2)*s, item: e },
-        { side: 'bottom', x: cx + (-o/2)*n, y: cy + (o/2)*s, item: e }
+        { side: 'left', x: cx + (-t / 2) * s, y: cy + (-t / 2) * n, item: e },
+        { side: 'right', x: cx + (t / 2) * s, y: cy + (t / 2) * n, item: e },
+        { side: 'top', x: cx + (o / 2) * n, y: cy + (-o / 2) * s, item: e },
+        { side: 'bottom', x: cx + (-o / 2) * n, y: cy + (o / 2) * s, item: e }
     ];
 }
 
@@ -1673,10 +1697,10 @@ function createSimpleConnector(source, target) {
     const portsS = getItemPorts(source);
     const portsT = getItemPorts(target);
     if (!portsS.length || !portsT.length) return;
-    
+
     let minDist = Infinity;
     let bestS = 'right', bestT = 'left';
-    
+
     portsS.forEach(ps => {
         portsT.forEach(pt => {
             const d = Math.hypot(ps.x - pt.x, ps.y - pt.y);
@@ -1732,7 +1756,7 @@ function drawConnectorItem(e) {
     let endX = e.endX, endY = e.endY;
     let targetPortPos = null;
     let targetSide = null;
-    
+
     if (e.targetId) {
         const targetItem = items.find(i => i.id === e.targetId);
         if (targetItem) {
@@ -1744,14 +1768,14 @@ function drawConnectorItem(e) {
             }
         }
     }
-    
+
     e.computedStartX = sourcePortPos.x;
     e.computedStartY = sourcePortPos.y;
     e.computedEndX = endX;
     e.computedEndY = endY;
 
     const pushStrength = Math.min(Math.max(Math.hypot(endX - sourcePortPos.x, endY - sourcePortPos.y) / 2, 50), 200);
-    
+
     const getControlPoint = (portX, portY, side, item) => {
         let dx = 0, dy = 0;
         if (side === 'left') dx = -1;
@@ -1759,18 +1783,18 @@ function drawConnectorItem(e) {
         if (side === 'top') dy = -1;
         if (side === 'bottom') dy = 1;
         if (item && item.type !== 'reroute') {
-           const s = Math.cos(item.rotation || 0);
-           const n = Math.sin(item.rotation || 0);
-           const rotDx = dx * s - dy * n;
-           const rotDy = dx * n + dy * s;
-           return { x: portX + rotDx * pushStrength, y: portY + rotDy * pushStrength };
+            const s = Math.cos(item.rotation || 0);
+            const n = Math.sin(item.rotation || 0);
+            const rotDx = dx * s - dy * n;
+            const rotDy = dx * n + dy * s;
+            return { x: portX + rotDx * pushStrength, y: portY + rotDy * pushStrength };
         }
         return { x: portX + dx * pushStrength, y: portY + dy * pushStrength };
     };
 
     const cp1 = getControlPoint(sourcePortPos.x, sourcePortPos.y, e.sourcePort, sourceItem);
     const cp2 = targetPortPos ? getControlPoint(endX, endY, targetSide, items.find(i => i.id === e.targetId)) : { x: endX, y: endY };
-    
+
     e.cp1 = cp1;
     e.cp2 = cp2;
 
@@ -1778,10 +1802,10 @@ function drawConnectorItem(e) {
     ctx.beginPath();
     ctx.moveTo(sourcePortPos.x, sourcePortPos.y);
     ctx.bezierCurveTo(cp1.x, cp1.y, cp2.x, cp2.y, endX, endY);
-    
+
     ctx.lineWidth = 4 / cameraZoom;
     ctx.strokeStyle = e.color || accentColor;
-    
+
     if (selectedItems.includes(e) || (typeof hoveredConnector !== 'undefined' && hoveredConnector === e)) {
         ctx.save();
         ctx.strokeStyle = invertColor(canvasBackgroundColor);
@@ -1789,7 +1813,7 @@ function drawConnectorItem(e) {
         ctx.stroke();
         ctx.restore();
     }
-    
+
     ctx.stroke();
     ctx.restore();
 }
@@ -1841,12 +1865,31 @@ function drawGroupItem(e, t) {
 function handleKeyDown(e) {
     const activeEl = document.activeElement;
     if (currentlyEditingText || (activeEl && (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA'))) { return; }
-    
+
     if (e.key === 'Control' || e.key === 'Meta') {
         updateCursor(e);
     }
-    
+
     const key = e.key.toLowerCase();
+
+    // Color Seeker global keys intercept
+    const activeProject = projects.find(p => p.id === activeProjectId);
+    if (activeProject && activeProject.type === 'colorseeker') {
+        if (e.code === 'Space') {
+            e.preventDefault();
+            activeProject.data.baseColor = '#' + Math.floor(Math.random() * 16777215).toString(16).padStart(6, '0');
+            activeProject.data.colors = generatePalette(activeProject.data.baseColor, activeProject.data.mode);
+            saveToBrowser();
+            renderColorSeeker(activeProjectId);
+            return;
+        }
+        if (e.shiftKey && key === 's') {
+            e.preventDefault();
+            downloadColorSeekerPalette();
+            return;
+        }
+    }
+
     if (key === 'escape') { e.preventDefault(); if (helpModalOverlay.style.display === 'flex') { helpModalOverlay.style.display = 'none'; return; } if (currentTool) { setCurrentTool(null); } else if (selectedItems.length > 0) { selectedItems = []; updateSelectionToolbar(); updateLeftBarState(); } return; }
     if (e.shiftKey && key === 'n') { e.preventDefault(); confirmNewBoard(); return; }
     if (e.shiftKey && key === 'c') { e.preventDefault(); copyToClipboard(); return; }
@@ -1904,13 +1947,13 @@ function handleKeyUp(e) {
     }
 }
 
-function onDoubleClick(e) { 
-    const t = screenToWorld(getEventLocation(e)), o = getItemAtPosition(t); 
+function onDoubleClick(e) {
+    const t = screenToWorld(getEventLocation(e)), o = getItemAtPosition(t);
     if (o && (o.type === 'text' || o.type === 'comment' || o.type === 'textList') && !o.isPinned) {
         editText(o);
         return;
     }
-    
+
     const hoveredConn = getHoveredConnector(t);
     if (hoveredConn) {
         const rerouteNode = {
@@ -1924,7 +1967,7 @@ function onDoubleClick(e) {
             isPinned: false
         };
         addItemToLayeredItems(rerouteNode);
-        
+
         const newConn = {
             id: Date.now() + 1,
             type: 'connector',
@@ -1938,11 +1981,11 @@ function onDoubleClick(e) {
         };
         hoveredConn.targetId = rerouteNode.id;
         hoveredConn.targetPort = 'left';
-        
+
         if (newConn.targetId) {
             addItemToLayeredItems(newConn);
         }
-        
+
         selectedItems = [rerouteNode];
         saveStateForUndo();
     } else if (e.isTouch) {
@@ -1968,14 +2011,14 @@ function onMouseDown(e) {
         const t = getEventLocation(e);
         const mouseWorld = screenToWorld(t);
         const target = getItemAtPosition(mouseWorld);
-        
+
         if (target && target.id !== connectionSourceItem.id) {
             if (e.preventDefault) e.preventDefault();
             createSimpleConnector(connectionSourceItem, target);
         } else {
             showToast(target ? "Cannot connect an item to itself." : "Connection mode cancelled.");
         }
-        
+
         isConnectionMode = false;
         connectionSourceItem = null;
         if (connectBtn) connectBtn.classList.remove('active');
@@ -2054,7 +2097,7 @@ function onMouseDown(e) {
                     originalItemState.centerY = item.y + item.height / 2;
                     originalItemState.startAngle = Math.atan2(o.y - originalItemState.centerY, o.x - originalItemState.centerX);
                     originalItemState.startDist = Math.hypot(o.x - originalItemState.centerX, o.y - originalItemState.centerY);
-                    
+
                     if (gizmo === 'scale') {
                         const pivotOffset = { x: -originalItemState.width / 2, y: -originalItemState.height / 2 };
                         const cos = Math.cos(originalItemState.rotation);
@@ -2176,12 +2219,12 @@ function onMouseDown(e) {
     }
     requestUpdate();
 }
-function onMouseUp(e) { 
-    if (e.button === 0) { 
+function onMouseUp(e) {
+    if (e.button === 0) {
         if (isDraggingConnector) {
             isDraggingConnector = false;
             if (tempConnector) {
-                if (tempConnector.targetId && tempConnector.targetPort && 
+                if (tempConnector.targetId && tempConnector.targetPort &&
                     (tempConnector.sourceId !== tempConnector.targetId || tempConnector.sourcePort !== tempConnector.targetPort)) {
                     let newConnector = { ...tempConnector };
                     addItemToLayeredItems(newConnector);
@@ -2191,37 +2234,37 @@ function onMouseUp(e) {
             }
             return;
         }
-        if (isDrawing || isMovingItems || isTransforming || isTransformingArrow) { 
-            if (isDrawing) { 
-                const e = selectedItems[0]; 
-                if (e && (e.type === 'box' || e.type === 'circle' || e.type === 'grid') && (Math.abs(e.width) < 10 || Math.abs(e.height) < 10)) { 
-                    items = items.filter(t => t.id !== e.id); 
+        if (isDrawing || isMovingItems || isTransforming || isTransformingArrow) {
+            if (isDrawing) {
+                const e = selectedItems[0];
+                if (e && (e.type === 'box' || e.type === 'circle' || e.type === 'grid') && (Math.abs(e.width) < 10 || Math.abs(e.height) < 10)) {
+                    items = items.filter(t => t.id !== e.id);
                     selectedItems = [];
-                } else if (e && (e.type === 'text' || e.type === 'comment')) { 
+                } else if (e && (e.type === 'text' || e.type === 'comment')) {
                     editText(e);
-                } 
-            } 
+                }
+            }
             saveStateForUndo();
             if (isMovingItems || isTransforming || isTransformingArrow) {
                 updateSelectionToolbar(); // Re-open toolbar after movement/transform
             }
-        } 
-        if (isSelectingBox) { 
-            isSelectingBox = false; 
-            const e = getNormalizedSelectionBox(); 
-            selectedItems = items.filter(t => rectsIntersect(getItemBoundingBox(t), e)); 
-            updateSelectionToolbar(); 
+        }
+        if (isSelectingBox) {
+            isSelectingBox = false;
+            const e = getNormalizedSelectionBox();
+            selectedItems = items.filter(t => rectsIntersect(getItemBoundingBox(t), e));
+            updateSelectionToolbar();
             updateLeftBarState();
-        } 
-        isDrawing = false; 
-        isMovingItems = false; 
-        isTransforming = false; 
-        isTransformingArrow = false; 
-        transformingHandle = null; 
+        }
+        isDrawing = false;
+        isMovingItems = false;
+        isTransforming = false;
+        isTransformingArrow = false;
+        transformingHandle = null;
         originalItemState = null;
-    } else if (e.button === 1) { 
-        isDragging = !1; canvas.classList.remove('grabbing') 
-    } 
+    } else if (e.button === 1) {
+        isDragging = !1; canvas.classList.remove('grabbing')
+    }
     requestUpdate();
 }
 function onMouseMove(e) {
@@ -2232,7 +2275,7 @@ function onMouseMove(e) {
         hoveredItem = hoveredPort.item;
     }
     hoveredConnector = getHoveredConnector(worldPos);
-    
+
     if (isMovingItems || isTransforming || isTransformingArrow || isDrawing) {
         if (selectionToolbar.style.display !== 'none') selectionToolbar.style.display = 'none';
         items.forEach(item => { item._isDirty = true; });
@@ -2464,7 +2507,7 @@ function onMouseMove(e) {
         const currentGizmo = getGizmoAtPosition(worldPos);
         const currentArrowHandle = getArrowHandleAtPosition(worldPos);
         const itemUnderMouse = getItemAtPosition(worldPos);
-        
+
         // Reset ALL link hover states first
         items.forEach(i => { if (i.type === 'link') i.isHovered = false; });
 
@@ -2515,41 +2558,41 @@ function isLinkButtonHit(item, pos) {
     const ry = dx * sin + dy * cos;
     return rx >= btnX_rel && rx <= btnX_rel + btnSize && ry >= btnY_rel && ry <= btnY_rel + btnSize;
 }
-function onContextMenu(e) { 
-    if (e && e.preventDefault) e.preventDefault(); 
+function onContextMenu(e) {
+    if (e && e.preventDefault) e.preventDefault();
     let t;
     if (e && e.isFake && selectedItems.length > 0) {
         t = selectedItems[0];
     } else {
-        t = getItemAtPosition(screenToWorld(getEventLocation(e))); 
+        t = getItemAtPosition(screenToWorld(getEventLocation(e)));
     }
-    if (t && !selectedItems.includes(t)) { 
-        selectedItems = [t]; 
-        updateSelectionToolbar(); 
-        updateLeftBarState() 
-    } 
-    if (selectedItems.length > 0) { 
-        opacitySliderContainer.style.display = 'flex'; 
-        opacitySeparator.style.display = 'block'; 
-        const op = selectedItems[0].opacity ?? 1; 
-        itemOpacitySlider.value = op; 
-        itemOpacityValue.textContent = `${Math.round(op * 100)}%`; 
-        deleteItemBtn.style.display = 'flex'; 
-        document.getElementById('delete-separator').style.display = 'block' 
-    } else { 
-        opacitySliderContainer.style.display = 'none'; 
-        opacitySeparator.style.display = 'none'; 
-        deleteItemBtn.style.display = 'none'; 
-        document.getElementById('delete-separator').style.display = 'none' 
-    } 
-    const isImg = selectedItems.length === 1 && selectedItems[0].type === 'image'; 
-    downloadImageBtn.style.display = isImg ? 'flex' : 'none'; 
-    downloadSeparator.style.display = isImg ? 'block' : 'none'; 
-    
+    if (t && !selectedItems.includes(t)) {
+        selectedItems = [t];
+        updateSelectionToolbar();
+        updateLeftBarState()
+    }
+    if (selectedItems.length > 0) {
+        opacitySliderContainer.style.display = 'flex';
+        opacitySeparator.style.display = 'block';
+        const op = selectedItems[0].opacity ?? 1;
+        itemOpacitySlider.value = op;
+        itemOpacityValue.textContent = `${Math.round(op * 100)}%`;
+        deleteItemBtn.style.display = 'flex';
+        document.getElementById('delete-separator').style.display = 'block'
+    } else {
+        opacitySliderContainer.style.display = 'none';
+        opacitySeparator.style.display = 'none';
+        deleteItemBtn.style.display = 'none';
+        document.getElementById('delete-separator').style.display = 'none'
+    }
+    const isImg = selectedItems.length === 1 && selectedItems[0].type === 'image';
+    downloadImageBtn.style.display = isImg ? 'flex' : 'none';
+    downloadSeparator.style.display = isImg ? 'block' : 'none';
+
     const canConnect = selectedItems.length === 1 && !['connector', 'stroke', 'measure'].includes(selectedItems[0].type);
     contextConnectBtn.style.display = canConnect ? 'flex' : 'none';
 
-    showAndPositionMenu(contextMenu, e) 
+    showAndPositionMenu(contextMenu, e)
 }
 function confirmNewBoard() { if (items.length > 0) { showConfirmationModal() } else { resetBoard() } }
 function resetBoard() { const e = projects.find(e => e.id === activeProjectId); if (!e) return; e.data.items = []; e.data.cameraOffset = { x: window.innerWidth / 2, y: (window.innerHeight - 48) / 2 }; e.data.cameraZoom = 1; e.data.historyStack = []; e.data.historyIndex = -1; e.data.canvasBackgroundColor = '#0d0d0d'; e.data.accentColor = '#429eff'; e.data.gridColor = '#f9f8f6'; switchTab(activeProjectId); saveStateForUndo() }
@@ -2663,38 +2706,38 @@ function saveAsPng() {
     l.click();
     showToast("Image exported as PNG.")
 }
-function saveProject() { 
-    const t = projects.find(e => e.id === activeProjectId); 
-    if (!t) { showToast("No active project to save.", "error"); return; } 
-    const o = `${t.name}.mood`; 
-    
+function saveProject() {
+    const t = projects.find(e => e.id === activeProjectId);
+    if (!t) { showToast("No active project to save.", "error"); return; }
+    const o = `${t.name}.mood`;
+
     const zip = new window.JSZip();
     const folderName = t.name.replace(/[^a-z0-9]/gi, '_').toLowerCase() || 'moodboard';
     const rootDir = zip.folder(folderName);
     const imgFolder = rootDir.folder("images");
     let eJSON;
-    
-    if (t.type === 'moodinfinite') { 
-        t.data.items = items; 
-        t.data.cameraOffset = cameraOffset; 
-        t.data.cameraZoom = cameraZoom; 
-        t.data.historyStack = historyStack; 
-        t.data.historyIndex = historyIndex; 
-        
-        eJSON = { 
+
+    if (t.type === 'moodinfinite') {
+        t.data.items = items;
+        t.data.cameraOffset = cameraOffset;
+        t.data.cameraZoom = cameraZoom;
+        t.data.historyStack = historyStack;
+        t.data.historyIndex = historyIndex;
+
+        eJSON = {
             items: serializeItems(items),
-            cameraOffset: cameraOffset, 
-            cameraZoom: cameraZoom, 
-            canvasBackgroundColor: canvasBackgroundColor, 
-            accentColor: accentColor, 
-            gridColor: gridColor, 
-            showGrid: showGrid, 
-            snapToGrid: snapToGrid, 
-            showDropShadow: showDropShadow, 
-            gridSize: gridSize, 
-            gridOpacity: gridOpacity 
+            cameraOffset: cameraOffset,
+            cameraZoom: cameraZoom,
+            canvasBackgroundColor: canvasBackgroundColor,
+            accentColor: accentColor,
+            gridColor: gridColor,
+            showGrid: showGrid,
+            snapToGrid: snapToGrid,
+            showDropShadow: showDropShadow,
+            gridSize: gridSize,
+            gridOpacity: gridOpacity
         };
-        
+
         const localCache = {};
         const usedImageIds = new Set();
         const extractUsedIds = (arr) => {
@@ -2704,9 +2747,9 @@ function saveProject() {
             });
         };
         extractUsedIds(items);
-        
+
         showToast("Generating project export...", "info");
-        
+
         const promises = Array.from(usedImageIds).map(id => {
             return new Promise((resolve) => {
                 const base64Str = globalImageCache[id];
@@ -2715,7 +2758,7 @@ function saveProject() {
                     localCache[id] = base64Str;
                     return resolve();
                 }
-                
+
                 const img = new Image();
                 img.onload = () => {
                     const canvas = document.createElement('canvas');
@@ -2724,7 +2767,7 @@ function saveProject() {
                     const ctx = canvas.getContext('2d');
                     ctx.drawImage(img, 0, 0);
                     canvas.toBlob(blob => {
-                        if(blob) {
+                        if (blob) {
                             imgFolder.file(`${id}.webp`, blob);
                             localCache[id] = `images/${id}.webp`;
                         } else {
@@ -2737,32 +2780,32 @@ function saveProject() {
                 img.src = base64Str;
             });
         });
-        
+
         Promise.all(promises).then(() => {
             eJSON.globalImageCache = localCache;
             rootDir.file("data.json", JSON.stringify(eJSON, null, 2));
-            zip.generateAsync({type:"blob"}).then(function(content) {
-                const n = document.createElement('a'); 
-                n.href = URL.createObjectURL(content); 
-                n.download = o; 
-                document.body.appendChild(n); 
-                n.click(); 
-                document.body.removeChild(n); 
-                URL.revokeObjectURL(n.href); 
+            zip.generateAsync({ type: "blob" }).then(function (content) {
+                const n = document.createElement('a');
+                n.href = URL.createObjectURL(content);
+                n.download = o;
+                document.body.appendChild(n);
+                n.click();
+                document.body.removeChild(n);
+                URL.revokeObjectURL(n.href);
                 showToast("Project exported successfully.");
             });
         });
-    } else if (t.type === 'moodprompt') { 
+    } else if (t.type === 'moodprompt') {
         eJSON = t.data;
         rootDir.file("data.json", JSON.stringify(eJSON, null, 2));
-        zip.generateAsync({type:"blob"}).then(function(content) {
-            const n = document.createElement('a'); 
-            n.href = URL.createObjectURL(content); 
-            n.download = o; 
-            document.body.appendChild(n); 
-            n.click(); 
-            document.body.removeChild(n); 
-            URL.revokeObjectURL(n.href); 
+        zip.generateAsync({ type: "blob" }).then(function (content) {
+            const n = document.createElement('a');
+            n.href = URL.createObjectURL(content);
+            n.download = o;
+            document.body.appendChild(n);
+            n.click();
+            document.body.removeChild(n);
+            URL.revokeObjectURL(n.href);
             showToast("Project exported successfully.");
         });
     }
@@ -2770,7 +2813,7 @@ function saveProject() {
 function loadFileAsNewTab(fileContent, fileName) { try { const data = JSON.parse(fileContent); const name = fileName.split('.').slice(0, -1).join('.') || 'Loaded Project'; if (data.prompts && Array.isArray(data.prompts)) { const newId = Date.now(); const newProject = { id: newId, type: 'moodprompt', name: name, data: { prompts: data.prompts, canvasBackgroundColor: data.canvasBackgroundColor || '#0d0d0d' } }; projects.push(newProject); renderTabs(); switchTab(newId); showToast("Prompt file loaded successfully."); return } if (data.items && Array.isArray(data.items)) { const newId = Date.now(); const newProject = { id: newId, type: 'moodinfinite', name: name, data: { items: [], cameraOffset: {}, cameraZoom: 1, historyStack: [], historyIndex: -1 } }; projects.push(newProject); activeProjectId = newId; renderTabs(); loadProject(fileContent); return } showToast("Failed to load project. Unknown format.", "error") } catch (err) { console.error("Failed to load project:", err); showToast("Failed to load project. Invalid JSON.", "error") } }
 function loadProject(e) {
     try {
-        const t = JSON.parse(e); const o = projects.find(e => e.id === activeProjectId); if (!o || o.type !== 'moodinfinite') return; o.data.cameraOffset = t.cameraOffset || { x: window.innerWidth / 2, y: window.innerHeight / 2 }; o.data.cameraZoom = t.cameraZoom || 1; canvasBackgroundColor = t.canvasBackgroundColor || '#0d0d0d'; accentColor = t.accentColor || '#429eff'; gridColor = t.gridColor || '#f9f8f6'; o.data.canvasBackgroundColor = canvasBackgroundColor; o.data.accentColor = accentColor; o.data.gridColor = gridColor; showGrid = t.showGrid ?? true; snapToGrid = t.snapToGrid ?? true; showDropShadow = t.showDropShadow ?? true; gridSize = t.gridSize || 50; gridOpacity = t.gridOpacity || .05; if (t.globalImageCache) { globalImageCache = { ...globalImageCache, ...t.globalImageCache }; } 
+        const t = JSON.parse(e); const o = projects.find(e => e.id === activeProjectId); if (!o || o.type !== 'moodinfinite') return; o.data.cameraOffset = t.cameraOffset || { x: window.innerWidth / 2, y: window.innerHeight / 2 }; o.data.cameraZoom = t.cameraZoom || 1; canvasBackgroundColor = t.canvasBackgroundColor || '#0d0d0d'; accentColor = t.accentColor || '#429eff'; gridColor = t.gridColor || '#f9f8f6'; o.data.canvasBackgroundColor = canvasBackgroundColor; o.data.accentColor = accentColor; o.data.gridColor = gridColor; showGrid = t.showGrid ?? true; snapToGrid = t.snapToGrid ?? true; showDropShadow = t.showDropShadow ?? true; gridSize = t.gridSize || 50; gridOpacity = t.gridOpacity || .05; if (t.globalImageCache) { globalImageCache = { ...globalImageCache, ...t.globalImageCache }; }
         const processedItems = t.items || [];
         restoreImages(processedItems);
         o.data.items = [
@@ -2812,9 +2855,9 @@ function loadFileFromObject(t) {
             });
         }).catch(() => showToast("Failed to unpack project", "error"));
     } else {
-        const o = new FileReader; 
-        o.onload = e => { loadFileAsNewTab(e.target.result, t.name); scheduleAutoSave(); }; 
-        o.readAsText(t); 
+        const o = new FileReader;
+        o.onload = e => { loadFileAsNewTab(e.target.result, t.name); scheduleAutoSave(); };
+        o.readAsText(t);
     }
 }
 
@@ -3133,7 +3176,7 @@ function setCurrentTool(e) {
     console.log('Found', buttons.length, 'tool buttons');
     buttons.forEach(btn => btn.classList.remove('active'));
     canvas.classList.remove('eyedropper-active');
-    
+
     if (currentTool === null) {
         if (selectToolBtn) selectToolBtn.classList.add('active');
     } else if (currentTool === 'arrow') {
@@ -3205,21 +3248,21 @@ function setTextFontFamily(e) { if (selectedItems.length === 1 && (selectedItems
 function toggleTextStyleBold() { if (selectedItems.length === 1 && (selectedItems[0].type === 'text' || selectedItems[0].type === 'comment' || selectedItems[0].type === 'textList')) { const e = selectedItems[0]; e.fontWeight = e.fontWeight === 'bold' ? 'normal' : 'bold'; if (e.type === 'comment') updateCommentDimensions(e); else if (e.type === 'textList') updateTextListDimensions(e); updateSelectionToolbar(); saveStateForUndo() } }
 function toggleTextStyleItalic() { if (selectedItems.length === 1 && (selectedItems[0].type === 'text' || selectedItems[0].type === 'comment' || selectedItems[0].type === 'textList')) { const e = selectedItems[0]; e.fontStyle = e.fontStyle === 'italic' ? 'normal' : 'italic'; if (e.type === 'comment') updateCommentDimensions(e); else if (e.type === 'textList') updateTextListDimensions(e); updateSelectionToolbar(); saveStateForUndo() } }
 function updateCommentDimensions(e) { if (e.type !== 'comment') return; const t = e.fontStyle || 'normal', o = e.fontWeight || 'bold', a = e.fontFamily || 'Nunito'; ctx.save(); ctx.font = `${t} ${o} ${e.fontSize}px '${a}', sans-serif`; const i = e.text.split('\n'); let r = 0; i.forEach(e => { const t = ctx.measureText(e); if (t.width > r) r = t.width }); let extraW = 30; if (e.icon && e.icon !== 'none') extraW += e.fontSize * 1.2 + 10; e.width = r + extraW; const numLines = i.length || 1; e.height = numLines * (e.fontSize * 1.4) + 16; ctx.restore(); }
-function updateTextListDimensions(e) { 
-    if (e.type !== 'textList') return; 
-    const t = e.fontStyle || 'normal', o = e.fontWeight || 'bold', a = e.fontFamily || 'Nunito'; 
-    ctx.save(); 
-    ctx.font = `${t} ${o} ${e.fontSize}px '${a}', sans-serif`; 
-    let maxW = 0; 
-    (e.items || []).forEach(item => { 
-        const m = ctx.measureText(item.text); 
-        if (m.width > maxW) maxW = m.width; 
-    }); 
+function updateTextListDimensions(e) {
+    if (e.type !== 'textList') return;
+    const t = e.fontStyle || 'normal', o = e.fontWeight || 'bold', a = e.fontFamily || 'Nunito';
+    ctx.save();
+    ctx.font = `${t} ${o} ${e.fontSize}px '${a}', sans-serif`;
+    let maxW = 0;
+    (e.items || []).forEach(item => {
+        const m = ctx.measureText(item.text);
+        if (m.width > maxW) maxW = m.width;
+    });
     const checkboxArea = e.fontSize * 1.1 + 10;
-    e.width = maxW + checkboxArea + 30; 
+    e.width = maxW + checkboxArea + 30;
     const h = e.fontSize * 1.5;
-    e.height = (e.items || []).length * h + 30; 
-    ctx.restore(); 
+    e.height = (e.items || []).length * h + 30;
+    ctx.restore();
 }
 function updateSelectionToolbar() {
     const isBoxOrCircle = selectedItems.some(item => item.type === 'box' || item.type === 'circle');
@@ -3269,7 +3312,7 @@ function updateSelectionToolbar() {
                 noteBgColorInput.style.display = 'none';
             }
         }
-        
+
         toggleBoxStyleBtn.style.display = isBoxOrCircle ? 'flex' : 'none';
         scaleBtn.style.display = (selectedItems.length > 0 && !isComment && !isLink && !isTextList) ? 'flex' : 'none';
         rotateBtn.style.display = (selectedItems.length > 0 && !isTextList) ? 'flex' : 'none';
@@ -3287,7 +3330,7 @@ function updateSelectionToolbar() {
         scaleBtn.classList.toggle('active', activeGizmo === 'scale');
         rotateBtn.classList.toggle('active', activeGizmo === 'rotate');
         pinBtn.classList.toggle('pinned', selectedItems.every(e => e.isPinned));
-        
+
         // Ensure position is updated when toolbar is shown
         updateToolbarPosition();
     } else {
@@ -3314,14 +3357,14 @@ openLinkBtn.onclick = () => {
     }
 };
 
-function updateToolbarPosition() { 
-    if (selectedItems.length > 0) { 
-        const e = getCollectiveBoundingBox(selectedItems), 
-        // Use the bottom of the bounding box for "under" alignment
-        t = worldToScreen({ x: e.x + e.width / 2, y: e.y + e.height }); 
-        selectionToolbar.style.left = `${t.x}px`; 
-        selectionToolbar.style.top = `${t.y}px` 
-    } 
+function updateToolbarPosition() {
+    if (selectedItems.length > 0) {
+        const e = getCollectiveBoundingBox(selectedItems),
+            // Use the bottom of the bounding box for "under" alignment
+            t = worldToScreen({ x: e.x + e.width / 2, y: e.y + e.height });
+        selectionToolbar.style.left = `${t.x}px`;
+        selectionToolbar.style.top = `${t.y}px`
+    }
 }
 function editText(e) {
     if (e.type === 'text') {
@@ -3329,9 +3372,9 @@ function editText(e) {
         e.isHidden = true;
         noteEditorOverlay.style.display = 'flex';
         noteBodyInput.style.height = 'auto';
-        setTimeout(() => { 
-            noteBodyInput.style.height = noteBodyInput.scrollHeight + 'px'; 
-            noteBodyInput.focus(); 
+        setTimeout(() => {
+            noteBodyInput.style.height = noteBodyInput.scrollHeight + 'px';
+            noteBodyInput.focus();
             noteBodyInput.setSelectionRange(noteBodyInput.value.length, noteBodyInput.value.length);
         }, 10);
         noteTitleInput.value = e.title || '';
@@ -3346,7 +3389,7 @@ function editText(e) {
     if (e.type === 'comment' && e.icon && e.icon !== 'none') {
         paddingWidthAdjust += e.fontSize * 1.2 * cameraZoom + 10;
     }
-    Object.assign(textEditor.style, { display: 'block', left: `${t.x}px`, top: `${t.y}px`, width: `${o}px`, height: 'auto', transform: `rotate(${e.rotation}rad)`, transformOrigin: 'top left', color: e.type === 'comment' ? (getLuminance(e.color) > 0.5 ? '#111' : '#fff') : e.color, backgroundColor: e.type === 'comment' ? e.color : hexToRgba(e.color, .1), borderRadius: e.type === 'comment' ? `${12 * cameraZoom}px` : '0px', padding: e.type === 'comment' ? '8px 15px' : '0px', paddingLeft: e.type === 'comment' && e.icon && e.icon !== 'none' ? `${e.fontSize * 1.2 * cameraZoom  + 20}px` : (e.type === 'comment' ? '15px' : '0px'), fontSize: `${e.fontSize * cameraZoom}px`, fontFamily: e.fontFamily || 'Nunito', textAlign: e.textAlign || 'center', fontWeight: e.fontWeight || 'bold', fontStyle: e.fontStyle || 'normal', lineHeight: e.type === 'comment' ? '1.4' : 'normal' });
+    Object.assign(textEditor.style, { display: 'block', left: `${t.x}px`, top: `${t.y}px`, width: `${o}px`, height: 'auto', transform: `rotate(${e.rotation}rad)`, transformOrigin: 'top left', color: e.type === 'comment' ? (getLuminance(e.color) > 0.5 ? '#111' : '#fff') : e.color, backgroundColor: e.type === 'comment' ? e.color : hexToRgba(e.color, .1), borderRadius: e.type === 'comment' ? `${12 * cameraZoom}px` : '0px', padding: e.type === 'comment' ? '8px 15px' : '0px', paddingLeft: e.type === 'comment' && e.icon && e.icon !== 'none' ? `${e.fontSize * 1.2 * cameraZoom + 20}px` : (e.type === 'comment' ? '15px' : '0px'), fontSize: `${e.fontSize * cameraZoom}px`, fontFamily: e.fontFamily || 'Nunito', textAlign: e.textAlign || 'center', fontWeight: e.fontWeight || 'bold', fontStyle: e.fontStyle || 'normal', lineHeight: e.type === 'comment' ? '1.4' : 'normal' });
     textEditor.value = e.text === "Type..." || e.text === "Note..." ? "" : e.text;
     textEditor.focus();
     autoResizeTextEditor();
@@ -3373,9 +3416,9 @@ function finishNoteEditing() {
         currentlyEditingText.title = noteTitleInput.value.trim();
         currentlyEditingText.text = noteBodyInput.value.trim() || 'No content';
         currentlyEditingText.isHidden = false;
-        
+
         updateNoteDimensions(currentlyEditingText);
-        
+
         saveStateForUndo();
         selectedItems = [currentlyEditingText];
         currentlyEditingText = null;
@@ -3389,10 +3432,10 @@ function updateNoteDimensions(item) {
     const testCtx = canvas.getContext('2d');
     testCtx.save();
     testCtx.setTransform(1, 0, 0, 1, 0, 0); // RESET TRANSFORM for accurate measurement
-    
+
     const pX = 15;
     const maxWidth = item.width - pX * 2;
-    let totalH = 40; 
+    let totalH = 40;
 
     if (item.title && item.title.trim() !== "") {
         testCtx.font = `bold 16px Nunito`;
@@ -3462,7 +3505,8 @@ function loadStateFromHistory(e) {
 
 function undoLastAction() { if (historyIndex > 0) { historyIndex--; const e = historyStack[historyIndex]; loadStateFromHistory(e) } }
 function redoLastAction() { if (historyIndex < historyStack.length - 1) { historyIndex++; const e = historyStack[historyIndex]; loadStateFromHistory(e) } }
-function groupSelectedItems() { if (selectedItems.length <= 1) return; saveStateForUndo(); const e = []; selectedItems.forEach(t => { if (t.type === 'group') { const o = t.x + t.width / 2, a = t.y + t.height / 2, i = Math.cos(t.rotation), r = Math.sin(t.rotation); t.items.forEach(s => { const n = JSON.parse(JSON.stringify(s)); reattachImages(s, n); const l = s.x + s.width / 2, c = s.y + s.height / 2, d = l - t.width / 2, h = c - t.height / 2, p = d * i - h * r, m = d * r + h * i, u = o + p, g = a + m; n.x = u - s.width / 2; n.y = g - s.height / 2; n.rotation = (s.rotation || 0) + t.rotation; if (n.type === 'arrow' || n.type === 'stroke' || n.type === 'measure') { const e = (e, l) => { const c = t.x + e.x, d = t.y + e.y, h = c - o, p = d - a, m = h * i - p * r, u = h * r + p * i; return { x: o + m, y: a + u } }; if (n.type === 'arrow' || n.type === 'measure') { const t = e({ x: s.startX - s.x, y: s.startY - s.y }), o = e({ x: s.endX - s.x, y: s.endY - s.y }); n.startX = t.x; n.startY = t.y; n.endX = o.x; n.endY = o.y } else { n.points = s.points.map(t => e({ x: t.x - s.x, y: t.y - s.y })) } } e.push(n) }) } else { e.push(t) } }); const t = getCollectiveBoundingBox(e), o = { id: Date.now(), type: 'group', x: t.x, y: t.y, width: t.width, height: t.height, rotation: 0, isPinned: !1, opacity: 1, scaleX: 1, scaleY: 1, items: [] }; e.forEach(e => { const t = JSON.parse(JSON.stringify(e)); reattachImages(e, t); t.x -= o.x; t.y -= o.y; if (t.type === 'arrow' || t.type === 'measure') { t.startX -= o.x; t.startY -= o.y; t.endX -= o.x; t.endY -= o.y } else if (t.type === 'stroke') { t.points.forEach(e => { e.x -= o.x; e.y -= o.y }) } o.items.push(t) });     const a = new Set(selectedItems.map(e => e.id));
+function groupSelectedItems() {
+    if (selectedItems.length <= 1) return; saveStateForUndo(); const e = []; selectedItems.forEach(t => { if (t.type === 'group') { const o = t.x + t.width / 2, a = t.y + t.height / 2, i = Math.cos(t.rotation), r = Math.sin(t.rotation); t.items.forEach(s => { const n = JSON.parse(JSON.stringify(s)); reattachImages(s, n); const l = s.x + s.width / 2, c = s.y + s.height / 2, d = l - t.width / 2, h = c - t.height / 2, p = d * i - h * r, m = d * r + h * i, u = o + p, g = a + m; n.x = u - s.width / 2; n.y = g - s.height / 2; n.rotation = (s.rotation || 0) + t.rotation; if (n.type === 'arrow' || n.type === 'stroke' || n.type === 'measure') { const e = (e, l) => { const c = t.x + e.x, d = t.y + e.y, h = c - o, p = d - a, m = h * i - p * r, u = h * r + p * i; return { x: o + m, y: a + u } }; if (n.type === 'arrow' || n.type === 'measure') { const t = e({ x: s.startX - s.x, y: s.startY - s.y }), o = e({ x: s.endX - s.x, y: s.endY - s.y }); n.startX = t.x; n.startY = t.y; n.endX = o.x; n.endY = o.y } else { n.points = s.points.map(t => e({ x: t.x - s.x, y: t.y - s.y })) } } e.push(n) }) } else { e.push(t) } }); const t = getCollectiveBoundingBox(e), o = { id: Date.now(), type: 'group', x: t.x, y: t.y, width: t.width, height: t.height, rotation: 0, isPinned: !1, opacity: 1, scaleX: 1, scaleY: 1, items: [] }; e.forEach(e => { const t = JSON.parse(JSON.stringify(e)); reattachImages(e, t); t.x -= o.x; t.y -= o.y; if (t.type === 'arrow' || t.type === 'measure') { t.startX -= o.x; t.startY -= o.y; t.endX -= o.x; t.endY -= o.y } else if (t.type === 'stroke') { t.points.forEach(e => { e.x -= o.x; e.y -= o.y }) } o.items.push(t) }); const a = new Set(selectedItems.map(e => e.id));
     items = items.filter(e => !a.has(e.id));
     addItemToLayeredItems(o);
     selectedItems = [o];
@@ -3492,24 +3536,24 @@ function groupOrderedItems() {
     groupSelectedItems();
 }
 
-function ungroupSelectedItems() { 
-    const groups = selectedItems.filter(e => e.type === 'group'); 
-    if (groups.length === 0) return; 
-    saveStateForUndo(); 
-    
+function ungroupSelectedItems() {
+    const groups = selectedItems.filter(e => e.type === 'group');
+    if (groups.length === 0) return;
+    saveStateForUndo();
+
     const newItems = [];
     const groupIds = new Set();
-    
-    groups.forEach(group => { 
-        groupIds.add(group.id); 
+
+    groups.forEach(group => {
+        groupIds.add(group.id);
         const a = group.x + group.width / 2;
         const i = group.y + group.height / 2;
         const r = Math.cos(group.rotation || 0);
         const s = Math.sin(group.rotation || 0);
         const gScaleX = group.scaleX || 1;
         const gScaleY = group.scaleY || 1;
-        
-        const transformPoint = (localX, localY) => { 
+
+        const transformPoint = (localX, localY) => {
             const cx = localX - group.width / 2;
             const cy = localY - group.height / 2;
             const scaledX = cx * gScaleX;
@@ -3518,65 +3562,65 @@ function ungroupSelectedItems() {
             const rotY = scaledX * s + scaledY * r;
             return { x: a + rotX, y: i + rotY };
         };
-        
-        group.items.forEach(child => { 
-            const n = JSON.parse(JSON.stringify(child)); 
-            reattachImages(child, n); 
-            
+
+        group.items.forEach(child => {
+            const n = JSON.parse(JSON.stringify(child));
+            reattachImages(child, n);
+
             n.scaleX = (child.scaleX || 1) * gScaleX;
             n.scaleY = (child.scaleY || 1) * gScaleY;
-            
-            if (n.type === 'arrow' || n.type === 'measure') { 
+
+            if (n.type === 'arrow' || n.type === 'measure') {
                 const globalStart = transformPoint(child.startX, child.startY);
                 const globalEnd = transformPoint(child.endX, child.endY);
-                n.startX = globalStart.x; 
-                n.startY = globalStart.y; 
-                n.endX = globalEnd.x; 
+                n.startX = globalStart.x;
+                n.startY = globalStart.y;
+                n.endX = globalEnd.x;
                 n.endY = globalEnd.y;
-            } else if (n.type === 'stroke') { 
+            } else if (n.type === 'stroke') {
                 n.points = child.points.map(pt => transformPoint(pt.x, pt.y));
-            } 
-            
+            }
+
             const childLocalCenter = {
                 x: child.x + child.width / 2,
                 y: child.y + child.height / 2
             };
             const globalCenter = transformPoint(childLocalCenter.x, childLocalCenter.y);
-            
-            n.x = globalCenter.x - child.width / 2; 
-            n.y = globalCenter.y - child.height / 2; 
-            n.rotation = (child.rotation || 0) + (group.rotation || 0); 
-            
-            items.push(n); 
+
+            n.x = globalCenter.x - child.width / 2;
+            n.y = globalCenter.y - child.height / 2;
+            n.rotation = (child.rotation || 0) + (group.rotation || 0);
+
+            items.push(n);
             newItems.push(n);
         });
-    }); 
-    
-    items = items.filter(e => !groupIds.has(e.id)); 
-    selectedItems = newItems; 
-    updateSelectionToolbar(); 
+    });
+
+    items = items.filter(e => !groupIds.has(e.id));
+    selectedItems = newItems;
+    updateSelectionToolbar();
     updateLeftBarState();
 }
-function buildPaletteMenu() { 
-    palettePanel.innerHTML = ''; 
-    colorPalettes.forEach(palette => { 
-        const option = document.createElement('div'); 
-        option.className = 'palette-option'; 
-        option.innerHTML = `<div class="palette-color" style="background-color: ${palette.bg}"></div><div class="palette-color" style="background-color: ${palette.accent}"></div><div class="palette-color" style="background-color: ${palette.grid}"></div>`; 
+function buildPaletteMenu() {
+    palettePanel.innerHTML = '';
+    colorPalettes.forEach(palette => {
+        const option = document.createElement('div');
+        option.className = 'palette-option';
+        option.innerHTML = `<div class="palette-color" style="background-color: ${palette.bg}"></div><div class="palette-color" style="background-color: ${palette.accent}"></div><div class="palette-color" style="background-color: ${palette.grid}"></div>`;
         option.addEventListener('mouseenter', () => {
-            const activeProject = projects.find(p => p.id === activeProjectId); 
-            if (activeProject && (activeProject.type === 'moodinfinite' || activeProject.type === 'moodprompt')) { 
-                canvasBackgroundColor = palette.bg; 
-                if (activeProject.type === 'moodinfinite') { 
-                    accentColor = palette.accent; 
-                    gridColor = palette.grid; 
-                } 
+            const activeProject = projects.find(p => p.id === activeProjectId);
+            if (activeProject && (activeProject.type === 'moodinfinite' || activeProject.type === 'moodprompt')) {
+                canvasBackgroundColor = palette.bg;
+                if (activeProject.type === 'moodinfinite') {
+                    accentColor = palette.accent;
+                    gridColor = palette.grid;
+                }
                 updateUIColors();
             }
         });
 
         option.addEventListener('mouseleave', () => {
-            const activeProject = projects.find(p => p.id === activeProjectId); 
+            const activeProject = projects.find(p => p.id === activeProjectId);
             if (activeProject && (activeProject.type === 'moodinfinite' || activeProject.type === 'moodprompt')) {
                 canvasBackgroundColor = activeProject.data.canvasBackgroundColor || '#0d0d0d';
                 if (activeProject.type === 'moodinfinite') {
@@ -3587,25 +3631,25 @@ function buildPaletteMenu() {
             }
         });
 
-        option.addEventListener('click', () => { 
-            const activeProject = projects.find(p => p.id === activeProjectId); 
-            if (activeProject && (activeProject.type === 'moodinfinite' || activeProject.type === 'moodprompt')) { 
-                activeProject.data.canvasBackgroundColor = palette.bg; 
-                canvasBackgroundColor = palette.bg; 
-                if (activeProject.type === 'moodinfinite') { 
-                    activeProject.data.accentColor = palette.accent; 
-                    activeProject.data.gridColor = palette.grid; 
-                    accentColor = palette.accent; 
-                    gridColor = palette.grid; 
-                } 
+        option.addEventListener('click', () => {
+            const activeProject = projects.find(p => p.id === activeProjectId);
+            if (activeProject && (activeProject.type === 'moodinfinite' || activeProject.type === 'moodprompt')) {
+                activeProject.data.canvasBackgroundColor = palette.bg;
+                canvasBackgroundColor = palette.bg;
+                if (activeProject.type === 'moodinfinite') {
+                    activeProject.data.accentColor = palette.accent;
+                    activeProject.data.gridColor = palette.grid;
+                    accentColor = palette.accent;
+                    gridColor = palette.grid;
+                }
                 saveProjects();
-                updateUIColors(); 
-            } 
-            palettePanel.classList.remove('open'); 
-        }); 
+                updateUIColors();
+            }
+            palettePanel.classList.remove('open');
+        });
         palettePanel.appendChild(option);
     });
-    
+
     const separator = document.createElement('div');
     separator.style.borderTop = '1px solid var(--border-color)';
     separator.style.margin = '4px 0';
@@ -3662,12 +3706,12 @@ function onTouchEnd(e) {
 
 function getPinchDistance(e) { const t = e.touches[0], o = e.touches[1]; return Math.hypot(t.clientX - o.clientX, t.clientY - o.clientY) }
 function getPinchCenter(e) { const t = e.touches[0], o = e.touches[1]; return { x: (t.clientX + o.clientX) / 2, y: (t.clientY + o.clientY) / 2 } }
-function normalizeTouchEvent(e) { 
-    let t; 
-    if (e.touches && e.touches.length > 0) { t = e.touches[0] } 
-    else if (e.changedTouches && e.changedTouches.length > 0) { t = e.changedTouches[0] } 
-    else { return { clientX: 0, clientY: 0, button: 0, target: e.target, isTouch: true } } 
-    return { clientX: t.clientX, clientY: t.clientY, button: 0, target: e.target, isTouch: true } 
+function normalizeTouchEvent(e) {
+    let t;
+    if (e.touches && e.touches.length > 0) { t = e.touches[0] }
+    else if (e.changedTouches && e.changedTouches.length > 0) { t = e.changedTouches[0] }
+    else { return { clientX: 0, clientY: 0, button: 0, target: e.target, isTouch: true } }
+    return { clientX: t.clientX, clientY: t.clientY, button: 0, target: e.target, isTouch: true }
 }
 function screenToWorld(e) { if (!e) return { x: 0, y: 0 }; return { x: (e.x - canvas.width / 2) / cameraZoom - cameraOffset.x + canvas.width / 2, y: (e.y - canvas.height / 2) / cameraZoom - cameraOffset.y + canvas.height / 2 } }
 function worldToScreen(e) { if (!e) return { x: 0, y: 0 }; return { x: (e.x + cameraOffset.x - canvas.width / 2) * cameraZoom + canvas.width / 2, y: (e.y + cameraOffset.y - canvas.height / 2) * cameraZoom + canvas.height / 2 } }
@@ -3715,8 +3759,8 @@ function getHoveredConnector(mousePos) {
             const steps = 20;
             for (let s = 0; s <= steps; s++) {
                 const t = s / steps;
-                const x = (1-t)**3 * item.computedStartX + 3*(1-t)**2 * t * item.cp1.x + 3*(1-t) * t**2 * item.cp2.x + t**3 * item.computedEndX;
-                const y = (1-t)**3 * item.computedStartY + 3*(1-t)**2 * t * item.cp1.y + 3*(1-t) * t**2 * item.cp2.y + t**3 * item.computedEndY;
+                const x = (1 - t) ** 3 * item.computedStartX + 3 * (1 - t) ** 2 * t * item.cp1.x + 3 * (1 - t) * t ** 2 * item.cp2.x + t ** 3 * item.computedEndX;
+                const y = (1 - t) ** 3 * item.computedStartY + 3 * (1 - t) ** 2 * t * item.cp1.y + 3 * (1 - t) * t ** 2 * item.cp2.y + t ** 3 * item.computedEndY;
                 if (Math.hypot(x - mousePos.x, y - mousePos.y) <= hitRadius) return item;
             }
         }
@@ -3742,7 +3786,8 @@ function getItemAtPosition(pos) {
                     if (item.type === 'stroke') {
                         for (let i = 0; i < item.points.length - 1; i++) { if (Math.sqrt(distToSegmentSquared(pos, item.points[i], item.points[i + 1])) < 10 / cameraZoom) return item }
                     } else if (item.type === 'arrow' || item.type === 'measure') {
-                        if (Math.sqrt(distToSegmentSquared(pos, { x: item.startX, y: item.startY }, { x: item.endX, y: item.endY })) < 10 / cameraZoom) return item }
+                        if (Math.sqrt(distToSegmentSquared(pos, { x: item.startX, y: item.startY }, { x: item.endX, y: item.endY })) < 10 / cameraZoom) return item
+                    }
                 }
             } else if (item.type === 'reroute') {
                 if (Math.hypot(pos.x - item.x, pos.y - item.y) <= 12 / cameraZoom) return item
@@ -3769,49 +3814,49 @@ function getItemBoundingBox(item) {
     }
 
     if (item._cachedBox && !item._isDirty) return item._cachedBox;
-    
+
     let box;
     const itemRot = item.rotation || 0;
     const itemW = item.width || 0;
     const itemH = item.height || 0;
 
-    if (item.type === 'reroute') { 
+    if (item.type === 'reroute') {
         box = { x: item.x - 12 / cameraZoom, y: item.y - 12 / cameraZoom, width: 24 / cameraZoom, height: 24 / cameraZoom };
-    } else if (item.type === 'group') { 
-        if (!item.items || item.items.length === 0) { 
+    } else if (item.type === 'group') {
+        if (!item.items || item.items.length === 0) {
             box = { x: item.x, y: item.y, width: itemW, height: itemH };
         } else {
-            let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity; 
-            const centerX = item.x + itemW / 2, centerY = item.y + itemH / 2, cos = Math.cos(itemRot), sin = Math.sin(itemRot); 
-            item.items.forEach(child => { 
-                const childBox = getItemBoundingBox(child), vertices = [{ x: childBox.x, y: childBox.y }, { x: childBox.x + childBox.width, y: childBox.y }, { x: childBox.x + childBox.width, y: childBox.y + childBox.height }, { x: childBox.x, y: childBox.y + childBox.height }]; 
-                vertices.forEach(v => { 
-                    const dx = (item.x + v.x) - centerX, dy = (item.y + v.y) - centerY, rx = dx * cos - dy * sin, ry = dx * sin + dy * cos, x = centerX + rx, y = centerY + ry; 
-                    minX = Math.min(minX, x); minY = Math.min(minY, y); maxX = Math.max(maxX, x); maxY = Math.max(maxY, y) 
-                }) 
-            }); 
+            let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+            const centerX = item.x + itemW / 2, centerY = item.y + itemH / 2, cos = Math.cos(itemRot), sin = Math.sin(itemRot);
+            item.items.forEach(child => {
+                const childBox = getItemBoundingBox(child), vertices = [{ x: childBox.x, y: childBox.y }, { x: childBox.x + childBox.width, y: childBox.y }, { x: childBox.x + childBox.width, y: childBox.y + childBox.height }, { x: childBox.x, y: childBox.y + childBox.height }];
+                vertices.forEach(v => {
+                    const dx = (item.x + v.x) - centerX, dy = (item.y + v.y) - centerY, rx = dx * cos - dy * sin, ry = dx * sin + dy * cos, x = centerX + rx, y = centerY + ry;
+                    minX = Math.min(minX, x); minY = Math.min(minY, y); maxX = Math.max(maxX, x); maxY = Math.max(maxY, y)
+                })
+            });
             box = { x: minX, y: minY, width: Math.max(1, maxX - minX), height: Math.max(1, maxY - minY) };
         }
-    } else if (item.type === 'stroke') { 
-        let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity; 
-        if (item.points && item.points.length > 0) { 
-            item.points.forEach(p => { minX = Math.min(minX, p.x); minY = Math.min(minY, p.y); maxX = Math.max(maxX, p.x); maxY = Math.max(maxY, p.y) }); 
+    } else if (item.type === 'stroke') {
+        let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+        if (item.points && item.points.length > 0) {
+            item.points.forEach(p => { minX = Math.min(minX, p.x); minY = Math.min(minY, p.y); maxX = Math.max(maxX, p.x); maxY = Math.max(maxY, p.y) });
             box = { x: minX, y: minY, width: Math.max(1, maxX - minX), height: Math.max(1, maxY - minY) };
         } else {
             box = { x: item.x, y: item.y, width: 0, height: 0 };
         }
-    } else if (item.type === 'arrow' || item.type === 'measure') { 
+    } else if (item.type === 'arrow' || item.type === 'measure') {
         box = { x: Math.min(item.startX, item.endX), y: Math.min(item.startY, item.endY), width: Math.abs(item.startX - item.endX), height: Math.abs(item.startY - item.endY) };
     } else {
-        const centerX = item.x + itemW / 2, centerY = item.y + itemH / 2, cos = Math.cos(itemRot), sin = Math.sin(itemRot); 
+        const centerX = item.x + itemW / 2, centerY = item.y + itemH / 2, cos = Math.cos(itemRot), sin = Math.sin(itemRot);
         let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-        [{ x: -itemW / 2, y: -itemH / 2 }, { x: itemW / 2, y: -itemH / 2 }, { x: itemW / 2, y: itemH / 2 }, { x: -itemW / 2, y: itemH / 2 }].forEach(v => { 
-            const x = v.x * cos - v.y * sin + centerX, y = v.x * sin + v.y * cos + centerY; 
-            minX = Math.min(minX, x); minY = Math.min(minY, y); maxX = Math.max(maxX, x); maxY = Math.max(maxY, y) 
-        }); 
+        [{ x: -itemW / 2, y: -itemH / 2 }, { x: itemW / 2, y: -itemH / 2 }, { x: itemW / 2, y: itemH / 2 }, { x: -itemW / 2, y: itemH / 2 }].forEach(v => {
+            const x = v.x * cos - v.y * sin + centerX, y = v.x * sin + v.y * cos + centerY;
+            minX = Math.min(minX, x); minY = Math.min(minY, y); maxX = Math.max(maxX, x); maxY = Math.max(maxY, y)
+        });
         box = { x: minX, y: minY, width: Math.max(1, maxX - minX), height: Math.max(1, maxY - minY) };
     }
-    
+
     item._cachedBox = box;
     item._isDirty = false;
     return box;
@@ -3859,7 +3904,7 @@ function applyNoteFormat(fmt) {
     const selectedText = text.substring(start, end);
     let replacement = "";
 
-    switch(fmt) {
+    switch (fmt) {
         case 'bold': replacement = `**${selectedText || 'text'}**`; break;
         case 'italic': replacement = `*${selectedText || 'text'}*`; break;
         case 'h1': replacement = `\n# ${selectedText || 'Heading 1'}`; break;
@@ -3983,8 +4028,8 @@ function getCheckboxHitIndex(item, worldPos) {
         const itemY = padding + i * h;
         const cbY = itemY + (h - checkboxSize) / 2;
         const cbX = padding;
-        
-        if (localX >= cbX - 5 && localX <= cbX + checkboxSize + 5 && 
+
+        if (localX >= cbX - 5 && localX <= cbX + checkboxSize + 5 &&
             localY >= cbY - 5 && localY <= cbY + checkboxSize + 5) {
             return i;
         }
@@ -3997,7 +4042,7 @@ confirmInputBtn.onclick = () => {
     let url = linkUrlInput.value.trim();
     if (!url) return;
     if (!url.startsWith('http://') && !url.startsWith('https://')) url = 'https://' + url;
-    
+
     let title = linkTitleInput.value.trim();
     if (!title) {
         try {
@@ -4068,7 +4113,7 @@ function drawLinkItem(ctx, item) {
         try {
             const domain = new URL(item.url).hostname;
             const iconUrl = `https://www.google.com/s2/favicons?domain=${domain}&sz=64`;
-            
+
             if (faviconCache[domain]) {
                 item.iconImage = faviconCache[domain];
                 item.iconLoading = false;
@@ -4093,7 +4138,7 @@ function drawLinkItem(ctx, item) {
 
     const padding = 12 / cameraZoom;
     const iconSize = 24 / cameraZoom;
-    
+
     if (item.iconImage instanceof HTMLImageElement) {
         ctx.drawImage(item.iconImage, x + padding, y + (item.height - iconSize) / 2, iconSize, iconSize);
     } else {
@@ -4113,19 +4158,19 @@ function drawLinkItem(ctx, item) {
     ctx.font = `500 ${14 / cameraZoom}px Inter, sans-serif`;
     ctx.textAlign = 'left';
     ctx.textBaseline = 'middle';
-    
+
     const textX = x + padding + iconSize + 10 / cameraZoom;
     const title = item.title || 'Link';
-    
+
     // Quick Go button metrics
     const btnSize = 24 / cameraZoom;
     const btnPadding = 8 / cameraZoom;
     const btnX = item.width / 2 - btnSize - btnPadding;
     const btnY = -btnSize / 2;
-    
+
     // Recalculate maxWidth to avoid covering the button
     const maxWidth = item.width - (textX - x) - btnSize - btnPadding - 10 / cameraZoom;
-    
+
     let displayTitle = title;
     // Iteratively truncate to fit maxWidth
     if (ctx.measureText(displayTitle).width > maxWidth) {
@@ -4134,7 +4179,7 @@ function drawLinkItem(ctx, item) {
         }
         displayTitle += '...';
     }
-    
+
     ctx.fillText(displayTitle, textX, y + item.height / 2);
 
     // Quick Go button rendering with hover effect
@@ -4157,7 +4202,7 @@ function drawLinkItem(ctx, item) {
     const ay = btnY + btnSize - arrowPadding;
     const ax2 = btnX + btnSize - arrowPadding;
     const ay2 = btnY + arrowPadding;
-    
+
     ctx.moveTo(ax, ay);
     ctx.lineTo(ax2, ay2);
     ctx.moveTo(ax2 - 6 / cameraZoom, ay2);
@@ -4166,4 +4211,200 @@ function drawLinkItem(ctx, item) {
     ctx.stroke();
 
     ctx.restore();
+}
+
+// --- COLOR SEEKER ---
+const colorseekerModeSelect = document.getElementById('colorseeker-mode-select');
+const colorseekerBasePicker = document.getElementById('colorseeker-base-picker');
+const colorseekerPalette = document.getElementById('colorseeker-palette');
+
+function hexToHsl(hex) {
+    let result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+    if (!result) return { h: 0, s: 0, l: 0 };
+    let r = parseInt(result[1], 16) / 255, g = parseInt(result[2], 16) / 255, b = parseInt(result[3], 16) / 255;
+    let max = Math.max(r, g, b), min = Math.min(r, g, b);
+    let h, s, l = (max + min) / 2;
+    if (max === min) { h = s = 0; } else {
+        let d = max - min;
+        s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+        switch (max) {
+            case r: h = (g - b) / d + (g < b ? 6 : 0); break;
+            case g: h = (b - r) / d + 2; break;
+            case b: h = (r - g) / d + 4; break;
+        } h /= 6;
+    }
+    return { h: Math.round(h * 360), s: Math.round(s * 100), l: Math.round(l * 100) };
+}
+
+function hslToHex(h, s, l) {
+    l /= 100; const a = s * Math.min(l, 1 - l) / 100;
+    const f = n => { const k = (n + h / 30) % 12; const color = l - a * Math.max(Math.min(k - 3, 9 - k, 1), -1); return Math.round(255 * color).toString(16).padStart(2, '0'); };
+    return `#${f(0)}${f(8)}${f(4)}`;
+}
+
+function hexToRgb(hex) {
+    let result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+    return result ? `${parseInt(result[1], 16)}, ${parseInt(result[2], 16)}, ${parseInt(result[3], 16)}` : '';
+}
+
+function hexToCmyk(hex) {
+    let result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+    if (!result) return '';
+    let r = parseInt(result[1], 16) / 255, g = parseInt(result[2], 16) / 255, b = parseInt(result[3], 16) / 255;
+    let k = 1 - Math.max(r, g, b);
+    if (k === 1) return '0, 0, 0, 100';
+    let c = Math.round(((1 - r - k) / (1 - k)) * 100);
+    let m = Math.round(((1 - g - k) / (1 - k)) * 100);
+    let y = Math.round(((1 - b - k) / (1 - k)) * 100);
+    return `${c}, ${m}, ${y}, ${Math.round(k * 100)}`;
+}
+
+function generatePalette(baseHex, mode) {
+    const hsl = hexToHsl(baseHex); let colors = [];
+    if (mode === 'shades') {
+        colors = [hslToHex(hsl.h, hsl.s, Math.max(0, hsl.l - 40)), hslToHex(hsl.h, hsl.s, Math.max(0, hsl.l - 20)), baseHex, hslToHex(hsl.h, hsl.s, Math.min(100, hsl.l + 20)), hslToHex(hsl.h, hsl.s, Math.min(100, hsl.l + 40))];
+    } else if (mode === 'tones') {
+        colors = [hslToHex(hsl.h, Math.max(0, hsl.s - 40), hsl.l), hslToHex(hsl.h, Math.max(0, hsl.s - 20), hsl.l), baseHex, hslToHex(hsl.h, Math.min(100, hsl.s + 20), hsl.l), hslToHex(hsl.h, Math.min(100, hsl.s + 40), hsl.l)];
+    } else if (mode === 'harmonies') {
+        colors = [hslToHex((hsl.h + 60) % 360, hsl.s, hsl.l), hslToHex((hsl.h + 30) % 360, hsl.s, hsl.l), baseHex, hslToHex((hsl.h - 30 + 360) % 360, hsl.s, hsl.l), hslToHex((hsl.h - 60 + 360) % 360, hsl.s, hsl.l)];
+    }
+    return colors;
+}
+
+function renderColorSeeker(projectId) {
+    const project = projects.find(p => p.id === projectId);
+    if (!project || project.type !== 'colorseeker') return;
+
+    if (colorseekerModeSelect) colorseekerModeSelect.value = project.data.mode || 'shades';
+    if (colorseekerBasePicker) colorseekerBasePicker.value = project.data.baseColor || '#ffffff';
+    if (!project.data.colors) project.data.colors = generatePalette(project.data.baseColor, project.data.mode);
+
+    if (colorseekerPalette) {
+        colorseekerPalette.innerHTML = '';
+        project.data.colors.forEach((cHex, i) => {
+            const bar = document.createElement('div');
+            bar.className = 'colorseeker-bar';
+            bar.style.backgroundColor = cHex;
+            bar.style.flex = '1';
+            bar.style.height = '100%';
+            bar.style.transition = 'flex 0.3s ease';
+            bar.style.position = 'relative';
+            bar.style.cursor = 'pointer';
+
+            const isBase = i === 2;
+            if (isBase) {
+                const baseIndicator = document.createElement('div');
+                baseIndicator.innerHTML = '<iconify-icon icon="lucide:target" width="24" height="24"></iconify-icon>';
+                baseIndicator.style.position = 'absolute';
+                baseIndicator.style.top = '1.5rem';
+                baseIndicator.style.left = '50%';
+                baseIndicator.style.transform = 'translateX(-50%)';
+                const hsl = hexToHsl(cHex);
+                baseIndicator.style.color = hsl.l > 50 ? '#000' : '#fff';
+                baseIndicator.style.opacity = '0.5';
+                bar.appendChild(baseIndicator);
+            }
+
+            const info = document.createElement('div');
+            info.className = 'colorseeker-info';
+            info.style.position = 'absolute';
+            info.style.bottom = '2rem';
+            info.style.left = '50%';
+            info.style.transform = 'translateX(-50%)';
+            info.style.opacity = '0';
+            info.style.transition = 'opacity 0.2s';
+            info.style.display = 'flex';
+            info.style.flexDirection = 'column';
+            info.style.gap = '0.5rem';
+            info.style.alignItems = 'center';
+            info.style.pointerEvents = 'none';
+
+            const hslStr = hexToHsl(cHex);
+            info.style.color = hslStr.l > 50 ? '#000' : '#fff';
+
+            info.innerHTML = `
+                <div style="font-size: 1.5rem; font-weight: bold; margin-bottom: 0.5rem;">${cHex.toUpperCase()}</div>
+                <div style="font-size: 0.9rem;">RGB: ${hexToRgb(cHex)}</div>
+                <div style="font-size: 0.9rem;">HSL: ${hslStr.h}, ${hslStr.s}%, ${hslStr.l}%</div>
+                <div style="font-size: 0.9rem;">CMYK: ${hexToCmyk(cHex)}</div>
+            `;
+
+            bar.appendChild(info);
+
+            bar.addEventListener('mouseenter', () => { bar.style.flex = '1.5'; info.style.opacity = '1'; });
+            bar.addEventListener('mouseleave', () => { bar.style.flex = '1'; info.style.opacity = '0'; });
+
+            bar.addEventListener('click', (e) => {
+                if (e.shiftKey) {
+                    project.data.baseColor = cHex;
+                    project.data.colors = generatePalette(cHex, project.data.mode);
+                    saveToBrowser();
+                    renderColorSeeker(projectId);
+                    showToast('Base color set.');
+                } else {
+                    navigator.clipboard.writeText(cHex.toUpperCase());
+                    showToast(`Copied ${cHex.toUpperCase()}`);
+                }
+            });
+
+            colorseekerPalette.appendChild(bar);
+        });
+    }
+}
+
+function downloadColorSeekerPalette() {
+    const project = projects.find(p => p.id === activeProjectId);
+    if (!project || project.type !== 'colorseeker' || !project.data.colors) return;
+    showToast("Generating palette image...");
+
+    const w = 1920, h = 1080;
+    const c = document.createElement('canvas');
+    c.width = w; c.height = h;
+    const ctx = c.getContext('2d');
+
+    const barWidth = w / 5;
+    project.data.colors.forEach((color, i) => {
+        ctx.fillStyle = color;
+        ctx.fillRect(i * barWidth, 0, barWidth, h);
+
+        // Add hex text
+        ctx.fillStyle = hexToHsl(color).l > 50 ? '#000' : '#fff';
+        ctx.font = 'bold 40px Inter, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText(color.toUpperCase(), i * barWidth + barWidth / 2, h - 60);
+    });
+
+    const link = document.createElement('a');
+    link.download = `palette_${project.name}.png`;
+    link.href = c.toDataURL('image/png');
+    link.click();
+    showToast("Palette downloaded.");
+}
+
+if (colorseekerModeSelect) {
+    colorseekerModeSelect.addEventListener('change', (e) => {
+        const project = projects.find(p => p.id === activeProjectId);
+        if (project && project.type === 'colorseeker') {
+            project.data.mode = e.target.value;
+            project.data.colors = generatePalette(project.data.baseColor, project.data.mode);
+            saveToBrowser();
+            renderColorSeeker(activeProjectId);
+        }
+    });
+}
+if (colorseekerBasePicker) {
+    colorseekerBasePicker.addEventListener('input', (e) => {
+        const project = projects.find(p => p.id === activeProjectId);
+        if (project && project.type === 'colorseeker') {
+            project.data.baseColor = e.target.value;
+            project.data.colors = generatePalette(project.data.baseColor, project.data.mode);
+            renderColorSeeker(activeProjectId);
+        }
+    });
+    colorseekerBasePicker.addEventListener('change', () => {
+        saveToBrowser();
+    });
+}
+if (addColorseekerTabBtn) {
+    addColorseekerTabBtn.addEventListener('click', () => createNewProject('colorseeker'));
 }
