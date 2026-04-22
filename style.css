@@ -110,7 +110,7 @@
         .scroll-indicator {
             position: absolute;
             top: 0;
-            bottom: 8px;
+            bottom: 0;
             width: 40px;
             pointer-events: none;
             opacity: 0;
