@@ -5,7 +5,7 @@
 <head>
     <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0">
-    <title>Moodinfinite v0.9.7</title>
+    <title>Moodinfinite v0.9.8</title>
     <link rel="icon"
         href="https://raw.githubusercontent.com/davidbrum25/moodinfinite/refs/heads/main/fav_icon_alternative.png"
         type="image/png">
@@ -24,7 +24,7 @@
 
 <body>
     <div id="tabs-bar">
-        <div id="app-logo" title="Moodinfinite v0.9.7"
+        <div id="app-logo" title="Moodinfinite v0.9.8"
             style="display: flex; align-items: center; padding: 0 0.25rem; cursor: default;">
             <img src="https://raw.githubusercontent.com/davidbrum25/moodinfinite/refs/heads/main/fav_icon_alternative.png"
                 alt="Logo" style="width: 24px; height: 24px;">
@@ -47,6 +47,9 @@
         </button>
         <button id="add-colorseeker-tab-btn" class="tab-add-btn" title="New Color Seeker">
             <iconify-icon icon="lucide:swatch-book" width="20" height="20"></iconify-icon>
+        </button>
+        <button id="add-storyflow-tab-btn" class="tab-add-btn" title="New StoryFlow Sequence">
+            <iconify-icon icon="lucide:clapperboard" width="20" height="20"></iconify-icon>
         </button>
 
         <div style="width: 1px; background-color: var(--border-color); margin: 8px 4px; align-self: stretch;"></div>
@@ -228,6 +231,9 @@
         </div>
 
         <div id="moodprompt-container" class="tab-content" style="display: none;">
+        </div>
+
+        <div id="storyflow-container" class="tab-content" style="display: none;">
         </div>
 
         <div id="colorseeker-container" class="tab-content"
@@ -510,6 +516,24 @@
                         title="View on GitHub"><iconify-icon icon="lucide:github" width="16"
                             height="16"></iconify-icon></a>
                 </div>
+            </div>
+        </div>
+    </div>
+    <div id="asset-library-overlay" class="modal-overlay">
+        <div id="asset-library-modal" class="glass-modal" style="max-width: 800px; width: 90vw; height: 80vh; display: flex; flex-direction: column; text-align: left;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; flex-shrink: 0; gap: 1rem;">
+                <h2 style="margin: 0; white-space: nowrap;">Asset Library</h2>
+                <select id="asset-library-filter" class="form-input" style="flex-grow: 1; max-width: 300px; background: rgba(0,0,0,0.2); border: 1px solid var(--border-color); color: var(--text-color); border-radius: 0.5rem; padding: 0.5rem;">
+                    <option value="all">All Assets</option>
+                </select>
+                <button id="close-asset-library-btn" class="modal-button cancel" style="padding: 0.5rem; width: auto; height: auto; flex-shrink: 0;">&times;</button>
+            </div>
+            <div id="asset-library-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 1rem; overflow-y: auto; padding-right: 0.5rem; flex-grow: 1; min-height: 0;">
+                <!-- Images injected here -->
+            </div>
+            <div id="asset-library-empty" style="display: none; flex-direction: column; align-items: center; justify-content: center; padding: 3rem; color: var(--text-color-light);">
+                <iconify-icon icon="lucide:image-off" width="48" height="48" style="margin-bottom: 1rem; opacity: 0.5;"></iconify-icon>
+                <p>No images found in your current session.</p>
             </div>
         </div>
     </div>

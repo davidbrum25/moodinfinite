@@ -1,4 +1,4 @@
-# Moodinfinite v0.9.7
+# Moodinfinite v0.9.8
 
 <div align="center">
   <img src="https://github.com/davidbrum25/moodinfinite/blob/main/_branding/_png/moodinfinite__Logotipo_alpha.png?raw=true" alt="Moodinfinite Logo" width="400"/>
@@ -83,6 +83,15 @@ Each Moodprompt file consists of **Prompt Cards**, which feature:
 * **Reference Image Slots:** Upload one or two reference images.
 * **Dedicated Text Area:** Monospace text area for writing and refining complex prompts.
 
+### StoryFlow Tabs
+
+**StoryFlow** is a sequential storytelling tool. It organizes your project into a linear timeline of frames, perfect for storyboarding, video planning, or mapping user journeys.
+
+*   **Horizontal Sequencing:** Frames are laid out in a side-by-side gallery for narrative flow.
+*   **Visual Beats:** Each frame features a large image slot (upload or paste support).
+*   **Production Notes:** Dedicated fields for Title, Action/Dialogue, Duration, and Camera notes.
+*   **Drag & Drop:** Easily reorder your story beats to refine the narrative.
+
 ### Persistence & Storage
 
 * **LocalForage Auto-Saving:** Your entire workspace (projects, tabs, images, history) is silently saved in the browser's database and restored automatically on reload.
@@ -126,6 +135,15 @@ If you find this tool useful and want to help me build more, consider supporting
 ---
 
 ## Update Log
+
+### ✨ v0.9.8 — StoryFlow & Sequential Storytelling
+
+*   **🎬 StoryFlow Tabs:** A brand new project type for sequential planning.
+*   **🎞️ Horizontal Storyboarding:** Layout your ideas in a linear flow with dedicated fields for timing, camera, and dialogue.
+*   **📋 Paste-to-Frame:** Directly paste images from your clipboard into story frames for rapid ideation.
+*   **🔄 Reorderable Beats:** Drag and drop frames to instantly restructure your narrative.
+
+---
 
 ### ✨ v0.9.7 — Camera Navigation & Bug Fixes
 

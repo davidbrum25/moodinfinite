@@ -7,12 +7,19 @@ const tabsList = document.getElementById('tabs-list');
 const addMoodinfiniteTabBtn = document.getElementById('add-moodinfinite-tab-btn');
 const addMoodpromptTabBtn = document.getElementById('add-moodprompt-tab-btn');
 const addColorseekerTabBtn = document.getElementById('add-colorseeker-tab-btn');
+const addStoryflowTabBtn = document.getElementById('add-storyflow-tab-btn');
 const moodinfiniteContainer = document.getElementById('moodinfinite-container');
 const moodpromptContainer = document.getElementById('moodprompt-container');
 const colorseekerContainer = document.getElementById('colorseeker-container');
+const storyflowContainer = document.getElementById('storyflow-container');
 const promptImageInput = document.getElementById('prompt-image-input');
 const mobileTabsBtn = document.getElementById('mobile-tabs-btn');
 const mobileTabsPopup = document.getElementById('mobile-tabs-popup');
+const assetLibraryOverlay = document.getElementById('asset-library-overlay');
+const assetLibraryGrid = document.getElementById('asset-library-grid');
+const assetLibraryEmpty = document.getElementById('asset-library-empty');
+const closeAssetLibraryBtn = document.getElementById('close-asset-library-btn');
+const assetLibraryFilter = document.getElementById('asset-library-filter');
 
 const closeBoardModalOverlay = document.getElementById('close-board-modal-overlay');
 const cancelCloseBtn = document.getElementById('cancel-close-btn');
@@ -137,6 +144,17 @@ function createNewProject(type) {
                 canvasBackgroundColor: defaultCanvasBg
             }
         };
+    } else if (type === 'storyflow') {
+        const projectCount = projects.filter(p => p.type === 'storyflow').length;
+        newProject = {
+            id: newId,
+            type: 'storyflow',
+            name: `Story ${projectCount + 1}`,
+            data: {
+                frames: [],
+                canvasBackgroundColor: defaultCanvasBg
+            }
+        };
     } else {
         const projectCount = projects.filter(p => p.type === 'moodprompt').length;
         newProject = {
@@ -187,15 +205,24 @@ function switchTab(projectId) {
         moodinfiniteContainer.style.display = 'block';
         moodpromptContainer.style.display = 'none';
         if (colorseekerContainer) colorseekerContainer.style.display = 'none';
+        if (storyflowContainer) storyflowContainer.style.display = 'none';
         resizeCanvas();
     } else if (newActiveProject.type === 'colorseeker') {
         moodinfiniteContainer.style.display = 'none';
         moodpromptContainer.style.display = 'none';
         if (colorseekerContainer) colorseekerContainer.style.display = 'block';
+        if (storyflowContainer) storyflowContainer.style.display = 'none';
         renderColorSeeker(projectId);
+    } else if (newActiveProject.type === 'storyflow') {
+        moodinfiniteContainer.style.display = 'none';
+        moodpromptContainer.style.display = 'none';
+        if (colorseekerContainer) colorseekerContainer.style.display = 'none';
+        if (storyflowContainer) storyflowContainer.style.display = 'block';
+        renderStoryflowView(newActiveProject);
     } else {
         moodinfiniteContainer.style.display = 'none';
         if (colorseekerContainer) colorseekerContainer.style.display = 'none';
+        if (storyflowContainer) storyflowContainer.style.display = 'none';
         moodpromptContainer.style.display = 'block';
         renderMoodpromptView(newActiveProject);
     }
@@ -297,7 +324,9 @@ function renderTabs() {
             ? `<iconify-icon icon="lucide:image" width="16" height="16"></iconify-icon>`
             : project.type === 'colorseeker'
                 ? `<iconify-icon icon="lucide:swatch-book" width="16" height="16"></iconify-icon>`
-                : `<iconify-icon icon="lucide:pen-tool" width="16" height="16"></iconify-icon>`;
+                : project.type === 'storyflow'
+                    ? `<iconify-icon icon="lucide:clapperboard" width="16" height="16"></iconify-icon>`
+                    : `<iconify-icon icon="lucide:pen-tool" width="16" height="16"></iconify-icon>`;
 
         const nameSpan = document.createElement('span');
         nameSpan.className = 'tab-name';
@@ -833,6 +862,8 @@ function setupEventListeners() {
 
     if (addMoodinfiniteTabBtn) addMoodinfiniteTabBtn.addEventListener('click', () => createNewProject('moodinfinite'));
     if (addMoodpromptTabBtn) addMoodpromptTabBtn.addEventListener('click', () => createNewProject('moodprompt'));
+    if (addColorseekerTabBtn) addColorseekerTabBtn.addEventListener('click', () => createNewProject('colorseeker'));
+    if (addStoryflowTabBtn) addStoryflowTabBtn.addEventListener('click', () => createNewProject('storyflow'));
 
     const copyBtn = document.getElementById('copy-to-clipboard-btn');
     const renameTabBtn = document.getElementById('rename-tab-btn');
@@ -881,9 +912,12 @@ function setupEventListeners() {
             mobileTabsPopup.style.display = 'none'
         }
         if (palettePanel && palettePanel.classList.contains('open') && !palettePanel.contains(e.target) && e.target !== paletteBtn && !paletteBtn.contains(e.target)) {
-            palettePanel.classList.remove('open')
+            palettePanel.classList.remove('open');
         }
     });
+
+    if (closeAssetLibraryBtn) closeAssetLibraryBtn.addEventListener('click', () => assetLibraryOverlay.style.display = 'none');
+    if (assetLibraryOverlay) assetLibraryOverlay.addEventListener('click', (e) => { if (e.target === assetLibraryOverlay) assetLibraryOverlay.style.display = 'none'; });
 
     document.addEventListener('touchstart', e => {
         if (contextMenu && !contextMenu.contains(e.target)) contextMenu.style.display = 'none';
@@ -1258,7 +1292,46 @@ function drawSelectionBox() {
     ctx.restore()
 }
 function drawGrid() { const e = (0 - canvas.width / 2) / cameraZoom - cameraOffset.x + canvas.width / 2, t = (0 - canvas.height / 2) / cameraZoom - cameraOffset.y + canvas.height / 2, o = (canvas.width - canvas.width / 2) / cameraZoom - cameraOffset.x + canvas.width / 2, a = (canvas.height - canvas.height / 2) / cameraZoom - cameraOffset.y + canvas.height / 2, i = Math.floor(e / gridSize) * gridSize, r = Math.floor(t / gridSize) * gridSize; ctx.save(); ctx.globalAlpha = gridOpacity; ctx.beginPath(); ctx.strokeStyle = gridColor; ctx.lineWidth = 1 / cameraZoom; ctx.setLineDash([]); for (let s = i; s < o; s += gridSize) { ctx.moveTo(s, t); ctx.lineTo(s, a) } for (let s = r; s < a; s += gridSize) { ctx.moveTo(e, s); ctx.lineTo(o, s) } ctx.stroke(); ctx.restore() }
-function drawArrow(e, t) { const o = 10 / cameraZoom, a = t.endX - t.startX, i = t.endY - t.startY, r = Math.atan2(i, a); e.save(); e.beginPath(); e.moveTo(t.startX, t.startY); e.lineTo(t.endX, t.endY); e.lineTo(t.endX - o * Math.cos(r - Math.PI / 6), t.endY - o * Math.sin(r - Math.PI / 6)); e.moveTo(t.endX, t.endY); e.lineTo(t.endX - o * Math.cos(r + Math.PI / 6), t.endY - o * Math.sin(r + Math.PI / 6)); e.strokeStyle = t.color || accentColor; e.lineWidth = 3 / cameraZoom; e.stroke(); e.restore() }
+function drawArrow(ctx, item) {
+    const dx = item.endX - item.startX;
+    const dy = item.endY - item.startY;
+    const angle = Math.atan2(dy, dx);
+    const headLength = 20; 
+    const lineWidth = 4;
+    const innerDist = headLength * 0.6; 
+    
+    const tipX = item.endX;
+    const tipY = item.endY;
+    const rightBaseX = tipX - headLength * Math.cos(angle - Math.PI / 6);
+    const rightBaseY = tipY - headLength * Math.sin(angle - Math.PI / 6);
+    const innerBaseX = tipX - innerDist * Math.cos(angle);
+    const innerBaseY = tipY - innerDist * Math.sin(angle);
+    const leftBaseX = tipX - headLength * Math.cos(angle + Math.PI / 6);
+    const leftBaseY = tipY - headLength * Math.sin(angle + Math.PI / 6);
+    
+    ctx.save();
+    ctx.strokeStyle = item.color || accentColor;
+    ctx.fillStyle = item.color || accentColor;
+    ctx.lineWidth = lineWidth;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    
+    ctx.beginPath();
+    ctx.moveTo(item.startX, item.startY);
+    ctx.lineTo(innerBaseX, innerBaseY);
+    ctx.stroke();
+    
+    ctx.beginPath();
+    ctx.moveTo(tipX, tipY);
+    ctx.lineTo(rightBaseX, rightBaseY);
+    ctx.lineTo(innerBaseX, innerBaseY);
+    ctx.lineTo(leftBaseX, leftBaseY);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    
+    ctx.restore();
+}
 function drawTextItem(ctx, item) {
     ctx.save();
     const cx = item.x + item.width / 2;
@@ -1742,25 +1815,53 @@ function toggleConnectionMode() {
     showToast("Connection mode: Tap a target item", "success");
 }
 
-function getGlobalPortPos(item, side) {
-    const ports = getItemPorts(item);
-    return ports.find(p => p.side === side);
+function findItemAndGroupRecursively(id, arr, currentGroup = null) {
+    for (const item of arr) {
+        if (item.id === id) return { item, group: currentGroup };
+        if (item.type === 'group' && item.items) {
+            const found = findItemAndGroupRecursively(id, item.items, item);
+            if (found) return found;
+        }
+    }
+    return null;
 }
 
-function drawConnectorItem(e) {
-    const sourceItem = items.find(i => i.id === e.sourceId);
-    if (!sourceItem) return;
-    const sourcePortPos = getGlobalPortPos(sourceItem, e.sourcePort);
+function getGlobalPortPos(item, side, group = null) {
+    const ports = getItemPorts(item);
+    const port = ports.find(p => p.side === side);
+    if (!port) return null;
+    if (!group) return port;
+
+    const groupCenterX = group.x + group.width / 2;
+    const groupCenterY = group.y + group.height / 2;
+    const relX = port.x - group.width / 2;
+    const relY = port.y - group.height / 2;
+    const cos = Math.cos(group.rotation || 0);
+    const sin = Math.sin(group.rotation || 0);
+    
+    return {
+        x: groupCenterX + relX * cos - relY * sin,
+        y: groupCenterY + relX * sin + relY * cos,
+        side: port.side,
+        item: port.item
+    };
+}
+
+function drawConnectorItem(e, renderCtx) {
+    const sourceMatch = findItemAndGroupRecursively(e.sourceId, items);
+    if (!sourceMatch) return;
+    const sourcePortPos = getGlobalPortPos(sourceMatch.item, e.sourcePort, sourceMatch.group);
     if (!sourcePortPos) return;
 
     let endX = e.endX, endY = e.endY;
     let targetPortPos = null;
     let targetSide = null;
+    let tgtMatch = null;
 
     if (e.targetId) {
-        const targetItem = items.find(i => i.id === e.targetId);
-        if (targetItem) {
-            targetPortPos = getGlobalPortPos(targetItem, e.targetPort);
+        tgtMatch = findItemAndGroupRecursively(e.targetId, items);
+        if (tgtMatch) {
+            targetPortPos = getGlobalPortPos(tgtMatch.item, e.targetPort, tgtMatch.group);
             if (targetPortPos) {
                 endX = targetPortPos.x;
                 endY = targetPortPos.y;
@@ -1774,48 +1875,91 @@ function drawConnectorItem(e) {
     e.computedEndX = endX;
     e.computedEndY = endY;
 
-    const pushStrength = Math.min(Math.max(Math.hypot(endX - sourcePortPos.x, endY - sourcePortPos.y) / 2, 50), 200);
+    const margin = 30;
 
-    const getControlPoint = (portX, portY, side, item) => {
+    const getOrthoPoint = (portX, portY, side, item, group) => {
         let dx = 0, dy = 0;
         if (side === 'left') dx = -1;
         if (side === 'right') dx = 1;
         if (side === 'top') dy = -1;
         if (side === 'bottom') dy = 1;
         if (item && item.type !== 'reroute') {
-            const s = Math.cos(item.rotation || 0);
-            const n = Math.sin(item.rotation || 0);
+            const totalRot = (item.rotation || 0) + (group ? (group.rotation || 0) : 0);
+            const s = Math.cos(totalRot);
+            const n = Math.sin(totalRot);
             const rotDx = dx * s - dy * n;
             const rotDy = dx * n + dy * s;
-            return { x: portX + rotDx * pushStrength, y: portY + rotDy * pushStrength };
+            return { x: portX + rotDx * margin, y: portY + rotDy * margin };
         }
-        return { x: portX + dx * pushStrength, y: portY + dy * pushStrength };
+        return { x: portX + dx * margin, y: portY + dy * margin };
     };
 
-    const cp1 = getControlPoint(sourcePortPos.x, sourcePortPos.y, e.sourcePort, sourceItem);
-    const cp2 = targetPortPos ? getControlPoint(endX, endY, targetSide, items.find(i => i.id === e.targetId)) : { x: endX, y: endY };
+    const p0 = { x: sourcePortPos.x, y: sourcePortPos.y };
+    const p1 = getOrthoPoint(p0.x, p0.y, e.sourcePort, sourceMatch.item, sourceMatch.group);
+    const p3 = { x: endX, y: endY };
+    const p2 = targetPortPos && tgtMatch ? getOrthoPoint(p3.x, p3.y, targetSide, tgtMatch.item, tgtMatch.group) : p3;
 
-    e.cp1 = cp1;
-    e.cp2 = cp2;
+    const route = [p0, p1];
+    
+    const isHorizontalBreak = Math.abs(p1.x - p2.x) > Math.abs(p1.y - p2.y);
+    
+    if (isHorizontalBreak) {
+        const midX = (p1.x + p2.x) / 2;
+        route.push({ x: midX, y: p1.y });
+        route.push({ x: midX, y: p2.y });
+    } else {
+        const midY = (p1.y + p2.y) / 2;
+        route.push({ x: p1.x, y: midY });
+        route.push({ x: p2.x, y: midY });
+    }
+    
+    if (targetPortPos) {
+        route.push(p2);
+    }
+    route.push(p3);
 
-    ctx.save();
-    ctx.beginPath();
-    ctx.moveTo(sourcePortPos.x, sourcePortPos.y);
-    ctx.bezierCurveTo(cp1.x, cp1.y, cp2.x, cp2.y, endX, endY);
+    const cleanRoute = [route[0]];
+    for (let i = 1; i < route.length; i++) {
+        const prev = cleanRoute[cleanRoute.length - 1];
+        const curr = route[i];
+        if (Math.hypot(curr.x - prev.x, curr.y - prev.y) > 0.1) {
+            cleanRoute.push(curr);
+        }
+    }
+    e.route = cleanRoute;
 
-    ctx.lineWidth = 4 / cameraZoom;
-    ctx.strokeStyle = e.color || accentColor;
+    const _ctx = renderCtx || ctx;
+    _ctx.save();
+    _ctx.beginPath();
+    _ctx.moveTo(cleanRoute[0].x, cleanRoute[0].y);
+
+    const cornerRadius = 16 / cameraZoom;
+    for (let i = 1; i < cleanRoute.length - 1; i++) {
+        const pA = cleanRoute[i - 1];
+        const pB = cleanRoute[i];
+        const pC = cleanRoute[i + 1];
+
+        const d1 = Math.hypot(pB.x - pA.x, pB.y - pA.y);
+        const d2 = Math.hypot(pC.x - pB.x, pC.y - pB.y);
+        const currentR = Math.min(cornerRadius, d1 / 2, d2 / 2);
+
+        _ctx.arcTo(pB.x, pB.y, pC.x, pC.y, currentR);
+    }
+    _ctx.lineTo(cleanRoute[cleanRoute.length - 1].x, cleanRoute[cleanRoute.length - 1].y);
+
+    _ctx.lineWidth = 4 / cameraZoom;
+    _ctx.strokeStyle = e.color || accentColor;
 
     if (selectedItems.includes(e) || (typeof hoveredConnector !== 'undefined' && hoveredConnector === e)) {
-        ctx.save();
-        ctx.strokeStyle = invertColor(canvasBackgroundColor);
-        ctx.lineWidth = 8 / cameraZoom;
-        ctx.stroke();
-        ctx.restore();
+        _ctx.save();
+        _ctx.strokeStyle = invertColor(canvasBackgroundColor);
+        _ctx.lineWidth = 8 / cameraZoom;
+        _ctx.stroke();
+        _ctx.restore();
     }
 
-    ctx.stroke();
-    ctx.restore();
+    _ctx.stroke();
+    _ctx.restore();
 }
 
 function drawRerouteItem(e, t) {
@@ -1858,6 +2002,7 @@ function drawGroupItem(e, t) {
         else if (o.type === "comment") drawCommentItem(e, a);
         else if (o.type === "link") drawLinkItem(e, a);
         else if (o.type === "textList") drawTextListItem(e, a);
+        else if (o.type === "group") drawGroupItem(e, a);
     });
     e.restore();
 }
@@ -2637,11 +2782,15 @@ async function copyToClipboard() {
         else if (e.type === 'group') { drawGroupItem(ctx, e) }
         else if (e.type === 'comment') { drawCommentItem(ctx, e) }
         else if (e.type === 'link') { drawLinkItem(ctx, e) }
+        else if (e.type === 'textList') { drawTextListItem(ctx, e) }
+        else if (e.type === 'reroute') { drawRerouteItem(ctx, e) }
+        else if (e.type === 'connector') { drawConnectorItem(e, ctx) }
         ctx.restore()
     };
 
     // Draw in layers to match screen
-    items.forEach(e => { if (e.type !== 'comment' && e.type !== 'link') drawItemToCtx(e, l); });
+    items.forEach(e => { if (e.type !== 'comment' && e.type !== 'link' && e.type !== 'connector') drawItemToCtx(e, l); });
+    items.forEach(e => { if (e.type === 'connector') drawItemToCtx(e, l); });
     items.forEach(e => { if (e.type === 'link') drawItemToCtx(e, l); });
     items.forEach(e => { if (e.type === 'comment') drawItemToCtx(e, l); });
 
@@ -2690,18 +2839,25 @@ function saveAsPng() {
         else if (e.type === 'measure') { drawMeasureItem(ctx, e) }
         else if (e.type === 'stroke') { drawStrokeItem(ctx, e) }
         else if (e.type === 'grid') { drawGridItem(ctx, e) }
+        else if (e.type === 'group') { drawGroupItem(ctx, e) }
         else if (e.type === 'comment') { drawCommentItem(ctx, e) }
         else if (e.type === 'link') { drawLinkItem(ctx, e) }
+        else if (e.type === 'textList') { drawTextListItem(ctx, e) }
+        else if (e.type === 'reroute') { drawRerouteItem(ctx, e) }
+        else if (e.type === 'connector') { drawConnectorItem(e, ctx) }
         ctx.restore()
     };
 
     // Draw in layers to match screen
-    items.forEach(e => { if (e.type !== 'comment' && e.type !== 'link') drawItemToCtx(e, n); });
+    items.forEach(e => { if (e.type !== 'comment' && e.type !== 'link' && e.type !== 'connector') drawItemToCtx(e, n); });
+    items.forEach(e => { if (e.type === 'connector') drawItemToCtx(e, n); });
     items.forEach(e => { if (e.type === 'link') drawItemToCtx(e, n); });
     items.forEach(e => { if (e.type === 'comment') drawItemToCtx(e, n); });
 
+    const activeProject = projects.find(p => p.id === activeProjectId);
+    const fileName = activeProject && activeProject.name ? `${activeProject.name}.png` : 'moodboard.png';
     const l = document.createElement('a');
-    l.download = 'moodboard.png';
+    l.download = fileName;
     l.href = s.toDataURL('image/png');
     l.click();
     showToast("Image exported as PNG.")
@@ -2795,7 +2951,7 @@ function saveProject() {
                 showToast("Project exported successfully.");
             });
         });
-    } else if (t.type === 'moodprompt') {
+    } else if (t.type === 'moodprompt' || t.type === 'storyflow') {
         eJSON = t.data;
         rootDir.file("data.json", JSON.stringify(eJSON, null, 2));
         zip.generateAsync({ type: "blob" }).then(function (content) {
@@ -2810,7 +2966,43 @@ function saveProject() {
         });
     }
 }
-function loadFileAsNewTab(fileContent, fileName) { try { const data = JSON.parse(fileContent); const name = fileName.split('.').slice(0, -1).join('.') || 'Loaded Project'; if (data.prompts && Array.isArray(data.prompts)) { const newId = Date.now(); const newProject = { id: newId, type: 'moodprompt', name: name, data: { prompts: data.prompts, canvasBackgroundColor: data.canvasBackgroundColor || '#0d0d0d' } }; projects.push(newProject); renderTabs(); switchTab(newId); showToast("Prompt file loaded successfully."); return } if (data.items && Array.isArray(data.items)) { const newId = Date.now(); const newProject = { id: newId, type: 'moodinfinite', name: name, data: { items: [], cameraOffset: {}, cameraZoom: 1, historyStack: [], historyIndex: -1 } }; projects.push(newProject); activeProjectId = newId; renderTabs(); loadProject(fileContent); return } showToast("Failed to load project. Unknown format.", "error") } catch (err) { console.error("Failed to load project:", err); showToast("Failed to load project. Invalid JSON.", "error") } }
+function loadFileAsNewTab(fileContent, fileName) {
+    try {
+        const data = JSON.parse(fileContent);
+        const name = fileName.split('.').slice(0, -1).join('.') || 'Loaded Project';
+        if (data.prompts && Array.isArray(data.prompts)) {
+            const newId = Date.now();
+            const newProject = { id: newId, type: 'moodprompt', name: name, data: { prompts: data.prompts, canvasBackgroundColor: data.canvasBackgroundColor || '#0d0d0d' } };
+            projects.push(newProject);
+            renderTabs();
+            switchTab(newId);
+            showToast("Prompt file loaded successfully.");
+            return;
+        }
+        if (data.frames && Array.isArray(data.frames)) {
+            const newId = Date.now();
+            const newProject = { id: newId, type: 'storyflow', name: name, data: { frames: data.frames, canvasBackgroundColor: data.canvasBackgroundColor || '#0d0d0d' } };
+            projects.push(newProject);
+            renderTabs();
+            switchTab(newId);
+            showToast("StoryFlow file loaded successfully.");
+            return;
+        }
+        if (data.items && Array.isArray(data.items)) {
+            const newId = Date.now();
+            const newProject = { id: newId, type: 'moodinfinite', name: name, data: { items: [], cameraOffset: {}, cameraZoom: 1, historyStack: [], historyIndex: -1 } };
+            projects.push(newProject);
+            activeProjectId = newId;
+            renderTabs();
+            loadProject(fileContent);
+            return;
+        }
+        showToast("Failed to load project. Unknown format.", "error");
+    } catch (err) {
+        console.error("Failed to load project:", err);
+        showToast("Failed to load project. Invalid JSON.", "error");
+    }
+}
 function loadProject(e) {
     try {
         const t = JSON.parse(e); const o = projects.find(e => e.id === activeProjectId); if (!o || o.type !== 'moodinfinite') return; o.data.cameraOffset = t.cameraOffset || { x: window.innerWidth / 2, y: window.innerHeight / 2 }; o.data.cameraZoom = t.cameraZoom || 1; canvasBackgroundColor = t.canvasBackgroundColor || '#0d0d0d'; accentColor = t.accentColor || '#429eff'; gridColor = t.gridColor || '#f9f8f6'; o.data.canvasBackgroundColor = canvasBackgroundColor; o.data.accentColor = accentColor; o.data.gridColor = gridColor; showGrid = t.showGrid ?? true; snapToGrid = t.snapToGrid ?? true; showDropShadow = t.showDropShadow ?? true; gridSize = t.gridSize || 50; gridOpacity = t.gridOpacity || .05; if (t.globalImageCache) { globalImageCache = { ...globalImageCache, ...t.globalImageCache }; }
@@ -3506,7 +3698,7 @@ function loadStateFromHistory(e) {
 function undoLastAction() { if (historyIndex > 0) { historyIndex--; const e = historyStack[historyIndex]; loadStateFromHistory(e) } }
 function redoLastAction() { if (historyIndex < historyStack.length - 1) { historyIndex++; const e = historyStack[historyIndex]; loadStateFromHistory(e) } }
 function groupSelectedItems() {
-    if (selectedItems.length <= 1) return; saveStateForUndo(); const e = []; selectedItems.forEach(t => { if (t.type === 'group') { const o = t.x + t.width / 2, a = t.y + t.height / 2, i = Math.cos(t.rotation), r = Math.sin(t.rotation); t.items.forEach(s => { const n = JSON.parse(JSON.stringify(s)); reattachImages(s, n); const l = s.x + s.width / 2, c = s.y + s.height / 2, d = l - t.width / 2, h = c - t.height / 2, p = d * i - h * r, m = d * r + h * i, u = o + p, g = a + m; n.x = u - s.width / 2; n.y = g - s.height / 2; n.rotation = (s.rotation || 0) + t.rotation; if (n.type === 'arrow' || n.type === 'stroke' || n.type === 'measure') { const e = (e, l) => { const c = t.x + e.x, d = t.y + e.y, h = c - o, p = d - a, m = h * i - p * r, u = h * r + p * i; return { x: o + m, y: a + u } }; if (n.type === 'arrow' || n.type === 'measure') { const t = e({ x: s.startX - s.x, y: s.startY - s.y }), o = e({ x: s.endX - s.x, y: s.endY - s.y }); n.startX = t.x; n.startY = t.y; n.endX = o.x; n.endY = o.y } else { n.points = s.points.map(t => e({ x: t.x - s.x, y: t.y - s.y })) } } e.push(n) }) } else { e.push(t) } }); const t = getCollectiveBoundingBox(e), o = { id: Date.now(), type: 'group', x: t.x, y: t.y, width: t.width, height: t.height, rotation: 0, isPinned: !1, opacity: 1, scaleX: 1, scaleY: 1, items: [] }; e.forEach(e => { const t = JSON.parse(JSON.stringify(e)); reattachImages(e, t); t.x -= o.x; t.y -= o.y; if (t.type === 'arrow' || t.type === 'measure') { t.startX -= o.x; t.startY -= o.y; t.endX -= o.x; t.endY -= o.y } else if (t.type === 'stroke') { t.points.forEach(e => { e.x -= o.x; e.y -= o.y }) } o.items.push(t) }); const a = new Set(selectedItems.map(e => e.id));
+    if (selectedItems.length <= 1) return; saveStateForUndo(); const e = []; selectedItems.forEach(t => { if (t.type === 'group') { const o = t.x + t.width / 2, a = t.y + t.height / 2, i = Math.cos(t.rotation), r = Math.sin(t.rotation); t.items.forEach(s => { const n = JSON.parse(JSON.stringify(s)); reattachImages(s, n); if (n.type === 'arrow' || n.type === 'stroke' || n.type === 'measure') { const transformPt = (px, py) => { const dx = px - t.width / 2, dy = py - t.height / 2, rx = dx * i - dy * r, ry = dx * r + dy * i; return { x: o + rx, y: a + ry } }; if (n.type === 'arrow' || n.type === 'measure') { const p1 = transformPt(s.startX, s.startY), p2 = transformPt(s.endX, s.endY); n.startX = p1.x; n.startY = p1.y; n.endX = p2.x; n.endY = p2.y } else { n.points = s.points.map(pt => transformPt(pt.x, pt.y)) } } else { const l = s.x + s.width / 2, c = s.y + s.height / 2, d = l - t.width / 2, h = c - t.height / 2, p = d * i - h * r, m = d * r + h * i, u = o + p, g = a + m; n.x = u - s.width / 2; n.y = g - s.height / 2; n.rotation = (s.rotation || 0) + t.rotation; } e.push(n) }) } else { e.push(t) } }); const t = getCollectiveBoundingBox(e), o = { id: Date.now(), type: 'group', x: t.x, y: t.y, width: t.width, height: t.height, rotation: 0, isPinned: !1, opacity: 1, scaleX: 1, scaleY: 1, items: [] }; e.forEach(e => { const t = JSON.parse(JSON.stringify(e)); reattachImages(e, t); t.x -= o.x; t.y -= o.y; if (t.type === 'arrow' || t.type === 'measure') { t.startX -= o.x; t.startY -= o.y; t.endX -= o.x; t.endY -= o.y } else if (t.type === 'stroke') { t.points.forEach(e => { e.x -= o.x; e.y -= o.y }) } o.items.push(t) }); const a = new Set(selectedItems.map(e => e.id));
     items = items.filter(e => !a.has(e.id));
     addItemToLayeredItems(o);
     selectedItems = [o];
@@ -3609,7 +3801,7 @@ function buildPaletteMenu() {
         option.innerHTML = `<div class="palette-color" style="background-color: ${palette.bg}"></div><div class="palette-color" style="background-color: ${palette.accent}"></div><div class="palette-color" style="background-color: ${palette.grid}"></div>`;
         option.addEventListener('mouseenter', () => {
             const activeProject = projects.find(p => p.id === activeProjectId);
-            if (activeProject && (activeProject.type === 'moodinfinite' || activeProject.type === 'moodprompt')) {
+            if (activeProject && (activeProject.type === 'moodinfinite' || activeProject.type === 'moodprompt' || activeProject.type === 'storyflow')) {
                 canvasBackgroundColor = palette.bg;
                 if (activeProject.type === 'moodinfinite') {
                     accentColor = palette.accent;
@@ -3621,7 +3813,7 @@ function buildPaletteMenu() {
 
         option.addEventListener('mouseleave', () => {
             const activeProject = projects.find(p => p.id === activeProjectId);
-            if (activeProject && (activeProject.type === 'moodinfinite' || activeProject.type === 'moodprompt')) {
+            if (activeProject && (activeProject.type === 'moodinfinite' || activeProject.type === 'moodprompt' || activeProject.type === 'storyflow')) {
                 canvasBackgroundColor = activeProject.data.canvasBackgroundColor || '#0d0d0d';
                 if (activeProject.type === 'moodinfinite') {
                     accentColor = activeProject.data.accentColor || '#429eff';
@@ -3633,7 +3825,7 @@ function buildPaletteMenu() {
 
         option.addEventListener('click', () => {
             const activeProject = projects.find(p => p.id === activeProjectId);
-            if (activeProject && (activeProject.type === 'moodinfinite' || activeProject.type === 'moodprompt')) {
+            if (activeProject && (activeProject.type === 'moodinfinite' || activeProject.type === 'moodprompt' || activeProject.type === 'storyflow')) {
                 activeProject.data.canvasBackgroundColor = palette.bg;
                 canvasBackgroundColor = palette.bg;
                 if (activeProject.type === 'moodinfinite') {
@@ -3755,13 +3947,21 @@ function getHoveredConnector(mousePos) {
     const hitRadius = 10 / cameraZoom;
     for (let i = items.length - 1; i >= 0; i--) {
         const item = items[i];
-        if (item.type === 'connector' && item.cp1 && item.cp2) {
-            const steps = 20;
-            for (let s = 0; s <= steps; s++) {
-                const t = s / steps;
-                const x = (1 - t) ** 3 * item.computedStartX + 3 * (1 - t) ** 2 * t * item.cp1.x + 3 * (1 - t) * t ** 2 * item.cp2.x + t ** 3 * item.computedEndX;
-                const y = (1 - t) ** 3 * item.computedStartY + 3 * (1 - t) ** 2 * t * item.cp1.y + 3 * (1 - t) * t ** 2 * item.cp2.y + t ** 3 * item.computedEndY;
-                if (Math.hypot(x - mousePos.x, y - mousePos.y) <= hitRadius) return item;
+        if (item.type === 'connector' && item.route) {
+            for (let j = 0; j < item.route.length - 1; j++) {
+                const p1 = item.route[j];
+                const p2 = item.route[j + 1];
+                
+                const l2 = (p1.x - p2.x) ** 2 + (p1.y - p2.y) ** 2;
+                if (l2 === 0) continue;
+                let t = ((mousePos.x - p1.x) * (p2.x - p1.x) + (mousePos.y - p1.y) * (p2.y - p1.y)) / l2;
+                t = Math.max(0, Math.min(1, t));
+                const projX = p1.x + t * (p2.x - p1.x);
+                const projY = p1.y + t * (p2.y - p1.y);
+                
+                if (Math.hypot(mousePos.x - projX, mousePos.y - projY) <= hitRadius) {
+                    return item;
+                }
             }
         }
     }
@@ -4407,4 +4607,305 @@ if (colorseekerBasePicker) {
 }
 if (addColorseekerTabBtn) {
     addColorseekerTabBtn.addEventListener('click', () => createNewProject('colorseeker'));
+}
+
+// --- STORYFLOW ---
+
+function renderStoryflowView(project) {
+    if (!storyflowContainer) return;
+    storyflowContainer.innerHTML = '';
+    const storyList = document.createElement('div');
+    storyList.className = 'storyflow-list';
+
+    project.data.frames.forEach((frame, index) => {
+        storyList.appendChild(createStoryCard(project, frame, index));
+    });
+
+    storyList.addEventListener('dragover', (e) => {
+        e.preventDefault();
+    });
+
+    storyList.addEventListener('drop', (e) => {
+        e.preventDefault();
+        const oldIndexStr = e.dataTransfer.getData('text/story-frame-index');
+        if (!oldIndexStr) return;
+        const oldIndex = parseInt(oldIndexStr, 10);
+        const dropTargetCard = e.target.closest('.story-card');
+        if (!dropTargetCard) return;
+
+        const allCards = Array.from(storyList.querySelectorAll('.story-card'));
+        const newIndex = allCards.indexOf(dropTargetCard);
+
+        if (oldIndex !== newIndex) {
+            const [movedFrame] = project.data.frames.splice(oldIndex, 1);
+            project.data.frames.splice(newIndex, 0, movedFrame);
+            renderStoryflowView(project);
+            saveToBrowser();
+        }
+    });
+
+    storyflowContainer.appendChild(storyList);
+
+    const addFrameBtn = document.createElement('button');
+    addFrameBtn.id = 'add-story-frame-btn';
+    addFrameBtn.innerHTML = `<iconify-icon icon="lucide:plus-circle" width="32" height="32"></iconify-icon><span>Add Frame</span>`;
+    addFrameBtn.onclick = () => {
+        project.data.frames.push({
+            id: Date.now(),
+            title: '',
+            image: null,
+            description: '',
+            meta: { duration: '3s', camera: '', audio: '' }
+        });
+        renderStoryflowView(project);
+        saveToBrowser();
+    };
+    storyflowContainer.appendChild(addFrameBtn);
+}
+
+function createStoryCard(project, frame, index) {
+    const card = document.createElement('div');
+    card.className = 'story-card';
+    card.draggable = true;
+
+    card.addEventListener('dragstart', (e) => {
+        e.dataTransfer.setData('text/story-frame-index', index);
+        setTimeout(() => card.classList.add('dragging'), 0);
+    });
+    card.addEventListener('dragend', () => card.classList.remove('dragging'));
+
+    const header = document.createElement('div');
+    header.className = 'story-card-header';
+    const indexSpan = document.createElement('span');
+    indexSpan.className = 'story-card-index';
+    indexSpan.textContent = index + 1;
+    
+    const dragIcon = document.createElement('iconify-icon');
+    dragIcon.setAttribute('icon', 'lucide:grip-vertical');
+    dragIcon.setAttribute('width', '16');
+    dragIcon.setAttribute('height', '16');
+    dragIcon.style.color = 'var(--text-color-light)';
+    dragIcon.style.cursor = 'grab';
+
+    header.append(indexSpan, dragIcon);
+
+    const imageSlot = createStoryImageSlot(project, frame);
+
+    const titleInput = document.createElement('input');
+    titleInput.className = 'story-title-input';
+    titleInput.placeholder = 'Frame Title...';
+    titleInput.value = frame.title || '';
+    titleInput.oninput = (e) => { frame.title = e.target.value; scheduleAutoSave(); };
+
+    const descArea = document.createElement('textarea');
+    descArea.className = 'story-desc-area';
+    descArea.placeholder = 'Action / Dialogue / Notes...';
+    descArea.value = frame.description || '';
+    descArea.oninput = (e) => { frame.description = e.target.value; scheduleAutoSave(); };
+
+    const metaGrid = document.createElement('div');
+    metaGrid.className = 'story-meta-grid';
+
+    const createMetaItem = (label, key) => {
+        const item = document.createElement('div');
+        item.className = 'story-meta-item';
+        const lbl = document.createElement('label');
+        lbl.className = 'story-meta-label';
+        lbl.textContent = label;
+        const input = document.createElement('input');
+        input.className = 'story-meta-input';
+        input.value = frame.meta[key] || '';
+        input.oninput = (e) => { frame.meta[key] = e.target.value; scheduleAutoSave(); };
+        item.append(lbl, input);
+        return item;
+    };
+
+    metaGrid.append(
+        createMetaItem('Duration', 'duration'),
+        createMetaItem('Camera', 'camera')
+    );
+
+    const actions = document.createElement('div');
+    actions.className = 'story-card-actions';
+    const deleteBtn = document.createElement('button');
+    deleteBtn.className = 'selection-tool-btn';
+    deleteBtn.innerHTML = `<iconify-icon icon="lucide:trash-2" width="16" height="16" style="color:#ef4444"></iconify-icon>`;
+    deleteBtn.onclick = () => {
+        project.data.frames.splice(index, 1);
+        renderStoryflowView(project);
+        saveToBrowser();
+    };
+    actions.appendChild(deleteBtn);
+
+    card.append(header, imageSlot, titleInput, descArea, metaGrid, actions);
+    return card;
+}
+
+function createStoryImageSlot(project, frame) {
+    const slot = document.createElement('div');
+    slot.className = 'story-image-slot';
+
+    if (frame.image) {
+        const img = document.createElement('img');
+        img.src = frame.image;
+        slot.appendChild(img);
+    } else {
+        slot.innerHTML = `<iconify-icon icon="lucide:plus" width="24" height="24" style="color:var(--text-color-light)"></iconify-icon>`;
+    }
+
+    const overlay = document.createElement('div');
+    overlay.className = 'story-image-overlay';
+
+    const uploadBtn = document.createElement('button');
+    uploadBtn.className = 'story-image-overlay-btn';
+    uploadBtn.title = 'Upload from Computer';
+    uploadBtn.innerHTML = `<iconify-icon icon="lucide:upload" width="20" height="20"></iconify-icon>`;
+    uploadBtn.onclick = (e) => {
+        e.stopPropagation();
+        promptImageInput.onchange = (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = (readEvent) => {
+                    frame.image = readEvent.target.result;
+                    renderStoryflowView(project);
+                    saveToBrowser();
+                };
+                reader.readAsDataURL(file);
+            }
+        };
+        promptImageInput.click();
+    };
+
+    const libraryBtn = document.createElement('button');
+    libraryBtn.className = 'story-image-overlay-btn';
+    libraryBtn.title = 'Select from Asset Library';
+    libraryBtn.innerHTML = `<iconify-icon icon="lucide:library" width="20" height="20"></iconify-icon>`;
+    libraryBtn.onclick = (e) => {
+        e.stopPropagation();
+        openAssetLibrary((selectedImage) => {
+            frame.image = selectedImage;
+            renderStoryflowView(project);
+            saveToBrowser();
+        });
+    };
+
+    overlay.append(uploadBtn, libraryBtn);
+    slot.appendChild(overlay);
+
+    // Support paste on slot
+    slot.addEventListener('mouseenter', () => {
+        const handlePaste = (e) => {
+            const items = (e.clipboardData || e.originalEvent.clipboardData).items;
+            for (const item of items) {
+                if (item.type.indexOf("image") !== -1) {
+                    const blob = item.getAsFile();
+                    const reader = new FileReader();
+                    reader.onload = (readEvent) => {
+                        frame.image = readEvent.target.result;
+                        renderStoryflowView(project);
+                        saveToBrowser();
+                    };
+                    reader.readAsDataURL(blob);
+                }
+            }
+        };
+        window.addEventListener('paste', handlePaste);
+        slot.addEventListener('mouseleave', () => window.removeEventListener('paste', handlePaste), { once: true });
+    });
+
+    return slot;
+}
+
+function openAssetLibrary(callback) {
+    if (!assetLibraryOverlay || !assetLibraryGrid) return;
+    
+    // Gather all images from global cache as base
+    let allImages = new Set(Object.values(globalImageCache));
+    const imagesByProject = {
+        'all': new Set()
+    };
+    
+    // Extract images embedded in projects
+    projects.forEach(p => {
+        const projectImages = new Set();
+        if (p.type === 'moodinfinite' && p.data && p.data.items) {
+            p.data.items.forEach(item => {
+                if (item.type === 'image' && item.imageId && globalImageCache[item.imageId]) {
+                    projectImages.add(globalImageCache[item.imageId]);
+                }
+            });
+        } else if (p.type === 'storyflow' && p.data && p.data.frames) {
+            p.data.frames.forEach(frame => {
+                if (frame.image) projectImages.add(frame.image);
+            });
+        } else if (p.type === 'moodprompt' && p.data && p.data.prompts) {
+            p.data.prompts.forEach(prompt => {
+                if (prompt.image1) projectImages.add(prompt.image1);
+                if (prompt.image2) projectImages.add(prompt.image2);
+            });
+        }
+        
+        if (projectImages.size > 0) {
+            imagesByProject[p.id] = projectImages;
+            projectImages.forEach(img => allImages.add(img));
+        }
+    });
+    
+    imagesByProject['all'] = allImages;
+    
+    if (assetLibraryFilter) {
+        assetLibraryFilter.innerHTML = '<option value="all">All Assets</option>';
+        projects.forEach(p => {
+            if (imagesByProject[p.id] && imagesByProject[p.id].size > 0) {
+                const opt = document.createElement('option');
+                opt.value = p.id;
+                opt.textContent = p.name;
+                assetLibraryFilter.appendChild(opt);
+            }
+        });
+        
+        assetLibraryFilter.onchange = (e) => {
+            renderAssetGrid(imagesByProject[e.target.value], callback);
+        };
+    }
+
+    renderAssetGrid(allImages, callback);
+    assetLibraryOverlay.style.display = 'flex';
+}
+
+function renderAssetGrid(imagesSet, callback) {
+    if (!assetLibraryGrid) return;
+    
+    assetLibraryGrid.innerHTML = '';
+    const images = Array.from(imagesSet || []);
+
+    if (images.length === 0) {
+        assetLibraryEmpty.style.display = 'flex';
+        assetLibraryGrid.style.display = 'none';
+    } else {
+        assetLibraryEmpty.style.display = 'none';
+        assetLibraryGrid.style.display = 'grid';
+        
+        const fragment = document.createDocumentFragment();
+        images.forEach(imgData => {
+            const item = document.createElement('div');
+            item.className = 'asset-library-item';
+            
+            const img = document.createElement('img');
+            img.src = imgData;
+            img.loading = 'lazy';
+            
+            item.appendChild(img);
+            item.onclick = () => {
+                callback(imgData);
+                assetLibraryOverlay.style.display = 'none';
+            };
+            fragment.appendChild(item);
+        });
+        
+        requestAnimationFrame(() => {
+            assetLibraryGrid.appendChild(fragment);
+        });
+    }
 }
