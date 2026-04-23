@@ -1,4 +1,4 @@
-# Moodinfinite v0.9.8
+# Moodinfinite v0.9.9
 
 <div align="center">
   <img src="https://github.com/davidbrum25/moodinfinite/blob/main/_branding/_png/moodinfinite__Logotipo_alpha.png?raw=true" alt="Moodinfinite Logo" width="400"/>
@@ -135,6 +135,17 @@ If you find this tool useful and want to help me build more, consider supporting
 ---
 
 ## Update Log
+
+### ✨ v0.9.9 — UI Polish & Moodflow Minimap
+
+*   **🎨 True Glassmorphism UI:** The topbar menu has been redesigned into a floating, fully transparent glass panel, allowing your canvas to blur beautifully underneath it.
+*   **🖱️ Moodflow Minimap:** Added a dedicated horizontal scroll minimap timeline for Moodflow tabs. It includes live visual previews of your frames, a draggable camera viewport, and a skip-to-start button for rapid navigation.
+*   **↔️ Horizontal Mousewheel Panning:** Scrolling your mouse wheel vertically inside a Moodflow tab now intuitively translates to smooth horizontal panning across your frames.
+*   **🎯 Drag-and-Drop Indicators:** When reordering Moodflow cards, the drop zone now dynamically illuminates with your accent color and a subtle scale animation to clearly indicate where the card will be inserted.
+*   **🏷️ Creation Tab Refinements:** Reorganized and renamed the creation buttons (Moodinfinite, Moodpront, Moodtone, Moodflow). They now display their signature brand colors seamlessly upon hover.
+*   **🎛️ Moodflow Controls:** The frame duration input is now an interactive slider (0s to 60s). The camera property is now a structured dropdown menu with predefined framing options. 
+
+---
 
 ### ✨ v0.9.8 — StoryFlow & Sequential Storytelling
 

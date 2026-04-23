@@ -5,7 +5,7 @@
 <head>
     <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0">
-    <title>Moodinfinite v0.9.8</title>
+    <title>Moodinfinite v0.9.9</title>
     <link rel="icon"
         href="https://raw.githubusercontent.com/davidbrum25/moodinfinite/refs/heads/main/fav_icon_alternative.png"
         type="image/png">
@@ -20,11 +20,12 @@
     <script src="https://code.iconify.design/iconify-icon/2.1.0/iconify-icon.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/localforage/1.10.0/localforage.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 </head>
 
 <body>
     <div id="tabs-bar">
-        <div id="app-logo" title="Moodinfinite v0.9.8"
+        <div id="app-logo" title="Moodinfinite v0.9.9"
             style="display: flex; align-items: center; padding: 0 0.25rem; cursor: default;">
             <img src="https://raw.githubusercontent.com/davidbrum25/moodinfinite/refs/heads/main/fav_icon_alternative.png"
                 alt="Logo" style="width: 24px; height: 24px;">
@@ -42,13 +43,13 @@
         <button id="add-moodinfinite-tab-btn" class="tab-add-btn" title="New Moodinfinite Board">
             <iconify-icon icon="lucide:image" width="22" height="22"></iconify-icon>
         </button>
-        <button id="add-moodprompt-tab-btn" class="tab-add-btn" title="New Moodprompt File">
+        <button id="add-moodprompt-tab-btn" class="tab-add-btn" title="New Moodpront Board">
             <iconify-icon icon="lucide:pen-tool" width="20" height="20"></iconify-icon>
         </button>
-        <button id="add-colorseeker-tab-btn" class="tab-add-btn" title="New Color Seeker">
+        <button id="add-colorseeker-tab-btn" class="tab-add-btn" title="New Moodtone Board">
             <iconify-icon icon="lucide:swatch-book" width="20" height="20"></iconify-icon>
         </button>
-        <button id="add-storyflow-tab-btn" class="tab-add-btn" title="New StoryFlow Sequence">
+        <button id="add-storyflow-tab-btn" class="tab-add-btn" title="New Moodflow Board">
             <iconify-icon icon="lucide:clapperboard" width="20" height="20"></iconify-icon>
         </button>
 
@@ -80,6 +81,9 @@
         <div style="margin-left: auto; display: flex; align-items: center; gap: 4px;">
             <button id="save-png-btn" title="Export as PNG (Shift+S)" class="tab-add-btn">
                 <iconify-icon icon="lucide:download" width="20" height="20"></iconify-icon>
+            </button>
+            <button id="print-btn" title="Print Tab" class="tab-add-btn">
+                <iconify-icon icon="lucide:printer" width="20" height="20"></iconify-icon>
             </button>
             <button id="copy-to-clipboard-btn" title="Copy to Clipboard (Shift+C)" class="tab-add-btn">
                 <iconify-icon icon="lucide:copy" width="20" height="20"></iconify-icon>
@@ -234,6 +238,19 @@
         </div>
 
         <div id="storyflow-container" class="tab-content" style="display: none;">
+        </div>
+
+        <div id="storyflow-minimap" style="display: none;">
+            <button id="storyflow-scroll-start-btn" class="minimap-control-btn" title="Go to Beginning">
+                <iconify-icon icon="lucide:skip-back" width="24" height="24"></iconify-icon>
+            </button>
+            <div id="storyflow-minimap-track-container">
+                <div id="storyflow-minimap-track"></div>
+                <div id="storyflow-minimap-viewport"></div>
+            </div>
+            <button id="storyflow-add-frame-btn" class="minimap-control-btn" title="Add Frame">
+                <iconify-icon icon="lucide:plus" width="24" height="24"></iconify-icon>
+            </button>
         </div>
 
         <div id="colorseeker-container" class="tab-content"
