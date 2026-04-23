@@ -1,4 +1,6 @@
 {
+  "name": "moodinfinite",
+  "version": "0.9.9",
   "dependencies": {
     "puppeteer": "^24.27.0"
   }
