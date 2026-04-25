@@ -24,6 +24,16 @@
 </head>
 
 <body>
+    <div id="print-header" class="print-only">
+        <div style="display: flex; align-items: center; gap: 1rem; margin-bottom: 0.5rem;">
+            <img src="https://raw.githubusercontent.com/davidbrum25/moodinfinite/refs/heads/main/fav_icon_alternative.png" alt="Logo" style="width: 32px; height: 32px;">
+            <h1 id="print-project-name" style="margin: 0; font-size: 1.5rem; color: #000;">Project Name</h1>
+        </div>
+        <div id="print-project-meta" style="font-size: 0.85rem; color: #666; border-bottom: 1px solid #eee; padding-bottom: 0.5rem; margin-bottom: 1.5rem;">
+            Board Type: <span id="print-board-type">Moodflow</span> | Date: <span id="print-date"></span>
+        </div>
+    </div>
+
     <div id="tabs-bar">
         <div id="app-logo" title="Moodinfinite v0.9.9"
             style="display: flex; align-items: center; padding: 0 0.25rem; cursor: default;">
@@ -238,6 +248,25 @@
         </div>
 
         <div id="storyflow-container" class="tab-content" style="display: none;">
+            <div id="storyflow-stats-bar">
+                <div class="stats-item">
+                    <iconify-icon icon="lucide:film" width="16" height="16"></iconify-icon>
+                    <span id="stats-frames-count">0 Frames</span>
+                </div>
+                <div class="stats-item">
+                    <iconify-icon icon="lucide:clock" width="16" height="16"></iconify-icon>
+                    <span id="stats-total-duration">0s Total</span>
+                </div>
+                <div class="stats-item">
+                    <iconify-icon icon="lucide:gauge" width="16" height="16"></iconify-icon>
+                    <span id="stats-avg-duration">0s Avg</span>
+                </div>
+                <div class="stats-item">
+                    <iconify-icon icon="lucide:check-circle" width="16" height="16"></iconify-icon>
+                    <span id="stats-completion">0% Ready</span>
+                </div>
+            </div>
+            <div id="storyflow-scroll-area"></div>
         </div>
 
         <div id="storyflow-minimap" style="display: none;">

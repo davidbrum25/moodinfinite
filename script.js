@@ -29,6 +29,21 @@ let projectPendingClose = null;
 const leftScrollIndicator = document.querySelector('.tabs-list-container .scroll-indicator.left');
 const rightScrollIndicator = document.querySelector('.tabs-list-container .scroll-indicator.right');
 
+// Performance: Lazy loading observer for board images
+const imageLazyObserver = new IntersectionObserver((entries, observer) => {
+    entries.forEach(entry => {
+        if (entry.isIntersecting) {
+            const img = entry.target;
+            if (img.dataset.src) {
+                img.src = img.dataset.src;
+                img.removeAttribute('data-src');
+            }
+            img.classList.remove('lazy-load');
+            observer.unobserve(img);
+        }
+    });
+}, { rootMargin: '200px' });
+
 let autoSaveTimeout = null;
 function scheduleAutoSave() {
     clearTimeout(autoSaveTimeout);
@@ -551,7 +566,9 @@ function createImageSlot(project, prompt, slotNumber) {
     const prop = `image${slotNumber}`;
     if (prompt[prop]) {
         const img = document.createElement('img');
-        img.src = prompt[prop];
+        img.dataset.src = prompt[prop];
+        img.className = 'lazy-load';
+        imageLazyObserver.observe(img);
         slot.appendChild(img);
     } else {
         const placeholder = document.createElement('div');
@@ -562,14 +579,40 @@ function createImageSlot(project, prompt, slotNumber) {
     slot.onclick = () => {
         promptImageInput.onchange = (e) => {
             const file = e.target.files[0];
-            if (file) {
-                const reader = new FileReader();
-                reader.onload = (readEvent) => { prompt[prop] = readEvent.target.result; renderMoodpromptView(project); };
-                reader.readAsDataURL(file);
-            }
+            handleImageFile(file, (dataUrl) => {
+                prompt[prop] = dataUrl;
+                renderMoodpromptView(project);
+                saveToBrowser();
+            });
         };
         promptImageInput.click();
     };
+
+    // Drag & Drop
+    slot.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        slot.classList.add('drag-over');
+    });
+
+    slot.addEventListener('dragleave', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        slot.classList.remove('drag-over');
+    });
+
+    slot.addEventListener('drop', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        slot.classList.remove('drag-over');
+        const file = e.dataTransfer.files[0];
+        handleImageFile(file, (dataUrl) => {
+            prompt[prop] = dataUrl;
+            renderMoodpromptView(project);
+            saveToBrowser();
+        });
+    });
+
     return slot;
 }
 
@@ -957,7 +1000,7 @@ function setupEventListeners() {
     if (helpModalOverlay) helpModalOverlay.addEventListener('click', e => { if (e.target === helpModalOverlay) { helpModalOverlay.style.display = 'none' } });
 
     if (savePngBtn) savePngBtn.addEventListener('click', saveAsPng);
-    if (printBtn) printBtn.addEventListener('click', () => window.print());
+    if (printBtn) printBtn.addEventListener('click', prepareAndPrint);
     if (saveProjectBtn) saveProjectBtn.addEventListener('click', saveProject);
     if (loadProjectBtn) loadProjectBtn.addEventListener('click', () => projectInput.click());
 
@@ -3098,6 +3141,14 @@ function handlePaste(e) {
 function handleDragOver(e) { e.preventDefault(); canvas.style.outline = `2px dashed ${accentColor}`; canvas.style.outlineOffset = '-10px' }
 function handleDragLeave(e) { e.preventDefault(); canvas.style.outline = 'none' }
 function handleDrop(e) { e.preventDefault(); handleDragLeave(e); if (!e.dataTransfer.files) return; const t = e.dataTransfer.files[0]; if (t && (t.name.endsWith('.json') || t.name.endsWith('.zip') || t.name.endsWith('.mood'))) { loadFileFromObject(t); } else { processFiles(e.dataTransfer.files, screenToWorld(getEventLocation(e))) } }
+function handleImageFile(file, callback) {
+    if (file && file.type.startsWith('image/')) {
+        const reader = new FileReader();
+        reader.onload = (e) => callback(e.target.result);
+        reader.readAsDataURL(file);
+    }
+}
+
 function processFiles(files, worldPos) {
     Array.from(files).forEach((file, index) => {
         if (!file.type.startsWith('image/')) return;
@@ -4632,9 +4683,14 @@ if (addColorseekerTabBtn) {
 
 function renderStoryflowView(project) {
     if (!storyflowContainer) return;
-    storyflowContainer.innerHTML = '';
+    const scrollArea = document.getElementById('storyflow-scroll-area');
+    if (!scrollArea) return;
+    
+    scrollArea.innerHTML = '';
     const storyList = document.createElement('div');
     storyList.className = 'storyflow-list';
+
+    updateStoryflowStats(project);
 
     project.data.frames.forEach((frame, index) => {
         storyList.appendChild(createStoryCard(project, frame, index));
@@ -4676,7 +4732,7 @@ function renderStoryflowView(project) {
         }
     });
 
-    storyflowContainer.appendChild(storyList);
+    scrollArea.appendChild(storyList);
 
     const storyflowAddFrameBtn = document.getElementById('storyflow-add-frame-btn');
     if (storyflowAddFrameBtn) {
@@ -4775,13 +4831,13 @@ function createStoryCard(project, frame, index) {
     titleInput.className = 'story-title-input';
     titleInput.placeholder = 'Frame Title...';
     titleInput.value = frame.title || '';
-    titleInput.oninput = (e) => { frame.title = e.target.value; scheduleAutoSave(); };
+    titleInput.oninput = (e) => { frame.title = e.target.value; scheduleAutoSave(); updateStoryflowStats(project); };
 
     const descArea = document.createElement('textarea');
     descArea.className = 'story-desc-area';
     descArea.placeholder = 'Action / Dialogue / Notes...';
     descArea.value = frame.description || '';
-    descArea.oninput = (e) => { frame.description = e.target.value; scheduleAutoSave(); };
+    descArea.oninput = (e) => { frame.description = e.target.value; scheduleAutoSave(); updateStoryflowStats(project); };
 
     const metaGrid = document.createElement('div');
     metaGrid.className = 'story-meta-grid';
@@ -4812,7 +4868,7 @@ function createStoryCard(project, frame, index) {
     
     const durationSlider = document.createElement('input');
     durationSlider.type = 'range';
-    durationSlider.min = '0';
+    durationSlider.min = '1';
     durationSlider.max = '60';
     durationSlider.step = '1';
     durationSlider.className = 'story-duration-slider';
@@ -4821,7 +4877,7 @@ function createStoryCard(project, frame, index) {
     durationSlider.addEventListener('pointerdown', (e) => e.stopPropagation());
     durationSlider.addEventListener('mousedown', (e) => e.stopPropagation());
     
-    let currentDuration = parseInt(frame.meta.duration) || 3;
+    let currentDuration = Math.max(1, parseInt(frame.meta.duration) || 3);
     durationSlider.value = currentDuration;
     
     const durationValueDisplay = document.createElement('div');
@@ -4833,24 +4889,27 @@ function createStoryCard(project, frame, index) {
         durationValueDisplay.textContent = e.target.value + 's';
         frame.meta.duration = e.target.value + 's';
         scheduleAutoSave();
+        updateStoryflowStats(project);
     };
     
     durationValueDisplay.ondblclick = () => {
         const input = document.createElement('input');
         input.type = 'number';
-        input.value = parseInt(frame.meta.duration) || 3;
+        input.min = '1';
+        input.value = Math.max(1, parseInt(frame.meta.duration) || 3);
         input.className = 'story-meta-input';
         input.style.width = '40px';
         input.style.padding = '0';
         input.style.textAlign = 'center';
         
         const finishEdit = () => {
-            let val = parseInt(input.value) || 0;
+            let val = Math.max(1, parseInt(input.value) || 1);
             frame.meta.duration = val + 's';
             durationSlider.value = val;
             durationValueDisplay.textContent = val + 's';
             durationContainer.replaceChild(durationValueDisplay, input);
             scheduleAutoSave();
+            updateStoryflowStats(project);
         };
         
         input.onblur = finishEdit;
@@ -4936,7 +4995,9 @@ function createStoryImageSlot(project, frame) {
 
     if (frame.image) {
         const img = document.createElement('img');
-        img.src = frame.image;
+        img.dataset.src = frame.image;
+        img.className = 'lazy-load';
+        imageLazyObserver.observe(img);
         slot.appendChild(img);
     } else {
         slot.innerHTML = `<iconify-icon icon="lucide:plus" width="24" height="24" style="color:var(--text-color-light)"></iconify-icon>`;
@@ -4953,18 +5014,39 @@ function createStoryImageSlot(project, frame) {
         e.stopPropagation();
         promptImageInput.onchange = (e) => {
             const file = e.target.files[0];
-            if (file) {
-                const reader = new FileReader();
-                reader.onload = (readEvent) => {
-                    frame.image = readEvent.target.result;
-                    renderStoryflowView(project);
-                    saveToBrowser();
-                };
-                reader.readAsDataURL(file);
-            }
+            handleImageFile(file, (dataUrl) => {
+                frame.image = dataUrl;
+                renderStoryflowView(project);
+                saveToBrowser();
+            });
         };
         promptImageInput.click();
     };
+
+    // Drag & Drop
+    slot.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        slot.classList.add('drag-over');
+    });
+
+    slot.addEventListener('dragleave', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        slot.classList.remove('drag-over');
+    });
+
+    slot.addEventListener('drop', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        slot.classList.remove('drag-over');
+        const file = e.dataTransfer.files[0];
+        handleImageFile(file, (dataUrl) => {
+            frame.image = dataUrl;
+            renderStoryflowView(project);
+            saveToBrowser();
+        });
+    });
 
     const libraryBtn = document.createElement('button');
     libraryBtn.className = 'story-image-overlay-btn';
@@ -5172,11 +5254,11 @@ function saveStoryflowAsPdf(project) {
 // --- STORYFLOW MINIMAP LOGIC ---
 
 function updateStoryflowMinimapViewport() {
-    const storyflowContainer = document.getElementById('storyflow-container');
+    const storyflowContainer = document.getElementById('storyflow-scroll-area');
     const minimapTrack = document.getElementById('storyflow-minimap-track');
     const minimapViewport = document.getElementById('storyflow-minimap-viewport');
     
-    if (!storyflowContainer || !minimapTrack || !minimapViewport || storyflowContainer.style.display === 'none') return;
+    if (!storyflowContainer || !minimapTrack || !minimapViewport || document.getElementById('storyflow-container').style.display === 'none') return;
 
     const scrollRatio = storyflowContainer.scrollLeft / (storyflowContainer.scrollWidth - storyflowContainer.clientWidth);
     const minimapWidth = minimapTrack.clientWidth;
@@ -5194,13 +5276,43 @@ function updateStoryflowMinimapViewport() {
     minimapViewport.style.left = `${viewportLeft}px`;
 }
 
-document.getElementById('storyflow-container').addEventListener('scroll', updateStoryflowMinimapViewport);
-window.addEventListener('resize', updateStoryflowMinimapViewport);
+function updateStoryflowStats(project) {
+    const framesCountEl = document.getElementById('stats-frames-count');
+    const totalDurEl = document.getElementById('stats-total-duration');
+    const avgDurEl = document.getElementById('stats-avg-duration');
+    const completionEl = document.getElementById('stats-completion');
+    
+    if (!framesCountEl || !totalDurEl || !avgDurEl || !completionEl) return;
 
-document.getElementById('storyflow-container').addEventListener('wheel', (e) => {
+    let totalDuration = 0;
+    let completedFrames = 0;
+    project.data.frames.forEach(frame => {
+        totalDuration += parseInt(frame.meta?.duration) || 0;
+        if (frame.image || (frame.title && frame.description)) completedFrames++;
+    });
+    
+    framesCountEl.textContent = `${project.data.frames.length} Frames`;
+    totalDurEl.textContent = `${totalDuration}s Total`;
+    avgDurEl.textContent = `${project.data.frames.length > 0 ? (totalDuration / project.data.frames.length).toFixed(1) : 0}s Avg`;
+    completionEl.textContent = `${project.data.frames.length > 0 ? Math.round((completedFrames / project.data.frames.length) * 100) : 0}% Ready`;
+}
+
+let minimapFrameId = null;
+function throttledUpdateStoryflowMinimap() {
+    if (minimapFrameId) return;
+    minimapFrameId = requestAnimationFrame(() => {
+        updateStoryflowMinimapViewport();
+        minimapFrameId = null;
+    });
+}
+
+document.getElementById('storyflow-scroll-area').addEventListener('scroll', throttledUpdateStoryflowMinimap);
+window.addEventListener('resize', throttledUpdateStoryflowMinimap);
+
+document.getElementById('storyflow-scroll-area').addEventListener('wheel', (e) => {
     if (e.deltaY !== 0 && !e.shiftKey) {
         e.preventDefault();
-        document.getElementById('storyflow-container').scrollLeft += e.deltaY;
+        document.getElementById('storyflow-scroll-area').scrollLeft += e.deltaY;
     }
 }, { passive: false });
 
@@ -5209,7 +5321,7 @@ let minimapStartX = 0;
 let minimapStartScrollLeft = 0;
 
 const storyflowMinimapViewportEl = document.getElementById('storyflow-minimap-viewport');
-const storyflowContainerEl = document.getElementById('storyflow-container');
+const storyflowContainerEl = document.getElementById('storyflow-scroll-area');
 const storyflowMinimapTrackEl = document.getElementById('storyflow-minimap-track');
 
 if (storyflowMinimapViewportEl) {
@@ -5242,3 +5354,23 @@ window.addEventListener('mouseup', () => {
         document.body.style.cursor = '';
     }
 });
+
+function prepareAndPrint() {
+    const activeProject = projects.find(p => p.id === activeProjectId);
+    if (activeProject) {
+        const nameEl = document.getElementById('print-project-name');
+        const typeEl = document.getElementById('print-board-type');
+        const dateEl = document.getElementById('print-date');
+        
+        if (nameEl) nameEl.textContent = activeProject.name || 'Untitled Board';
+        if (typeEl) {
+            typeEl.textContent = 
+                activeProject.type === 'moodinfinite' ? 'Moodinfinite' : 
+                activeProject.type === 'moodprompt' ? 'Moodprompt' : 
+                activeProject.type === 'storyflow' ? 'Moodflow' : 
+                activeProject.type === 'colorseeker' ? 'Moodtone' : 'Board';
+        }
+        if (dateEl) dateEl.textContent = new Date().toLocaleDateString();
+    }
+    window.print();
+}
