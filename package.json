@@ -2,6 +2,26 @@
   "name": "moodinfinite",
   "version": "0.9.9",
   "dependencies": {
+    "acorn": "^8.16.0",
+    "acorn-walk": "^8.3.5",
+    "escodegen": "^2.1.0",
     "puppeteer": "^24.27.0"
-  }
+  },
+  "description": "<div align=\"center\">   <img src=\"https://github.com/davidbrum25/moodinfinite/blob/main/_branding/_png/moodinfinite__Logotipo_alpha.png?raw=true\" alt=\"Moodinfinite Logo\" width=\"400\"/> </div>",
+  "main": "analyzer.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/davidbrum25/moodinfinite.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "module",
+  "bugs": {
+    "url": "https://github.com/davidbrum25/moodinfinite/issues"
+  },
+  "homepage": "https://github.com/davidbrum25/moodinfinite#readme"
 }

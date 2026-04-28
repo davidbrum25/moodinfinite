@@ -1,0 +1,1762 @@
+[
+  {
+    "type": "variable",
+    "name": "projects",
+    "line": 2
+  },
+  {
+    "type": "variable",
+    "name": "activeProjectId",
+    "line": 3
+  },
+  {
+    "type": "variable",
+    "name": "tabsBar",
+    "line": 5
+  },
+  {
+    "type": "variable",
+    "name": "tabsList",
+    "line": 6
+  },
+  {
+    "type": "variable",
+    "name": "addMoodinfiniteTabBtn",
+    "line": 7
+  },
+  {
+    "type": "variable",
+    "name": "addMoodpromptTabBtn",
+    "line": 8
+  },
+  {
+    "type": "variable",
+    "name": "addColorseekerTabBtn",
+    "line": 9
+  },
+  {
+    "type": "variable",
+    "name": "addStoryflowTabBtn",
+    "line": 10
+  },
+  {
+    "type": "variable",
+    "name": "moodinfiniteContainer",
+    "line": 11
+  },
+  {
+    "type": "variable",
+    "name": "moodpromptContainer",
+    "line": 12
+  },
+  {
+    "type": "variable",
+    "name": "colorseekerContainer",
+    "line": 13
+  },
+  {
+    "type": "variable",
+    "name": "storyflowContainer",
+    "line": 14
+  },
+  {
+    "type": "variable",
+    "name": "promptImageInput",
+    "line": 15
+  },
+  {
+    "type": "variable",
+    "name": "mobileTabsBtn",
+    "line": 16
+  },
+  {
+    "type": "variable",
+    "name": "mobileTabsPopup",
+    "line": 17
+  },
+  {
+    "type": "variable",
+    "name": "assetLibraryOverlay",
+    "line": 18
+  },
+  {
+    "type": "variable",
+    "name": "assetLibraryGrid",
+    "line": 19
+  },
+  {
+    "type": "variable",
+    "name": "assetLibraryEmpty",
+    "line": 20
+  },
+  {
+    "type": "variable",
+    "name": "closeAssetLibraryBtn",
+    "line": 21
+  },
+  {
+    "type": "variable",
+    "name": "assetLibraryFilter",
+    "line": 22
+  },
+  {
+    "type": "variable",
+    "name": "closeBoardModalOverlay",
+    "line": 24
+  },
+  {
+    "type": "variable",
+    "name": "cancelCloseBtn",
+    "line": 25
+  },
+  {
+    "type": "variable",
+    "name": "confirmCloseBtn",
+    "line": 26
+  },
+  {
+    "type": "variable",
+    "name": "projectPendingClose",
+    "line": 27
+  },
+  {
+    "type": "variable",
+    "name": "leftScrollIndicator",
+    "line": 29
+  },
+  {
+    "type": "variable",
+    "name": "rightScrollIndicator",
+    "line": 30
+  },
+  {
+    "type": "variable",
+    "name": "imageLazyObserver",
+    "line": 33
+  },
+  {
+    "type": "variable",
+    "name": "autoSaveTimeout",
+    "line": 47
+  },
+  {
+    "type": "function",
+    "name": "scheduleAutoSave",
+    "line": 48
+  },
+  {
+    "type": "function",
+    "name": "serializeItems",
+    "line": 53
+  },
+  {
+    "type": "function",
+    "name": "restoreImages",
+    "line": 62
+  },
+  {
+    "type": "function",
+    "name": "saveToBrowser",
+    "line": 75
+  },
+  {
+    "type": "variable",
+    "name": "genericIcon",
+    "line": 99
+  },
+  {
+    "type": "variable",
+    "name": "platformData",
+    "line": 100
+  },
+  {
+    "type": "function",
+    "name": "updateScrollIndicators",
+    "line": 113
+  },
+  {
+    "type": "function",
+    "name": "createNewProject",
+    "line": 129
+  },
+  {
+    "type": "function",
+    "name": "switchTab",
+    "line": 190
+  },
+  {
+    "type": "function",
+    "name": "closeTab",
+    "line": 290
+  },
+  {
+    "type": "function",
+    "name": "actuallyCloseTab",
+    "line": 300
+  },
+  {
+    "type": "function",
+    "name": "hideCloseBoardModal",
+    "line": 327
+  },
+  {
+    "type": "function",
+    "name": "updateTabName",
+    "line": 332
+  },
+  {
+    "type": "function",
+    "name": "renderTabs",
+    "line": 342
+  },
+  {
+    "type": "function",
+    "name": "renderMoodpromptView",
+    "line": 444
+  },
+  {
+    "type": "function",
+    "name": "createPromptCard",
+    "line": 481
+  },
+  {
+    "type": "function",
+    "name": "createImageSlot",
+    "line": 563
+  },
+  {
+    "type": "function",
+    "name": "renderMobileTabsPopup",
+    "line": 619
+  },
+  {
+    "type": "function",
+    "name": "toggleMobileTabsPopup",
+    "line": 663
+  },
+  {
+    "type": "variable",
+    "name": "canvas",
+    "line": 676
+  },
+  {
+    "type": "variable",
+    "name": "ctx",
+    "line": 677
+  },
+  {
+    "type": "variable",
+    "name": "imageInput",
+    "line": 678
+  },
+  {
+    "type": "variable",
+    "name": "projectInput",
+    "line": 679
+  },
+  {
+    "type": "variable",
+    "name": "addImageBtn",
+    "line": 680
+  },
+  {
+    "type": "variable",
+    "name": "addTextBtn",
+    "line": 681
+  },
+  {
+    "type": "variable",
+    "name": "addCommentBtn",
+    "line": 682
+  },
+  {
+    "type": "variable",
+    "name": "addArrowBtn",
+    "line": 683
+  },
+  {
+    "type": "variable",
+    "name": "addBoxBtn",
+    "line": 684
+  },
+  {
+    "type": "variable",
+    "name": "addCircleBtn",
+    "line": 685
+  },
+  {
+    "type": "variable",
+    "name": "addMeasureBtn",
+    "line": 686
+  },
+  {
+    "type": "variable",
+    "name": "addGridBtn",
+    "line": 687
+  },
+  {
+    "type": "variable",
+    "name": "addTextListBtn",
+    "line": 688
+  },
+  {
+    "type": "variable",
+    "name": "drawBtn",
+    "line": 689
+  },
+  {
+    "type": "variable",
+    "name": "alignBtn",
+    "line": 690
+  },
+  {
+    "type": "variable",
+    "name": "contextMenu",
+    "line": 691
+  },
+  {
+    "type": "variable",
+    "name": "tabContextMenu",
+    "line": 692
+  },
+  {
+    "type": "variable",
+    "name": "showGridToggle",
+    "line": 693
+  },
+  {
+    "type": "variable",
+    "name": "snapGridToggle",
+    "line": 694
+  },
+  {
+    "type": "variable",
+    "name": "dropShadowToggle",
+    "line": 695
+  },
+  {
+    "type": "variable",
+    "name": "showNotificationsToggle",
+    "line": 696
+  },
+  {
+    "type": "variable",
+    "name": "gridSizeSlider",
+    "line": 697
+  },
+  {
+    "type": "variable",
+    "name": "gridSizeValue",
+    "line": 698
+  },
+  {
+    "type": "variable",
+    "name": "gridOpacitySlider",
+    "line": 699
+  },
+  {
+    "type": "variable",
+    "name": "gridOpacityValue",
+    "line": 700
+  },
+  {
+    "type": "variable",
+    "name": "deleteItemBtn",
+    "line": 701
+  },
+  {
+    "type": "variable",
+    "name": "savePngBtn",
+    "line": 702
+  },
+  {
+    "type": "variable",
+    "name": "printBtn",
+    "line": 703
+  },
+  {
+    "type": "variable",
+    "name": "saveProjectBtn",
+    "line": 704
+  },
+  {
+    "type": "variable",
+    "name": "loadProjectBtn",
+    "line": 705
+  },
+  {
+    "type": "variable",
+    "name": "bgColorPicker",
+    "line": 706
+  },
+  {
+    "type": "variable",
+    "name": "accentColorPicker",
+    "line": 707
+  },
+  {
+    "type": "variable",
+    "name": "gridColorPicker",
+    "line": 708
+  },
+  {
+    "type": "variable",
+    "name": "toolbarAccentColorPicker",
+    "line": 709
+  },
+  {
+    "type": "variable",
+    "name": "textEditor",
+    "line": 710
+  },
+  {
+    "type": "variable",
+    "name": "itemColorToolContainer",
+    "line": 711
+  },
+  {
+    "type": "variable",
+    "name": "itemColorPicker",
+    "line": 712
+  },
+  {
+    "type": "variable",
+    "name": "selectionToolbar",
+    "line": 713
+  },
+  {
+    "type": "variable",
+    "name": "toggleBoxStyleBtn",
+    "line": 714
+  },
+  {
+    "type": "variable",
+    "name": "scaleBtn",
+    "line": 715
+  },
+  {
+    "type": "variable",
+    "name": "rotateBtn",
+    "line": 716
+  },
+  {
+    "type": "variable",
+    "name": "resetTransformBtn",
+    "line": 717
+  },
+  {
+    "type": "variable",
+    "name": "flipHorizontalBtn",
+    "line": 718
+  },
+  {
+    "type": "variable",
+    "name": "flipVerticalBtn",
+    "line": 719
+  },
+  {
+    "type": "variable",
+    "name": "pinBtn",
+    "line": 720
+  },
+  {
+    "type": "variable",
+    "name": "deleteSelectionBtn",
+    "line": 721
+  },
+  {
+    "type": "variable",
+    "name": "bringFrontBtn",
+    "line": 722
+  },
+  {
+    "type": "variable",
+    "name": "sendBackBtn",
+    "line": 723
+  },
+  {
+    "type": "variable",
+    "name": "confirmationModalOverlay",
+    "line": 724
+  },
+  {
+    "type": "variable",
+    "name": "confirmNewBtn",
+    "line": 725
+  },
+  {
+    "type": "variable",
+    "name": "cancelNewBtn",
+    "line": 726
+  },
+  {
+    "type": "variable",
+    "name": "opacitySliderContainer",
+    "line": 727
+  },
+  {
+    "type": "variable",
+    "name": "opacitySeparator",
+    "line": 728
+  },
+  {
+    "type": "variable",
+    "name": "itemOpacitySlider",
+    "line": 729
+  },
+  {
+    "type": "variable",
+    "name": "itemOpacityValue",
+    "line": 730
+  },
+  {
+    "type": "variable",
+    "name": "paletteBtn",
+    "line": 731
+  },
+  {
+    "type": "variable",
+    "name": "palettePanel",
+    "line": 732
+  },
+  {
+    "type": "variable",
+    "name": "eyedropperBtn",
+    "line": 733
+  },
+  {
+    "type": "variable",
+    "name": "groupBtn",
+    "line": 734
+  },
+  {
+    "type": "variable",
+    "name": "groupOrderedBtn",
+    "line": 735
+  },
+  {
+    "type": "variable",
+    "name": "connectBtn",
+    "line": 736
+  },
+  {
+    "type": "variable",
+    "name": "ungroupBtn",
+    "line": 737
+  },
+  {
+    "type": "variable",
+    "name": "textToolsContainer",
+    "line": 738
+  },
+  {
+    "type": "variable",
+    "name": "iconToolsContainer",
+    "line": 739
+  },
+  {
+    "type": "variable",
+    "name": "commentIconBtn",
+    "line": 740
+  },
+  {
+    "type": "variable",
+    "name": "iconPickerPanel",
+    "line": 741
+  },
+  {
+    "type": "variable",
+    "name": "gridToolsContainer",
+    "line": 742
+  },
+  {
+    "type": "variable",
+    "name": "measureToolsContainer",
+    "line": 743
+  },
+  {
+    "type": "variable",
+    "name": "gridRowsInput",
+    "line": 744
+  },
+  {
+    "type": "variable",
+    "name": "gridColsInput",
+    "line": 745
+  },
+  {
+    "type": "variable",
+    "name": "measureUnitSelect",
+    "line": 746
+  },
+  {
+    "type": "variable",
+    "name": "fontFamilySelect",
+    "line": 747
+  },
+  {
+    "type": "variable",
+    "name": "textAlignLeftBtn",
+    "line": 748
+  },
+  {
+    "type": "variable",
+    "name": "textAlignCenterBtn",
+    "line": 749
+  },
+  {
+    "type": "variable",
+    "name": "textAlignRightBtn",
+    "line": 750
+  },
+  {
+    "type": "variable",
+    "name": "textStyleBoldBtn",
+    "line": 751
+  },
+  {
+    "type": "variable",
+    "name": "textStyleItalicBtn",
+    "line": 752
+  },
+  {
+    "type": "variable",
+    "name": "openHelpBtn",
+    "line": 753
+  },
+  {
+    "type": "variable",
+    "name": "helpModalOverlay",
+    "line": 754
+  },
+  {
+    "type": "variable",
+    "name": "closeHelpBtn",
+    "line": 755
+  },
+  {
+    "type": "variable",
+    "name": "selectToolBtn",
+    "line": 756
+  },
+  {
+    "type": "variable",
+    "name": "downloadImageBtn",
+    "line": 757
+  },
+  {
+    "type": "variable",
+    "name": "contextConnectBtn",
+    "line": 758
+  },
+  {
+    "type": "variable",
+    "name": "downloadSeparator",
+    "line": 759
+  },
+  {
+    "type": "variable",
+    "name": "addLinkBtn",
+    "line": 760
+  },
+  {
+    "type": "variable",
+    "name": "inputModalOverlay",
+    "line": 761
+  },
+  {
+    "type": "variable",
+    "name": "inputModalTitle",
+    "line": 762
+  },
+  {
+    "type": "variable",
+    "name": "linkUrlInput",
+    "line": 763
+  },
+  {
+    "type": "variable",
+    "name": "linkTitleInput",
+    "line": 764
+  },
+  {
+    "type": "variable",
+    "name": "cancelInputBtn",
+    "line": 765
+  },
+  {
+    "type": "variable",
+    "name": "confirmInputBtn",
+    "line": 766
+  },
+  {
+    "type": "variable",
+    "name": "linkToolsContainer",
+    "line": 767
+  },
+  {
+    "type": "variable",
+    "name": "editLinkBtn",
+    "line": 768
+  },
+  {
+    "type": "variable",
+    "name": "openLinkBtn",
+    "line": 769
+  },
+  {
+    "type": "variable",
+    "name": "mobileContextBtn",
+    "line": 770
+  },
+  {
+    "type": "variable",
+    "name": "noteEditorOverlay",
+    "line": 771
+  },
+  {
+    "type": "variable",
+    "name": "noteTitleInput",
+    "line": 772
+  },
+  {
+    "type": "variable",
+    "name": "noteBodyInput",
+    "line": 773
+  },
+  {
+    "type": "variable",
+    "name": "cancelNoteBtn",
+    "line": 774
+  },
+  {
+    "type": "variable",
+    "name": "confirmNoteBtn",
+    "line": 775
+  },
+  {
+    "type": "variable",
+    "name": "noteFmtBtns",
+    "line": 776
+  },
+  {
+    "type": "variable",
+    "name": "noteBgColorInput",
+    "line": 777
+  },
+  {
+    "type": "variable",
+    "name": "items",
+    "line": 780
+  },
+  {
+    "type": "variable",
+    "name": "globalImageCache",
+    "line": 781
+  },
+  {
+    "type": "variable",
+    "name": "MAX_ZOOM",
+    "line": 784
+  },
+  {
+    "type": "variable",
+    "name": "isDragging",
+    "line": 785
+  },
+  {
+    "type": "variable",
+    "name": "clipboard",
+    "line": 786
+  },
+  {
+    "type": "variable",
+    "name": "internalClipboardTimestamp",
+    "line": 787
+  },
+  {
+    "type": "variable",
+    "name": "isMovingItems",
+    "line": 788
+  },
+  {
+    "type": "variable",
+    "name": "currentTool",
+    "line": 789
+  },
+  {
+    "type": "variable",
+    "name": "defaultCanvasBg",
+    "line": 790
+  },
+  {
+    "type": "variable",
+    "name": "canvasBackgroundColor",
+    "line": 791
+  },
+  {
+    "type": "variable",
+    "name": "isConnectionMode",
+    "line": 792
+  },
+  {
+    "type": "variable",
+    "name": "connectionSourceItem",
+    "line": 793
+  },
+  {
+    "type": "variable",
+    "name": "activeGizmo",
+    "line": 794
+  },
+  {
+    "type": "variable",
+    "name": "transformingHandle",
+    "line": 795
+  },
+  {
+    "type": "variable",
+    "name": "hoveredGizmo",
+    "line": 796
+  },
+  {
+    "type": "variable",
+    "name": "isSelectingBox",
+    "line": 797
+  },
+  {
+    "type": "variable",
+    "name": "currentlyEditingText",
+    "line": 798
+  },
+  {
+    "type": "variable",
+    "name": "hoveredItem",
+    "line": 799
+  },
+  {
+    "type": "variable",
+    "name": "isDraggingConnector",
+    "line": 800
+  },
+  {
+    "type": "variable",
+    "name": "showGrid",
+    "line": 801
+  },
+  {
+    "type": "variable",
+    "name": "gridSize",
+    "line": 802
+  },
+  {
+    "type": "variable",
+    "name": "currentProjectName",
+    "line": 803
+  },
+  {
+    "type": "variable",
+    "name": "HISTORY_LIMIT",
+    "line": 804
+  },
+  {
+    "type": "variable",
+    "name": "needsUpdate",
+    "line": 805
+  },
+  {
+    "type": "function",
+    "name": "requestUpdate",
+    "line": 806
+  },
+  {
+    "type": "function",
+    "name": "getLuminance",
+    "line": 808
+  },
+  {
+    "type": "variable",
+    "name": "commentIcons",
+    "line": 819
+  },
+  {
+    "type": "variable",
+    "name": "svgCache",
+    "line": 828
+  },
+  {
+    "type": "function",
+    "name": "getIconImage",
+    "line": 829
+  },
+  {
+    "type": "variable",
+    "name": "colorPalettes",
+    "line": 839
+  },
+  {
+    "type": "function",
+    "name": "getDragAfterElement",
+    "line": 847
+  },
+  {
+    "type": "function",
+    "name": "showAndPositionMenu",
+    "line": 859
+  },
+  {
+    "type": "function",
+    "name": "saveSettings",
+    "line": 861
+  },
+  {
+    "type": "function",
+    "name": "loadSettings",
+    "line": 868
+  },
+  {
+    "type": "function",
+    "name": "saveDefaultTheme",
+    "line": 889
+  },
+  {
+    "type": "function",
+    "name": "applySettingsToUI",
+    "line": 902
+  },
+  {
+    "type": "function",
+    "name": "setupEventListeners",
+    "line": 914
+  },
+  {
+    "type": "function",
+    "name": "resizeCanvas",
+    "line": 1227
+  },
+  {
+    "type": "function",
+    "name": "gameLoop",
+    "line": 1228
+  },
+  {
+    "type": "function",
+    "name": "draw",
+    "line": 1233
+  },
+  {
+    "type": "function",
+    "name": "drawSelection",
+    "line": 1342
+  },
+  {
+    "type": "function",
+    "name": "drawSelectionOutline",
+    "line": 1343
+  },
+  {
+    "type": "function",
+    "name": "drawSelectionBox",
+    "line": 1344
+  },
+  {
+    "type": "function",
+    "name": "drawGrid",
+    "line": 1355
+  },
+  {
+    "type": "function",
+    "name": "drawArrow",
+    "line": 1356
+  },
+  {
+    "type": "function",
+    "name": "drawTextItem",
+    "line": 1396
+  },
+  {
+    "type": "function",
+    "name": "renderMarkdownLine",
+    "line": 1477
+  },
+  {
+    "type": "function",
+    "name": "drawInlineFormattedText",
+    "line": 1528
+  },
+  {
+    "type": "function",
+    "name": "wrapText",
+    "line": 1585
+  },
+  {
+    "type": "function",
+    "name": "drawBoxItem",
+    "line": 1604
+  },
+  {
+    "type": "function",
+    "name": "drawCircleItem",
+    "line": 1605
+  },
+  {
+    "type": "function",
+    "name": "drawCommentItem",
+    "line": 1606
+  },
+  {
+    "type": "function",
+    "name": "drawImageItem",
+    "line": 1608
+  },
+  {
+    "type": "function",
+    "name": "drawMeasureItem",
+    "line": 1650
+  },
+  {
+    "type": "function",
+    "name": "drawGridItem",
+    "line": 1738
+  },
+  {
+    "type": "function",
+    "name": "drawTextListItem",
+    "line": 1740
+  },
+  {
+    "type": "function",
+    "name": "drawStrokeItem",
+    "line": 1807
+  },
+  {
+    "type": "function",
+    "name": "getItemPorts",
+    "line": 1808
+  },
+  {
+    "type": "function",
+    "name": "createSimpleConnector",
+    "line": 1829
+  },
+  {
+    "type": "function",
+    "name": "toggleConnectionMode",
+    "line": 1863
+  },
+  {
+    "type": "function",
+    "name": "findItemAndGroupRecursively",
+    "line": 1879
+  },
+  {
+    "type": "function",
+    "name": "getGlobalPortPos",
+    "line": 1890
+  },
+  {
+    "type": "function",
+    "name": "drawConnectorItem",
+    "line": 1911
+  },
+  {
+    "type": "function",
+    "name": "drawRerouteItem",
+    "line": 2026
+  },
+  {
+    "type": "function",
+    "name": "drawGroupItem",
+    "line": 2036
+  },
+  {
+    "type": "function",
+    "name": "handleKeyDown",
+    "line": 2071
+  },
+  {
+    "type": "function",
+    "name": "handleKeyUp",
+    "line": 2150
+  },
+  {
+    "type": "function",
+    "name": "onDoubleClick",
+    "line": 2156
+  },
+  {
+    "type": "function",
+    "name": "getEventLocation",
+    "line": 2201
+  },
+  {
+    "type": "function",
+    "name": "onMouseDown",
+    "line": 2209
+  },
+  {
+    "type": "function",
+    "name": "onMouseUp",
+    "line": 2428
+  },
+  {
+    "type": "function",
+    "name": "onMouseMove",
+    "line": 2476
+  },
+  {
+    "type": "function",
+    "name": "updateCursor",
+    "line": 2727
+  },
+  {
+    "type": "function",
+    "name": "isLinkButtonHit",
+    "line": 2751
+  },
+  {
+    "type": "function",
+    "name": "onContextMenu",
+    "line": 2767
+  },
+  {
+    "type": "function",
+    "name": "confirmNewBoard",
+    "line": 2803
+  },
+  {
+    "type": "function",
+    "name": "resetBoard",
+    "line": 2804
+  },
+  {
+    "type": "function",
+    "name": "showConfirmationModal",
+    "line": 2805
+  },
+  {
+    "type": "function",
+    "name": "hideConfirmationModal",
+    "line": 2806
+  },
+  {
+    "type": "function",
+    "name": "copyToClipboard",
+    "line": 2807
+  },
+  {
+    "type": "function",
+    "name": "saveAsPng",
+    "line": 2867
+  },
+  {
+    "type": "function",
+    "name": "saveProject",
+    "line": 2933
+  },
+  {
+    "type": "function",
+    "name": "loadFileAsNewTab",
+    "line": 3037
+  },
+  {
+    "type": "function",
+    "name": "loadProject",
+    "line": 3074
+  },
+  {
+    "type": "function",
+    "name": "loadFileFromObject",
+    "line": 3088
+  },
+  {
+    "type": "function",
+    "name": "handleImageUpload",
+    "line": 3124
+  },
+  {
+    "type": "function",
+    "name": "handleProjectUpload",
+    "line": 3125
+  },
+  {
+    "type": "function",
+    "name": "handlePaste",
+    "line": 3127
+  },
+  {
+    "type": "function",
+    "name": "handleDragOver",
+    "line": 3141
+  },
+  {
+    "type": "function",
+    "name": "handleDragLeave",
+    "line": 3142
+  },
+  {
+    "type": "function",
+    "name": "handleDrop",
+    "line": 3143
+  },
+  {
+    "type": "function",
+    "name": "handleImageFile",
+    "line": 3144
+  },
+  {
+    "type": "function",
+    "name": "processFiles",
+    "line": 3152
+  },
+  {
+    "type": "function",
+    "name": "downloadSourceImage",
+    "line": 3192
+  },
+  {
+    "type": "function",
+    "name": "copyItems",
+    "line": 3194
+  },
+  {
+    "type": "function",
+    "name": "cutItems",
+    "line": 3219
+  },
+  {
+    "type": "function",
+    "name": "pasteItems",
+    "line": 3227
+  },
+  {
+    "type": "function",
+    "name": "duplicateItems",
+    "line": 3263
+  },
+  {
+    "type": "function",
+    "name": "deleteSelectedItems",
+    "line": 3304
+  },
+  {
+    "type": "function",
+    "name": "addItemToLayeredItems",
+    "line": 3305
+  },
+  {
+    "type": "function",
+    "name": "bringSelectedToFront",
+    "line": 3318
+  },
+  {
+    "type": "function",
+    "name": "sendSelectedToBack",
+    "line": 3331
+  },
+  {
+    "type": "function",
+    "name": "moveSelectedUp",
+    "line": 3344
+  },
+  {
+    "type": "function",
+    "name": "moveSelectedDown",
+    "line": 3355
+  },
+  {
+    "type": "function",
+    "name": "duplicateItems",
+    "line": 3366
+  },
+  {
+    "type": "function",
+    "name": "flipHorizontal",
+    "line": 3387
+  },
+  {
+    "type": "function",
+    "name": "flipVertical",
+    "line": 3412
+  },
+  {
+    "type": "function",
+    "name": "autoAlignSelection",
+    "line": 3434
+  },
+  {
+    "type": "function",
+    "name": "updateLeftBarState",
+    "line": 3435
+  },
+  {
+    "type": "function",
+    "name": "getContrastColor",
+    "line": 3436
+  },
+  {
+    "type": "function",
+    "name": "updateUIColors",
+    "line": 3437
+  },
+  {
+    "type": "function",
+    "name": "setCurrentTool",
+    "line": 3438
+  },
+  {
+    "type": "function",
+    "name": "setActiveGizmo",
+    "line": 3478
+  },
+  {
+    "type": "function",
+    "name": "toggleBoxStyle",
+    "line": 3479
+  },
+  {
+    "type": "function",
+    "name": "resetItemTransform",
+    "line": 3489
+  },
+  {
+    "type": "function",
+    "name": "togglePin",
+    "line": 3511
+  },
+  {
+    "type": "function",
+    "name": "setTextAlign",
+    "line": 3512
+  },
+  {
+    "type": "function",
+    "name": "updateGridDimension",
+    "line": 3513
+  },
+  {
+    "type": "function",
+    "name": "updateMeasureUnit",
+    "line": 3514
+  },
+  {
+    "type": "function",
+    "name": "setTextFontFamily",
+    "line": 3515
+  },
+  {
+    "type": "function",
+    "name": "toggleTextStyleBold",
+    "line": 3516
+  },
+  {
+    "type": "function",
+    "name": "toggleTextStyleItalic",
+    "line": 3517
+  },
+  {
+    "type": "function",
+    "name": "updateCommentDimensions",
+    "line": 3518
+  },
+  {
+    "type": "function",
+    "name": "updateTextListDimensions",
+    "line": 3519
+  },
+  {
+    "type": "function",
+    "name": "updateSelectionToolbar",
+    "line": 3535
+  },
+  {
+    "type": "function",
+    "name": "updateToolbarPosition",
+    "line": 3628
+  },
+  {
+    "type": "function",
+    "name": "editText",
+    "line": 3637
+  },
+  {
+    "type": "function",
+    "name": "cancelNoteEditing",
+    "line": 3670
+  },
+  {
+    "type": "function",
+    "name": "finishNoteEditing",
+    "line": 3682
+  },
+  {
+    "type": "function",
+    "name": "updateNoteDimensions",
+    "line": 3698
+  },
+  {
+    "type": "function",
+    "name": "finishEditingText",
+    "line": 3743
+  },
+  {
+    "type": "function",
+    "name": "autoResizeTextEditor",
+    "line": 3744
+  },
+  {
+    "type": "function",
+    "name": "saveStateForUndo",
+    "line": 3745
+  },
+  {
+    "type": "function",
+    "name": "loadStateFromHistory",
+    "line": 3746
+  },
+  {
+    "type": "function",
+    "name": "undoLastAction",
+    "line": 3774
+  },
+  {
+    "type": "function",
+    "name": "redoLastAction",
+    "line": 3775
+  },
+  {
+    "type": "function",
+    "name": "groupSelectedItems",
+    "line": 3776
+  },
+  {
+    "type": "function",
+    "name": "groupOrderedItems",
+    "line": 3784
+  },
+  {
+    "type": "function",
+    "name": "ungroupSelectedItems",
+    "line": 3807
+  },
+  {
+    "type": "function",
+    "name": "buildPaletteMenu",
+    "line": 3872
+  },
+  {
+    "type": "function",
+    "name": "showToast",
+    "line": 3930
+  },
+  {
+    "type": "variable",
+    "name": "lastTap",
+    "line": 3932
+  },
+  {
+    "type": "function",
+    "name": "onTouchStart",
+    "line": 3933
+  },
+  {
+    "type": "function",
+    "name": "onTouchMove",
+    "line": 3946
+  },
+  {
+    "type": "function",
+    "name": "onTouchEnd",
+    "line": 3961
+  },
+  {
+    "type": "function",
+    "name": "getPinchDistance",
+    "line": 3969
+  },
+  {
+    "type": "function",
+    "name": "getPinchCenter",
+    "line": 3970
+  },
+  {
+    "type": "function",
+    "name": "normalizeTouchEvent",
+    "line": 3971
+  },
+  {
+    "type": "function",
+    "name": "screenToWorld",
+    "line": 3978
+  },
+  {
+    "type": "function",
+    "name": "worldToScreen",
+    "line": 3979
+  },
+  {
+    "type": "function",
+    "name": "reattachImages",
+    "line": 3980
+  },
+  {
+    "type": "function",
+    "name": "getHoveredPort",
+    "line": 3993
+  },
+  {
+    "type": "function",
+    "name": "getHoveredConnector",
+    "line": 4016
+  },
+  {
+    "type": "function",
+    "name": "getItemAtPosition",
+    "line": 4041
+  },
+  {
+    "type": "function",
+    "name": "getGizmoAtPosition",
+    "line": 4077
+  },
+  {
+    "type": "function",
+    "name": "getArrowHandleAtPosition",
+    "line": 4078
+  },
+  {
+    "type": "function",
+    "name": "getCollectiveBoundingBox",
+    "line": 4079
+  },
+  {
+    "type": "function",
+    "name": "getItemBoundingBox",
+    "line": 4080
+  },
+  {
+    "type": "function",
+    "name": "rectsIntersect",
+    "line": 4134
+  },
+  {
+    "type": "function",
+    "name": "getNormalizedSelectionBox",
+    "line": 4135
+  },
+  {
+    "type": "function",
+    "name": "hexToRgba",
+    "line": 4136
+  },
+  {
+    "type": "function",
+    "name": "rgbToHex",
+    "line": 4137
+  },
+  {
+    "type": "function",
+    "name": "distSq",
+    "line": 4138
+  },
+  {
+    "type": "function",
+    "name": "distToSegmentSquared",
+    "line": 4139
+  },
+  {
+    "type": "function",
+    "name": "invertColor",
+    "line": 4140
+  },
+  {
+    "type": "function",
+    "name": "padZero",
+    "line": 4141
+  },
+  {
+    "type": "function",
+    "name": "adjustZoom",
+    "line": 4142
+  },
+  {
+    "type": "function",
+    "name": "centerView",
+    "line": 4144
+  },
+  {
+    "type": "function",
+    "name": "focusOnSelection",
+    "line": 4151
+  },
+  {
+    "type": "function",
+    "name": "applyNoteFormat",
+    "line": 4169
+  },
+  {
+    "type": "variable",
+    "name": "activeLinkEdit",
+    "line": 4269
+  },
+  {
+    "type": "function",
+    "name": "showLinkInputModal",
+    "line": 4270
+  },
+  {
+    "type": "function",
+    "name": "hideLinkInputModal",
+    "line": 4279
+  },
+  {
+    "type": "function",
+    "name": "getCheckboxHitIndex",
+    "line": 4284
+  },
+  {
+    "type": "variable",
+    "name": "faviconCache",
+    "line": 4356
+  },
+  {
+    "type": "function",
+    "name": "drawLinkItem",
+    "line": 4357
+  },
+  {
+    "type": "variable",
+    "name": "colorseekerModeSelect",
+    "line": 4487
+  },
+  {
+    "type": "variable",
+    "name": "colorseekerBasePicker",
+    "line": 4488
+  },
+  {
+    "type": "variable",
+    "name": "colorseekerPalette",
+    "line": 4489
+  },
+  {
+    "type": "function",
+    "name": "hexToHsl",
+    "line": 4491
+  },
+  {
+    "type": "function",
+    "name": "hslToHex",
+    "line": 4509
+  },
+  {
+    "type": "function",
+    "name": "hexToRgb",
+    "line": 4515
+  },
+  {
+    "type": "function",
+    "name": "hexToCmyk",
+    "line": 4520
+  },
+  {
+    "type": "function",
+    "name": "generatePalette",
+    "line": 4532
+  },
+  {
+    "type": "function",
+    "name": "renderColorSeeker",
+    "line": 4544
+  },
+  {
+    "type": "function",
+    "name": "downloadColorSeekerPalette",
+    "line": 4625
+  },
+  {
+    "type": "function",
+    "name": "renderStoryflowView",
+    "line": 4684
+  },
+  {
+    "type": "function",
+    "name": "createStoryCard",
+    "line": 4791
+  },
+  {
+    "type": "function",
+    "name": "createStoryImageSlot",
+    "line": 4992
+  },
+  {
+    "type": "function",
+    "name": "openAssetLibrary",
+    "line": 5091
+  },
+  {
+    "type": "function",
+    "name": "renderAssetGrid",
+    "line": 5148
+  },
+  {
+    "type": "function",
+    "name": "saveStoryflowAsPdf",
+    "line": 5183
+  },
+  {
+    "type": "function",
+    "name": "updateStoryflowMinimapViewport",
+    "line": 5256
+  },
+  {
+    "type": "function",
+    "name": "updateStoryflowStats",
+    "line": 5279
+  },
+  {
+    "type": "variable",
+    "name": "minimapFrameId",
+    "line": 5300
+  },
+  {
+    "type": "function",
+    "name": "throttledUpdateStoryflowMinimap",
+    "line": 5301
+  },
+  {
+    "type": "variable",
+    "name": "isDraggingStoryflowMinimap",
+    "line": 5319
+  },
+  {
+    "type": "variable",
+    "name": "minimapStartX",
+    "line": 5320
+  },
+  {
+    "type": "variable",
+    "name": "minimapStartScrollLeft",
+    "line": 5321
+  },
+  {
+    "type": "variable",
+    "name": "storyflowMinimapViewportEl",
+    "line": 5323
+  },
+  {
+    "type": "variable",
+    "name": "storyflowContainerEl",
+    "line": 5324
+  },
+  {
+    "type": "variable",
+    "name": "storyflowMinimapTrackEl",
+    "line": 5325
+  },
+  {
+    "type": "function",
+    "name": "prepareAndPrint",
+    "line": 5358
+  }
+]

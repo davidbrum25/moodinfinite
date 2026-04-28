@@ -92,6 +92,9 @@
             <button id="save-png-btn" title="Export as PNG (Shift+S)" class="tab-add-btn">
                 <iconify-icon icon="lucide:download" width="20" height="20"></iconify-icon>
             </button>
+            <button id="export-sheet-btn" title="Export as Sheet" class="tab-add-btn" style="display:none;">
+                <iconify-icon icon="lucide:table" width="20" height="20"></iconify-icon>
+            </button>
             <button id="print-btn" title="Print Tab" class="tab-add-btn">
                 <iconify-icon icon="lucide:printer" width="20" height="20"></iconify-icon>
             </button>
@@ -282,10 +285,18 @@
             </button>
         </div>
 
+        <!-- Storyflow image lightbox -->
+        <div id="storyflow-lightbox">
+            <button id="storyflow-lightbox-close" title="Close (Esc)">
+                <iconify-icon icon="lucide:x" width="20" height="20"></iconify-icon>
+            </button>
+            <img id="storyflow-lightbox-img" src="" alt="Frame preview" />
+        </div>
+
         <div id="colorseeker-container" class="tab-content"
-            style="display: none; height: 100%; width: 100%; position: relative;">
+            style="display: none; height: 100%; width: 100%; padding-top: calc(var(--tabs-bar-height) + 0.75rem); box-sizing: border-box; position: relative;">
             <div id="colorseeker-sidebar"
-                style="position: absolute; left: 1.5rem; top: 1.5rem; background: var(--bg-ui); border: 1px solid var(--border-color); border-radius: 0.75rem; padding: 1.5rem; z-index: 10; display: flex; flex-direction: column; gap: 1rem; box-shadow: 0 8px 32px rgba(0,0,0,0.3); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); width: 220px;">
+                style="position: absolute; left: 1.5rem; top: calc(var(--tabs-bar-height) + 0.75rem); bottom: 1.5rem; background: var(--bg-ui); border: 1px solid var(--border-color); border-radius: 0.75rem; padding: 1.25rem; z-index: 10; display: flex; flex-direction: column; gap: 0.85rem; box-shadow: 0 8px 32px rgba(0,0,0,0.3); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); width: 220px; overflow-y: auto; overflow-x: hidden;">
                 <div style="display: flex; align-items: center; gap: 0.5rem;">
                     <iconify-icon icon="lucide:swatch-book" width="20" height="20"
                         style="color: var(--text-color)"></iconify-icon>
@@ -298,7 +309,11 @@
                         style="background: rgba(0,0,0,0.2); border: 1px solid var(--border-color); color: var(--text-color); padding: 0.5rem; border-radius: 0.5rem; outline: none; cursor: pointer; font-family: inherit;">
                         <option value="shades">Color Shades</option>
                         <option value="tones">Color Tones</option>
-                        <option value="harmonies">Color Harmonies</option>
+                        <option value="harmonies">Analogous</option>
+                        <option value="complementary">Complementary</option>
+                        <option value="split-complementary">Split-Comp</option>
+                        <option value="triadic">Triadic</option>
+                        <option value="tetradic">Tetradic</option>
                     </select>
                 </div>
                 <div style="display: flex; flex-direction: column; gap: 0.5rem;">
@@ -312,6 +327,7 @@
                     </p>
                     <p style="margin: 0 0 0.25rem 0;"><strong style="color: var(--text-color);">Shift+Click</strong> Set
                         as Base</p>
+                    <p style="margin: 0 0 0.25rem 0;"><strong style="color: var(--text-color);">L</strong> Lock / Unlock</p>
                     <p style="margin: 0;"><strong style="color: var(--text-color);">Shift+S</strong> Download PNG</p>
                 </div>
             </div>
@@ -379,7 +395,27 @@
 
     <div id="tab-context-menu">
         <div class="menu-item" id="rename-tab-btn"><span class="menu-label">Rename</span></div>
+        <div class="border-t my-2" style="border-color:var(--border-color)"></div>
+        <div class="menu-item" id="send-tab-to-start-btn"><span class="menu-label">Send to Start</span></div>
+        <div class="menu-item" id="send-tab-to-last-btn"><span class="menu-label">Send to Last</span></div>
+        <div class="border-t my-2" style="border-color:var(--border-color)"></div>
         <div class="menu-item" id="close-context-tab-btn"><span class="menu-label text-red-500">Close Tab</span></div>
+    </div>
+
+    <div id="storyflow-context-menu" class="context-menu">
+        <div class="menu-item" id="sf-add-left-btn">
+            <span class="menu-label">Add Frame Left</span>
+            <iconify-icon icon="lucide:arrow-left-to-line" width="18" height="18"></iconify-icon>
+        </div>
+        <div class="menu-item" id="sf-add-right-btn">
+            <span class="menu-label">Add Frame Right</span>
+            <iconify-icon icon="lucide:arrow-right-to-line" width="18" height="18"></iconify-icon>
+        </div>
+        <div class="border-t my-2" style="border-color:var(--border-color)"></div>
+        <div class="menu-item" id="sf-delete-btn">
+            <span class="menu-label text-red-500">Delete Frame</span>
+            <iconify-icon icon="lucide:trash-2" width="18" height="18" class="text-red-500"></iconify-icon>
+        </div>
     </div>
 
     <div id="palette-panel"></div>

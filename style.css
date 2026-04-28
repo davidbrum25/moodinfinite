@@ -558,8 +558,8 @@
             left: 50%;
             transform: translateX(-50%);
             height: 112px;
-            width: 80%;
-            max-width: 800px;
+            width: calc(100% - 3rem);
+            max-width: 1600px;
             background: var(--bg-ui);
             border: 1px solid var(--border-color);
             border-radius: 12px;
@@ -1008,7 +1008,8 @@
         #confirmation-modal-overlay,
         #help-modal-overlay,
         #toast-container,
-        #tab-context-menu {
+        #tab-context-menu,
+        #storyflow-context-menu {
             position: fixed;
         }
 
@@ -1045,7 +1046,7 @@
             z-index: 5000;
         }
 
-        #context-menu {
+        #context-menu, #storyflow-context-menu {
             position: absolute;
             z-index: 2100;
             background: var(--bg-ui);
@@ -2225,6 +2226,73 @@
             #note-md-hint { display: none; }
         }
 
+        /* --- STORYFLOW LIGHTBOX --- */
+        #storyflow-lightbox {
+            position: fixed;
+            inset: 0;
+            top: calc(var(--tabs-bar-height) + 0.6rem);
+            z-index: 90; /* below tabs-bar (100) but above everything else */
+            background: rgba(0, 0, 0, 0.88);
+            backdrop-filter: blur(18px);
+            -webkit-backdrop-filter: blur(18px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 2rem;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.22s ease;
+        }
+
+        #storyflow-lightbox.open {
+            opacity: 1;
+            pointer-events: all;
+        }
+
+        #storyflow-lightbox-img {
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
+            border-radius: 0.75rem;
+            box-shadow: 0 24px 80px rgba(0, 0, 0, 0.7);
+            transform: scale(0.95);
+            transition: transform 0.25s cubic-bezier(0.2, 0, 0, 1);
+            cursor: zoom-out;
+            user-select: none;
+        }
+
+        #storyflow-lightbox.open #storyflow-lightbox-img {
+            transform: scale(1);
+        }
+
+        #storyflow-lightbox-close {
+            position: absolute;
+            top: 1rem;
+            right: 1rem;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 50%;
+            width: 36px;
+            height: 36px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            color: #fff;
+            transition: background 0.2s, transform 0.2s;
+            z-index: 1;
+        }
+
+        #storyflow-lightbox-close:hover {
+            background: rgba(255, 255, 255, 0.2);
+            transform: scale(1.1);
+        }
+
+        /* Zoom-in cursor hint on story images that have a photo loaded */
+        .story-image-slot.has-image {
+            cursor: zoom-in;
+        }
+
         /* --- PRINT STYLES --- */
         @media print {
             * {
@@ -2279,8 +2347,8 @@
                 display: block !important;
             }
 
-            /* STORYFLOW PRINT LAYOUT */
-            #storyflow-container {
+            /* STORYFLOW PRINT LAYOUT — only when printing a storyflow tab */
+            body[data-print-tab="storyflow"] #storyflow-container {
                 display: block !important;
                 padding: 0 !important;
                 margin: 0 !important;
@@ -2344,8 +2412,8 @@
                 font-weight: bold !important;
             }
 
-            /* MOODPROMPT PRINT LAYOUT */
-            #moodprompt-container {
+            /* MOODPROMPT PRINT LAYOUT — only when printing a moodprompt tab */
+            body[data-print-tab="moodprompt"] #moodprompt-container {
                 display: block !important;
                 padding: 0 !important;
                 background: transparent !important;

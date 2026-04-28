@@ -258,16 +258,6 @@ function switchTab(projectId) {
         }
     }
 
-    const exportSheetBtnEl = document.getElementById('export-sheet-btn');
-    if (exportSheetBtnEl) {
-        exportSheetBtnEl.style.display = newActiveProject.type === 'storyflow' ? '' : 'none';
-    }
-
-    const copyToClipboardBtnEl = document.getElementById('copy-to-clipboard-btn');
-    if (copyToClipboardBtnEl) {
-        copyToClipboardBtnEl.style.display = newActiveProject.type === 'storyflow' ? 'none' : '';
-    }
-
     // Reset all interaction states to prevent cross-tab contamination
     selectedItems = [];
     isDragging = false;
@@ -700,7 +690,6 @@ const drawBtn = document.getElementById('draw-btn');
 const alignBtn = document.getElementById('align-btn');
 const contextMenu = document.getElementById('context-menu');
 const tabContextMenu = document.getElementById('tab-context-menu');
-const sfContextMenu = document.getElementById('storyflow-context-menu');
 const showGridToggle = document.getElementById('show-grid-toggle');
 const snapGridToggle = document.getElementById('snap-grid-toggle');
 const dropShadowToggle = document.getElementById('drop-shadow-toggle');
@@ -794,7 +783,6 @@ let historyStack, historyIndex;
 
 const MAX_ZOOM = 5, MIN_ZOOM = 0.1, SCROLL_SENSITIVITY = 0.0005;
 let isDragging = false, dragStart = { x: 0, y: 0 };
-let isRearrangingList = false, rearrangingListObj = null, rearrangingItemIndex = -1;
 let clipboard = [];
 let internalClipboardTimestamp = 0;
 let isMovingItems = false, moveStart = { x: 0, y: 0 };
@@ -962,79 +950,6 @@ function setupEventListeners() {
         tabContextMenu.style.display = 'none'
     });
 
-    const sendTabToStartBtn = document.getElementById('send-tab-to-start-btn');
-    const sendTabToLastBtn = document.getElementById('send-tab-to-last-btn');
-
-    if (sendTabToStartBtn) sendTabToStartBtn.addEventListener('click', () => {
-        const id = tabContextMenu.dataset.tabId;
-        if (id) {
-            const idx = projects.findIndex(p => p.id.toString() === id.toString());
-            if (idx > 0) {
-                const [moved] = projects.splice(idx, 1);
-                projects.unshift(moved);
-                renderTabs();
-                saveToBrowser();
-                showToast('Tab moved to start.');
-            }
-        }
-        tabContextMenu.style.display = 'none';
-    });
-
-    if (sendTabToLastBtn) sendTabToLastBtn.addEventListener('click', () => {
-        const id = tabContextMenu.dataset.tabId;
-        if (id) {
-            const idx = projects.findIndex(p => p.id.toString() === id.toString());
-            if (idx !== -1 && idx < projects.length - 1) {
-                const [moved] = projects.splice(idx, 1);
-                projects.push(moved);
-                renderTabs();
-                saveToBrowser();
-                showToast('Tab moved to last.');
-            }
-        }
-        tabContextMenu.style.display = 'none';
-    });
-
-    const sfAddLeftBtn = document.getElementById('sf-add-left-btn');
-    const sfAddRightBtn = document.getElementById('sf-add-right-btn');
-    const sfDeleteBtn = document.getElementById('sf-delete-btn');
-
-    if (sfAddLeftBtn) sfAddLeftBtn.addEventListener('click', () => {
-        const frameIndex = parseInt(sfContextMenu.dataset.frameIndex);
-        const activeProject = projects.find(p => p.id === activeProjectId);
-        if (activeProject && !isNaN(frameIndex)) {
-            activeProject.data.frames.splice(frameIndex, 0, { title: '', description: '', image: null, meta: { duration: "5", camera: "" } });
-            renderStoryflowView(activeProject);
-            saveToBrowser();
-            showToast('Frame added to the left.');
-        }
-        sfContextMenu.style.display = 'none';
-    });
-
-    if (sfAddRightBtn) sfAddRightBtn.addEventListener('click', () => {
-        const frameIndex = parseInt(sfContextMenu.dataset.frameIndex);
-        const activeProject = projects.find(p => p.id === activeProjectId);
-        if (activeProject && !isNaN(frameIndex)) {
-            activeProject.data.frames.splice(frameIndex + 1, 0, { title: '', description: '', image: null, meta: { duration: "5", camera: "" } });
-            renderStoryflowView(activeProject);
-            saveToBrowser();
-            showToast('Frame added to the right.');
-        }
-        sfContextMenu.style.display = 'none';
-    });
-
-    if (sfDeleteBtn) sfDeleteBtn.addEventListener('click', () => {
-        const frameIndex = parseInt(sfContextMenu.dataset.frameIndex);
-        const activeProject = projects.find(p => p.id === activeProjectId);
-        if (activeProject && !isNaN(frameIndex)) {
-            activeProject.data.frames.splice(frameIndex, 1);
-            renderStoryflowView(activeProject);
-            saveToBrowser();
-            showToast('Frame deleted.');
-        }
-        sfContextMenu.style.display = 'none';
-    });
-
     canvas.addEventListener('mousedown', onMouseDown);
     canvas.addEventListener('mouseup', onMouseUp);
     canvas.addEventListener('mousemove', onMouseMove);
@@ -1053,7 +968,6 @@ function setupEventListeners() {
     document.addEventListener('click', e => {
         if (contextMenu && !contextMenu.contains(e.target)) contextMenu.style.display = 'none';
         if (tabContextMenu && !tabContextMenu.contains(e.target)) tabContextMenu.style.display = 'none';
-        if (sfContextMenu && !sfContextMenu.contains(e.target)) sfContextMenu.style.display = 'none';
         if (mobileTabsPopup && mobileTabsPopup.style.display === 'block' && !mobileTabsPopup.contains(e.target) && e.target !== mobileTabsBtn && !mobileTabsBtn.contains(e.target)) {
             mobileTabsPopup.style.display = 'none'
         }
@@ -1068,7 +982,6 @@ function setupEventListeners() {
     document.addEventListener('touchstart', e => {
         if (contextMenu && !contextMenu.contains(e.target)) contextMenu.style.display = 'none';
         if (tabContextMenu && !tabContextMenu.contains(e.target)) tabContextMenu.style.display = 'none';
-        if (sfContextMenu && !sfContextMenu.contains(e.target)) sfContextMenu.style.display = 'none';
         if (palettePanel && palettePanel.classList.contains('open') && !palettePanel.contains(e.target) && e.target !== paletteBtn && !paletteBtn.contains(e.target)) {
             palettePanel.classList.remove('open')
         }
@@ -1088,15 +1001,6 @@ function setupEventListeners() {
 
     if (savePngBtn) savePngBtn.addEventListener('click', saveAsPng);
     if (printBtn) printBtn.addEventListener('click', prepareAndPrint);
-    const exportSheetBtn = document.getElementById('export-sheet-btn');
-    if (exportSheetBtn) exportSheetBtn.addEventListener('click', () => {
-        const activeProject = projects.find(p => p.id === activeProjectId);
-        if (!activeProject || activeProject.type !== 'storyflow') {
-            showToast('Export as Sheet is only available for Moodflow boards.', 'error');
-            return;
-        }
-        exportMoodflowAsSheet(activeProject);
-    });
     if (saveProjectBtn) saveProjectBtn.addEventListener('click', saveProject);
     if (loadProjectBtn) loadProjectBtn.addEventListener('click', () => projectInput.click());
 
@@ -1855,6 +1759,7 @@ function drawTextListItem(e, t) {
     const textColor = lum > 0.5 ? '#111111' : '#ffffff';
     e.fillStyle = textColor;
     const i = t.fontStyle || 'normal', r = t.fontWeight || 'bold', s = t.fontFamily || 'Nunito';
+    e.font = `${i} ${r} ${t.fontSize}px '${s}', sans-serif`;
     e.textAlign = 'left';
     e.textBaseline = 'top';
 
@@ -1862,53 +1767,14 @@ function drawTextListItem(e, t) {
     const padding = 15;
     const checkboxSize = t.fontSize * 1.1;
     const checkboxMargin = 10;
-    const handleSize = t.fontSize * 0.8;
-    const indentSize = 25;
-
-    let currentY = -t.height / 2 + padding;
-
-    // Draw Title
-    if (t.title) {
-        e.font = `bold ${t.fontSize * 1.2}px '${s}', sans-serif`;
-        e.fillText(t.title, -t.width / 2 + padding, currentY);
-        currentY += h * 1.2;
-        // Divider
-        e.strokeStyle = textColor;
-        e.globalAlpha *= 0.2;
-        e.beginPath();
-        e.moveTo(-t.width / 2 + padding, currentY - 5);
-        e.lineTo(t.width / 2 - padding, currentY - 5);
-        e.stroke();
-        e.globalAlpha = t.opacity ?? 1;
-        currentY += 10;
-    }
-
-    e.font = `${i} ${r} ${t.fontSize}px '${s}', sans-serif`;
 
     (t.items || []).forEach((item, idx) => {
-        const indentOffset = (item.indent || 0) * indentSize;
-        const itemY = currentY;
-
-        // Draw Drag Handle
-        const handleX = -t.width / 2 + padding + indentOffset;
-        const handleY = itemY + (h - handleSize) / 2;
-        e.save();
-        e.globalAlpha *= 0.3;
-        e.strokeStyle = textColor;
-        e.lineWidth = 2 / cameraZoom;
-        for (let j = 0; j < 3; j++) {
-            const lineY = handleY + (j + 1) * (handleSize / 4);
-            e.beginPath();
-            e.moveTo(handleX, lineY);
-            e.lineTo(handleX + handleSize, lineY);
-            e.stroke();
-        }
-        e.restore();
+        const itemY = -t.height / 2 + padding + idx * h;
 
         // Draw Checkbox
         e.strokeStyle = textColor;
         e.lineWidth = 2 / cameraZoom;
-        const cbX = handleX + handleSize + 8;
+        const cbX = -t.width / 2 + padding;
         const cbY = itemY + (h - checkboxSize) / 2;
 
         e.strokeRect(cbX, cbY, checkboxSize, checkboxSize);
@@ -1922,7 +1788,9 @@ function drawTextListItem(e, t) {
 
         // Draw Text
         e.save();
-        if (item.completed) e.globalAlpha *= 0.5;
+        if (item.completed) {
+            e.globalAlpha *= 0.5;
+        }
         e.fillText(item.text, cbX + checkboxSize + checkboxMargin, itemY + (h - t.fontSize) / 2);
 
         if (item.completed) {
@@ -1933,7 +1801,6 @@ function drawTextListItem(e, t) {
             e.stroke();
         }
         e.restore();
-        currentY += h;
     });
     e.restore();
 }
@@ -2217,7 +2084,7 @@ function handleKeyDown(e) {
         if (e.code === 'Space') {
             e.preventDefault();
             activeProject.data.baseColor = '#' + Math.floor(Math.random() * 16777215).toString(16).padStart(6, '0');
-            activeProject.data.colors = generatePalette(activeProject.data.baseColor, activeProject.data.mode, activeProject.data.lockedColors);
+            activeProject.data.colors = generatePalette(activeProject.data.baseColor, activeProject.data.mode);
             saveToBrowser();
             renderColorSeeker(activeProjectId);
             return;
@@ -2225,16 +2092,6 @@ function handleKeyDown(e) {
         if (e.shiftKey && key === 's') {
             e.preventDefault();
             downloadColorSeekerPalette();
-            return;
-        }
-        if (key === 'l' && !e.ctrlKey && !e.shiftKey && !e.altKey) {
-            e.preventDefault();
-            const focusedIdx = window._colorseekerFocusedIndex;
-            if (focusedIdx !== null && focusedIdx !== undefined) {
-                const bars = colorseekerPalette ? colorseekerPalette.querySelectorAll('.colorseeker-bar') : [];
-                const bar = bars[focusedIdx];
-                if (bar && bar._toggleLock) bar._toggleLock();
-            }
             return;
         }
     }
@@ -2510,19 +2367,9 @@ function onMouseDown(e) {
                 }
             }
             if (itemUnderMouse && itemUnderMouse.type === 'textList') {
-                const handleIndex = getHandleHitIndex(itemUnderMouse, o);
-                if (handleIndex !== -1) {
-                    isRearrangingList = true;
-                    rearrangingListObj = itemUnderMouse;
-                    rearrangingItemIndex = handleIndex;
-                    canvas.style.cursor = 'row-resize';
-                    return;
-                }
-
                 const hitIndex = getCheckboxHitIndex(itemUnderMouse, o);
                 if (hitIndex !== -1) {
                     itemUnderMouse.items[hitIndex].completed = !itemUnderMouse.items[hitIndex].completed;
-                    syncTextListProperty(itemUnderMouse);
                     saveStateForUndo();
                     return;
                 }
@@ -2580,13 +2427,6 @@ function onMouseDown(e) {
 }
 function onMouseUp(e) {
     if (e.button === 0) {
-        if (isRearrangingList) {
-            isRearrangingList = false;
-            rearrangingListObj = null;
-            rearrangingItemIndex = -1;
-            canvas.style.cursor = 'default';
-            return;
-        }
         if (isDraggingConnector) {
             isDraggingConnector = false;
             if (tempConnector) {
@@ -2641,19 +2481,6 @@ function onMouseMove(e) {
         hoveredItem = hoveredPort.item;
     }
     hoveredConnector = getHoveredConnector(worldPos);
-
-    if (isRearrangingList) {
-        const overIndex = getHandleHitIndex(rearrangingListObj, worldPos);
-        if (overIndex !== -1 && overIndex !== rearrangingItemIndex) {
-            const itemsList = rearrangingListObj.items;
-            const movedItem = itemsList.splice(rearrangingItemIndex, 1)[0];
-            itemsList.splice(overIndex, 0, movedItem);
-            rearrangingItemIndex = overIndex;
-            syncTextListProperty(rearrangingListObj);
-            saveStateForUndo();
-        }
-        return;
-    }
 
     if (isMovingItems || isTransforming || isTransformingArrow || isDrawing) {
         if (selectionToolbar.style.display !== 'none') selectionToolbar.style.display = 'none';
@@ -3693,45 +3520,17 @@ function updateTextListDimensions(e) {
     if (e.type !== 'textList') return;
     const t = e.fontStyle || 'normal', o = e.fontWeight || 'bold', a = e.fontFamily || 'Nunito';
     ctx.save();
-    
-    let maxW = 0;
-    const h = e.fontSize * 1.5;
-    const indentSize = 25;
-    const handleSize = e.fontSize * 0.8;
-    const checkboxArea = e.fontSize * 1.1 + 8;
-    const padding = 30;
-
-    if (e.title) {
-        ctx.font = `bold ${e.fontSize * 1.2}px '${a}', sans-serif`;
-        maxW = ctx.measureText(e.title).width;
-    }
-
     ctx.font = `${t} ${o} ${e.fontSize}px '${a}', sans-serif`;
+    let maxW = 0;
     (e.items || []).forEach(item => {
         const m = ctx.measureText(item.text);
-        const indentOffset = (item.indent || 0) * indentSize;
-        const totalW = m.width + indentOffset + handleSize + 8 + checkboxArea + 15;
-        if (totalW > maxW) maxW = totalW;
+        if (m.width > maxW) maxW = m.width;
     });
-    
-    e.width = maxW + padding;
-    let totalH = (e.items || []).length * h + padding;
-    if (e.title) totalH += h * 1.2 + 10;
-    e.height = totalH;
+    const checkboxArea = e.fontSize * 1.1 + 10;
+    e.width = maxW + checkboxArea + 30;
+    const h = e.fontSize * 1.5;
+    e.height = (e.items || []).length * h + 30;
     ctx.restore();
-}
-
-function syncTextListProperty(item) {
-    if (item.type !== 'textList') return;
-    let lines = [];
-    if (item.title) {
-        lines.push(`# ${item.title}`);
-    }
-    (item.items || []).forEach(it => {
-        const indentStr = "-".repeat(it.indent || 0);
-        lines.push(`${indentStr}${it.text}`);
-    });
-    item.text = lines.join('\n');
 }
 function updateSelectionToolbar() {
     const isBoxOrCircle = selectedItems.some(item => item.type === 'box' || item.type === 'circle');
@@ -3941,28 +3740,7 @@ function updateNoteDimensions(item) {
     testCtx.restore();
     item.height = Math.max(120, totalH + 60); // Generous safety margin
 }
-function finishEditingText() { if (currentlyEditingText) { if (currentlyEditingText.type === 'text') return; currentlyEditingText.text = textEditor.value.trim() || (currentlyEditingText.type === 'comment' ? "Note..." : "Type..."); const e = currentlyEditingText; if (e.type === 'comment') { updateCommentDimensions(e); } else if (currentlyEditingText.type === 'textList') {
-        const lines = textEditor.value.split('\n');
-        let items = [];
-        let title = "";
-        const oldItems = currentlyEditingText.items || [];
-        lines.forEach((line, idx) => {
-            if (idx === 0 && line.startsWith('# ')) {
-                title = line.substring(2).trim();
-            } else if (line.trim() !== "") {
-                const indentMatch = line.match(/^(-+)/);
-                const indentStr = indentMatch ? indentMatch[0] : "";
-                const indent = indentStr.length;
-                const text = line.substring(indentStr.length).trim();
-                const oldItem = oldItems.find(oi => oi.text === text);
-                items.push({ text: text, completed: oldItem ? oldItem.completed : false, indent: indent });
-            }
-        });
-        if (items.length === 0 && !title) items.push({ text: "Item 1", completed: false, indent: 0 });
-        currentlyEditingText.items = items;
-        currentlyEditingText.title = title;
-        updateTextListDimensions(currentlyEditingText);
-    } else { const t = e.fontStyle || 'normal', o = e.fontWeight || 'bold', a = e.fontFamily || 'Nunito'; ctx.font = `${t} ${o} ${e.fontSize}px '${a}', sans-serif`; const i = textEditor.value.split('\n'); let r = 0; i.forEach(e => { const t = ctx.measureText(e); if (t.width > r) r = t.width }); e.width = r + 20; e.height = textEditor.scrollHeight / cameraZoom; } currentlyEditingText.isHidden = !1; selectedItems = [currentlyEditingText]; saveStateForUndo(); currentlyEditingText = null } textEditor.style.display = 'none'; textEditor.style.padding = '0'; textEditor.style.lineHeight = 'normal'; }
+function finishEditingText() { if (currentlyEditingText) { if (currentlyEditingText.type === 'text') return; currentlyEditingText.text = textEditor.value.trim() || (currentlyEditingText.type === 'comment' ? "Note..." : "Type..."); const e = currentlyEditingText; if (e.type === 'comment') { updateCommentDimensions(e); } else if (e.type === 'textList') { const lines = textEditor.value.split('\n').filter(l => l.trim() !== ""); if (lines.length === 0) lines.push("Item 1"); const oldItems = e.items || []; e.items = lines.map((l, i) => ({ text: l, completed: (oldItems[i] && oldItems[i].text === l) ? oldItems[i].completed : false })); updateTextListDimensions(e); } else { const t = e.fontStyle || 'normal', o = e.fontWeight || 'bold', a = e.fontFamily || 'Nunito'; ctx.font = `${t} ${o} ${e.fontSize}px '${a}', sans-serif`; const i = textEditor.value.split('\n'); let r = 0; i.forEach(e => { const t = ctx.measureText(e); if (t.width > r) r = t.width }); e.width = r + 20; e.height = textEditor.scrollHeight / cameraZoom; } currentlyEditingText.isHidden = !1; selectedItems = [currentlyEditingText]; saveStateForUndo(); currentlyEditingText = null } textEditor.style.display = 'none'; textEditor.style.padding = '0'; textEditor.style.lineHeight = 'normal'; }
 function autoResizeTextEditor() { textEditor.style.height = 'auto'; textEditor.style.height = textEditor.scrollHeight + 'px' }
 function saveStateForUndo() { items.forEach(i => i._isDirty = true); const e = JSON.stringify(items, (e, t) => { if (e === 'img') { return undefined } return t }); if (historyIndex < historyStack.length - 1) { historyStack = historyStack.slice(0, historyIndex + 1) } if (historyStack.length > 0 && historyStack[historyStack.length - 1] === e) return; historyStack.push(e); historyIndex++; if (historyStack.length > HISTORY_LIMIT) { historyStack.shift(); historyIndex-- } scheduleAutoSave(); requestUpdate(); }
 function loadStateFromHistory(e) {
@@ -4515,53 +4293,16 @@ function getCheckboxHitIndex(item, worldPos) {
     const padding = 15;
     const h = item.fontSize * 1.5;
     const checkboxSize = item.fontSize * 1.1;
-    const indentSize = 25;
-    const handleSize = item.fontSize * 0.8;
-
-    let currentY = padding;
-    if (item.title) currentY += h * 1.2 + 10;
 
     for (let i = 0; i < (item.items || []).length; i++) {
-        const indentOffset = (item.items[i].indent || 0) * indentSize;
-        const cbY = currentY + (h - checkboxSize) / 2;
-        const cbX = padding + indentOffset + handleSize + 8;
+        const itemY = padding + i * h;
+        const cbY = itemY + (h - checkboxSize) / 2;
+        const cbX = padding;
 
         if (localX >= cbX - 5 && localX <= cbX + checkboxSize + 5 &&
             localY >= cbY - 5 && localY <= cbY + checkboxSize + 5) {
             return i;
         }
-        currentY += h;
-    }
-    return -1;
-}
-
-function getHandleHitIndex(item, worldPos) {
-    if (item.type !== 'textList') return -1;
-    const dx = worldPos.x - (item.x + item.width / 2);
-    const dy = worldPos.y - (item.y + item.height / 2);
-    const cos = Math.cos(-item.rotation);
-    const sin = Math.sin(-item.rotation);
-    const localX = dx * cos - dy * sin + item.width / 2;
-    const localY = dx * sin + dy * cos + item.height / 2;
-
-    const padding = 15;
-    const h = item.fontSize * 1.5;
-    const handleSize = item.fontSize * 0.8;
-    const indentSize = 25;
-
-    let currentY = padding;
-    if (item.title) currentY += h * 1.2 + 10;
-
-    for (let i = 0; i < (item.items || []).length; i++) {
-        const indentOffset = (item.items[i].indent || 0) * indentSize;
-        const hy = currentY + (h - handleSize) / 2;
-        const hx = padding + indentOffset;
-
-        if (localX >= hx - 5 && localX <= hx + handleSize + 5 &&
-            localY >= hy - 5 && localY <= hy + handleSize + 5) {
-            return i;
-        }
-        currentY += h;
     }
     return -1;
 }
@@ -4788,85 +4529,15 @@ function hexToCmyk(hex) {
     return `${c}, ${m}, ${y}, ${Math.round(k * 100)}`;
 }
 
-function generatePalette(baseHex, mode, lockedColors) {
-    const hsl = hexToHsl(baseHex);
-    let colors = [];
-
+function generatePalette(baseHex, mode) {
+    const hsl = hexToHsl(baseHex); let colors = [];
     if (mode === 'shades') {
-        colors = [
-            hslToHex(hsl.h, hsl.s, Math.max(0, hsl.l - 40)),
-            hslToHex(hsl.h, hsl.s, Math.max(0, hsl.l - 20)),
-            baseHex,
-            hslToHex(hsl.h, hsl.s, Math.min(100, hsl.l + 20)),
-            hslToHex(hsl.h, hsl.s, Math.min(100, hsl.l + 40))
-        ];
+        colors = [hslToHex(hsl.h, hsl.s, Math.max(0, hsl.l - 40)), hslToHex(hsl.h, hsl.s, Math.max(0, hsl.l - 20)), baseHex, hslToHex(hsl.h, hsl.s, Math.min(100, hsl.l + 20)), hslToHex(hsl.h, hsl.s, Math.min(100, hsl.l + 40))];
     } else if (mode === 'tones') {
-        colors = [
-            hslToHex(hsl.h, Math.max(0, hsl.s - 40), hsl.l),
-            hslToHex(hsl.h, Math.max(0, hsl.s - 20), hsl.l),
-            baseHex,
-            hslToHex(hsl.h, Math.min(100, hsl.s + 20), hsl.l),
-            hslToHex(hsl.h, Math.min(100, hsl.s + 40), hsl.l)
-        ];
+        colors = [hslToHex(hsl.h, Math.max(0, hsl.s - 40), hsl.l), hslToHex(hsl.h, Math.max(0, hsl.s - 20), hsl.l), baseHex, hslToHex(hsl.h, Math.min(100, hsl.s + 20), hsl.l), hslToHex(hsl.h, Math.min(100, hsl.s + 40), hsl.l)];
     } else if (mode === 'harmonies') {
-        // Analogous: ±15°, ±30° around the base
-        colors = [
-            hslToHex((hsl.h - 30 + 360) % 360, hsl.s, hsl.l),
-            hslToHex((hsl.h - 15 + 360) % 360, hsl.s, hsl.l),
-            baseHex,
-            hslToHex((hsl.h + 15) % 360, hsl.s, hsl.l),
-            hslToHex((hsl.h + 30) % 360, hsl.s, hsl.l)
-        ];
-    } else if (mode === 'complementary') {
-        // Base, base-warm split, midpoint, comp-cool split, complement (180°)
-        const comp = (hsl.h + 180) % 360;
-        colors = [
-            baseHex,
-            hslToHex((hsl.h + 30) % 360, hsl.s, hsl.l),
-            hslToHex((hsl.h + 90) % 360, hsl.s, hsl.l),
-            hslToHex((hsl.h + 150) % 360, hsl.s, hsl.l),
-            hslToHex(comp, hsl.s, hsl.l)
-        ];
-    } else if (mode === 'split-complementary') {
-        // Base + two colors flanking its complement (150° and 210°)
-        const splitA = (hsl.h + 150) % 360;
-        const splitB = (hsl.h + 210) % 360;
-        colors = [
-            hslToHex(splitA, hsl.s, Math.max(5, hsl.l - 15)),
-            hslToHex(splitA, hsl.s, hsl.l),
-            baseHex,
-            hslToHex(splitB, hsl.s, hsl.l),
-            hslToHex(splitB, hsl.s, Math.min(95, hsl.l + 15))
-        ];
-    } else if (mode === 'triadic') {
-        // Three hues at 120° intervals, with lighter/darker variants
-        const t1 = (hsl.h + 120) % 360;
-        const t2 = (hsl.h + 240) % 360;
-        colors = [
-            hslToHex(t2, hsl.s, hsl.l),
-            hslToHex(t2, hsl.s, Math.min(95, hsl.l + 15)),
-            baseHex,
-            hslToHex(t1, hsl.s, Math.min(95, hsl.l + 15)),
-            hslToHex(t1, hsl.s, hsl.l)
-        ];
-    } else if (mode === 'tetradic') {
-        // Four hues at 90° intervals
-        colors = [
-            baseHex,
-            hslToHex((hsl.h + 90) % 360, hsl.s, hsl.l),
-            hslToHex((hsl.h + 180) % 360, hsl.s, hsl.l),
-            hslToHex((hsl.h + 270) % 360, hsl.s, hsl.l),
-            hslToHex((hsl.h + 45) % 360, hsl.s, Math.min(95, hsl.l + 10))
-        ];
+        colors = [hslToHex((hsl.h + 60) % 360, hsl.s, hsl.l), hslToHex((hsl.h + 30) % 360, hsl.s, hsl.l), baseHex, hslToHex((hsl.h - 30 + 360) % 360, hsl.s, hsl.l), hslToHex((hsl.h - 60 + 360) % 360, hsl.s, hsl.l)];
     }
-
-    // Apply locked colors — locked slots keep their existing value
-    if (lockedColors && lockedColors.length) {
-        lockedColors.forEach((lockedHex, i) => {
-            if (lockedHex && i < colors.length) colors[i] = lockedHex;
-        });
-    }
-
     return colors;
 }
 
@@ -4874,14 +4545,9 @@ function renderColorSeeker(projectId) {
     const project = projects.find(p => p.id === projectId);
     if (!project || project.type !== 'colorseeker') return;
 
-    if (!project.data.lockedColors) project.data.lockedColors = [];
-
     if (colorseekerModeSelect) colorseekerModeSelect.value = project.data.mode || 'shades';
     if (colorseekerBasePicker) colorseekerBasePicker.value = project.data.baseColor || '#ffffff';
-    if (!project.data.colors) project.data.colors = generatePalette(project.data.baseColor, project.data.mode, project.data.lockedColors);
-
-    // Track which bar is "focused" for the L hotkey
-    window._colorseekerFocusedIndex = null;
+    if (!project.data.colors) project.data.colors = generatePalette(project.data.baseColor, project.data.mode);
 
     if (colorseekerPalette) {
         colorseekerPalette.innerHTML = '';
@@ -4895,117 +4561,53 @@ function renderColorSeeker(projectId) {
             bar.style.position = 'relative';
             bar.style.cursor = 'pointer';
 
-            const isLocked = !!project.data.lockedColors[i];
-
-            // Base indicator (only when not locked)
-            const isBase = (project.data.mode === 'shades' || project.data.mode === 'tones') ? i === 2
-                         : (project.data.mode === 'harmonies' || project.data.mode === 'split-complementary' || project.data.mode === 'triadic') ? i === 2
-                         : (project.data.mode === 'complementary' || project.data.mode === 'tetradic') ? i === 0
-                         : false;
-            if (isBase && !isLocked) {
+            const isBase = i === 2;
+            if (isBase) {
                 const baseIndicator = document.createElement('div');
                 baseIndicator.innerHTML = '<iconify-icon icon="lucide:target" width="24" height="24"></iconify-icon>';
-                baseIndicator.style.cssText = 'position:absolute;top:1.5rem;left:50%;transform:translateX(-50%);opacity:0.5;pointer-events:none;';
+                baseIndicator.style.position = 'absolute';
+                baseIndicator.style.top = '1.5rem';
+                baseIndicator.style.left = '50%';
+                baseIndicator.style.transform = 'translateX(-50%)';
                 const hsl = hexToHsl(cHex);
                 baseIndicator.style.color = hsl.l > 50 ? '#000' : '#fff';
+                baseIndicator.style.opacity = '0.5';
                 bar.appendChild(baseIndicator);
             }
 
-            // Lock icon button (visible on hover or when locked)
-            const lockBtn = document.createElement('button');
-            lockBtn.title = isLocked ? 'Unlock color (L)' : 'Lock color (L)';
-            lockBtn.style.cssText = `
-                position: absolute;
-                top: 0.75rem;
-                right: 0.75rem;
-                background: ${isLocked ? 'rgba(255,255,255,0.25)' : 'rgba(0,0,0,0.3)'};
-                border: 1px solid ${isLocked ? 'rgba(255,255,255,0.6)' : 'rgba(255,255,255,0.2)'};
-                border-radius: 6px;
-                width: 28px;
-                height: 28px;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                cursor: pointer;
-                opacity: ${isLocked ? '1' : '0'};
-                transition: opacity 0.2s, background 0.2s;
-                z-index: 5;
-                padding: 0;
-                color: ${hexToHsl(cHex).l > 50 ? '#222' : '#fff'};
-            `;
-            lockBtn.innerHTML = isLocked
-                ? '<iconify-icon icon="lucide:lock" width="14" height="14"></iconify-icon>'
-                : '<iconify-icon icon="lucide:lock-open" width="14" height="14"></iconify-icon>';
-            bar.appendChild(lockBtn);
-
-            // Locked overlay stripe
-            if (isLocked) {
-                const lockedStripe = document.createElement('div');
-                lockedStripe.style.cssText = `
-                    position:absolute;inset:0;
-                    background: repeating-linear-gradient(
-                        -45deg,
-                        transparent,transparent 8px,
-                        rgba(255,255,255,0.06) 8px,rgba(255,255,255,0.06) 10px
-                    );
-                    pointer-events:none;
-                    border: 2px solid rgba(255,255,255,0.25);
-                    box-sizing:border-box;
-                `;
-                bar.appendChild(lockedStripe);
-            }
-
-            // Color info tooltip
             const info = document.createElement('div');
             info.className = 'colorseeker-info';
-            info.style.cssText = 'position:absolute;bottom:2rem;left:50%;transform:translateX(-50%);opacity:0;transition:opacity 0.2s;display:flex;flex-direction:column;gap:0.5rem;align-items:center;pointer-events:none;';
+            info.style.position = 'absolute';
+            info.style.bottom = '2rem';
+            info.style.left = '50%';
+            info.style.transform = 'translateX(-50%)';
+            info.style.opacity = '0';
+            info.style.transition = 'opacity 0.2s';
+            info.style.display = 'flex';
+            info.style.flexDirection = 'column';
+            info.style.gap = '0.5rem';
+            info.style.alignItems = 'center';
+            info.style.pointerEvents = 'none';
+
             const hslStr = hexToHsl(cHex);
             info.style.color = hslStr.l > 50 ? '#000' : '#fff';
+
             info.innerHTML = `
-                <div style="font-size:1.5rem;font-weight:bold;margin-bottom:0.5rem;">${cHex.toUpperCase()}</div>
-                <div style="font-size:0.9rem;">RGB: ${hexToRgb(cHex)}</div>
-                <div style="font-size:0.9rem;">HSL: ${hslStr.h}, ${hslStr.s}%, ${hslStr.l}%</div>
-                <div style="font-size:0.9rem;">CMYK: ${hexToCmyk(cHex)}</div>
-                ${isLocked ? '<div style="font-size:0.8rem;margin-top:0.25rem;opacity:0.8;">🔒 Locked</div>' : ''}
+                <div style="font-size: 1.5rem; font-weight: bold; margin-bottom: 0.5rem;">${cHex.toUpperCase()}</div>
+                <div style="font-size: 0.9rem;">RGB: ${hexToRgb(cHex)}</div>
+                <div style="font-size: 0.9rem;">HSL: ${hslStr.h}, ${hslStr.s}%, ${hslStr.l}%</div>
+                <div style="font-size: 0.9rem;">CMYK: ${hexToCmyk(cHex)}</div>
             `;
+
             bar.appendChild(info);
 
-            // Hover effects
-            bar.addEventListener('mouseenter', () => {
-                bar.style.flex = '1.5';
-                info.style.opacity = '1';
-                lockBtn.style.opacity = '1';
-                window._colorseekerFocusedIndex = i;
-            });
-            bar.addEventListener('mouseleave', () => {
-                bar.style.flex = '1';
-                info.style.opacity = '0';
-                if (!isLocked) lockBtn.style.opacity = '0';
-                if (window._colorseekerFocusedIndex === i) window._colorseekerFocusedIndex = null;
-            });
-
-            // Lock toggle function
-            const toggleLock = (ev) => {
-                if (ev) ev.stopPropagation();
-                if (project.data.lockedColors[i]) {
-                    project.data.lockedColors[i] = null;
-                } else {
-                    project.data.lockedColors[i] = cHex;
-                }
-                saveToBrowser();
-                renderColorSeeker(projectId);
-                showToast(project.data.lockedColors[i] ? `Color ${cHex.toUpperCase()} locked.` : 'Color unlocked.');
-            };
-
-            lockBtn.addEventListener('click', toggleLock);
-            // Expose toggle on the bar element for hotkey access
-            bar._toggleLock = toggleLock;
+            bar.addEventListener('mouseenter', () => { bar.style.flex = '1.5'; info.style.opacity = '1'; });
+            bar.addEventListener('mouseleave', () => { bar.style.flex = '1'; info.style.opacity = '0'; });
 
             bar.addEventListener('click', (e) => {
-                if (e.target === lockBtn || lockBtn.contains(e.target)) return;
                 if (e.shiftKey) {
                     project.data.baseColor = cHex;
-                    project.data.colors = generatePalette(cHex, project.data.mode, project.data.lockedColors);
+                    project.data.colors = generatePalette(cHex, project.data.mode);
                     saveToBrowser();
                     renderColorSeeker(projectId);
                     showToast('Base color set.');
@@ -5054,7 +4656,7 @@ if (colorseekerModeSelect) {
         const project = projects.find(p => p.id === activeProjectId);
         if (project && project.type === 'colorseeker') {
             project.data.mode = e.target.value;
-            project.data.colors = generatePalette(project.data.baseColor, project.data.mode, project.data.lockedColors);
+            project.data.colors = generatePalette(project.data.baseColor, project.data.mode);
             saveToBrowser();
             renderColorSeeker(activeProjectId);
         }
@@ -5065,7 +4667,7 @@ if (colorseekerBasePicker) {
         const project = projects.find(p => p.id === activeProjectId);
         if (project && project.type === 'colorseeker') {
             project.data.baseColor = e.target.value;
-            project.data.colors = generatePalette(project.data.baseColor, project.data.mode, project.data.lockedColors);
+            project.data.colors = generatePalette(project.data.baseColor, project.data.mode);
             renderColorSeeker(activeProjectId);
         }
     });
@@ -5199,13 +4801,6 @@ function createStoryCard(project, frame, index) {
         card.classList.remove('dragging');
         card.draggable = false;
         document.querySelectorAll('.story-card.drag-target').forEach(c => c.classList.remove('drag-target'));
-    });
-
-    card.addEventListener('contextmenu', e => {
-        e.preventDefault();
-        document.querySelectorAll('.context-menu').forEach(m => m.style.display = 'none');
-        sfContextMenu.dataset.frameIndex = index;
-        showAndPositionMenu(sfContextMenu, e);
     });
 
     const header = document.createElement('div');
@@ -5394,42 +4989,6 @@ function createStoryCard(project, frame, index) {
     return card;
 }
 
-// --- STORYFLOW LIGHTBOX ---
-(function () {
-    const lightbox = document.getElementById('storyflow-lightbox');
-    const lightboxImg = document.getElementById('storyflow-lightbox-img');
-    const lightboxClose = document.getElementById('storyflow-lightbox-close');
-
-    function closeLightbox() {
-        if (!lightbox) return;
-        lightbox.classList.remove('open');
-        // Clear src after fade out to free memory
-        setTimeout(() => { if (!lightbox.classList.contains('open')) lightboxImg.src = ''; }, 250);
-    }
-
-    window.openStoryLightbox = function (src) {
-        if (!lightbox || !lightboxImg) return;
-        lightboxImg.src = src;
-        lightbox.classList.add('open');
-    };
-    window.closeStoryLightbox = closeLightbox;
-
-    if (lightboxClose) lightboxClose.addEventListener('click', (e) => { e.stopPropagation(); closeLightbox(); });
-
-    // Click on backdrop (not on the image) closes
-    if (lightbox) lightbox.addEventListener('click', (e) => {
-        if (e.target === lightbox || e.target === lightboxImg) closeLightbox();
-    });
-
-    // Escape key closes
-    document.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape' && lightbox && lightbox.classList.contains('open')) {
-            e.stopPropagation();
-            closeLightbox();
-        }
-    }, true);
-})();
-
 function createStoryImageSlot(project, frame) {
     const slot = document.createElement('div');
     slot.className = 'story-image-slot';
@@ -5440,13 +4999,6 @@ function createStoryImageSlot(project, frame) {
         img.className = 'lazy-load';
         imageLazyObserver.observe(img);
         slot.appendChild(img);
-        slot.classList.add('has-image');
-
-        // Click on the image itself opens the lightbox
-        img.addEventListener('click', (e) => {
-            e.stopPropagation();
-            window.openStoryLightbox(frame.image);
-        });
     } else {
         slot.innerHTML = `<iconify-icon icon="lucide:plus" width="24" height="24" style="color:var(--text-color-light)"></iconify-icon>`;
     }
@@ -5469,17 +5021,6 @@ function createStoryImageSlot(project, frame) {
             });
         };
         promptImageInput.click();
-    };
-
-    // Zoom / preview button (only shown when an image is loaded)
-    const zoomBtn = document.createElement('button');
-    zoomBtn.className = 'story-image-overlay-btn';
-    zoomBtn.title = 'Preview full size';
-    zoomBtn.style.display = frame.image ? '' : 'none';
-    zoomBtn.innerHTML = `<iconify-icon icon="lucide:zoom-in" width="20" height="20"></iconify-icon>`;
-    zoomBtn.onclick = (e) => {
-        e.stopPropagation();
-        if (frame.image) window.openStoryLightbox(frame.image);
     };
 
     // Drag & Drop
@@ -5520,7 +5061,7 @@ function createStoryImageSlot(project, frame) {
         });
     };
 
-    overlay.append(uploadBtn, zoomBtn, libraryBtn);
+    overlay.append(uploadBtn, libraryBtn);
     slot.appendChild(overlay);
 
     // Support paste on slot
@@ -5710,98 +5251,6 @@ function saveStoryflowAsPdf(project) {
     showToast("StoryFlow exported as PDF.");
 }
 
-function exportMoodflowAsSheet(project) {
-    if (!project || !project.data || !project.data.frames || project.data.frames.length === 0) {
-        showToast('Moodflow is empty, nothing to export.', 'error');
-        return;
-    }
-
-    showToast('Generating sheet export...');
-
-    const frames = project.data.frames;
-    const projectName = project.name || 'Moodflow Export';
-    const exportDate = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
-
-    // Build table rows
-    const rows = frames.map((frame, i) => {
-        const frameNum = i + 1;
-        const title = (frame.title || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-        const description = (frame.description || '').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>');
-        const duration = frame.meta?.duration || '—';
-        const camera = (frame.meta?.camera || '—').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-        const imgCell = frame.image
-            ? `<img src="${frame.image}" style="width:180px;height:120px;object-fit:cover;border-radius:4px;display:block;" />`
-            : `<div style="width:180px;height:120px;background:#1a1a2e;border-radius:4px;display:flex;align-items:center;justify-content:center;color:#555;font-size:11px;">No Image</div>`;
-
-        const rowBg = i % 2 === 0 ? '#0f0f1a' : '#12121f';
-        return `
-        <tr style="background:${rowBg};">
-            <td style="text-align:center;font-weight:700;font-size:1.1rem;color:#7c9cff;vertical-align:middle;padding:10px 8px;">${frameNum}</td>
-            <td style="font-weight:600;font-size:0.9rem;color:#e2e8f0;vertical-align:middle;padding:10px 8px;min-width:120px;max-width:180px;word-break:break-word;">${title || '<span style="color:#444">Untitled</span>'}</td>
-            <td style="padding:10px 8px;vertical-align:middle;">${imgCell}</td>
-            <td style="font-size:0.82rem;color:#94a3b8;vertical-align:top;padding:10px 8px;min-width:200px;max-width:300px;line-height:1.6;">${description || '<span style="color:#444">—</span>'}</td>
-            <td style="text-align:center;font-size:0.85rem;color:#64748b;vertical-align:middle;padding:10px 8px;white-space:nowrap;">${duration}</td>
-            <td style="text-align:center;font-size:0.85rem;color:#64748b;vertical-align:middle;padding:10px 8px;white-space:nowrap;">${camera}</td>
-        </tr>`;
-    }).join('');
-
-    const html = `<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>${projectName} — Moodflow Sheet</title>
-<style>
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: 'Inter', 'Segoe UI', Arial, sans-serif; background: #0d0d0d; color: #e2e8f0; padding: 2rem; }
-  .sheet-header { display: flex; align-items: center; gap: 1.2rem; margin-bottom: 0.75rem; }
-  .sheet-header h1 { font-size: 1.5rem; font-weight: 700; color: #fff; }
-  .sheet-meta { font-size: 0.8rem; color: #64748b; margin-bottom: 1.5rem; padding-bottom: 1rem; border-bottom: 1px solid #1e2035; }
-  table { border-collapse: collapse; width: 100%; min-width: 900px; }
-  thead tr { background: #161628 !important; }
-  th { padding: 10px 8px; font-size: 0.72rem; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: #7c9cff; border-bottom: 2px solid #252545; text-align: left; white-space: nowrap; }
-  th:first-child { text-align: center; }
-  td { border-bottom: 1px solid #1a1a2e; vertical-align: middle; }
-  tr:hover td { background: rgba(124, 156, 255, 0.04) !important; }
-  .badge { display: inline-block; padding: 2px 8px; border-radius: 20px; font-size: 0.72rem; font-weight: 600; background: rgba(124,156,255,0.12); color: #7c9cff; }
-  @media print { body { background: #fff; color: #000; } .sheet-header h1 { color: #000; } }
-</style>
-</head>
-<body>
-  <div class="sheet-header">
-    <svg width="28" height="28" viewBox="0 0 28 28" fill="none" xmlns="http://www.w3.org/2000/svg"><rect width="28" height="28" rx="6" fill="#7c9cff" fill-opacity="0.15"/><path d="M7 10h14M7 14h14M7 18h10" stroke="#7c9cff" stroke-width="1.8" stroke-linecap="round"/></svg>
-    <h1>${projectName}</h1>
-    <span class="badge">Moodflow</span>
-  </div>
-  <div class="sheet-meta">Exported on ${exportDate} &nbsp;·&nbsp; ${frames.length} frame${frames.length !== 1 ? 's' : ''} &nbsp;·&nbsp; Moodinfinite</div>
-  <table>
-    <thead>
-      <tr>
-        <th style="width:40px;">#</th>
-        <th>Frame Title</th>
-        <th>Visual</th>
-        <th>Action / Notes</th>
-        <th>Duration</th>
-        <th>Camera</th>
-      </tr>
-    </thead>
-    <tbody>
-      ${rows}
-    </tbody>
-  </table>
-</body>
-</html>`;
-
-    const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${projectName.replace(/[^a-z0-9\-_. ]/gi, '_')}_sheet.html`;
-    a.click();
-    URL.revokeObjectURL(url);
-    showToast(`Sheet exported as "${a.download}".`);
-}
-
 // --- STORYFLOW MINIMAP LOGIC ---
 
 function updateStoryflowMinimapViewport() {
@@ -5922,17 +5371,6 @@ function prepareAndPrint() {
                 activeProject.type === 'colorseeker' ? 'Moodtone' : 'Board';
         }
         if (dateEl) dateEl.textContent = new Date().toLocaleDateString();
-
-        // Stamp the active tab type so CSS print rules only show the correct container
-        document.body.dataset.printTab = activeProject.type;
     }
-
-    // Clean up the attribute after the print dialog closes
-    const cleanup = () => {
-        delete document.body.dataset.printTab;
-        window.removeEventListener('afterprint', cleanup);
-    };
-    window.addEventListener('afterprint', cleanup);
-
     window.print();
 }
