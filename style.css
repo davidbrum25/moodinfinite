@@ -939,6 +939,35 @@
             margin-top: 0.5rem;
         }
 
+        .story-toggle-btn {
+            background: rgba(0, 0, 0, 0.15);
+            border: 1px solid var(--border-color);
+            color: var(--text-color-light);
+            border-radius: 0.35rem;
+            padding: 0.25rem 0.5rem;
+            font-size: 0.75rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            text-transform: uppercase;
+        }
+
+        .story-toggle-btn:hover {
+            background: rgba(0, 0, 0, 0.25);
+        }
+
+        .story-toggle-btn.approved-active {
+            background: rgba(34, 197, 94, 0.2);
+            border-color: #22c55e;
+            color: #22c55e;
+        }
+
+        .story-toggle-btn.wip-active {
+            background: rgba(234, 179, 8, 0.2);
+            border-color: #eab308;
+            color: #eab308;
+        }
+
         #add-story-frame-btn {
             height: fit-content;
             align-self: center;

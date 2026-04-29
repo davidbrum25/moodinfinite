@@ -5383,6 +5383,32 @@ function createStoryCard(project, frame, index) {
 
     const actions = document.createElement('div');
     actions.className = 'story-card-actions';
+
+    const togglesContainer = document.createElement('div');
+    togglesContainer.style.display = 'flex';
+    togglesContainer.style.gap = '0.5rem';
+    togglesContainer.style.marginRight = 'auto';
+
+    const btnApproved = document.createElement('button');
+    btnApproved.textContent = 'Approved';
+    btnApproved.className = 'story-toggle-btn ' + (frame.meta.status === 'approved' ? 'approved-active' : '');
+    btnApproved.onclick = () => {
+        frame.meta.status = frame.meta.status === 'approved' ? null : 'approved';
+        scheduleAutoSave();
+        renderStoryflowView(project);
+    };
+
+    const btnWip = document.createElement('button');
+    btnWip.textContent = 'Wip';
+    btnWip.className = 'story-toggle-btn ' + (frame.meta.status === 'wip' ? 'wip-active' : '');
+    btnWip.onclick = () => {
+        frame.meta.status = frame.meta.status === 'wip' ? null : 'wip';
+        scheduleAutoSave();
+        renderStoryflowView(project);
+    };
+
+    togglesContainer.append(btnApproved, btnWip);
+
     const deleteBtn = document.createElement('button');
     deleteBtn.className = 'selection-tool-btn';
     deleteBtn.innerHTML = `<iconify-icon icon="lucide:trash-2" width="16" height="16" style="color:#ef4444"></iconify-icon>`;
@@ -5391,7 +5417,8 @@ function createStoryCard(project, frame, index) {
         renderStoryflowView(project);
         saveToBrowser();
     };
-    actions.appendChild(deleteBtn);
+    
+    actions.append(togglesContainer, deleteBtn);
 
     card.append(header, imageSlot, titleInput, descArea, metaGrid, actions);
     return card;
