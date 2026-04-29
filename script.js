@@ -5202,6 +5202,9 @@ function createStoryCard(project, frame, index) {
     });
 
     card.addEventListener('contextmenu', e => {
+        if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') {
+            return;
+        }
         e.preventDefault();
         document.querySelectorAll('.context-menu').forEach(m => m.style.display = 'none');
         sfContextMenu.dataset.frameIndex = index;
@@ -5520,7 +5523,19 @@ function createStoryImageSlot(project, frame) {
         });
     };
 
-    overlay.append(uploadBtn, zoomBtn, libraryBtn);
+    const removeBtn = document.createElement('button');
+    removeBtn.className = 'story-image-overlay-btn';
+    removeBtn.title = 'Remove Image';
+    removeBtn.style.display = frame.image ? '' : 'none';
+    removeBtn.innerHTML = `<iconify-icon icon="lucide:trash-2" width="20" height="20"></iconify-icon>`;
+    removeBtn.onclick = (e) => {
+        e.stopPropagation();
+        frame.image = null;
+        renderStoryflowView(project);
+        saveToBrowser();
+    };
+
+    overlay.append(uploadBtn, zoomBtn, libraryBtn, removeBtn);
     slot.appendChild(overlay);
 
     // Support paste on slot
