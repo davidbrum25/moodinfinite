@@ -268,6 +268,18 @@
                     <iconify-icon icon="lucide:check-circle" width="16" height="16"></iconify-icon>
                     <span id="stats-completion">0% Ready</span>
                 </div>
+                <div class="stats-item" style="margin-left: auto;">
+                    <iconify-icon icon="lucide:check" width="16" height="16" style="color: #22c55e"></iconify-icon>
+                    <span id="stats-approved">0% Approved</span>
+                </div>
+                <div class="stats-item">
+                    <iconify-icon icon="lucide:pencil" width="16" height="16" style="color: #eab308"></iconify-icon>
+                    <span id="stats-wip">0% WIP</span>
+                </div>
+                <div class="stats-item">
+                    <iconify-icon icon="lucide:circle-dashed" width="16" height="16"></iconify-icon>
+                    <span id="stats-not-started">0% Not Started</span>
+                </div>
             </div>
             <div id="storyflow-scroll-area"></div>
         </div>
@@ -275,6 +287,9 @@
         <div id="storyflow-minimap" style="display: none;">
             <button id="storyflow-scroll-start-btn" class="minimap-control-btn" title="Go to Beginning">
                 <iconify-icon icon="lucide:skip-back" width="24" height="24"></iconify-icon>
+            </button>
+            <button id="storyflow-toggle-tint-btn" class="minimap-control-btn active" title="Toggle Status Tint">
+                <iconify-icon icon="lucide:gallery-horizontal" width="24" height="24"></iconify-icon>
             </button>
             <div id="storyflow-minimap-track-container">
                 <div id="storyflow-minimap-track"></div>

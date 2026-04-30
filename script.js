@@ -5159,6 +5159,14 @@ function renderStoryflowView(project) {
 
     const minimapTrack = document.getElementById('storyflow-minimap-track');
     const minimapViewport = document.getElementById('storyflow-minimap-viewport');
+    const toggleTintBtn = document.getElementById('storyflow-toggle-tint-btn');
+    
+    if (toggleTintBtn && minimapTrack) {
+        toggleTintBtn.onclick = () => {
+            toggleTintBtn.classList.toggle('active');
+            minimapTrack.classList.toggle('hide-tint');
+        };
+    }
     
     if (minimapTrack && minimapViewport) {
         minimapTrack.innerHTML = '';
@@ -5168,13 +5176,13 @@ function renderStoryflowView(project) {
             if (frame.image) {
                 miniframe.style.backgroundImage = `url(${frame.image})`;
             }
-            miniframe.addEventListener('click', () => {
-                const targetCard = storyList.children[index];
-                if (targetCard) {
-                    const scrollLeft = targetCard.offsetLeft - (storyflowContainer.clientWidth / 2) + (targetCard.clientWidth / 2);
-                    storyflowContainer.scrollTo({ left: scrollLeft, behavior: 'smooth' });
-                }
-            });
+            if (frame.meta && frame.meta.status === 'approved') {
+                miniframe.classList.add('status-approved');
+            } else if (frame.meta && frame.meta.status === 'wip') {
+                miniframe.classList.add('status-wip');
+            } else {
+                miniframe.classList.add('status-not-started');
+            }
             minimapTrack.appendChild(miniframe);
         });
         
@@ -5874,20 +5882,42 @@ function updateStoryflowStats(project) {
     const totalDurEl = document.getElementById('stats-total-duration');
     const avgDurEl = document.getElementById('stats-avg-duration');
     const completionEl = document.getElementById('stats-completion');
+    const approvedEl = document.getElementById('stats-approved');
+    const wipEl = document.getElementById('stats-wip');
+    const notStartedEl = document.getElementById('stats-not-started');
     
     if (!framesCountEl || !totalDurEl || !avgDurEl || !completionEl) return;
 
     let totalDuration = 0;
     let completedFrames = 0;
+    let approvedFrames = 0;
+    let wipFrames = 0;
+    let notStartedFrames = 0;
+
     project.data.frames.forEach(frame => {
         totalDuration += parseInt(frame.meta?.duration) || 0;
         if (frame.image || (frame.title && frame.description)) completedFrames++;
+        
+        if (frame.meta?.status === 'approved') {
+            approvedFrames++;
+        } else if (frame.meta?.status === 'wip') {
+            wipFrames++;
+        } else {
+            notStartedFrames++;
+        }
     });
     
-    framesCountEl.textContent = `${project.data.frames.length} Frames`;
+    const total = project.data.frames.length;
+    framesCountEl.textContent = `${total} Frames`;
     totalDurEl.textContent = `${totalDuration}s Total`;
-    avgDurEl.textContent = `${project.data.frames.length > 0 ? (totalDuration / project.data.frames.length).toFixed(1) : 0}s Avg`;
-    completionEl.textContent = `${project.data.frames.length > 0 ? Math.round((completedFrames / project.data.frames.length) * 100) : 0}% Ready`;
+    avgDurEl.textContent = `${total > 0 ? (totalDuration / total).toFixed(1) : 0}s Avg`;
+    completionEl.textContent = `${total > 0 ? Math.round((completedFrames / total) * 100) : 0}% Ready`;
+    
+    if (approvedEl && wipEl && notStartedEl) {
+        approvedEl.textContent = `${total > 0 ? Math.round((approvedFrames / total) * 100) : 0}% Approved`;
+        wipEl.textContent = `${total > 0 ? Math.round((wipFrames / total) * 100) : 0}% WIP`;
+        notStartedEl.textContent = `${total > 0 ? Math.round((notStartedFrames / total) * 100) : 0}% Not Started`;
+    }
 }
 
 let minimapFrameId = null;
@@ -5916,6 +5946,7 @@ let minimapStartScrollLeft = 0;
 const storyflowMinimapViewportEl = document.getElementById('storyflow-minimap-viewport');
 const storyflowContainerEl = document.getElementById('storyflow-scroll-area');
 const storyflowMinimapTrackEl = document.getElementById('storyflow-minimap-track');
+const storyflowMinimapTrackContainerEl = document.getElementById('storyflow-minimap-track-container');
 
 if (storyflowMinimapViewportEl) {
     storyflowMinimapViewportEl.onmousedown = (e) => {
@@ -5924,7 +5955,38 @@ if (storyflowMinimapViewportEl) {
         minimapStartScrollLeft = storyflowContainerEl.scrollLeft;
         document.body.style.cursor = 'grabbing';
         e.preventDefault();
+        e.stopPropagation();
     };
+}
+
+if (storyflowMinimapTrackContainerEl) {
+    storyflowMinimapTrackContainerEl.addEventListener('mousedown', (e) => {
+        if (e.target === storyflowMinimapViewportEl) return;
+        
+        const rect = storyflowMinimapTrackEl.getBoundingClientRect();
+        const clickX = e.clientX - rect.left;
+        
+        const minimapWidth = storyflowMinimapTrackEl.clientWidth;
+        const viewportWidth = parseFloat(storyflowMinimapViewportEl.style.width) || 20;
+        
+        let newViewportLeft = clickX - (viewportWidth / 2);
+        
+        const maxLeft = minimapWidth - viewportWidth;
+        if (newViewportLeft < 0) newViewportLeft = 0;
+        if (newViewportLeft > maxLeft) newViewportLeft = maxLeft;
+        
+        const scrollRatio = maxLeft > 0 ? newViewportLeft / maxLeft : 0;
+        
+        const maxScrollLeft = storyflowContainerEl.scrollWidth - storyflowContainerEl.clientWidth;
+        storyflowContainerEl.scrollLeft = scrollRatio * maxScrollLeft;
+        
+        isDraggingStoryflowMinimap = true;
+        minimapStartX = e.clientX;
+        minimapStartScrollLeft = storyflowContainerEl.scrollLeft;
+        document.body.style.cursor = 'grabbing';
+        
+        e.preventDefault();
+    });
 }
 
 window.addEventListener('mousemove', (e) => {
