@@ -696,6 +696,7 @@ const addCircleBtn = document.getElementById('add-circle-btn');
 const addMeasureBtn = document.getElementById('add-measure-btn');
 const addGridBtn = document.getElementById('add-grid-btn');
 const addTextListBtn = document.getElementById('add-text-list-btn');
+const addCounterBtn = document.getElementById('add-counter-btn');
 const drawBtn = document.getElementById('draw-btn');
 const alignBtn = document.getElementById('align-btn');
 const contextMenu = document.getElementById('context-menu');
@@ -1152,6 +1153,7 @@ function setupEventListeners() {
     if (addMeasureBtn) addMeasureBtn.addEventListener('click', () => setCurrentTool('measure'));
     if (addGridBtn) addGridBtn.addEventListener('click', () => setCurrentTool('grid'));
     if (addTextListBtn) addTextListBtn.addEventListener('click', () => setCurrentTool('textList'));
+    if (addCounterBtn) addCounterBtn.addEventListener('click', () => setCurrentTool('counter'));
     if (drawBtn) drawBtn.addEventListener('click', () => setCurrentTool('draw'));
     if (eyedropperBtn) eyedropperBtn.addEventListener('click', () => setCurrentTool('eyedropper'));
     if (selectToolBtn) selectToolBtn.addEventListener('click', () => setCurrentTool(null));
@@ -1384,6 +1386,7 @@ function draw() {
             else if (e.type === 'comment') drawCommentItem(ctx, e);
             else if (e.type === 'link') drawLinkItem(ctx, e);
             else if (e.type === 'textList') drawTextListItem(ctx, e);
+            else if (e.type === 'counter') drawCounterItem(ctx, e);
             else if (e.type === 'reroute') drawRerouteItem(ctx, e);
             else if (e.type === 'connector') drawConnectorItem(e);
 
@@ -2166,6 +2169,41 @@ function drawRerouteItem(e, t) {
     e.restore();
 }
 
+function drawCounterItem(e, t) {
+    e.save();
+    e.globalAlpha *= (t.opacity ?? 1);
+    const o = t.x + t.width / 2, a = t.y + t.height / 2;
+    e.translate(o, a);
+    e.rotate(t.rotation || 0);
+    e.scale(t.scaleX || 1, t.scaleY || 1);
+
+    const halfW = t.width / 2;
+    const halfH = t.height / 2;
+
+    e.fillStyle = hexToRgba(invertColor(canvasBackgroundColor), 0.1);
+    e.strokeStyle = t.color || accentColor;
+    e.lineWidth = 2 / cameraZoom;
+    e.beginPath();
+    if (e.roundRect) {
+        e.roundRect(-halfW, -halfH, t.width, t.height, 8 / cameraZoom);
+    } else {
+        e.rect(-halfW, -halfH, t.width, t.height);
+    }
+    e.fill();
+    e.stroke();
+
+    e.fillStyle = t.color || accentColor;
+    e.font = `bold ${t.fontSize || 24}px sans-serif`;
+    e.textAlign = 'center';
+    e.textBaseline = 'middle';
+    e.fillText((t.value || 0).toString(), 0, 0);
+
+    e.fillText('-', -halfW + 25, 0);
+    e.fillText('+', halfW - 25, 0);
+
+    e.restore();
+}
+
 function drawGroupItem(e, t) {
     e.save();
     e.globalAlpha *= (t.opacity ?? 1);
@@ -2196,6 +2234,7 @@ function drawGroupItem(e, t) {
         else if (o.type === "comment") drawCommentItem(e, a);
         else if (o.type === "link") drawLinkItem(e, a);
         else if (o.type === "textList") drawTextListItem(e, a);
+        else if (o.type === "counter") drawCounterItem(e, a);
         else if (o.type === "group") drawGroupItem(e, a);
     });
     e.restore();
@@ -2300,6 +2339,17 @@ function onDoubleClick(e) {
     const t = screenToWorld(getEventLocation(e)), o = getItemAtPosition(t);
     if (o && (o.type === 'text' || o.type === 'comment' || o.type === 'textList') && !o.isPinned) {
         editText(o);
+        return;
+    }
+    if (o && o.type === 'counter' && !o.isPinned) {
+        if (getCounterButtonHit(o, t) === 0) {
+            const newVal = prompt("Enter new counter value:", o.value || 0);
+            if (newVal !== null && !isNaN(Number(newVal))) {
+                o.value = Number(newVal);
+                saveStateForUndo();
+                requestUpdate();
+            }
+        }
         return;
     }
 
@@ -2488,6 +2538,8 @@ function onMouseDown(e) {
             } else if (currentTool === 'textList') {
                 newItem = { id: Date.now(), type: 'textList', items: [{ text: 'Item 1', completed: false }], text: 'Item 1', x: o.x, y: o.y, width: 0, height: 0, fontSize: 18, rotation: 0, isPinned: false, opacity: 1, fontFamily: 'Nunito', textAlign: 'left', fontWeight: 'bold', fontStyle: 'normal', color: accentColor, scaleX: 1, scaleY: 1 };
                 updateTextListDimensions(newItem);
+            } else if (currentTool === 'counter') {
+                newItem = { id: Date.now(), type: 'counter', value: 0, x: o.x, y: o.y, width: 140, height: 60, fontSize: 24, rotation: 0, isPinned: false, opacity: 1, fontFamily: 'Nunito', color: accentColor, scaleX: 1, scaleY: 1 };
             } else if (currentTool === 'draw') {
                 newItem = { id: Date.now(), type: 'stroke', points: [{ x: o.x, y: o.y }], color: accentColor, isPinned: false, x: o.x, y: o.y, width: 0, height: 0, opacity: 1, scaleX: 1, scaleY: 1 };
             }
@@ -2496,13 +2548,21 @@ function onMouseDown(e) {
                 addItemToLayeredItems(newItem);
                 selectedItems = [newItem];
                 bringSelectedToFront();
-                if (['textList', 'text', 'comment'].includes(newItem.type)) {
+                if (['textList', 'text', 'comment', 'counter'].includes(newItem.type)) {
                     setCurrentTool(null);
                 }
             }
         } else {
             // Selection / Moving logic
             const itemUnderMouse = getItemAtPosition(o);
+            if (itemUnderMouse && itemUnderMouse.type === 'counter') {
+                const hitBtn = getCounterButtonHit(itemUnderMouse, o);
+                if (hitBtn !== 0) {
+                    itemUnderMouse.value = (itemUnderMouse.value || 0) + hitBtn;
+                    saveStateForUndo();
+                    return;
+                }
+            }
             if (itemUnderMouse && itemUnderMouse.type === 'link') {
                 if (isLinkButtonHit(itemUnderMouse, o)) {
                     window.open(itemUnderMouse.url, '_blank');
@@ -3017,6 +3077,7 @@ async function copyToClipboard() {
         else if (e.type === 'comment') { drawCommentItem(ctx, e) }
         else if (e.type === 'link') { drawLinkItem(ctx, e) }
         else if (e.type === 'textList') { drawTextListItem(ctx, e) }
+        else if (e.type === 'counter') { drawCounterItem(ctx, e) }
         else if (e.type === 'reroute') { drawRerouteItem(ctx, e) }
         else if (e.type === 'connector') { drawConnectorItem(e, ctx) }
         ctx.restore()
@@ -3085,6 +3146,7 @@ function saveAsPng() {
         else if (e.type === 'comment') { drawCommentItem(ctx, e) }
         else if (e.type === 'link') { drawLinkItem(ctx, e) }
         else if (e.type === 'textList') { drawTextListItem(ctx, e) }
+        else if (e.type === 'counter') { drawCounterItem(ctx, e) }
         else if (e.type === 'reroute') { drawRerouteItem(ctx, e) }
         else if (e.type === 'connector') { drawConnectorItem(e, ctx) }
         ctx.restore()
@@ -4564,6 +4626,23 @@ function getHandleHitIndex(item, worldPos) {
         currentY += h;
     }
     return -1;
+}
+
+function getCounterButtonHit(item, worldPos) {
+    if (item.type !== 'counter') return 0;
+    const dx = worldPos.x - (item.x + item.width / 2);
+    const dy = worldPos.y - (item.y + item.height / 2);
+    const cos = Math.cos(-item.rotation);
+    const sin = Math.sin(-item.rotation);
+    const localX = dx * cos - dy * sin;
+    const localY = dx * sin + dy * cos;
+
+    const thirdW = item.width / 3;
+
+    if (localX < -thirdW / 2) return -1;
+    if (localX > thirdW / 2) return 1;
+
+    return 0;
 }
 
 cancelInputBtn.onclick = hideLinkInputModal;
