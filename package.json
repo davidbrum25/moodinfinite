@@ -10,6 +10,7 @@
   "description": "<div align=\"center\">   <img src=\"https://github.com/davidbrum25/moodinfinite/blob/main/_branding/_png/moodinfinite__Logotipo_alpha.png?raw=true\" alt=\"Moodinfinite Logo\" width=\"400\"/> </div>",
   "main": "analyzer.js",
   "scripts": {
+    "dev": "npx http-server . -p 3000",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "repository": {

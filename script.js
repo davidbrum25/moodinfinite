@@ -6119,3 +6119,22 @@ function prepareAndPrint() {
 
     window.print();
 }
+
+// ─── Cloud Sync API Exports ──────────────────────────────────────────────────
+// These expose internal app state/functions so cloud.js can access them cleanly.
+window.__moodinfinite = {
+    get projects()         { return projects; },
+    get activeProjectId()  { return activeProjectId; },
+    get globalImageCache() { return globalImageCache; },
+    serializeItems,
+    loadFileFromObject,
+    showToast,
+};
+// Convenience aliases (cloud.js uses window.projects etc.)
+Object.defineProperty(window, 'projects',         { get: () => projects,         configurable: true });
+Object.defineProperty(window, 'activeProjectId',  { get: () => activeProjectId,  configurable: true });
+Object.defineProperty(window, 'globalImageCache', { get: () => globalImageCache, configurable: true });
+window.serializeItems     = serializeItems;
+window.loadFileFromObject = loadFileFromObject;
+window.showToast          = showToast;
+

@@ -21,6 +21,8 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/localforage/1.10.0/localforage.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <!-- Google Identity Services -->
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
 </head>
 
 <body>
@@ -104,6 +106,54 @@
             <button id="palette-btn" title="Color Palettes" class="tab-add-btn">
                 <iconify-icon icon="lucide:palette" width="20" height="20"></iconify-icon>
             </button>
+
+            <!-- Cloud Sync separator -->
+            <div style="width: 1px; background-color: var(--border-color); margin: 8px 4px; align-self: stretch;"></div>
+
+            <!-- Cloud Login / Avatar button -->
+            <div id="cloud-btn-wrapper" style="position: relative;">
+                <button id="cloud-login-btn" class="tab-add-btn cloud-login-btn" title="Sign in to Google Drive">
+                    <!-- Avatar image (shown when logged in) -->
+                    <img id="cloud-avatar-img" src="" alt="Account" style="display:none; width:24px; height:24px; border-radius:50%; object-fit:cover;">
+                    <!-- Default icon (shown when logged out) -->
+                    <span id="cloud-avatar-icon" style="display:flex; align-items:center; justify-content:center;">
+                        <iconify-icon icon="lucide:cloud" width="20" height="20"></iconify-icon>
+                    </span>
+                    <!-- Sync status dot -->
+                    <span id="cloud-status-dot" class="cloud-status-dot"></span>
+                </button>
+
+                <!-- User account dropdown menu -->
+                <div id="cloud-user-menu" class="cloud-user-menu">
+                    <div class="cloud-menu-profile">
+                        <img id="cloud-menu-avatar" src="" alt="" style="width:36px; height:36px; border-radius:50%; object-fit:cover; flex-shrink:0;">
+                        <div class="cloud-menu-profile-info">
+                            <span id="cloud-menu-name" class="cloud-menu-name">Google Account</span>
+                            <span id="cloud-menu-email" class="cloud-menu-email"></span>
+                        </div>
+                    </div>
+                    <!-- Storage meter -->
+                    <div id="cloud-menu-storage" class="cloud-menu-storage" style="display:none;"></div>
+                    <div class="cloud-menu-divider"></div>
+                    <button id="cloud-menu-save" class="cloud-menu-item">
+                        <iconify-icon icon="lucide:cloud-upload" width="16" height="16"></iconify-icon>
+                        Save to Drive
+                    </button>
+                    <button id="cloud-menu-open" class="cloud-menu-item">
+                        <iconify-icon icon="lucide:cloud-download" width="16" height="16"></iconify-icon>
+                        Open from Drive
+                    </button>
+                    <div class="cloud-menu-divider"></div>
+                    <button id="cloud-menu-switch" class="cloud-menu-item">
+                        <iconify-icon icon="lucide:refresh-cw" width="16" height="16"></iconify-icon>
+                        Switch Account
+                    </button>
+                    <button id="cloud-menu-signout" class="cloud-menu-item cloud-menu-item--danger">
+                        <iconify-icon icon="lucide:log-out" width="16" height="16"></iconify-icon>
+                        Sign Out
+                    </button>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -638,7 +688,71 @@
     </div>
     <div id="toast-container"></div>
 
+    <!-- ─── CLOUD SYNC: Conflict Resolution Modal ────────────────────────── -->
+    <div id="cloud-conflict-overlay" class="cloud-modal-overlay" style="display:none;">
+        <div class="cloud-modal glass-modal">
+            <div class="cloud-modal-icon">
+                <iconify-icon icon="lucide:git-merge" width="28" height="28" style="color: #f59e0b;"></iconify-icon>
+            </div>
+            <h2 class="cloud-modal-title">Sync Conflict</h2>
+            <p class="cloud-modal-desc">
+                A file named <strong id="cloud-conflict-filename"></strong> already exists in your
+                Moodinfinite Drive folder.<br>
+                Drive version last modified: <strong id="cloud-conflict-drivedate"></strong>
+            </p>
+            <div class="cloud-modal-actions">
+                <button id="cloud-conflict-keep-drive" class="modal-button cancel" style="flex:1;">
+                    <iconify-icon icon="lucide:cloud" width="14" height="14"></iconify-icon>
+                    Keep Drive Version
+                </button>
+                <button id="cloud-conflict-keep-local" class="modal-button confirm" style="flex:1;">
+                    <iconify-icon icon="lucide:hard-drive" width="14" height="14"></iconify-icon>
+                    Overwrite with Local
+                </button>
+            </div>
+            <button id="cloud-conflict-cancel" class="cloud-modal-cancel-link">Cancel</button>
+        </div>
+    </div>
+
+    <!-- ─── CLOUD SYNC: Drive File Picker ───────────────────────────────── -->
+    <div id="cloud-picker-overlay" class="cloud-modal-overlay" style="display:none;">
+        <div class="cloud-modal glass-modal cloud-picker-modal">
+            <div class="cloud-picker-header">
+                <div style="display:flex; align-items:center; gap:0.5rem;">
+                    <iconify-icon icon="lucide:hard-drive" width="20" height="20" style="color:var(--switch-bg-checked);"></iconify-icon>
+                    <h2 class="cloud-modal-title" style="margin:0;">Open from Drive</h2>
+                </div>
+                <button id="cloud-picker-cancel" class="tab-add-btn" title="Cancel">
+                    <iconify-icon icon="lucide:x" width="18" height="18"></iconify-icon>
+                </button>
+            </div>
+            <!-- Sort toolbar -->
+            <div class="cloud-picker-toolbar">
+                <div class="cloud-picker-toolbar-left">
+                    <iconify-icon icon="lucide:arrow-up-down" width="13" height="13"></iconify-icon>
+                    <span>Sort by</span>
+                </div>
+                <select id="cloud-picker-sort" class="cloud-picker-sort-select">
+                    <option value="modified-desc">Recent first</option>
+                    <option value="modified-asc">Oldest first</option>
+                    <option value="created-desc">Date created</option>
+                    <option value="size-desc">Largest first</option>
+                    <option value="size-asc">Smallest first</option>
+                    <option value="name-asc">Name A → Z</option>
+                    <option value="name-desc">Name Z → A</option>
+                </select>
+            </div>
+            <div id="cloud-picker-list" class="cloud-picker-list"></div>
+            <!-- Storage footer -->
+            <div class="cloud-picker-footer">
+                <iconify-icon icon="lucide:database" width="12" height="12"></iconify-icon>
+                <span id="cloud-picker-storage"></span>
+            </div>
+        </div>
+    </div>
+
     <script src="script.js"></script>
+    <script src="cloud.js"></script>
 </body>
 
 </html>

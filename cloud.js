@@ -1,0 +1,770 @@
+/**
+ * Moodinfinite — Google Drive Cloud Sync
+ * =======================================
+ * Uses Google Identity Services (token-based flow) + Drive REST API v3.
+ * Requires a GCP Client ID embedded below (public / non-secret for browser flows).
+ *
+ * SETUP: Replace GOOGLE_CLIENT_ID with your own OAuth 2.0 Client ID from
+ *        https://console.cloud.google.com/  (no backend required).
+ */
+
+const CloudSync = (() => {
+
+    // ─── CONFIGURATION ──────────────────────────────────────────────────────
+    const GOOGLE_CLIENT_ID = '437663034251-o3spsku9k6ud9p6un3og7s97vklt9vas.apps.googleusercontent.com';
+    const DRIVE_API = 'https://www.googleapis.com/drive/v3';
+    const UPLOAD_API = 'https://www.googleapis.com/upload/drive/v3';
+    const SCOPES = 'https://www.googleapis.com/auth/drive.file openid email profile';
+    const FOLDER_NAME = 'Moodinfinite';
+
+    // ─── STATE ──────────────────────────────────────────────────────────────
+    let _tokenClient = null;
+    let _accessToken = null;
+    let _tokenExpiry = 0;          // epoch ms
+    let _userInfo = null;       // { name, email, picture }
+    let _folderId = null;       // Drive folder ID (cached)
+    let _ready = false;      // GIS script loaded
+    let _isSilentRefresh = false;  // true during background token renewal
+
+    // Pending callback after auth (resolve queues)
+    let _pendingResolve = null;
+    let _pendingReject = null;
+
+    // ─── HELPERS ────────────────────────────────────────────────────────────
+    function _isTokenValid() {
+        return _accessToken && Date.now() < _tokenExpiry - 60_000; // 1-min buffer
+    }
+
+    function _driveHeaders() {
+        return {
+            Authorization: `Bearer ${_accessToken}`,
+            'Content-Type': 'application/json',
+        };
+    }
+
+    async function _fetchJSON(url, options = {}) {
+        const res = await fetch(url, options);
+        if (!res.ok) {
+            const text = await res.text();
+            throw new Error(`Drive API error ${res.status}: ${text}`);
+        }
+        return res.json();
+    }
+
+    // ─── GIS INIT ───────────────────────────────────────────────────────────
+    function _initGIS() {
+        if (!window.google?.accounts?.oauth2) {
+            console.warn('[CloudSync] Google Identity Services not yet loaded.');
+            return;
+        }
+        _tokenClient = window.google.accounts.oauth2.initTokenClient({
+            client_id: GOOGLE_CLIENT_ID,
+            scope: SCOPES,
+            callback: _handleTokenResponse,
+            error_callback: _handleTokenError,
+        });
+        _ready = true;
+
+        // ── Restore UI from cached session (no token request on page load) ──
+        // Token is fetched lazily on the first Drive action the user triggers.
+        const cached = localStorage.getItem('moodinfinite_cloud_user');
+        if (cached) {
+            try {
+                _userInfo = JSON.parse(cached);
+                _updateUI_loggedIn();
+            } catch (e) {
+                localStorage.removeItem('moodinfinite_cloud_user');
+            }
+        }
+    }
+
+    function _handleTokenResponse(response) {
+        if (response.error) {
+            _handleTokenError(response);
+            return;
+        }
+        _accessToken = response.access_token;
+        _tokenExpiry = Date.now() + (response.expires_in * 1000);
+
+        // Fetch user profile
+        fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+            headers: { Authorization: `Bearer ${_accessToken}` }
+        })
+            .then(r => r.json())
+            .then(info => {
+                _userInfo = { name: info.name, email: info.email, picture: info.picture };
+                // Persist so UI survives page refresh
+                localStorage.setItem('moodinfinite_cloud_user', JSON.stringify(_userInfo));
+                _updateUI_loggedIn();
+                showCloudToast('Signed in to Google Drive ✓', 'success');
+                if (_pendingResolve) { _pendingResolve(_accessToken); _pendingResolve = null; _pendingReject = null; }
+            })
+            .catch(err => {
+                console.error('[CloudSync] Failed to fetch user info:', err);
+                if (_pendingReject) { _pendingReject(err); _pendingResolve = null; _pendingReject = null; }
+            });
+    }
+
+    function _handleTokenError(err) {
+        console.warn('[CloudSync] Auth error:', err);
+        _accessToken = null;
+        showCloudToast('Sign-in cancelled or failed.', 'error');
+        if (_pendingReject) { _pendingReject(err); _pendingResolve = null; _pendingReject = null; }
+    }
+
+    // ─── AUTH FLOW ──────────────────────────────────────────────────────────
+    /**
+     * Requests an access token. Resolves immediately if token is valid,
+     * otherwise opens the Google sign-in popup.
+     */
+    function _ensureAuth() {
+        return new Promise((resolve, reject) => {
+            if (_isTokenValid()) return resolve(_accessToken);
+            if (!_ready) {
+                reject(new Error('Google Identity Services not loaded. Refresh and try again.'));
+                return;
+            }
+            _pendingResolve = resolve;
+            _pendingReject = reject;
+            _tokenClient.requestAccessToken({ prompt: _userInfo ? '' : 'select_account' });
+        });
+    }
+
+    // ─── DRIVE FOLDER ───────────────────────────────────────────────────────
+    async function _ensureFolder() {
+        if (_folderId) return _folderId;
+
+        // Search for existing Moodinfinite folder
+        const q = encodeURIComponent(
+            `mimeType='application/vnd.google-apps.folder' and name='${FOLDER_NAME}' and trashed=false`
+        );
+        const result = await _fetchJSON(
+            `${DRIVE_API}/files?q=${q}&fields=files(id,name)`,
+            { headers: _driveHeaders() }
+        );
+
+        if (result.files && result.files.length > 0) {
+            _folderId = result.files[0].id;
+            return _folderId;
+        }
+
+        // Create the folder
+        const created = await _fetchJSON(`${DRIVE_API}/files`, {
+            method: 'POST',
+            headers: _driveHeaders(),
+            body: JSON.stringify({
+                name: FOLDER_NAME,
+                mimeType: 'application/vnd.google-apps.folder',
+            }),
+        });
+        _folderId = created.id;
+        return _folderId;
+    }
+
+    // ─── LIST DRIVE FILES ───────────────────────────────────────────────────
+    async function listFiles() {
+        await _ensureAuth();
+        const fId = await _ensureFolder();
+        const q = encodeURIComponent(`'${fId}' in parents and trashed=false`);
+        const result = await _fetchJSON(
+            `${DRIVE_API}/files?q=${q}&fields=files(id,name,modifiedTime,size,createdTime)&orderBy=modifiedTime desc`,
+            { headers: _driveHeaders() }
+        );
+        return result.files || [];
+    }
+
+    // ─── DRIVE STORAGE INFO ────────────────────────────────────────────────
+    /**
+     * Returns { appBytes, totalBytes, usedBytes } for the storage meter.
+     */
+    async function getDriveStorageInfo() {
+        await _ensureAuth();
+        const about = await _fetchJSON(
+            `${DRIVE_API}/about?fields=storageQuota`,
+            { headers: _driveHeaders() }
+        );
+        const quota = about.storageQuota || {};
+        const totalBytes = parseInt(quota.limit || 0, 10);
+        const usedBytes = parseInt(quota.usage || 0, 10);
+
+        let appBytes = 0;
+        try {
+            const files = await listFiles();
+            appBytes = files.reduce((sum, f) => sum + (parseInt(f.size || 0, 10)), 0);
+        } catch (_) { }
+
+        return { appBytes, totalBytes, usedBytes };
+    }
+
+    function _fmtBytes(bytes) {
+        if (!bytes || bytes <= 0) return '0 B';
+        const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(1024));
+        return (bytes / Math.pow(1024, i)).toFixed(i === 0 ? 0 : 1) + ' ' + units[i];
+    }
+
+    // ─── UPLOAD FILE ────────────────────────────────────────────────────────
+    /**
+     * Uploads a Blob to Drive. If a file with the same name already exists in
+     * the Moodinfinite folder the user is asked what to do (keep local / keep drive / cancel).
+     * Returns the Drive file ID.
+     */
+    async function uploadFile(blob, fileName) {
+        await _ensureAuth();
+        const fId = await _ensureFolder();
+
+        // Check if file already exists
+        const q = encodeURIComponent(
+            `name='${fileName}' and '${fId}' in parents and trashed=false`
+        );
+        const existing = await _fetchJSON(
+            `${DRIVE_API}/files?q=${q}&fields=files(id,name,modifiedTime)`,
+            { headers: _driveHeaders() }
+        );
+
+        if (existing.files && existing.files.length > 0) {
+            const driveFile = existing.files[0];
+            const driveDate = new Date(driveFile.modifiedTime).toLocaleString();
+
+            const choice = await _showConflictDialog(fileName, driveDate);
+            if (choice === 'cancel') return null;
+            if (choice === 'keep-drive') return driveFile.id;
+            // choice === 'keep-local' → overwrite below
+            return await _patchFile(driveFile.id, blob);
+        }
+
+        // New file upload
+        return await _createFile(blob, fileName, fId);
+    }
+
+    async function _createFile(blob, fileName, folderId) {
+        const metadata = { name: fileName, parents: [folderId] };
+        const form = new FormData();
+        form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
+        form.append('file', blob);
+
+        const res = await fetch(`${UPLOAD_API}/files?uploadType=multipart&fields=id`, {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${_accessToken}` },
+            body: form,
+        });
+        if (!res.ok) throw new Error(`Upload failed: ${res.status}`);
+        const json = await res.json();
+        return json.id;
+    }
+
+    async function _patchFile(fileId, blob) {
+        const res = await fetch(`${UPLOAD_API}/files/${fileId}?uploadType=media`, {
+            method: 'PATCH',
+            headers: {
+                Authorization: `Bearer ${_accessToken}`,
+                'Content-Type': blob.type || 'application/octet-stream',
+            },
+            body: blob,
+        });
+        if (!res.ok) throw new Error(`Update failed: ${res.status}`);
+        const json = await res.json();
+        return json.id;
+    }
+
+    // ─── DOWNLOAD FILE ──────────────────────────────────────────────────────
+    async function downloadFile(fileId) {
+        await _ensureAuth();
+        const res = await fetch(`${DRIVE_API}/files/${fileId}?alt=media`, {
+            headers: { Authorization: `Bearer ${_accessToken}` },
+        });
+        if (!res.ok) throw new Error(`Download failed: ${res.status}`);
+        return res.blob();
+    }
+
+    // ─── DELETE FILE ────────────────────────────────────────────────────────
+    async function deleteFile(fileId) {
+        await _ensureAuth();
+        const res = await fetch(`${DRIVE_API}/files/${fileId}`, {
+            method: 'DELETE',
+            headers: { Authorization: `Bearer ${_accessToken}` },
+        });
+        if (!res.ok && res.status !== 204) {
+            const text = await res.text();
+            throw new Error(`Delete failed ${res.status}: ${text}`);
+        }
+        return true;
+    }
+
+    // ─── CONFLICT DIALOG ────────────────────────────────────────────────────
+    function _showConflictDialog(fileName, driveDate) {
+        return new Promise(resolve => {
+            const overlay = document.getElementById('cloud-conflict-overlay');
+            const fileNameEl = document.getElementById('cloud-conflict-filename');
+            const driveDateEl = document.getElementById('cloud-conflict-drivedate');
+            const keepLocalBtn = document.getElementById('cloud-conflict-keep-local');
+            const keepDriveBtn = document.getElementById('cloud-conflict-keep-drive');
+            const cancelBtn = document.getElementById('cloud-conflict-cancel');
+
+            fileNameEl.textContent = fileName;
+            driveDateEl.textContent = driveDate;
+            overlay.style.display = 'flex';
+
+            function cleanup() {
+                overlay.style.display = 'none';
+                keepLocalBtn.removeEventListener('click', onLocal);
+                keepDriveBtn.removeEventListener('click', onDrive);
+                cancelBtn.removeEventListener('click', onCancel);
+            }
+            function onLocal() { cleanup(); resolve('keep-local'); }
+            function onDrive() { cleanup(); resolve('keep-drive'); }
+            function onCancel() { cleanup(); resolve('cancel'); }
+
+            keepLocalBtn.addEventListener('click', onLocal);
+            keepDriveBtn.addEventListener('click', onDrive);
+            cancelBtn.addEventListener('click', onCancel);
+        });
+    }
+
+    // ─── SIGN OUT ────────────────────────────────────────────────────────────
+    function signOut() {
+        if (_accessToken) {
+            window.google?.accounts?.oauth2?.revoke(_accessToken, () => { });
+        }
+        _accessToken = null;
+        _tokenExpiry = 0;
+        _userInfo = null;
+        _folderId = null;
+        // Clear persisted session
+        localStorage.removeItem('moodinfinite_cloud_user');
+        _updateUI_loggedOut();
+        showCloudToast('Signed out from Google Drive.', 'success');
+    }
+
+    // ─── SWITCH ACCOUNT ─────────────────────────────────────────────────────
+    function switchAccount() {
+        _accessToken = null;
+        _tokenExpiry = 0;
+        _userInfo = null;
+        _folderId = null;
+        // Clear persisted session so we show the account picker freshly
+        localStorage.removeItem('moodinfinite_cloud_user');
+        _updateUI_loggedOut();
+        // Force account picker on next request
+        _isSilentRefresh = false;
+        _tokenClient.requestAccessToken({ prompt: 'select_account' });
+    }
+
+    // ─── PUBLIC SAVE & LOAD ─────────────────────────────────────────────────
+    /**
+     * Called when the user triggers "Save to Drive".
+     * Serialises the current active project into a .mood blob and uploads it.
+     */
+    async function saveCurrentProject() {
+        try {
+            setCloudStatus('syncing');
+            showCloudToast('Saving to Google Drive…', 'info');
+
+            // Get the project blob via the existing saveProject logic
+            const blob = await _buildProjectBlob();
+            if (!blob) { setCloudStatus('idle'); return; }
+
+            const activeProject = window.projects?.find(p => p.id === window.activeProjectId);
+            const fileName = `${(activeProject?.name || 'moodboard').replace(/[^a-z0-9 _-]/gi, '_')}.mood`;
+
+            const fileId = await uploadFile(blob, fileName);
+            if (fileId) {
+                showCloudToast(`Saved "${fileName}" to Drive ✓`, 'success');
+                setCloudStatus('synced');
+            } else {
+                setCloudStatus('idle');
+            }
+        } catch (err) {
+            console.error('[CloudSync] Save error:', err);
+            showCloudToast('Failed to save to Drive.', 'error');
+            setCloudStatus('error');
+        }
+    }
+
+    /**
+     * Opens a Drive file picker dialog showing files in the Moodinfinite folder,
+     * then loads the selected file into the app.
+     */
+    async function openFromDrive() {
+        try {
+            setCloudStatus('syncing');
+            const files = await listFiles();
+
+            if (files.length === 0) {
+                showCloudToast('No projects found in your Moodinfinite Drive folder.', 'error');
+                setCloudStatus('idle');
+                return;
+            }
+
+            const fileId = await _showDriveFilePicker(files);
+            if (!fileId) { setCloudStatus('idle'); return; }
+
+            showCloudToast('Loading project from Drive…', 'info');
+            const blob = await downloadFile(fileId);
+            const selectedFile = files.find(f => f.id === fileId);
+            const file = new File([blob], selectedFile?.name || 'project.mood');
+
+            // Reuse the existing loadFileFromObject function
+            window.loadFileFromObject(file);
+            setCloudStatus('synced');
+        } catch (err) {
+            console.error('[CloudSync] Load error:', err);
+            showCloudToast('Failed to load from Drive.', 'error');
+            setCloudStatus('error');
+        }
+    }
+
+    // ─── DRIVE FILE PICKER ───────────────────────────────────────────────────
+    function _showDriveFilePicker(files) {
+        return new Promise(resolve => {
+            const overlay    = document.getElementById('cloud-picker-overlay');
+            const list       = document.getElementById('cloud-picker-list');
+            const cancelBtn  = document.getElementById('cloud-picker-cancel');
+            const sortSel    = document.getElementById('cloud-picker-sort');
+            const storageEl  = document.getElementById('cloud-picker-storage');
+
+            // ── Compute app storage directly from the files list (no extra API call) ──
+            const totalAppBytes = files.reduce((s, f) => s + parseInt(f.size || 0, 10), 0);
+            if (storageEl) {
+                storageEl.textContent = `${files.length} project${files.length !== 1 ? 's' : ''} · ${_fmtBytes(totalAppBytes)} used by Moodinfinite`;
+            }
+
+            let currentSort = sortSel?.value || 'modified-desc';
+
+            function _sortFiles(arr, key) {
+                const sorted = [...arr];
+                switch (key) {
+                    case 'modified-desc': sorted.sort((a, b) => new Date(b.modifiedTime) - new Date(a.modifiedTime)); break;
+                    case 'modified-asc':  sorted.sort((a, b) => new Date(a.modifiedTime) - new Date(b.modifiedTime)); break;
+                    case 'created-desc':  sorted.sort((a, b) => new Date(b.createdTime)  - new Date(a.createdTime));  break;
+                    case 'size-desc':     sorted.sort((a, b) => parseInt(b.size || 0) - parseInt(a.size || 0));        break;
+                    case 'size-asc':      sorted.sort((a, b) => parseInt(a.size || 0) - parseInt(b.size || 0));        break;
+                    case 'name-asc':      sorted.sort((a, b) => a.name.localeCompare(b.name));                         break;
+                    case 'name-desc':     sorted.sort((a, b) => b.name.localeCompare(a.name));                         break;
+                }
+                return sorted;
+            }
+
+            function _renderList(arr) {
+                list.innerHTML = '';
+                const sorted = _sortFiles(arr, currentSort);
+                if (sorted.length === 0) {
+                    list.innerHTML = `<div class="cloud-picker-empty"><span>No projects found</span></div>`;
+                    return;
+                }
+                sorted.forEach(f => {
+                    const item = document.createElement('div');
+                    item.className = 'cloud-picker-item';
+                    const date = new Date(f.modifiedTime).toLocaleDateString();
+                    const sizeStr = _fmtBytes(parseInt(f.size || 0, 10));
+                    item.innerHTML = `
+                        <div class="cloud-picker-info">
+                            <span class="cloud-picker-name">${f.name}</span>
+                            <span class="cloud-picker-meta">${date} · ${sizeStr}</span>
+                        </div>
+                        <button class="cloud-picker-delete-btn"><iconify-icon icon="lucide:trash-2"></iconify-icon></button>
+                    `;
+                    item.addEventListener('click', (e) => {
+                        if (!e.target.closest('.cloud-picker-delete-btn')) { cleanup(); resolve(f.id); }
+                    });
+                    item.querySelector('.cloud-picker-delete-btn').addEventListener('click', async (e) => {
+                        e.stopPropagation();
+                        if (confirm(`Delete "${f.name}"?`)) {
+                            await deleteFile(f.id);
+                            const updated = await listFiles();
+                            _renderList(updated);
+                        }
+                    });
+                    list.appendChild(item);
+                });
+            }
+
+            _renderList(files);
+            overlay.style.display = 'flex';
+            if (sortSel) sortSel.onchange = () => { currentSort = sortSel.value; _renderList(files); };
+            function cleanup() { overlay.style.display = 'none'; }
+            cancelBtn.onclick = () => { cleanup(); resolve(null); };
+        });
+    }
+
+    // ─── BUILD PROJECT BLOB ──────────────────────────────────────────────────
+    /**
+     * Replicates the zip-building logic from saveProject() but returns a Blob
+     * instead of triggering a download.
+     */
+    function _buildProjectBlob() {
+        return new Promise((resolve, reject) => {
+            const t = window.projects?.find(p => p.id === window.activeProjectId);
+            if (!t) { resolve(null); return; }
+
+            const zip = new window.JSZip();
+            const folderName = t.name.replace(/[^a-z0-9]/gi, '_').toLowerCase() || 'moodboard';
+            const rootDir = zip.folder(folderName);
+
+            if (t.type === 'moodinfinite') {
+                const items = t.data.items;
+                const imgFolder = rootDir.folder('images');
+                const eJSON = {
+                    items: window.serializeItems(items),
+                    cameraOffset: t.data.cameraOffset,
+                    cameraZoom: t.data.cameraZoom,
+                    canvasBackgroundColor: t.data.canvasBackgroundColor,
+                    accentColor: t.data.accentColor,
+                    gridColor: t.data.gridColor,
+                    showGrid: t.data.showGrid,
+                    snapToGrid: t.data.snapToGrid,
+                    showDropShadow: t.data.showDropShadow,
+                    gridSize: t.data.gridSize,
+                    gridOpacity: t.data.gridOpacity,
+                };
+
+                const cache = window.globalImageCache || {};
+                const usedIds = new Set();
+                const extractIds = arr => arr?.forEach(i => {
+                    if (i.type === 'image' && i.imageId) usedIds.add(i.imageId);
+                    if (i.type === 'group' && i.items) extractIds(i.items);
+                });
+                extractIds(items);
+
+                const localCache = {};
+                const promises = Array.from(usedIds).map(id => new Promise(res => {
+                    const b64 = cache[id];
+                    if (!b64 || !b64.startsWith('data:image')) { localCache[id] = b64; return res(); }
+                    const img = new Image();
+                    img.onload = () => {
+                        const c = document.createElement('canvas');
+                        c.width = img.width; c.height = img.height;
+                        c.getContext('2d').drawImage(img, 0, 0);
+                        c.toBlob(blob => {
+                            if (blob) { imgFolder.file(`${id}.webp`, blob); localCache[id] = `images/${id}.webp`; }
+                            else { localCache[id] = b64; }
+                            res();
+                        }, 'image/webp', 0.9);
+                    };
+                    img.onerror = res;
+                    img.src = b64;
+                }));
+
+                Promise.all(promises).then(() => {
+                    eJSON.globalImageCache = localCache;
+                    rootDir.file('data.json', JSON.stringify(eJSON, null, 2));
+                    zip.generateAsync({ type: 'blob' }).then(resolve).catch(reject);
+                }).catch(reject);
+
+            } else if (t.type === 'moodprompt' || t.type === 'storyflow') {
+                rootDir.file('data.json', JSON.stringify(t.data, null, 2));
+                zip.generateAsync({ type: 'blob' }).then(resolve).catch(reject);
+            } else {
+                resolve(null);
+            }
+        });
+    }
+
+    // ─── TOAST HELPER ────────────────────────────────────────────────────────
+    /**
+     * Shows a cloud-specific toast.  Falls back to the app's showToast if available.
+     */
+    function showCloudToast(msg, type = 'success') {
+        if (typeof window.showToast === 'function') {
+            const icon = type === 'info' ? 'lucide:cloud' : undefined;
+            window.showToast(msg, type === 'info' ? 'success' : type);
+        }
+    }
+
+    // ─── CLOUD STATUS INDICATOR ──────────────────────────────────────────────
+    function setCloudStatus(state) {
+        const btn = document.getElementById('cloud-login-btn');
+        const indicator = document.getElementById('cloud-status-dot');
+        if (!btn || !indicator) return;
+
+        indicator.className = 'cloud-status-dot';
+        if (state === 'syncing') { indicator.classList.add('syncing'); }
+        else if (state === 'synced') { indicator.classList.add('synced'); setTimeout(() => setCloudStatus('idle'), 3000); }
+        else if (state === 'error') { indicator.classList.add('error'); }
+        // 'idle' → no class, dot hidden
+    }
+
+    // ─── UI: LOGGED IN / LOGGED OUT ──────────────────────────────────────────
+    function _updateUI_loggedIn() {
+        const loginBtn = document.getElementById('cloud-login-btn');
+        const avatarImg = document.getElementById('cloud-avatar-img');
+        const avatarIcon = document.getElementById('cloud-avatar-icon');
+        const menuAvatar = document.getElementById('cloud-menu-avatar');
+        const menuEmail = document.getElementById('cloud-menu-email');
+        const menuName = document.getElementById('cloud-menu-name');
+
+        if (!_userInfo) return;
+
+        if (avatarImg) {
+            avatarImg.src = _userInfo.picture || '';
+            avatarImg.style.display = _userInfo.picture ? 'block' : 'none';
+        }
+        if (menuAvatar) {
+            menuAvatar.src = _userInfo.picture || '';
+            menuAvatar.style.display = _userInfo.picture ? 'block' : 'none';
+        }
+        if (avatarIcon) avatarIcon.style.display = _userInfo.picture ? 'none' : 'flex';
+        if (menuEmail) menuEmail.textContent = _userInfo.email;
+        if (menuName) menuName.textContent = _userInfo.name;
+        if (loginBtn) loginBtn.title = `Signed in as ${_userInfo.email}`;
+    }
+
+    // Loads the storage meter — called only when the menu is opened (user gesture, token is valid)
+    async function _loadStorageMeter() {
+        const storageMeter = document.getElementById('cloud-menu-storage');
+        if (!storageMeter || !_isTokenValid()) return;
+
+        storageMeter.style.display = 'block';
+        storageMeter.innerHTML = `<span class="cloud-storage-label">Loading storage…</span>`;
+        try {
+            const { appBytes, totalBytes, usedBytes } = await getDriveStorageInfo();
+            const appPct  = totalBytes > 0 ? (appBytes  / totalBytes) * 100 : 0;
+            const usedPct = totalBytes > 0 ? (usedBytes / totalBytes) * 100 : 0;
+            const barColor = appPct > 80 ? '#ef4444' : appPct > 50 ? '#f59e0b' : '#429eff';
+            storageMeter.innerHTML = `
+                <div class="cloud-storage-row">
+                    <iconify-icon icon="lucide:database" width="13" height="13"></iconify-icon>
+                    <span class="cloud-storage-label">Drive Storage</span>
+                    <span class="cloud-storage-value">${_fmtBytes(usedBytes)} / ${_fmtBytes(totalBytes)}</span>
+                </div>
+                <div class="cloud-storage-track">
+                    <div class="cloud-storage-bar" style="width:${Math.min(usedPct,100).toFixed(1)}%; background:rgba(148,163,184,0.3);"></div>
+                    <div class="cloud-storage-bar cloud-storage-bar--app" style="width:${Math.min(appPct,100).toFixed(1)}%; background:${barColor};"></div>
+                </div>
+                <div class="cloud-storage-row" style="margin-top:2px;">
+                    <span class="cloud-storage-dot" style="background:${barColor};"></span>
+                    <span class="cloud-storage-label">Moodinfinite: ${_fmtBytes(appBytes)}</span>
+                </div>
+            `;
+        } catch (_) {
+            storageMeter.style.display = 'none';
+        }
+    }
+
+    function _updateUI_loggedOut() {
+        const avatarImg = document.getElementById('cloud-avatar-img');
+        const avatarIcon = document.getElementById('cloud-avatar-icon');
+        const menuEmail = document.getElementById('cloud-menu-email');
+        const menuName = document.getElementById('cloud-menu-name');
+
+        if (avatarImg) { avatarImg.src = ''; avatarImg.style.display = 'none'; }
+        if (avatarIcon) avatarIcon.style.display = 'flex';
+        if (menuEmail) menuEmail.textContent = '';
+        if (menuName) menuName.textContent = '';
+    }
+
+    // ─── SIGN-IN (PUBLIC ENTRY POINT) ─────────────────────────────────────
+    async function signIn() {
+        try {
+            setCloudStatus('syncing');
+            await _ensureAuth();
+            setCloudStatus('idle');
+        } catch (err) {
+            console.error('[CloudSync] signIn error:', err);
+            setCloudStatus('error');
+        }
+    }
+
+    // ─── INIT ────────────────────────────────────────────────────────────────
+    function init() {
+        // Wait for the GIS library to be available
+        if (window.google?.accounts?.oauth2) {
+            _initGIS();
+        } else {
+            window.addEventListener('load', () => {
+                // Poll briefly since the GIS script is async
+                let attempts = 0;
+                const poll = setInterval(() => {
+                    if (window.google?.accounts?.oauth2) {
+                        clearInterval(poll);
+                        _initGIS();
+                    } else if (++attempts > 20) {
+                        clearInterval(poll);
+                        console.warn('[CloudSync] GIS library failed to load.');
+                    }
+                }, 200);
+            });
+        }
+
+        // Wire up the user account menu
+        _wireMenuEvents();
+    }
+
+    function _wireMenuEvents() {
+        // Login button → toggle menu if logged in, else sign in
+        document.getElementById('cloud-login-btn')?.addEventListener('click', (e) => {
+            e.stopPropagation();
+            if (_userInfo) {
+                const menu = document.getElementById('cloud-user-menu');
+                if (menu) {
+                    const isOpening = !menu.classList.contains('open');
+                    menu.classList.toggle('open');
+                    // Load storage meter only when the menu is opened and token is valid
+                    if (isOpening) _loadStorageMeter();
+                }
+            } else {
+                signIn();
+            }
+
+        });
+
+        // Close menu on outside click
+        document.addEventListener('click', () => {
+            document.getElementById('cloud-user-menu')?.classList.remove('open');
+        });
+
+        // Menu item: Save to Drive
+        document.getElementById('cloud-menu-save')?.addEventListener('click', () => {
+            document.getElementById('cloud-user-menu')?.classList.remove('open');
+            if (!_userInfo) { signIn().then(saveCurrentProject); return; }
+            saveCurrentProject();
+        });
+
+        // Menu item: Open from Drive
+        document.getElementById('cloud-menu-open')?.addEventListener('click', () => {
+            document.getElementById('cloud-user-menu')?.classList.remove('open');
+            openFromDrive();
+        });
+
+        // Menu item: Switch account
+        document.getElementById('cloud-menu-switch')?.addEventListener('click', () => {
+            document.getElementById('cloud-user-menu')?.classList.remove('open');
+            switchAccount();
+        });
+
+        // Menu item: Sign out
+        document.getElementById('cloud-menu-signout')?.addEventListener('click', () => {
+            document.getElementById('cloud-user-menu')?.classList.remove('open');
+            signOut();
+        });
+
+        // Conflict dialog buttons handled inside _showConflictDialog
+
+        // Drive file picker cancel
+        document.getElementById('cloud-picker-cancel')?.addEventListener('click', () => {
+            document.getElementById('cloud-picker-overlay').style.display = 'none';
+        });
+    }
+
+    // ─── PUBLIC API ──────────────────────────────────────────────────────────
+    return {
+        init,
+        signIn,
+        signOut,
+        switchAccount,
+        saveCurrentProject,
+        openFromDrive,
+        setCloudStatus,
+        showCloudToast,
+        get isLoggedIn() { return !!_userInfo; },
+        get userInfo() { return _userInfo; },
+    };
+
+})();
+
+// Auto-initialise on DOM ready
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', CloudSync.init);
+} else {
+    CloudSync.init();
+}
