@@ -174,36 +174,84 @@
                         height="20"></iconify-icon></button>
                 <div class="separator"></div><button id="select-tool-btn" title="Select (A)"
                     class="tool-button active"><iconify-icon icon="lucide:mouse-pointer-2" width="20"
-                        height="20"></iconify-icon></button><button id="add-text-btn" title="Add Text (T)"
-                    class="tool-button"><iconify-icon icon="lucide:type" width="20"
-                        height="20"></iconify-icon></button><button id="add-comment-btn" title="Add Comment (N)"
-                    class="tool-button"><iconify-icon icon="lucide:message-square" width="20"
-                        height="20"></iconify-icon></button><button id="add-link-btn" title="Add Link (K)"
-                    class="tool-button"><iconify-icon icon="lucide:link" width="20"
-                        height="20"></iconify-icon></button><button id="add-text-list-btn" title="Add Text List (L)"
-                    class="tool-button"><iconify-icon icon="lucide:list-todo" width="20"
-                        height="20"></iconify-icon></button><button id="add-counter-btn" title="Add Counter"
-                    class="tool-button"><iconify-icon icon="lucide:hash" width="20"
-                        height="20"></iconify-icon></button><button id="draw-btn" title="Draw (D)"
-                    class="tool-button"><iconify-icon icon="lucide:pencil" width="20"
-                        height="20"></iconify-icon></button><button id="add-arrow-btn" title="Add Arrow (Shift+A)"
-                    class="tool-button"><iconify-icon icon="lucide:arrow-up-right" width="20"
-                        height="20"></iconify-icon></button><button id="add-box-btn" title="Add Box (B)"
-                    class="tool-button"><iconify-icon icon="lucide:square" width="20"
-                        height="20"></iconify-icon></button><button id="add-circle-btn" title="Add Circle (C)"
-                    class="tool-button"><iconify-icon icon="lucide:circle" width="20"
-                        height="20"></iconify-icon></button><button id="add-measure-btn" title="Measure (M)"
-                    class="tool-button"><iconify-icon icon="lucide:ruler" width="20"
-                        height="20"></iconify-icon></button><button id="add-grid-btn" title="Add Grid (Alt+G)"
-                    class="tool-button"><iconify-icon icon="lucide:grid-3x3" width="20"
                         height="20"></iconify-icon></button>
+                
+                <!-- Text Tools Group -->
+                <div class="tool-group">
+                    <button class="tool-button" title="Text Tools (T, N, K, L)">
+                        <iconify-icon icon="lucide:type" width="20" height="20"></iconify-icon>
+                        <div class="group-indicator"></div>
+                    </button>
+                    <div class="tool-group-flyout">
+                        <button id="add-text-btn" title="Add Text (T)" class="tool-button">
+                            <iconify-icon icon="lucide:type" width="20" height="20"></iconify-icon>
+                        </button>
+                        <button id="add-comment-btn" title="Add Comment (N)" class="tool-button">
+                            <iconify-icon icon="lucide:message-square" width="20" height="20"></iconify-icon>
+                        </button>
+                        <button id="add-link-btn" title="Add Link (K)" class="tool-button">
+                            <iconify-icon icon="lucide:link" width="20" height="20"></iconify-icon>
+                        </button>
+                        <button id="add-text-list-btn" title="Add Text List (L)" class="tool-button">
+                            <iconify-icon icon="lucide:list-todo" width="20" height="20"></iconify-icon>
+                        </button>
+                    </div>
+                </div>
+
+                <button id="add-counter-btn" title="Add Counter"
+                    class="tool-button"><iconify-icon icon="lucide:hash" width="20"
+                        height="20"></iconify-icon></button>
+                <button id="draw-btn" title="Draw (D)"
+                    class="tool-button"><iconify-icon icon="lucide:pencil" width="20"
+                        height="20"></iconify-icon></button>
+
+                <!-- Shapes Group -->
+                <div class="tool-group">
+                    <button class="tool-button" title="Shape Tools (Shift+A, B, C, Alt+G)">
+                        <iconify-icon icon="lucide:shapes" width="20" height="20"></iconify-icon>
+                        <div class="group-indicator"></div>
+                    </button>
+                    <div class="tool-group-flyout">
+                        <button id="add-arrow-btn" title="Add Arrow (Shift+A)" class="tool-button">
+                            <iconify-icon icon="lucide:arrow-up-right" width="20" height="20"></iconify-icon>
+                        </button>
+                        <button id="add-box-btn" title="Add Box (B)" class="tool-button">
+                            <iconify-icon icon="lucide:square" width="20" height="20"></iconify-icon>
+                        </button>
+                        <button id="add-circle-btn" title="Add Circle (C)" class="tool-button">
+                            <iconify-icon icon="lucide:circle" width="20" height="20"></iconify-icon>
+                        </button>
+                        <button id="add-grid-btn" title="Add Grid (Alt+G)" class="tool-button">
+                            <iconify-icon icon="lucide:grid-3x3" width="20" height="20"></iconify-icon>
+                        </button>
+                    </div>
+                </div>
+
+                <button id="add-measure-btn" title="Measure (M)"
+                    class="tool-button"><iconify-icon icon="lucide:ruler" width="20"
+                        height="20"></iconify-icon></button>
+                
                 <div class="separator"></div><button id="align-btn" title="Auto Align Selection (Ctrl+Shift+A)"
                     class="tool-button" disabled><iconify-icon icon="lucide:layout-grid" width="22"
                         height="22"></iconify-icon></button>
                 <div class="separator"></div>
-                <button id="center-view-btn" title="Center View (Home)" class="tool-button">
-                    <iconify-icon icon="lucide:crosshair" width="20" height="20"></iconify-icon>
-                </button>
+
+                <!-- View Group -->
+                <div class="tool-group">
+                    <button class="tool-button" title="View Tools (Home, .)">
+                        <iconify-icon icon="lucide:eye" width="20" height="20"></iconify-icon>
+                        <div class="group-indicator"></div>
+                    </button>
+                    <div class="tool-group-flyout">
+                        <button id="center-view-btn" title="Center View (Home)" class="tool-button">
+                            <iconify-icon icon="lucide:crosshair" width="20" height="20"></iconify-icon>
+                        </button>
+                        <button id="center-selected-btn" title="Center Selected (.)" class="tool-button">
+                            <iconify-icon icon="lucide:focus" width="20" height="20"></iconify-icon>
+                        </button>
+                    </div>
+                </div>
+
                 <button id="open-help-btn" title="Help" class="tool-button">
                     <iconify-icon icon="lucide:info" width="20" height="20"></iconify-icon>
                 </button>

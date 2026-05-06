@@ -1243,6 +1243,73 @@
             color: var(--switch-bg-checked)
         }
 
+        /* --- TOOL GROUPING STYLES --- */
+        .tool-group {
+            position: relative;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .tool-group-flyout {
+            position: absolute;
+            left: calc(100% + 8px);
+            top: 0;
+            background: var(--bg-ui);
+            padding: 0.4rem;
+            border-radius: 0.75rem;
+            display: none;
+            flex-direction: row;
+            gap: 0.4rem;
+            border: 1px solid var(--border-color);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+            z-index: 1000;
+            animation: flyoutIn 0.2s ease-out;
+        }
+
+        /* Safe zone to bridge the gap between trigger and flyout */
+        .tool-group-flyout::before {
+            content: '';
+            position: absolute;
+            left: -12px;
+            top: -10px;
+            bottom: -10px;
+            width: 14px;
+            /* background: rgba(255,0,0,0.2); Debug */
+        }
+
+        @keyframes flyoutIn {
+            from { opacity: 0; transform: translateX(-10px); }
+            to { opacity: 1; transform: translateX(0); }
+        }
+
+        .tool-group:hover .tool-group-flyout {
+            display: flex;
+        }
+
+        .group-indicator {
+            position: absolute;
+            bottom: 3px;
+            right: 3px;
+            width: 0;
+            height: 0;
+            border-style: solid;
+            border-width: 0 0 5px 5px;
+            border-color: transparent transparent var(--text-color-light) transparent;
+            pointer-events: none;
+            transition: border-color 0.2s;
+        }
+
+        .tool-button:hover .group-indicator,
+        .tool-button.active .group-indicator {
+            border-color: transparent transparent var(--text-color) transparent;
+        }
+
+        .tool-button.active .group-indicator {
+            border-color: transparent transparent var(--switch-bg-checked) transparent;
+        }
+
         .separator {
             height: 1px;
             background-color: var(--border-color);

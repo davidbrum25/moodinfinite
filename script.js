@@ -787,6 +787,7 @@ const cancelNoteBtn = document.getElementById('cancel-note-btn');
 const confirmNoteBtn = document.getElementById('confirm-note-btn');
 const noteFmtBtns = document.querySelectorAll('.note-fmt-btn');
 const noteBgColorInput = document.getElementById('note-bg-color-input');
+const centerSelectedBtn = document.getElementById('center-selected-btn');
 
 let cameraOffset, cameraZoom;
 let items = [], selectedItems = [];
@@ -1161,6 +1162,7 @@ function setupEventListeners() {
     if (alignBtn) alignBtn.addEventListener('click', autoAlignSelection);
     const centerViewBtn = document.getElementById('center-view-btn');
     if (centerViewBtn) centerViewBtn.addEventListener('click', centerView);
+    if (centerSelectedBtn) centerSelectedBtn.addEventListener('click', focusOnSelection);
 
     if (showGridToggle) showGridToggle.addEventListener('change', e => { showGrid = e.target.checked; saveSettings() });
     if (snapGridToggle) snapGridToggle.addEventListener('change', e => { snapToGrid = e.target.checked; saveSettings() });
@@ -3700,6 +3702,8 @@ function setCurrentTool(e) {
         if (addGridBtn) addGridBtn.classList.add('active');
     } else if (currentTool === 'textList') {
         if (addTextListBtn) addTextListBtn.classList.add('active');
+    } else if (currentTool === 'counter') {
+        if (addCounterBtn) addCounterBtn.classList.add('active');
     } else if (currentTool === 'draw') {
         if (drawBtn) drawBtn.classList.add('active');
     } else if (currentTool === 'eyedropper') {
@@ -3708,6 +3712,16 @@ function setCurrentTool(e) {
             canvas.classList.add('eyedropper-active');
         }
     }
+
+    // Highlight group parent if a tool inside it is active
+    document.querySelectorAll('.tool-group').forEach(group => {
+        const flyout = group.querySelector('.tool-group-flyout');
+        if (flyout && flyout.querySelector('.tool-button.active')) {
+            const groupBtn = group.querySelector('.tool-button:not(.tool-group-flyout .tool-button)');
+            if (groupBtn) groupBtn.classList.add('active');
+        }
+    });
+
     console.log('Tool updated to:', currentTool);
 }
 function setActiveGizmo(e) { activeGizmo = activeGizmo === e ? null : e; updateSelectionToolbar() }
@@ -4430,6 +4444,7 @@ function centerView() {
     cameraOffset.x = canvas.width / 2;
     cameraOffset.y = canvas.height / 2;
     showToast('View centered.');
+    requestUpdate();
 }
 
 function focusOnSelection() {
@@ -4445,6 +4460,7 @@ function focusOnSelection() {
     const centerY = bbox.y + bbox.height / 2;
     cameraOffset.x = canvas.width / 2 - centerX;
     cameraOffset.y = canvas.height / 2 - centerY;
+    requestUpdate();
 }
 
 cancelNoteBtn.onclick = cancelNoteEditing;
