@@ -127,35 +127,6 @@
                 </button>
 
                 <!-- User account dropdown menu -->
-                <div id="cloud-user-menu" class="cloud-user-menu">
-                    <div class="cloud-menu-profile">
-                        <img id="cloud-menu-avatar" src="" alt="" style="width:36px; height:36px; border-radius:50%; object-fit:cover; flex-shrink:0;">
-                        <div class="cloud-menu-profile-info">
-                            <span id="cloud-menu-name" class="cloud-menu-name">Google Account</span>
-                            <span id="cloud-menu-email" class="cloud-menu-email"></span>
-                        </div>
-                    </div>
-                    <!-- Storage meter -->
-                    <div id="cloud-menu-storage" class="cloud-menu-storage" style="display:none;"></div>
-                    <div class="cloud-menu-divider"></div>
-                    <button id="cloud-menu-save" class="cloud-menu-item">
-                        <iconify-icon icon="lucide:cloud-upload" width="16" height="16"></iconify-icon>
-                        Save to Drive
-                    </button>
-                    <button id="cloud-menu-open" class="cloud-menu-item">
-                        <iconify-icon icon="lucide:cloud-download" width="16" height="16"></iconify-icon>
-                        Open from Drive
-                    </button>
-                    <div class="cloud-menu-divider"></div>
-                    <button id="cloud-menu-switch" class="cloud-menu-item">
-                        <iconify-icon icon="lucide:refresh-cw" width="16" height="16"></iconify-icon>
-                        Switch Account
-                    </button>
-                    <button id="cloud-menu-signout" class="cloud-menu-item cloud-menu-item--danger">
-                        <iconify-icon icon="lucide:log-out" width="16" height="16"></iconify-icon>
-                        Sign Out
-                    </button>
-                </div>
             </div>
         </div>
     </div>
@@ -608,6 +579,62 @@
         style="display: none;" multiple>
     <input type="file" id="project-input" accept=".json, .mood" style="display: none;">
     <input type="file" id="prompt-image-input" accept="image/png, image/jpeg, image/webp" style="display: none;">
+
+    <!-- User account dropdown menu (moved to root for blur effect) -->
+    <div id="cloud-user-menu" class="cloud-user-menu">
+        <div class="cloud-menu-profile">
+            <img id="cloud-menu-avatar" src="" alt="" style="width:36px; height:36px; border-radius:50%; object-fit:cover; flex-shrink:0;">
+            <div class="cloud-menu-profile-info">
+                <span id="cloud-menu-name" class="cloud-menu-name">Google Account</span>
+                <span id="cloud-menu-email" class="cloud-menu-email"></span>
+            </div>
+        </div>
+        <!-- Storage meter -->
+        <div id="cloud-menu-storage" class="cloud-menu-storage" style="display:none;"></div>
+        <div class="cloud-menu-divider"></div>
+        <button id="cloud-menu-save" class="cloud-menu-item">
+            <iconify-icon icon="lucide:cloud-upload" width="16" height="16"></iconify-icon>
+            Save to Drive
+        </button>
+        <button id="cloud-menu-open" class="cloud-menu-item">
+            <iconify-icon icon="lucide:cloud-download" width="16" height="16"></iconify-icon>
+            Open from Drive
+        </button>
+        <div class="cloud-menu-divider"></div>
+        
+        <!-- Autosave Settings -->
+        <div class="cloud-menu-autosave-section">
+            <div class="cloud-autosave-row">
+                <span class="cloud-autosave-label">Autosave to Drive</span>
+                <label class="switch">
+                    <input type="checkbox" id="cloud-autosave-toggle">
+                    <span class="slider round"></span>
+                </label>
+            </div>
+            <div class="cloud-autosave-row">
+                <span class="cloud-autosave-sublabel">Interval (min)</span>
+                <select id="cloud-autosave-interval" class="cloud-autosave-select">
+                    <option value="1">1 min</option>
+                    <option value="2">2 min</option>
+                    <option value="3">3 min</option>
+                    <option value="5" selected>5 min</option>
+                    <option value="10">10 min</option>
+                    <option value="15">15 min</option>
+                    <option value="30">30 min</option>
+                </select>
+            </div>
+        </div>
+        
+        <div class="cloud-menu-divider"></div>
+        <button id="cloud-menu-switch" class="cloud-menu-item">
+            <iconify-icon icon="lucide:refresh-cw" width="16" height="16"></iconify-icon>
+            Switch Account
+        </button>
+        <button id="cloud-menu-signout" class="cloud-menu-item cloud-menu-item--danger">
+            <iconify-icon icon="lucide:log-out" width="16" height="16"></iconify-icon>
+            Sign Out
+        </button>
+    </div>
 
     <div id="context-menu">
         <div class="menu-item"><label class="menu-label">Colors</label>

@@ -1,18 +1,14 @@
 # Moodinfinite v1.0.0
 
-<div align="center">
-  <img src="https://github.com/davidbrum25/moodinfinite/blob/main/_branding/_png/moodinfinite__Logotipo_alpha.png?raw=true" alt="Moodinfinite Logo" width="400"/>
-</div>
+![Moodinfinite Logo](https://github.com/davidbrum25/moodinfinite/blob/main/_branding/_png/moodinfinite__Logotipo_alpha.png?raw=true)
 
-<p align="center">
-  <strong>A versatile, infinite digital canvas for your ideas. Create moodboards, brainstorm, organize thoughts, and craft the perfect AI prompts.</strong>
-</p>
+**A versatile, infinite digital canvas for your ideas. Create moodboards, brainstorm, organize thoughts, and craft the perfect AI prompts.**
 
 ---
 
 ## Demo
 
-Try it live: https://davidbrum25.github.io/moodinfinite/index.html
+Try it live: <https://davidbrum25.github.io/moodinfinite/index.html>
 
 ---
 
@@ -29,18 +25,18 @@ Try it live: https://davidbrum25.github.io/moodinfinite/index.html
 
 * **Infinite Canvas:** Pan and zoom freely on a boundless digital canvas.
 * **Core Tools & Hotkeys:**
-    * **Select (A):** The default tool for selecting and moving items.
-    * **Add Image (I):** Add images from your computer, by pasting, or by drag-and-drop.
-    * **Add Text (T):** Create rich Post-it notes with Markdown, custom fonts, and colors.
-    * **Add Comment (N):** Sticky-note style annotations with optional icons.
-    * **Add Link (K):** Place interactive hyperlinks with favicon previews on the canvas.
-    * **Add Text List (L):** Interactive checklists with togglable checkbox items.
-    * **Draw (D):** Freehand drawing and sketching.
-    * **Add Arrow (Shift+A):** Draw directional arrows. Hold Shift to snap to 45° angles.
-    * **Add Box (B) & Circle (C):** Geometric shapes with Fill or Stroke toggle.
-    * **Measure (M):** Draw a measurement line in px, cm, or inches.
-    * **Add Grid (Alt+G):** Create structured grids with adjustable rows and columns.
-    * **Eyedropper (E):** Pick any color directly from the canvas.
+  * **Select (A):** The default tool for selecting and moving items.
+  * **Add Image (I):** Add images from your computer, by pasting, or by drag-and-drop.
+  * **Add Text (T):** Create rich Post-it notes with Markdown, custom fonts, and colors.
+  * **Add Comment (N):** Sticky-note style annotations with optional icons.
+  * **Add Link (K):** Place interactive hyperlinks with favicon previews on the canvas.
+  * **Add Text List (L):** Interactive checklists with togglable checkbox items.
+  * **Draw (D):** Freehand drawing and sketching.
+  * **Add Arrow (Shift+A):** Draw directional arrows. Hold Shift to snap to 45° angles.
+  * **Add Box (B) & Circle (C):** Geometric shapes with Fill or Stroke toggle.
+  * **Measure (M):** Draw a measurement line in px, cm, or inches.
+  * **Add Grid (Alt+G):** Create structured grids with adjustable rows and columns.
+  * **Eyedropper (E):** Pick any color directly from the canvas.
 
 * **Clipboard:** `Ctrl+C` (Copy), `Ctrl+X` (Cut), `Ctrl+V` (Paste), `Ctrl+D` (Duplicate).
 * **History:** `Ctrl+Z` (Undo), `Ctrl+Shift+Z` (Redo).
@@ -87,10 +83,10 @@ Each Moodprompt file consists of **Prompt Cards**, which feature:
 
 **StoryFlow** is a sequential storytelling tool. It organizes your project into a linear timeline of frames, perfect for storyboarding, video planning, or mapping user journeys.
 
-*   **Horizontal Sequencing:** Frames are laid out in a side-by-side gallery for narrative flow.
-*   **Visual Beats:** Each frame features a large image slot (upload or paste support).
-*   **Production Notes:** Dedicated fields for Title, Action/Dialogue, Duration, and Camera notes.
-*   **Drag & Drop:** Easily reorder your story beats to refine the narrative.
+* **Horizontal Sequencing:** Frames are laid out in a side-by-side gallery for narrative flow.
+* **Visual Beats:** Each frame features a large image slot (upload or paste support).
+* **Production Notes:** Dedicated fields for Title, Action/Dialogue, Duration, and Camera notes.
+* **Drag & Drop:** Easily reorder your story beats to refine the narrative.
 
 ### Persistence & Storage
 
@@ -103,18 +99,22 @@ Each Moodprompt file consists of **Prompt Cards**, which feature:
 
 ### Prerequisites
 
-- A modern web browser (Chrome, Firefox, Safari, or Edge).
+* A modern web browser (Chrome, Firefox, Safari, or Edge).
 
 ### Installation
 
 1. Clone the repository:
-   ```
+
+   ```bash
    git clone https://github.com/davidbrum25/moodinfinite.git
    ```
+
 2. Navigate to the project directory:
-   ```
+
+   ```bash
    cd moodinfinite
    ```
+
 3. Open `index.html` in your web browser.
 
 No build tools or servers required — it's a fully static web app!
@@ -124,6 +124,7 @@ No build tools or servers required — it's a fully static web app!
 ## Credits
 
 Made by H. David Brum
+
 * **Email:** [davidbrum@gmail.com](mailto:davidbrum@gmail.com)
 * **Links:** [linktr.ee/davidbrum](https://linktr.ee/davidbrum)
 
@@ -138,40 +139,40 @@ If you find this tool useful and want to help me build more, consider supporting
 
 ### ✨ v1.0.0 — Google Drive Cloud Sync & Persistence
 
-*   **☁️ Google Drive Integration:** Sign in with your Google account to save and load projects directly from your personal Drive. All files are stored in a dedicated `Moodinfinite` folder.
-*   **🔄 Seamless Cross-Device Sync:** Keep your projects in sync across all your devices. The app now handles conflict resolution and ensures your data is always safe.
-*   **💾 Persistent Sessions:** Stay logged in across page reloads. The app uses a secure silent refresh flow to keep your cloud connection active.
-*   **📊 Drive Storage Management:** Monitor your storage usage with a real-time meter in the account menu.
-*   **📂 Enhanced Cloud Picker:** Open projects from Drive with a premium file picker featuring live sorting (Date, Size, Name) and built-in file deletion.
-*   **🗑️ Remote File Management:** Delete unwanted projects from your Google Drive directly within the app interface.
+* **☁️ Google Drive Integration:** Sign in with your Google account to save and load projects directly from your personal Drive. All files are stored in a dedicated `Moodinfinite` folder.
+* **🔄 Seamless Cross-Device Sync:** Keep your projects in sync across all your devices. The app now handles conflict resolution and ensures your data is always safe.
+* **💾 Persistent Sessions:** Stay logged in across page reloads. The app uses a secure silent refresh flow to keep your cloud connection active.
+* **📊 Drive Storage Management:** Monitor your storage usage with a real-time meter in the account menu.
+* **📂 Enhanced Cloud Picker:** Open projects from Drive with a premium file picker featuring live sorting (Date, Size, Name) and built-in file deletion.
+* **🗑️ Remote File Management:** Delete unwanted projects from your Google Drive directly within the app interface.
 
 ---
 
 ### ✨ v0.9.9 — UI Polish & Moodflow Minimap
 
-*   **🎨 True Glassmorphism UI:** The topbar menu has been redesigned into a floating, fully transparent glass panel, allowing your canvas to blur beautifully underneath it.
-*   **🖱️ Moodflow Minimap:** Added a dedicated horizontal scroll minimap timeline for Moodflow tabs. It includes live visual previews of your frames, a draggable camera viewport, and a skip-to-start button for rapid navigation.
-*   **↔️ Horizontal Mousewheel Panning:** Scrolling your mouse wheel vertically inside a Moodflow tab now intuitively translates to smooth horizontal panning across your frames.
-*   **🎯 Drag-and-Drop Indicators:** When reordering Moodflow cards, the drop zone now dynamically illuminates with your accent color and a subtle scale animation to clearly indicate where the card will be inserted.
-*   **🏷️ Creation Tab Refinements:** Reorganized and renamed the creation buttons (Moodinfinite, Moodpront, Moodtone, Moodflow). They now display their signature brand colors seamlessly upon hover.
-*   **🎛️ Moodflow Controls:** The frame duration input is now an interactive slider (0s to 60s). The camera property is now a structured dropdown menu with predefined framing options. 
+* **🎨 True Glassmorphism UI:** The topbar menu has been redesigned into a floating, fully transparent glass panel, allowing your canvas to blur beautifully underneath it.
+* **🖱️ Moodflow Minimap:** Added a dedicated horizontal scroll minimap timeline for Moodflow tabs. It includes live visual previews of your frames, a draggable camera viewport, and a skip-to-start button for rapid navigation.
+* **↔️ Horizontal Mousewheel Panning:** Scrolling your mouse wheel vertically inside a Moodflow tab now intuitively translates to smooth horizontal panning across your frames.
+* **🎯 Drag-and-Drop Indicators:** When reordering Moodflow cards, the drop zone now dynamically illuminates with your accent color and a subtle scale animation to clearly indicate where the card will be inserted.
+* **🏷️ Creation Tab Refinements:** Reorganized and renamed the creation buttons (Moodinfinite, Moodpront, Moodtone, Moodflow). They now display their signature brand colors seamlessly upon hover.
+* **🎛️ Moodflow Controls:** The frame duration input is now an interactive slider (0s to 60s). The camera property is now a structured dropdown menu with predefined framing options.
 
 ---
 
 ### ✨ v0.9.8 — StoryFlow & Sequential Storytelling
 
-*   **🎬 StoryFlow Tabs:** A brand new project type for sequential planning.
-*   **🎞️ Horizontal Storyboarding:** Layout your ideas in a linear flow with dedicated fields for timing, camera, and dialogue.
-*   **📋 Paste-to-Frame:** Directly paste images from your clipboard into story frames for rapid ideation.
-*   **🔄 Reorderable Beats:** Drag and drop frames to instantly restructure your narrative.
+* **🎬 StoryFlow Tabs:** A brand new project type for sequential planning.
+* **🎞️ Horizontal Storyboarding:** Layout your ideas in a linear flow with dedicated fields for timing, camera, and dialogue.
+* **📋 Paste-to-Frame:** Directly paste images from your clipboard into story frames for rapid ideation.
+* **🔄 Reorderable Beats:** Drag and drop frames to instantly restructure your narrative.
 
 ---
 
 ### ✨ v0.9.7 — Camera Navigation & Bug Fixes
 
-*   **📍 Center View (Home):** A new toolbar button and hotkey to instantly reset the camera to the canvas origin at 1:1 zoom.
-*   **🔍 Focus on Selection (.):** Press `.` to automatically zoom and pan the camera to perfectly frame all selected items. If nothing is selected, the entire board is framed.
-*   **🎨 List Element Color Fix:** The color picker now correctly applies color changes to Text List elements (the change was silently ignored before).
+* **📍 Center View (Home):** A new toolbar button and hotkey to instantly reset the camera to the canvas origin at 1:1 zoom.
+* **🔍 Focus on Selection (.):** Press `.` to automatically zoom and pan the camera to perfectly frame all selected items. If nothing is selected, the entire board is framed.
+* **🎨 List Element Color Fix:** The color picker now correctly applies color changes to Text List elements (the change was silently ignored before).
 
 ---
 
@@ -179,101 +180,101 @@ If you find this tool useful and want to help me build more, consider supporting
 
 This update brings a massive overhaul to the storage architecture, focusing on reliability, performance, and seamless offline data persistence.
 
-*   **🧠 LocalForage Auto-Saving:** The app now silently and automatically saves your entire workspace (projects, tabs, images, and history) natively in your browser's database. Your boards will instantly load exactly where you left them across page reloads.
-*   **🗜️ Compressed .mood Exports:** Replaced legacy JSON exports with a robust `.mood` export pipeline. Hitting save securely generates a ZIP archive containing your raw project state and your images dynamically compressed as `.webp` binaries, vastly reducing file payload sizes.
-*   **🖼️ Refined Text Elements Scaling:** Text elements now actively word-wrap instead of scaling the source font, and automatically lock their minimum dimensions to effectively contain the exact dimensions of the typed text constraints during resize actions.
-*   **🎨 Layering & Grouping Fixes:** Corrected the rendering loop order so that connections and arrows correctly adhere to natural layer ordering. Fixed an invisible element bug where 'Comment', 'Link', and 'Text List' elements would vanish when grouped together.
+* **🧠 LocalForage Auto-Saving:** The app now silently and automatically saves your entire workspace (projects, tabs, images, and history) natively in your browser's database. Your boards will instantly load exactly where you left them across page reloads.
+* **🗜️ Compressed .mood Exports:** Replaced legacy JSON exports with a robust `.mood` export pipeline. Hitting save securely generates a ZIP archive containing your raw project state and your images dynamically compressed as `.webp` binaries, vastly reducing file payload sizes.
+* **🖼️ Refined Text Elements Scaling:** Text elements now actively word-wrap instead of scaling the source font, and automatically lock their minimum dimensions to effectively contain the exact dimensions of the typed text constraints during resize actions.
+* **🎨 Layering & Grouping Fixes:** Corrected the rendering loop order so that connections and arrows correctly adhere to natural layer ordering. Fixed an invisible element bug where 'Comment', 'Link', and 'Text List' elements would vanish when grouped together.
 
 ---
 
 ### ✨ v0.9.5 — Next-Gen Post-it Notes & Premium UI
 
-*   **📝 Next-Gen Post-it Note:**
-    *   **Full Markdown Engine:** The Text element now supports headings (`#`, `##`, `###`), bullets (`-`, `*`), **bold**, *italic*, and monospaced `` `inline code` ``.
-    *   **Auto-Responsive Containers:** Notes now intelligently resize their boundaries to perfectly wrap your text.
-    *   **Smart Color Adaptive UI:** Background colors can be changed instantly via the selection toolbar. Text color flips automatically for readability.
-*   **⌨️ Power-User Hotkeys:** `Ctrl+B` (bold), `Ctrl+I` (italic), `Ctrl+Enter` (save note), `Escape` (discard).
-*   **💎 Premium Glassmorphism UI:** Redesigned confirmation modals with glassmorphism, backdrop blur, and a safety confirmation step when closing board tabs.
-*   **🎨 Default Font (Nunito):** Set as the default for all text-capable elements.
+* **📝 Next-Gen Post-it Note:**
+  * **Full Markdown Engine:** The Text element now supports headings (`#`, `##`, `###`), bullets (`-`, `*`), **bold**, *italic*, and monospaced `` `inline code` ``.
+  * **Auto-Responsive Containers:** Notes now intelligently resize their boundaries to perfectly wrap your text.
+  * **Smart Color Adaptive UI:** Background colors can be changed instantly via the selection toolbar. Text color flips automatically for readability.
+* **⌨️ Power-User Hotkeys:** `Ctrl+B` (bold), `Ctrl+I` (italic), `Ctrl+Enter` (save note), `Escape` (discard).
+* **💎 Premium Glassmorphism UI:** Redesigned confirmation modals with glassmorphism, backdrop blur, and a safety confirmation step when closing board tabs.
+* **🎨 Default Font (Nunito):** Set as the default for all text-capable elements.
 
 ---
 
 ### ✨ v0.9.4 — Mobile UX & Bug Fixes
 
-*   **📱 Reliable Connectors:** Rebuilt tap-to-connect using native `pointerdown` events, eliminating duplicate triggers on mobile/tablet.
-*   **🎨 Live Color Previews:** Hovering over Color Palette options now instantly previews the style.
-*   **🐛 Group Transformation Preservation:** Fixed an issue where items scaled inside a parent group would snap back to unscaled dimensions when ungrouped.
-*   **🛡️ Event Crash Prevention:** Fixed an `Undefined preventDefault` crash on iOS/Android during connector wire tracing.
+* **📱 Reliable Connectors:** Rebuilt tap-to-connect using native `pointerdown` events, eliminating duplicate triggers on mobile/tablet.
+* **🎨 Live Color Previews:** Hovering over Color Palette options now instantly previews the style.
+* **🐛 Group Transformation Preservation:** Fixed an issue where items scaled inside a parent group would snap back to unscaled dimensions when ungrouped.
+* **🛡️ Event Crash Prevention:** Fixed an `Undefined preventDefault` crash on iOS/Android during connector wire tracing.
 
 ---
 
 ### ✨ v0.9.3 — Node Connectors & Checklists
 
-*   **🔌 Node Connectors:** Drag from any element's edge port to another to draw dynamic bezier curve connectors.
-*   **↩️ Reroute Nodes:** Double-click a connector to split it and add a reroute node.
-*   **✂️ Smart Deletion:** Hold `Ctrl`/`Cmd` over a wire to reveal the scissor cursor and cut connections with a click.
-*   **✅ Checklist Element:** Add interactive checklist elements with togglable checkboxes, color, and font editing.
+* **🔌 Node Connectors:** Drag from any element's edge port to another to draw dynamic bezier curve connectors.
+* **↩️ Reroute Nodes:** Double-click a connector to split it and add a reroute node.
+* **✂️ Smart Deletion:** Hold `Ctrl`/`Cmd` over a wire to reveal the scissor cursor and cut connections with a click.
+* **✅ Checklist Element:** Add interactive checklist elements with togglable checkboxes, color, and font editing.
 
 ---
 
 ### ✨ v0.9.2 — Link Element & Icon Modernization
 
-*   **🔗 New "Link" Element:** Interactive hyperlinks with automatic favicon fetching.
-*   **🎭 Icon Modernization:** Replaced individual icon assets with the unified **Iconify** system.
-*   **💬 Notes Tool Refinements:** Better layout, icon support, and a cleaner selection toolbar.
-*   **🛡️ Bug Fixes:** Fixed a critical crash during element duplication.
+* **🔗 New "Link" Element:** Interactive hyperlinks with automatic favicon fetching.
+* **🎭 Icon Modernization:** Replaced individual icon assets with the unified **Iconify** system.
+* **💬 Notes Tool Refinements:** Better layout, icon support, and a cleaner selection toolbar.
+* **🛡️ Bug Fixes:** Fixed a critical crash during element duplication.
 
 ---
 
 ### ✨ v0.9.1 — Linux Middle-Click Fix
 
-*   **🐧 Linux Middle-Click Fix:** Prevented the middle mouse button from triggering paste on Linux.
+* **🐧 Linux Middle-Click Fix:** Prevented the middle mouse button from triggering paste on Linux.
 
 ---
 
 ### ✨ v0.9.0 — Performance & Group Ordered
 
-*   **🚀 Performance Optimization:** Global image cache to reduce memory usage and prevent crashes with many images.
-*   **🛡️ Stability Improvements:** Fixed undo/redo history crashes with large images.
-*   **🔢 Group Ordered (`Ctrl+Shift+O`):** Automatically group and number selected images from top-left to bottom-right.
+* **🚀 Performance Optimization:** Global image cache to reduce memory usage and prevent crashes with many images.
+* **🛡️ Stability Improvements:** Fixed undo/redo history crashes with large images.
+* **🔢 Group Ordered (`Ctrl+Shift+O`):** Automatically group and number selected images from top-left to bottom-right.
 
 ---
 
 ### ✨ v0.8.9 — Tab System Polish & Scaling
 
-*   **Visual Tab Connection:** Eliminated the visual gap between the tab bar and the canvas.
-*   **Mobile Tab Deletion:** Added a delete button in the mobile tabs popup.
-*   **Intuitive Scaling:** Inverted scaling behavior — aspect ratio locked by default, `Shift` for free-form.
-*   **Enhanced Reset Button:** Fully resets position, rotation, and flip state of selected elements.
-*   **Codebase Refactoring:** Separated into modular `index.html`, `style.css`, and `script.js` files.
+* **Visual Tab Connection:** Eliminated the visual gap between the tab bar and the canvas.
+* **Mobile Tab Deletion:** Added a delete button in the mobile tabs popup.
+* **Intuitive Scaling:** Inverted scaling behavior — aspect ratio locked by default, `Shift` for free-form.
+* **Enhanced Reset Button:** Fully resets position, rotation, and flip state of selected elements.
+* **Codebase Refactoring:** Separated into modular `index.html`, `style.css`, and `script.js` files.
 
 ---
 
 ### ✨ v0.8.7 — Measure Tool & Help
 
-*   **📏 New "Measure" Tool:** Measure distances in pixels, cm, or inches.
-*   **👆 Enhanced Touch Controls:** Improved pinch-to-zoom and two-finger pan.
-*   **❓ In-App Help:** Comprehensive help modal with all features and hotkeys.
-*   **📋 Copy to Clipboard:** Copy the entire board as a PNG image.
-*   **🎨 Color Palettes:** Curated palettes panel for quick theming.
+* **📏 New "Measure" Tool:** Measure distances in pixels, cm, or inches.
+* **👆 Enhanced Touch Controls:** Improved pinch-to-zoom and two-finger pan.
+* **❓ In-App Help:** Comprehensive help modal with all features and hotkeys.
+* **📋 Copy to Clipboard:** Copy the entire board as a PNG image.
+* **🎨 Color Palettes:** Curated palettes panel for quick theming.
 
 ---
 
 ### ✨ v0.8.6 — Theming & New Tools
 
-*   **🎨 Enhanced Theming:** Per-project color palettes.
-*   **✒️ Google Fonts Integration:** Multiple new fonts added.
-*   **🖱️ Scrollable Tabs:** Work with many projects seamlessly.
-*   **⚪ New "Circle" Tool:** Draw circles on the canvas.
+* **🎨 Enhanced Theming:** Per-project color palettes.
+* **✒️ Google Fonts Integration:** Multiple new fonts added.
+* **🖱️ Scrollable Tabs:** Work with many projects seamlessly.
+* **⚪ New "Circle" Tool:** Draw circles on the canvas.
 
 ---
 
 ### ✨ v0.8.0 — Multi-Project Workspace
 
-*   **🚀 All-New Tab System:** Work on multiple boards simultaneously.
-*   **✍️ Moodprompt Tabs:** Structured AI prompt management for Midjourney, Sora, and more.
-*   **💾 Persistent User Settings:** Colors, grid, and preferences saved in local storage.
-*   **📱 Mobile Long-Press Menu:** Context menu accessible on touch via long press.
+* **🚀 All-New Tab System:** Work on multiple boards simultaneously.
+* **✍️ Moodprompt Tabs:** Structured AI prompt management for Midjourney, Sora, and more.
+* **💾 Persistent User Settings:** Colors, grid, and preferences saved in local storage.
+* **📱 Mobile Long-Press Menu:** Context menu accessible on touch via long press.
 
 ---
 

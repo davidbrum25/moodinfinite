@@ -209,7 +209,7 @@ const CloudSync = (() => {
      * the Moodinfinite folder the user is asked what to do (keep local / keep drive / cancel).
      * Returns the Drive file ID.
      */
-    async function uploadFile(blob, fileName) {
+    async function uploadFile(blob, fileName, isAutoSave = false) {
         await _ensureAuth();
         const fId = await _ensureFolder();
 
@@ -226,7 +226,10 @@ const CloudSync = (() => {
             const driveFile = existing.files[0];
             const driveDate = new Date(driveFile.modifiedTime).toLocaleString();
 
-            const choice = await _showConflictDialog(fileName, driveDate);
+            let choice = 'keep-local';
+            if (!isAutoSave) {
+                choice = await _showConflictDialog(fileName, driveDate);
+            }
             if (choice === 'cancel') return null;
             if (choice === 'keep-drive') return driveFile.id;
             // choice === 'keep-local' → overwrite below
@@ -360,16 +363,18 @@ const CloudSync = (() => {
             setCloudStatus('syncing');
             showCloudToast('Saving to Google Drive…', 'info');
 
-            // Get the project blob via the existing saveProject logic
-            const blob = await _buildProjectBlob();
+            const activeProject = window.projects?.find(p => p.id === window.activeProjectId);
+            const blob = await _buildProjectBlob(activeProject);
             if (!blob) { setCloudStatus('idle'); return; }
 
-            const activeProject = window.projects?.find(p => p.id === window.activeProjectId);
             const fileName = `${(activeProject?.name || 'moodboard').replace(/[^a-z0-9 _-]/gi, '_')}.mood`;
 
             const fileId = await uploadFile(blob, fileName);
             if (fileId) {
                 showCloudToast(`Saved "${fileName}" to Drive ✓`, 'success');
+                if (activeProject && activeProject.data) {
+                    activeProject.data._cloudSaved = Date.now();
+                }
                 setCloudStatus('synced');
             } else {
                 setCloudStatus('idle');
@@ -492,9 +497,8 @@ const CloudSync = (() => {
      * Replicates the zip-building logic from saveProject() but returns a Blob
      * instead of triggering a download.
      */
-    function _buildProjectBlob() {
+    function _buildProjectBlob(t) {
         return new Promise((resolve, reject) => {
-            const t = window.projects?.find(p => p.id === window.activeProjectId);
             if (!t) { resolve(null); return; }
 
             const zip = new window.JSZip();
@@ -551,7 +555,7 @@ const CloudSync = (() => {
                     zip.generateAsync({ type: 'blob' }).then(resolve).catch(reject);
                 }).catch(reject);
 
-            } else if (t.type === 'moodprompt' || t.type === 'storyflow') {
+            } else if (t.type === 'moodprompt' || t.type === 'storyflow' || t.type === 'colorseeker' || t.type === 'moodgantt') {
                 rootDir.file('data.json', JSON.stringify(t.data, null, 2));
                 zip.generateAsync({ type: 'blob' }).then(resolve).catch(reject);
             } else {
@@ -698,9 +702,16 @@ const CloudSync = (() => {
                 const menu = document.getElementById('cloud-user-menu');
                 if (menu) {
                     const isOpening = !menu.classList.contains('open');
+                    
+                    if (isOpening) {
+                        const btn = e.currentTarget;
+                        const rect = btn.getBoundingClientRect();
+                        menu.style.top = (rect.bottom + 8) + 'px';
+                        menu.style.right = (window.innerWidth - rect.right) + 'px';
+                        _loadStorageMeter();
+                    }
+                    
                     menu.classList.toggle('open');
-                    // Load storage meter only when the menu is opened and token is valid
-                    if (isOpening) _loadStorageMeter();
                 }
             } else {
                 signIn();
@@ -744,6 +755,83 @@ const CloudSync = (() => {
         document.getElementById('cloud-picker-cancel')?.addEventListener('click', () => {
             document.getElementById('cloud-picker-overlay').style.display = 'none';
         });
+
+        // Autosave UI
+        _initAutosaveUI();
+    }
+
+    let _autosaveTimer = null;
+    let _autosaveEnabled = false;
+    let _autosaveInterval = 5;
+
+    function _initAutosaveUI() {
+        const toggle = document.getElementById('cloud-autosave-toggle');
+        const intervalSelect = document.getElementById('cloud-autosave-interval');
+        if (!toggle || !intervalSelect) return;
+
+        const settings = JSON.parse(localStorage.getItem('moodinfinite_cloud_autosave') || '{"enabled":false, "interval":5}');
+        _autosaveEnabled = settings.enabled;
+        _autosaveInterval = settings.interval;
+
+        toggle.checked = _autosaveEnabled;
+        intervalSelect.value = _autosaveInterval;
+
+        toggle.addEventListener('change', (e) => {
+            _autosaveEnabled = e.target.checked;
+            _saveAutosaveSettings();
+            _updateAutosaveTimer();
+        });
+
+        intervalSelect.addEventListener('change', (e) => {
+            _autosaveInterval = parseInt(e.target.value, 10);
+            _saveAutosaveSettings();
+            _updateAutosaveTimer();
+        });
+
+        _updateAutosaveTimer();
+    }
+
+    function _saveAutosaveSettings() {
+        localStorage.setItem('moodinfinite_cloud_autosave', JSON.stringify({
+            enabled: _autosaveEnabled,
+            interval: _autosaveInterval
+        }));
+    }
+
+    function _updateAutosaveTimer() {
+        if (_autosaveTimer) {
+            clearInterval(_autosaveTimer);
+            _autosaveTimer = null;
+        }
+        if (_autosaveEnabled && _autosaveInterval > 0) {
+            _autosaveTimer = setInterval(runAutoSave, _autosaveInterval * 60 * 1000);
+        }
+    }
+
+    async function runAutoSave() {
+        if (!_userInfo || !_isTokenValid()) return;
+        
+        let savedAny = false;
+        for (const proj of window.projects || []) {
+            if (!proj.data) continue;
+            const localMod = proj.data._localModified || 0;
+            const cloudSave = proj.data._cloudSaved || 0;
+            
+            if (localMod > cloudSave) {
+                proj.data._cloudSaved = Date.now();
+                console.log(`[CloudSync] Autosaving "${proj.name}"...`);
+                const blob = await _buildProjectBlob(proj);
+                if (blob) {
+                    const fileName = `${(proj.name || 'moodboard').replace(/[^a-z0-9 _-]/gi, '_')}.mood`;
+                    await uploadFile(blob, fileName, true);
+                    savedAny = true;
+                }
+            }
+        }
+        
+        if (savedAny) {
+            setCloudStatus('synced');
+        }
     }
 
     // ─── PUBLIC API ──────────────────────────────────────────────────────────

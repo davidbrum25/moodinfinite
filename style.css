@@ -97,6 +97,7 @@
         #add-moodprompt-tab-btn:hover { color: #dc4c99; }
         #add-colorseeker-tab-btn:hover { color: #4cdc92; }
         #add-storyflow-tab-btn:hover { color: #6b4cdc; }
+        #add-moodgantt-tab-btn:hover { color: #fff0cc; }
 
         .tabs-list-container {
             position: relative;
@@ -2727,16 +2728,16 @@
 
         /* ─── ACCOUNT DROPDOWN MENU ─────────────────────────────────────── */
         .cloud-user-menu {
-            position: absolute;
-            top: calc(100% + 8px);
-            right: 0;
+            position: fixed;
+            top: 60px;
+            right: 12px;
             min-width: 220px;
             background: var(--bg-ui);
-            backdrop-filter: blur(20px);
-            -webkit-backdrop-filter: blur(20px);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
             border: 1px solid var(--border-color);
-            border-radius: 12px;
-            box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+            border-radius: .75rem;
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, .37);
             padding: 0.5rem;
             z-index: 5000;
             opacity: 0;
@@ -3107,6 +3108,47 @@
             border-top: 1px solid var(--border-color);
             font-size: 0.7rem;
             color: var(--text-color-light);
+        }
+
+        /* ─── AUTOSAVE SETTINGS ─── */
+        .cloud-menu-autosave-section {
+            padding: 0.5rem 0.6rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.6rem;
+        }
+        .cloud-autosave-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .cloud-autosave-label {
+            font-size: 0.82rem;
+            color: var(--text-color);
+            font-family: 'Inter', sans-serif;
+        }
+        .cloud-autosave-sublabel {
+            font-size: 0.72rem;
+            color: var(--text-color-light);
+        }
+        .cloud-autosave-select {
+            background: rgba(0, 0, 0, 0.3);
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            color: var(--text-color);
+            padding: 0.2rem 0.4rem;
+            font-size: 0.75rem;
+            outline: none;
+            cursor: pointer;
+            font-family: inherit;
+        }
+        .cloud-autosave-select option {
+            background-color: #1e1e1e;
+            color: var(--text-color);
+        }
+        .cloud-autosave-select:hover {
+            border-color: var(--switch-bg-checked);
+            background-color: rgba(0, 0, 0, 0.5);
         }
 
         /* ─── EMPTY STATE (file picker) ──────────────────────────────────── */

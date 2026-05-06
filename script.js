@@ -75,12 +75,16 @@ function restoreImages(itemArray) {
 function saveToBrowser() {
     if (activeProjectId) {
         const currentProject = projects.find(p => p.id === activeProjectId);
-        if (currentProject && currentProject.type === 'moodinfinite') {
-            currentProject.data.items = items;
-            currentProject.data.cameraOffset = cameraOffset;
-            currentProject.data.cameraZoom = cameraZoom;
-            currentProject.data.historyStack = historyStack;
-            currentProject.data.historyIndex = historyIndex;
+        if (currentProject) {
+            if (!currentProject.data) currentProject.data = {};
+            currentProject.data._localModified = Date.now();
+            if (currentProject.type === 'moodinfinite') {
+                currentProject.data.items = items;
+                currentProject.data.cameraOffset = cameraOffset;
+                currentProject.data.cameraZoom = cameraZoom;
+                currentProject.data.historyStack = historyStack;
+                currentProject.data.historyIndex = historyIndex;
+            }
         }
     }
     const projectsToSave = projects.map(p => {
@@ -175,7 +179,7 @@ function createNewProject(type) {
         const gToday = ganttFormatDate(ganttToday());
         const gEnd   = ganttFormatDate(ganttAddMonths(ganttToday(), 6));
         newProject = { id: newId, type: 'moodgantt', name: `Plan ${gcnt + 1}`,
-            data: { zoomLevel: 'week', viewStartDate: gToday, viewEndDate: gEnd, groups: [] } };
+            data: { zoomLevel: 'week', viewStartDate: gToday, viewEndDate: gEnd, groups: [], canvasBackgroundColor: defaultCanvasBg, accentColor: defaultAccent, gridColor: defaultGridColor } };
     } else {
         const projectCount = projects.filter(p => p.type === 'moodprompt').length;
         newProject = {
@@ -229,6 +233,8 @@ function switchTab(projectId) {
         if (storyflowContainer) storyflowContainer.style.display = 'none';
         const storyflowMinimap = document.getElementById('storyflow-minimap');
         if (storyflowMinimap) storyflowMinimap.style.display = 'none';
+        const ganttCont = document.getElementById('gantt-container');
+        if (ganttCont) ganttCont.style.display = 'none';
         resizeCanvas();
     } else if (newActiveProject.type === 'colorseeker') {
         moodinfiniteContainer.style.display = 'none';
@@ -237,6 +243,8 @@ function switchTab(projectId) {
         if (storyflowContainer) storyflowContainer.style.display = 'none';
         const storyflowMinimap = document.getElementById('storyflow-minimap');
         if (storyflowMinimap) storyflowMinimap.style.display = 'none';
+        const ganttCont = document.getElementById('gantt-container');
+        if (ganttCont) ganttCont.style.display = 'none';
         renderColorSeeker(projectId);
     } else if (newActiveProject.type === 'storyflow') {
         moodinfiniteContainer.style.display = 'none';
@@ -245,6 +253,8 @@ function switchTab(projectId) {
         if (storyflowContainer) storyflowContainer.style.display = 'block';
         const storyflowMinimap = document.getElementById('storyflow-minimap');
         if (storyflowMinimap) storyflowMinimap.style.display = 'flex';
+        const ganttCont = document.getElementById('gantt-container');
+        if (ganttCont) ganttCont.style.display = 'none';
         renderStoryflowView(newActiveProject);
     } else if (newActiveProject.type === 'moodgantt') {
         moodinfiniteContainer.style.display = 'none';
@@ -1304,7 +1314,7 @@ function setupEventListeners() {
 
     const updateColor = (key, value) => {
         const proj = projects.find(p => p.id === activeProjectId);
-        if (proj && (proj.type === 'moodinfinite' || proj.type === 'moodprompt')) {
+        if (proj) {
             proj.data[key] = value;
             if (key === 'canvasBackgroundColor') canvasBackgroundColor = value;
             else if (key === 'accentColor') accentColor = value;
