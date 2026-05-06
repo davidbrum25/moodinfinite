@@ -64,6 +64,9 @@
         <button id="add-storyflow-tab-btn" class="tab-add-btn" title="New Moodflow Board">
             <iconify-icon icon="lucide:clapperboard" width="20" height="20"></iconify-icon>
         </button>
+        <button id="add-moodgantt-tab-btn" class="tab-add-btn" title="New Moodgantt Board">
+            <iconify-icon icon="lucide:gantt-chart" width="20" height="20"></iconify-icon>
+        </button>
 
         <div style="width: 1px; background-color: var(--border-color); margin: 8px 4px; align-self: stretch;"></div>
 
@@ -231,9 +234,66 @@
                     class="tool-button"><iconify-icon icon="lucide:ruler" width="20"
                         height="20"></iconify-icon></button>
                 
-                <div class="separator"></div><button id="align-btn" title="Auto Align Selection (Ctrl+Shift+A)"
-                    class="tool-button" disabled><iconify-icon icon="lucide:layout-grid" width="22"
-                        height="22"></iconify-icon></button>
+                <div class="separator"></div>
+                <!-- Arrange Tools Group -->
+                <div class="tool-group">
+                    <button id="align-btn" class="tool-button" title="Auto Arrange (Ctrl+Shift+A)" disabled>
+                        <iconify-icon icon="lucide:layout-grid" width="22" height="22"></iconify-icon>
+                        <div class="group-indicator"></div>
+                    </button>
+                    <div class="tool-group-flyout arrange-flyout">
+                        <div class="arrange-flyout-section">
+                            <span class="arrange-flyout-label">Layout</span>
+                            <div class="arrange-flyout-grid">
+                                <button id="align-grid-btn" class="tool-button" title="Grid (Ctrl+Shift+A)">
+                                    <iconify-icon icon="lucide:layout-grid" width="20" height="20"></iconify-icon>
+                                </button>
+                                <button id="align-row-btn" class="tool-button" title="Horizontal Row">
+                                    <iconify-icon icon="lucide:align-horizontal-distribute-center" width="20" height="20"></iconify-icon>
+                                </button>
+                                <button id="align-col-btn" class="tool-button" title="Vertical Column">
+                                    <iconify-icon icon="lucide:align-vertical-distribute-center" width="20" height="20"></iconify-icon>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="arrange-flyout-divider"></div>
+                        <div class="arrange-flyout-section">
+                            <span class="arrange-flyout-label">Align</span>
+                            <div class="arrange-flyout-grid">
+                                <button id="align-left-btn" class="tool-button" title="Align Left">
+                                    <iconify-icon icon="lucide:align-left" width="20" height="20"></iconify-icon>
+                                </button>
+                                <button id="align-center-h-btn" class="tool-button" title="Align Center (Horizontal)">
+                                    <iconify-icon icon="lucide:align-center" width="20" height="20"></iconify-icon>
+                                </button>
+                                <button id="align-right-btn" class="tool-button" title="Align Right">
+                                    <iconify-icon icon="lucide:align-right" width="20" height="20"></iconify-icon>
+                                </button>
+                                <button id="align-top-btn" class="tool-button" title="Align Top">
+                                    <iconify-icon icon="lucide:align-start-vertical" width="20" height="20"></iconify-icon>
+                                </button>
+                                <button id="align-middle-v-btn" class="tool-button" title="Align Middle (Vertical)">
+                                    <iconify-icon icon="lucide:align-center-vertical" width="20" height="20"></iconify-icon>
+                                </button>
+                                <button id="align-bottom-btn" class="tool-button" title="Align Bottom">
+                                    <iconify-icon icon="lucide:align-end-vertical" width="20" height="20"></iconify-icon>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="arrange-flyout-divider"></div>
+                        <div class="arrange-flyout-section">
+                            <span class="arrange-flyout-label">Distribute</span>
+                            <div class="arrange-flyout-grid">
+                                <button id="distribute-h-btn" class="tool-button" title="Distribute Horizontally">
+                                    <iconify-icon icon="lucide:move-horizontal" width="20" height="20"></iconify-icon>
+                                </button>
+                                <button id="distribute-v-btn" class="tool-button" title="Distribute Vertically">
+                                    <iconify-icon icon="lucide:move-vertical" width="20" height="20"></iconify-icon>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
                 <div class="separator"></div>
 
                 <!-- View Group -->
@@ -411,7 +471,7 @@
         <div id="colorseeker-container" class="tab-content"
             style="display: none; height: 100%; width: 100%; padding-top: calc(var(--tabs-bar-height) + 0.75rem); box-sizing: border-box; position: relative;">
             <div id="colorseeker-sidebar"
-                style="position: absolute; left: 1.5rem; top: calc(var(--tabs-bar-height) + 0.75rem); bottom: 1.5rem; background: var(--bg-ui); border: 1px solid var(--border-color); border-radius: 0.75rem; padding: 1.25rem; z-index: 10; display: flex; flex-direction: column; gap: 0.85rem; box-shadow: 0 8px 32px rgba(0,0,0,0.3); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); width: 220px; overflow-y: auto; overflow-x: hidden;">
+                style="position: absolute; left: 1.5rem; top: calc(var(--tabs-bar-height) + 0.75rem); height: fit-content; max-height: calc(100% - var(--tabs-bar-height) - 3rem); background: var(--bg-ui); border: 1px solid var(--border-color); border-radius: 0.75rem; padding: 1.25rem; z-index: 10; display: flex; flex-direction: column; gap: 0.85rem; box-shadow: 0 8px 32px rgba(0,0,0,0.3); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); width: 220px; overflow-y: auto; overflow-x: hidden;">
                 <div style="display: flex; align-items: center; gap: 0.5rem;">
                     <iconify-icon icon="lucide:swatch-book" width="20" height="20"
                         style="color: var(--text-color)"></iconify-icon>
@@ -449,6 +509,98 @@
             <div id="colorseeker-palette" style="display: flex; width: 100%; height: 100%;">
                 <!-- Palette bars injected here -->
             </div>
+        </div>
+    </div>
+
+    <!-- ═══ MOODGANTT CONTAINER ═══ -->
+    <div id="gantt-container" class="tab-content" style="display:none;">
+        <!-- Stats bar -->
+        <div id="gantt-stats-bar">
+            <div class="gantt-stat-item" id="gantt-stat-groups"><iconify-icon icon="lucide:layers" width="14" height="14"></iconify-icon><span>0 Groups</span></div>
+            <div class="gantt-stat-item" id="gantt-stat-tasks"><iconify-icon icon="lucide:check-square" width="14" height="14"></iconify-icon><span>0 Tasks</span></div>
+            <div class="gantt-stat-item" id="gantt-stat-done"><iconify-icon icon="lucide:check-circle" width="14" height="14" style="color:#22c55e"></iconify-icon><span id="gantt-done-pct">0% Done</span></div>
+            <div class="gantt-stat-item" id="gantt-stat-blocked"><iconify-icon icon="lucide:ban" width="14" height="14" style="color:#ef4444"></iconify-icon><span id="gantt-blocked-pct">0% Blocked</span></div>
+            <div class="gantt-stat-item" style="margin-left:auto;"><iconify-icon icon="lucide:calendar-clock" width="14" height="14"></iconify-icon><span id="gantt-next-deadline">No upcoming deadlines</span></div>
+        </div>
+        <!-- Main body: sidebar + timeline -->
+        <div id="gantt-main">
+            <div id="gantt-sidebar">
+                <div id="gantt-sidebar-header">
+                    <span>Task</span>
+                    <button id="gantt-add-group-btn" title="Add Group">
+                        <iconify-icon icon="lucide:plus" width="16" height="16"></iconify-icon>
+                    </button>
+                </div>
+                <div id="gantt-sidebar-body"></div>
+            </div>
+            <div id="gantt-timeline">
+                <div id="gantt-timeline-inner">
+                    <div id="gantt-date-header"></div>
+                    <div id="gantt-rows-area"></div>
+                </div>
+            </div>
+        </div>
+        <!-- Bottom toolbar -->
+        <div id="gantt-bottom-bar">
+            <div class="gantt-zoom-group">
+                <span class="gantt-zoom-label">Zoom</span>
+                <button class="gantt-zoom-btn active" data-zoom="week">Week</button>
+                <button class="gantt-zoom-btn" data-zoom="month">Month</button>
+                <button class="gantt-zoom-btn" data-zoom="quarter">Quarter</button>
+            </div>
+            <button id="gantt-today-btn" class="gantt-nav-btn" title="Jump to Today">
+                <iconify-icon icon="lucide:calendar-check" width="16" height="16"></iconify-icon> Today
+            </button>
+            <button id="gantt-prev-btn" class="gantt-nav-btn" title="Previous Period">
+                <iconify-icon icon="lucide:chevron-left" width="16" height="16"></iconify-icon>
+            </button>
+            <button id="gantt-next-btn" class="gantt-nav-btn" title="Next Period">
+                <iconify-icon icon="lucide:chevron-right" width="16" height="16"></iconify-icon>
+            </button>
+        </div>
+    </div>
+
+    <!-- Gantt task detail panel -->
+    <div id="gantt-detail-panel">
+        <div id="gantt-detail-header">
+            <input id="gantt-detail-name" type="text" placeholder="Task name...">
+            <button id="gantt-detail-close"><iconify-icon icon="lucide:x" width="18" height="18"></iconify-icon></button>
+        </div>
+        <div id="gantt-detail-body">
+            <div class="gantt-field">
+                <label>Start Date</label>
+                <input type="date" id="gantt-detail-start">
+            </div>
+            <div class="gantt-field">
+                <label>End Date</label>
+                <input type="date" id="gantt-detail-end">
+            </div>
+            <div class="gantt-field">
+                <label>Progress <span id="gantt-detail-progress-val">0%</span></label>
+                <input type="range" id="gantt-detail-progress" min="0" max="100" value="0">
+            </div>
+            <div class="gantt-field">
+                <label>Status</label>
+                <select id="gantt-detail-status">
+                    <option value="">None</option>
+                    <option value="done">Done</option>
+                    <option value="review">In Review</option>
+                    <option value="blocked">Blocked</option>
+                </select>
+            </div>
+            <div class="gantt-field">
+                <label>Assignee</label>
+                <input type="text" id="gantt-detail-assignee" placeholder="Name...">
+            </div>
+            <div class="gantt-field">
+                <label>Notes</label>
+                <textarea id="gantt-detail-notes" placeholder="Notes..."></textarea>
+            </div>
+        </div>
+        <div id="gantt-detail-footer">
+            <button id="gantt-detail-delete" class="gantt-detail-delete-btn">
+                <iconify-icon icon="lucide:trash-2" width="14" height="14"></iconify-icon> Delete Task
+            </button>
         </div>
     </div>
 
@@ -525,6 +677,37 @@
         <div class="menu-item" id="sf-add-right-btn">
             <span class="menu-label">Add Frame Right</span>
             <iconify-icon icon="lucide:arrow-right-to-line" width="18" height="18"></iconify-icon>
+        </div>
+        <div class="border-t my-2" style="border-color:var(--border-color)"></div>
+        <div class="menu-item" id="sf-duplicate-btn">
+            <span class="menu-label">Duplicate Frame</span>
+            <iconify-icon icon="lucide:copy-plus" width="18" height="18"></iconify-icon>
+        </div>
+        <div class="menu-item" id="sf-clear-btn">
+            <span class="menu-label">Clear Frame</span>
+            <iconify-icon icon="lucide:eraser" width="18" height="18"></iconify-icon>
+        </div>
+        <div class="border-t my-2" style="border-color:var(--border-color)"></div>
+        <div class="menu-item" id="sf-send-start-btn">
+            <span class="menu-label">Send to Start</span>
+            <iconify-icon icon="lucide:skip-back" width="18" height="18"></iconify-icon>
+        </div>
+        <div class="menu-item" id="sf-move-left-btn">
+            <span class="menu-label">Move Left</span>
+            <iconify-icon icon="lucide:arrow-left" width="18" height="18"></iconify-icon>
+        </div>
+        <div class="menu-item" id="sf-move-right-btn">
+            <span class="menu-label">Move Right</span>
+            <iconify-icon icon="lucide:arrow-right" width="18" height="18"></iconify-icon>
+        </div>
+        <div class="menu-item" id="sf-send-last-btn">
+            <span class="menu-label">Send to Last</span>
+            <iconify-icon icon="lucide:skip-forward" width="18" height="18"></iconify-icon>
+        </div>
+        <div class="border-t my-2" style="border-color:var(--border-color)"></div>
+        <div class="menu-item" id="sf-download-img-btn">
+            <span class="menu-label">Download Image</span>
+            <iconify-icon icon="lucide:image-down" width="18" height="18"></iconify-icon>
         </div>
         <div class="border-t my-2" style="border-color:var(--border-color)"></div>
         <div class="menu-item" id="sf-delete-btn">

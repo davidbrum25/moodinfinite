@@ -170,6 +170,12 @@ function createNewProject(type) {
                 canvasBackgroundColor: defaultCanvasBg
             }
         };
+    } else if (type === 'moodgantt') {
+        const gcnt = projects.filter(p => p.type === 'moodgantt').length;
+        const gToday = ganttFormatDate(ganttToday());
+        const gEnd   = ganttFormatDate(ganttAddMonths(ganttToday(), 6));
+        newProject = { id: newId, type: 'moodgantt', name: `Plan ${gcnt + 1}`,
+            data: { zoomLevel: 'week', viewStartDate: gToday, viewEndDate: gEnd, groups: [] } };
     } else {
         const projectCount = projects.filter(p => p.type === 'moodprompt').length;
         newProject = {
@@ -240,12 +246,25 @@ function switchTab(projectId) {
         const storyflowMinimap = document.getElementById('storyflow-minimap');
         if (storyflowMinimap) storyflowMinimap.style.display = 'flex';
         renderStoryflowView(newActiveProject);
+    } else if (newActiveProject.type === 'moodgantt') {
+        moodinfiniteContainer.style.display = 'none';
+        if (colorseekerContainer) colorseekerContainer.style.display = 'none';
+        if (storyflowContainer) storyflowContainer.style.display = 'none';
+        const sfm2 = document.getElementById('storyflow-minimap');
+        if (sfm2) sfm2.style.display = 'none';
+        moodpromptContainer.style.display = 'none';
+        const ganttCont = document.getElementById('gantt-container');
+        if (ganttCont) ganttCont.style.display = 'flex';
+        ganttCloseDetail();
+        renderGanttView(newActiveProject);
     } else {
         moodinfiniteContainer.style.display = 'none';
         if (colorseekerContainer) colorseekerContainer.style.display = 'none';
         if (storyflowContainer) storyflowContainer.style.display = 'none';
         const storyflowMinimap = document.getElementById('storyflow-minimap');
         if (storyflowMinimap) storyflowMinimap.style.display = 'none';
+        const ganttCont2 = document.getElementById('gantt-container');
+        if (ganttCont2) ganttCont2.style.display = 'none';
         moodpromptContainer.style.display = 'block';
         renderMoodpromptView(newActiveProject);
     }
@@ -367,7 +386,9 @@ function renderTabs() {
                 ? `<iconify-icon icon="lucide:swatch-book" width="16" height="16"></iconify-icon>`
                 : project.type === 'storyflow'
                     ? `<iconify-icon icon="lucide:clapperboard" width="16" height="16"></iconify-icon>`
-                    : `<iconify-icon icon="lucide:pen-tool" width="16" height="16"></iconify-icon>`;
+                    : project.type === 'moodgantt'
+                        ? `<iconify-icon icon="lucide:gantt-chart" width="16" height="16"></iconify-icon>`
+                        : `<iconify-icon icon="lucide:pen-tool" width="16" height="16"></iconify-icon>`;
 
         const nameSpan = document.createElement('span');
         nameSpan.className = 'tab-name';
@@ -1000,41 +1021,125 @@ function setupEventListeners() {
     const sfAddLeftBtn = document.getElementById('sf-add-left-btn');
     const sfAddRightBtn = document.getElementById('sf-add-right-btn');
     const sfDeleteBtn = document.getElementById('sf-delete-btn');
+    const sfDuplicateBtn = document.getElementById('sf-duplicate-btn');
+    const sfClearBtn = document.getElementById('sf-clear-btn');
+    const sfSendStartBtn = document.getElementById('sf-send-start-btn');
+    const sfSendLastBtn = document.getElementById('sf-send-last-btn');
+    const sfMoveLeftBtn = document.getElementById('sf-move-left-btn');
+    const sfMoveRightBtn = document.getElementById('sf-move-right-btn');
+    const sfDownloadImgBtn = document.getElementById('sf-download-img-btn');
+
+    const getSfContext = () => {
+        const frameIndex = parseInt(sfContextMenu.dataset.frameIndex);
+        const proj = projects.find(p => p.id === activeProjectId);
+        return { frameIndex, proj };
+    };
+    const closeSfMenu = () => { sfContextMenu.style.display = 'none'; };
 
     if (sfAddLeftBtn) sfAddLeftBtn.addEventListener('click', () => {
-        const frameIndex = parseInt(sfContextMenu.dataset.frameIndex);
-        const activeProject = projects.find(p => p.id === activeProjectId);
-        if (activeProject && !isNaN(frameIndex)) {
-            activeProject.data.frames.splice(frameIndex, 0, { title: '', description: '', image: null, meta: { duration: "5", camera: "" } });
-            renderStoryflowView(activeProject);
-            saveToBrowser();
-            showToast('Frame added to the left.');
+        const { frameIndex, proj } = getSfContext();
+        if (proj && !isNaN(frameIndex)) {
+            proj.data.frames.splice(frameIndex, 0, { title: '', description: '', image: null, meta: { duration: "5", camera: "" } });
+            renderStoryflowView(proj); saveToBrowser(); showToast('Frame added to the left.');
         }
-        sfContextMenu.style.display = 'none';
+        closeSfMenu();
     });
 
     if (sfAddRightBtn) sfAddRightBtn.addEventListener('click', () => {
-        const frameIndex = parseInt(sfContextMenu.dataset.frameIndex);
-        const activeProject = projects.find(p => p.id === activeProjectId);
-        if (activeProject && !isNaN(frameIndex)) {
-            activeProject.data.frames.splice(frameIndex + 1, 0, { title: '', description: '', image: null, meta: { duration: "5", camera: "" } });
-            renderStoryflowView(activeProject);
-            saveToBrowser();
-            showToast('Frame added to the right.');
+        const { frameIndex, proj } = getSfContext();
+        if (proj && !isNaN(frameIndex)) {
+            proj.data.frames.splice(frameIndex + 1, 0, { title: '', description: '', image: null, meta: { duration: "5", camera: "" } });
+            renderStoryflowView(proj); saveToBrowser(); showToast('Frame added to the right.');
         }
-        sfContextMenu.style.display = 'none';
+        closeSfMenu();
+    });
+
+    if (sfDuplicateBtn) sfDuplicateBtn.addEventListener('click', () => {
+        const { frameIndex, proj } = getSfContext();
+        if (proj && !isNaN(frameIndex)) {
+            const original = proj.data.frames[frameIndex];
+            const copy = JSON.parse(JSON.stringify(original));
+            proj.data.frames.splice(frameIndex + 1, 0, copy);
+            renderStoryflowView(proj); saveToBrowser(); showToast('Frame duplicated.');
+        }
+        closeSfMenu();
+    });
+
+    if (sfClearBtn) sfClearBtn.addEventListener('click', () => {
+        const { frameIndex, proj } = getSfContext();
+        if (proj && !isNaN(frameIndex)) {
+            proj.data.frames[frameIndex] = { title: '', description: '', image: null, meta: { duration: "5", camera: "" } };
+            renderStoryflowView(proj); saveToBrowser(); showToast('Frame cleared.');
+        }
+        closeSfMenu();
+    });
+
+    if (sfSendStartBtn) sfSendStartBtn.addEventListener('click', () => {
+        const { frameIndex, proj } = getSfContext();
+        if (proj && !isNaN(frameIndex) && frameIndex > 0) {
+            const [frame] = proj.data.frames.splice(frameIndex, 1);
+            proj.data.frames.unshift(frame);
+            renderStoryflowView(proj); saveToBrowser(); showToast('Frame moved to start.');
+        }
+        closeSfMenu();
+    });
+
+    if (sfSendLastBtn) sfSendLastBtn.addEventListener('click', () => {
+        const { frameIndex, proj } = getSfContext();
+        if (proj && !isNaN(frameIndex) && frameIndex < proj.data.frames.length - 1) {
+            const [frame] = proj.data.frames.splice(frameIndex, 1);
+            proj.data.frames.push(frame);
+            renderStoryflowView(proj); saveToBrowser(); showToast('Frame moved to last.');
+        }
+        closeSfMenu();
+    });
+
+    if (sfMoveLeftBtn) sfMoveLeftBtn.addEventListener('click', () => {
+        const { frameIndex, proj } = getSfContext();
+        if (proj && !isNaN(frameIndex) && frameIndex > 0) {
+            const frames = proj.data.frames;
+            [frames[frameIndex - 1], frames[frameIndex]] = [frames[frameIndex], frames[frameIndex - 1]];
+            renderStoryflowView(proj); saveToBrowser(); showToast('Frame moved left.');
+        }
+        closeSfMenu();
+    });
+
+    if (sfMoveRightBtn) sfMoveRightBtn.addEventListener('click', () => {
+        const { frameIndex, proj } = getSfContext();
+        if (proj && !isNaN(frameIndex) && frameIndex < proj.data.frames.length - 1) {
+            const frames = proj.data.frames;
+            [frames[frameIndex], frames[frameIndex + 1]] = [frames[frameIndex + 1], frames[frameIndex]];
+            renderStoryflowView(proj); saveToBrowser(); showToast('Frame moved right.');
+        }
+        closeSfMenu();
+    });
+
+    if (sfDownloadImgBtn) sfDownloadImgBtn.addEventListener('click', () => {
+        const { frameIndex, proj } = getSfContext();
+        if (proj && !isNaN(frameIndex)) {
+            const frame = proj.data.frames[frameIndex];
+            if (frame && frame.image) {
+                const a = document.createElement('a');
+                a.href = frame.image;
+                const frameNum = frameIndex + 1;
+                const title = frame.title ? frame.title.replace(/[^a-z0-9]/gi, '_').toLowerCase() : `frame_${frameNum}`;
+                a.download = `${title}.png`;
+                a.click();
+                showToast(`Downloading frame ${frameNum} image.`);
+            } else {
+                showToast('No image on this frame.');
+            }
+        }
+        closeSfMenu();
     });
 
     if (sfDeleteBtn) sfDeleteBtn.addEventListener('click', () => {
-        const frameIndex = parseInt(sfContextMenu.dataset.frameIndex);
-        const activeProject = projects.find(p => p.id === activeProjectId);
-        if (activeProject && !isNaN(frameIndex)) {
-            activeProject.data.frames.splice(frameIndex, 1);
-            renderStoryflowView(activeProject);
-            saveToBrowser();
-            showToast('Frame deleted.');
+        const { frameIndex, proj } = getSfContext();
+        if (proj && !isNaN(frameIndex)) {
+            proj.data.frames.splice(frameIndex, 1);
+            renderStoryflowView(proj); saveToBrowser(); showToast('Frame deleted.');
         }
-        sfContextMenu.style.display = 'none';
+        closeSfMenu();
     });
 
     canvas.addEventListener('mousedown', onMouseDown);
@@ -1160,6 +1265,29 @@ function setupEventListeners() {
     if (selectToolBtn) selectToolBtn.addEventListener('click', () => setCurrentTool(null));
 
     if (alignBtn) alignBtn.addEventListener('click', autoAlignSelection);
+    const alignGridBtn = document.getElementById('align-grid-btn');
+    if (alignGridBtn) alignGridBtn.addEventListener('click', autoAlignSelection);
+    const alignRowBtn = document.getElementById('align-row-btn');
+    if (alignRowBtn) alignRowBtn.addEventListener('click', alignHorizontalRow);
+    const alignColBtn = document.getElementById('align-col-btn');
+    if (alignColBtn) alignColBtn.addEventListener('click', alignVerticalColumn);
+    const alignLeftBtn = document.getElementById('align-left-btn');
+    if (alignLeftBtn) alignLeftBtn.addEventListener('click', alignLeft);
+    const alignCenterHBtn = document.getElementById('align-center-h-btn');
+    if (alignCenterHBtn) alignCenterHBtn.addEventListener('click', alignCenterH);
+    const alignRightBtn = document.getElementById('align-right-btn');
+    if (alignRightBtn) alignRightBtn.addEventListener('click', alignRight);
+    const alignTopBtn = document.getElementById('align-top-btn');
+    if (alignTopBtn) alignTopBtn.addEventListener('click', alignTop);
+    const alignMiddleVBtn = document.getElementById('align-middle-v-btn');
+    if (alignMiddleVBtn) alignMiddleVBtn.addEventListener('click', alignMiddleV);
+    const alignBottomBtn = document.getElementById('align-bottom-btn');
+    if (alignBottomBtn) alignBottomBtn.addEventListener('click', alignBottom);
+    const distributeHBtn = document.getElementById('distribute-h-btn');
+    if (distributeHBtn) distributeHBtn.addEventListener('click', distributeHorizontally);
+    const distributeVBtn = document.getElementById('distribute-v-btn');
+    if (distributeVBtn) distributeVBtn.addEventListener('click', distributeVertically);
+
     const centerViewBtn = document.getElementById('center-view-btn');
     if (centerViewBtn) centerViewBtn.addEventListener('click', centerView);
     if (centerSelectedBtn) centerSelectedBtn.addEventListener('click', focusOnSelection);
@@ -3668,8 +3796,23 @@ function flipVertical() {
     });
     saveStateForUndo();
 }
-function autoAlignSelection() { if (selectedItems.length < 2) return; let e = 0, t = 0; selectedItems.forEach(o => { e += getItemBoundingBox(o).width; t += getItemBoundingBox(o).height }); const o = e / selectedItems.length, a = t / selectedItems.length, i = Math.ceil(Math.sqrt(selectedItems.length)), r = getCollectiveBoundingBox(selectedItems), s = r.x, n = r.y; selectedItems.forEach((e, t) => { const r = Math.floor(t / i), l = t % i, c = s + l * (o + 20), d = n + r * (a + 20), h = c - e.x, p = d - e.y; e.x += h; e.y += p; if (e.type === 'arrow' || e.type === 'measure') { e.startX += h; e.startY += p; e.endX += h; e.endY += p } else if (e.type === 'stroke') { e.points.forEach(e => { e.x += h; e.y += p }) } }); saveStateForUndo() }
-function updateLeftBarState() { alignBtn.disabled = selectedItems.length < 2 }
+function moveItem(item, dx, dy) {
+    item.x += dx; item.y += dy;
+    if (item.type === 'arrow' || item.type === 'measure') { item.startX += dx; item.startY += dy; item.endX += dx; item.endY += dy; }
+    else if (item.type === 'stroke') { item.points.forEach(p => { p.x += dx; p.y += dy; }); }
+}
+function autoAlignSelection() { if (selectedItems.length < 2) return; let e = 0, t = 0; selectedItems.forEach(o => { e += getItemBoundingBox(o).width; t += getItemBoundingBox(o).height }); const o = e / selectedItems.length, a = t / selectedItems.length, i = Math.ceil(Math.sqrt(selectedItems.length)), r = getCollectiveBoundingBox(selectedItems), s = r.x, n = r.y; selectedItems.forEach((e, t) => { const r = Math.floor(t / i), l = t % i, c = s + l * (o + 20), d = n + r * (a + 20), h = c - e.x, p = d - e.y; moveItem(e, h, p); }); saveStateForUndo(); requestUpdate(); }
+function alignHorizontalRow() { if (selectedItems.length < 2) return; const sorted = [...selectedItems].sort((a, b) => getItemBoundingBox(a).x - getItemBoundingBox(b).x); const topY = Math.min(...sorted.map(i => getItemBoundingBox(i).y)); let cursor = getItemBoundingBox(sorted[0]).x; sorted.forEach(item => { const bb = getItemBoundingBox(item); const dx = cursor - bb.x; const dy = topY - bb.y; moveItem(item, dx, dy); cursor += bb.width + 20; }); saveStateForUndo(); requestUpdate(); }
+function alignVerticalColumn() { if (selectedItems.length < 2) return; const sorted = [...selectedItems].sort((a, b) => getItemBoundingBox(a).y - getItemBoundingBox(b).y); const leftX = Math.min(...sorted.map(i => getItemBoundingBox(i).x)); let cursor = getItemBoundingBox(sorted[0]).y; sorted.forEach(item => { const bb = getItemBoundingBox(item); const dx = leftX - bb.x; const dy = cursor - bb.y; moveItem(item, dx, dy); cursor += bb.height + 20; }); saveStateForUndo(); requestUpdate(); }
+function alignLeft() { if (selectedItems.length < 2) return; const minX = Math.min(...selectedItems.map(i => getItemBoundingBox(i).x)); selectedItems.forEach(item => { const dx = minX - getItemBoundingBox(item).x; moveItem(item, dx, 0); }); saveStateForUndo(); requestUpdate(); }
+function alignCenterH() { if (selectedItems.length < 2) return; const centerX = getCollectiveBoundingBox(selectedItems).x + getCollectiveBoundingBox(selectedItems).width / 2; selectedItems.forEach(item => { const bb = getItemBoundingBox(item); const dx = centerX - (bb.x + bb.width / 2); moveItem(item, dx, 0); }); saveStateForUndo(); requestUpdate(); }
+function alignRight() { if (selectedItems.length < 2) return; const maxX = Math.max(...selectedItems.map(i => { const b = getItemBoundingBox(i); return b.x + b.width; })); selectedItems.forEach(item => { const bb = getItemBoundingBox(item); const dx = maxX - (bb.x + bb.width); moveItem(item, dx, 0); }); saveStateForUndo(); requestUpdate(); }
+function alignTop() { if (selectedItems.length < 2) return; const minY = Math.min(...selectedItems.map(i => getItemBoundingBox(i).y)); selectedItems.forEach(item => { const dy = minY - getItemBoundingBox(item).y; moveItem(item, 0, dy); }); saveStateForUndo(); requestUpdate(); }
+function alignMiddleV() { if (selectedItems.length < 2) return; const centerY = getCollectiveBoundingBox(selectedItems).y + getCollectiveBoundingBox(selectedItems).height / 2; selectedItems.forEach(item => { const bb = getItemBoundingBox(item); const dy = centerY - (bb.y + bb.height / 2); moveItem(item, 0, dy); }); saveStateForUndo(); requestUpdate(); }
+function alignBottom() { if (selectedItems.length < 2) return; const maxY = Math.max(...selectedItems.map(i => { const b = getItemBoundingBox(i); return b.y + b.height; })); selectedItems.forEach(item => { const bb = getItemBoundingBox(item); const dy = maxY - (bb.y + bb.height); moveItem(item, 0, dy); }); saveStateForUndo(); requestUpdate(); }
+function distributeHorizontally() { if (selectedItems.length < 3) return; const sorted = [...selectedItems].sort((a, b) => getItemBoundingBox(a).x - getItemBoundingBox(b).x); const first = getItemBoundingBox(sorted[0]); const last = getItemBoundingBox(sorted[sorted.length - 1]); const totalWidth = sorted.reduce((s, i) => s + getItemBoundingBox(i).width, 0); const gap = (last.x + last.width - first.x - totalWidth) / (sorted.length - 1); let cursor = first.x; sorted.forEach(item => { const bb = getItemBoundingBox(item); moveItem(item, cursor - bb.x, 0); cursor += bb.width + gap; }); saveStateForUndo(); requestUpdate(); }
+function distributeVertically() { if (selectedItems.length < 3) return; const sorted = [...selectedItems].sort((a, b) => getItemBoundingBox(a).y - getItemBoundingBox(b).y); const first = getItemBoundingBox(sorted[0]); const last = getItemBoundingBox(sorted[sorted.length - 1]); const totalHeight = sorted.reduce((s, i) => s + getItemBoundingBox(i).height, 0); const gap = (last.y + last.height - first.y - totalHeight) / (sorted.length - 1); let cursor = first.y; sorted.forEach(item => { const bb = getItemBoundingBox(item); moveItem(item, 0, cursor - bb.y); cursor += bb.height + gap; }); saveStateForUndo(); requestUpdate(); }
+function updateLeftBarState() { const needsTwo = selectedItems.length < 2; const needsThree = selectedItems.length < 3; alignBtn.disabled = needsTwo; const ids = ['align-grid-btn','align-row-btn','align-col-btn','align-left-btn','align-center-h-btn','align-right-btn','align-top-btn','align-middle-v-btn','align-bottom-btn']; ids.forEach(id => { const b = document.getElementById(id); if (b) b.disabled = needsTwo; }); ['distribute-h-btn','distribute-v-btn'].forEach(id => { const b = document.getElementById(id); if (b) b.disabled = needsThree; }); }
 function getContrastColor(hex) { if (hex.indexOf('#') === 0) { hex = hex.slice(1) } if (hex.length === 3) { hex = hex[0] + hex[0] + hex[1] + hex[1] + hex[2] + hex[2] } if (hex.length !== 6) { return '#0d0d0d' } const r = parseInt(hex.slice(0, 2), 16), g = parseInt(hex.slice(2, 4), 16), b = parseInt(hex.slice(4, 6), 16), yiq = ((r * 299) + (g * 587) + (b * 114)) / 1000; return (yiq >= 128) ? '#262626' : '#ffffff' }
 function updateUIColors() { const e = document.documentElement.style, t = getContrastColor(canvasBackgroundColor); e.setProperty('--bg-page', canvasBackgroundColor); e.setProperty('--text-color-active-tab', t); e.setProperty('--contrast-color-light', hexToRgba(t, 0.6)); e.setProperty('--bg-ui', 'rgba(35, 38, 51, 0.4)'); e.setProperty('--bg-ui-hover', 'rgba(55, 58, 71, 0.5)'); e.setProperty('--text-color', '#e2e8f0'); e.setProperty('--text-color-light', '#94a3b8'); e.setProperty('--text-color-strong', '#ffffff'); e.setProperty('--border-color', 'rgba(255, 255, 255, 0.1)'); e.setProperty('--switch-bg-checked', accentColor); canvas.style.backgroundColor = canvasBackgroundColor; bgColorPicker.value = canvasBackgroundColor; accentColorPicker.value = accentColor; toolbarAccentColorPicker.value = accentColor; gridColorPicker.value = gridColor; renderTabs() }
 function setCurrentTool(e) {
@@ -4534,6 +4677,7 @@ if (noteTitleInput) {
 
 loadSettings();
 setupEventListeners();
+setupGanttListeners();
 buildPaletteMenu();
 
 window.localforage.getItem('moodinfinite_cache').then(cache => {
@@ -5011,13 +5155,14 @@ function renderColorSeeker(projectId) {
             lockBtn.title = isLocked ? 'Unlock color (L)' : 'Lock color (L)';
             lockBtn.style.cssText = `
                 position: absolute;
-                top: 0.75rem;
-                right: 0.75rem;
+                bottom: 1rem;
+                left: 50%;
+                transform: translateX(-50%);
                 background: ${isLocked ? 'rgba(255,255,255,0.25)' : 'rgba(0,0,0,0.3)'};
                 border: 1px solid ${isLocked ? 'rgba(255,255,255,0.6)' : 'rgba(255,255,255,0.2)'};
                 border-radius: 6px;
-                width: 28px;
-                height: 28px;
+                width: 32px;
+                height: 32px;
                 display: flex;
                 align-items: center;
                 justify-content: center;
@@ -5053,7 +5198,7 @@ function renderColorSeeker(projectId) {
             // Color info tooltip
             const info = document.createElement('div');
             info.className = 'colorseeker-info';
-            info.style.cssText = 'position:absolute;bottom:2rem;left:50%;transform:translateX(-50%);opacity:0;transition:opacity 0.2s;display:flex;flex-direction:column;gap:0.5rem;align-items:center;pointer-events:none;';
+            info.style.cssText = 'position:absolute;bottom:4.5rem;left:50%;transform:translateX(-50%);opacity:0;transition:opacity 0.2s;display:flex;flex-direction:column;gap:0.5rem;align-items:center;pointer-events:none;white-space:nowrap;';
             const hslStr = hexToHsl(cHex);
             info.style.color = hslStr.l > 50 ? '#000' : '#fff';
             info.innerHTML = `
@@ -6154,3 +6299,444 @@ window.serializeItems     = serializeItems;
 window.loadFileFromObject = loadFileFromObject;
 window.showToast          = showToast;
 
+
+// ══════════════════════════════════════════════════════════════════════════
+// MOODGANTT — Date utilities & constants
+// ══════════════════════════════════════════════════════════════════════════
+const GANTT_MS_DAY = 86400000;
+const GANTT_STATUS_COLORS = { done: '#22c55e', review: '#f59e0b', blocked: '#ef4444' };
+const GANTT_ZOOM = {
+    week:    { colWidth: 100, label: (d) => ({ top: d.toLocaleString('en',{month:'short'}), bottom: 'W'+ganttWeekNum(d) }) },
+    month:   { colWidth: 120, label: (d) => ({ top: String(d.getFullYear()), bottom: d.toLocaleString('en',{month:'short'}) }) },
+    quarter: { colWidth: 200, label: (d) => ({ top: String(d.getFullYear()), bottom: 'Q'+(Math.floor(d.getMonth()/3)+1) }) }
+};
+
+function ganttParseDate(str) {
+    if (!str) return ganttToday();
+    const [y,m,d] = str.split('-').map(Number);
+    return new Date(y, m-1, d);
+}
+function ganttFormatDate(date) {
+    return `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`;
+}
+function ganttToday() { const t=new Date(); return new Date(t.getFullYear(),t.getMonth(),t.getDate()); }
+function ganttAddDays(date, n) { const d=new Date(date); d.setDate(d.getDate()+n); return d; }
+function ganttAddMonths(date, n) { const d=new Date(date); d.setMonth(d.getMonth()+n); return d; }
+function ganttWeekNum(date) {
+    const d=new Date(Date.UTC(date.getFullYear(),date.getMonth(),date.getDate()));
+    d.setUTCDate(d.getUTCDate()+4-(d.getUTCDay()||7));
+    const y=new Date(Date.UTC(d.getUTCFullYear(),0,1));
+    return Math.ceil((((d-y)/GANTT_MS_DAY)+1)/7);
+}
+function ganttFloorWeek(date) {
+    const d=new Date(date);
+    const dow=d.getDay()||7;
+    d.setDate(d.getDate()-(dow-1));
+    return new Date(d.getFullYear(),d.getMonth(),d.getDate());
+}
+function ganttFloorMonth(date) { return new Date(date.getFullYear(),date.getMonth(),1); }
+function ganttFloorQuarter(date) { return new Date(date.getFullYear(),Math.floor(date.getMonth()/3)*3,1); }
+
+function ganttGetColumns(viewStartStr, viewEndStr, zoom) {
+    const end = ganttParseDate(viewEndStr);
+    const cols = [];
+    let cur;
+    if (zoom === 'week') {
+        cur = ganttFloorWeek(ganttParseDate(viewStartStr));
+        while (cur <= end) { cols.push(new Date(cur)); cur = ganttAddDays(cur, 7); }
+    } else if (zoom === 'month') {
+        cur = ganttFloorMonth(ganttParseDate(viewStartStr));
+        while (cur <= end) { cols.push(new Date(cur)); ganttAddMonths(cur, 1); cur = new Date(cur.getFullYear(), cur.getMonth()+1, 1); }
+    } else { // quarter
+        cur = ganttFloorQuarter(ganttParseDate(viewStartStr));
+        while (cur <= end) { cols.push(new Date(cur)); cur = new Date(cur.getFullYear(), cur.getMonth()+3, 1); }
+    }
+    return cols;
+}
+
+function ganttColOffset(date, cols, colWidth) {
+    const ts = date.getTime();
+    for (let i = 0; i < cols.length; i++) {
+        const colEnd = i < cols.length-1 ? cols[i+1] : ganttAddDays(cols[i], 7);
+        if (ts < colEnd.getTime()) {
+            const fraction = (ts - cols[i].getTime()) / (colEnd.getTime() - cols[i].getTime());
+            return (i + fraction) * colWidth;
+        }
+    }
+    return cols.length * colWidth;
+}
+
+function ganttBarPixels(task, cols, colWidth) {
+    const start = ganttParseDate(task.startDate);
+    const end   = ganttAddDays(ganttParseDate(task.endDate), 1);
+    const left  = Math.max(0, ganttColOffset(start, cols, colWidth));
+    const right = ganttColOffset(end, cols, colWidth);
+    return { left, width: Math.max(colWidth * 0.4, right - left - 2) };
+}
+
+function ganttStatusColor(task, groupColor) {
+    return GANTT_STATUS_COLORS[task.status] || groupColor || 'var(--switch-bg-checked)';
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// MOODGANTT — Render
+// ══════════════════════════════════════════════════════════════════════════
+let ganttDetailTarget = null; // { project, groupId, taskId }
+
+function renderGanttView(project) {
+    if (!project || project.type !== 'moodgantt') return;
+
+    const zoom     = project.data.zoomLevel || 'week';
+    const colWidth = GANTT_ZOOM[zoom].colWidth;
+    const cols     = ganttGetColumns(project.data.viewStartDate, project.data.viewEndDate, zoom);
+    const totalW   = cols.length * colWidth;
+    const today    = ganttToday();
+
+    // Update zoom button states
+    document.querySelectorAll('.gantt-zoom-btn').forEach(b => {
+        b.classList.toggle('active', b.dataset.zoom === zoom);
+    });
+
+    // ── Build date header ──
+    const header = document.getElementById('gantt-date-header');
+    if (!header) return;
+    header.innerHTML = '';
+    header.style.width = totalW + 'px';
+    const labelCfg = GANTT_ZOOM[zoom].label;
+    cols.forEach(colDate => {
+        const isToday = zoom === 'week' && Math.abs(colDate.getTime() - ganttFloorWeek(today).getTime()) < GANTT_MS_DAY;
+        const col = document.createElement('div');
+        col.className = 'gantt-col-header' + (isToday ? ' is-today' : '');
+        col.style.width = colWidth + 'px';
+        const lbl = labelCfg(colDate);
+        col.innerHTML = `<span class="gcol-top">${lbl.top}</span><span class="gcol-bottom">${lbl.bottom}</span>`;
+        header.appendChild(col);
+    });
+
+    // ── Build sidebar + rows ──
+    const sidebarBody = document.getElementById('gantt-sidebar-body');
+    const rowsArea    = document.getElementById('gantt-rows-area');
+    if (!sidebarBody || !rowsArea) return;
+    sidebarBody.innerHTML = '';
+    rowsArea.innerHTML = '';
+    rowsArea.style.width = totalW + 'px';
+
+    // Today line
+    const todayOffset = ganttColOffset(today, cols, colWidth);
+    if (todayOffset >= 0 && todayOffset <= totalW) {
+        const todayLine = document.createElement('div');
+        todayLine.className = 'gantt-today-line';
+        todayLine.style.left = todayOffset + 'px';
+        rowsArea.appendChild(todayLine);
+    }
+
+    const groups = project.data.groups || [];
+    let totalTasks = 0, doneTasks = 0, blockedTasks = 0;
+    let nextDeadline = null;
+
+    groups.forEach(group => {
+        const groupColor = group.color || 'var(--switch-bg-checked)';
+
+        // ── Sidebar group row ──
+        const sRow = document.createElement('div');
+        sRow.className = 'gantt-group-sidebar-row';
+        sRow.dataset.groupId = group.id;
+        const collapseBtn = document.createElement('button');
+        collapseBtn.className = 'gantt-group-collapse-btn' + (group.collapsed ? ' collapsed' : '');
+        collapseBtn.innerHTML = '<iconify-icon icon="lucide:chevron-down" width="14" height="14"></iconify-icon>';
+        collapseBtn.title = group.collapsed ? 'Expand' : 'Collapse';
+        collapseBtn.onclick = (e) => { e.stopPropagation(); group.collapsed = !group.collapsed; renderGanttView(project); scheduleAutoSave(); };
+        const dot = document.createElement('div');
+        dot.className = 'gantt-group-color-dot';
+        dot.style.background = groupColor;
+        const lbl = document.createElement('span');
+        lbl.className = 'gantt-group-label';
+        lbl.textContent = group.name || 'Unnamed Group';
+        lbl.title = 'Double-click to rename';
+        lbl.ondblclick = (e) => { e.stopPropagation(); ganttStartGroupRename(lbl, group, project); };
+        const addTaskBtn = document.createElement('button');
+        addTaskBtn.className = 'gantt-group-add-task-btn';
+        addTaskBtn.title = 'Add Task';
+        addTaskBtn.innerHTML = '<iconify-icon icon="lucide:plus" width="13" height="13"></iconify-icon>';
+        addTaskBtn.onclick = (e) => { e.stopPropagation(); ganttAddTask(project, group.id); };
+        sRow.append(collapseBtn, dot, lbl, addTaskBtn);
+        sidebarBody.appendChild(sRow);
+
+        // ── Timeline group track ──
+        const gTrack = document.createElement('div');
+        gTrack.className = 'gantt-group-track';
+        // Group summary bar (min/max of task dates)
+        if (group.tasks && group.tasks.length > 0) {
+            const starts = group.tasks.map(t => ganttParseDate(t.startDate).getTime());
+            const ends   = group.tasks.map(t => ganttParseDate(t.endDate).getTime());
+            const gStart = new Date(Math.min(...starts));
+            const gEnd   = ganttAddDays(new Date(Math.max(...ends)), 1);
+            const gl = ganttColOffset(gStart, cols, colWidth);
+            const gr = ganttColOffset(gEnd, cols, colWidth);
+            if (gr > gl) {
+                const sumBar = document.createElement('div');
+                sumBar.className = 'gantt-group-summary-bar';
+                sumBar.style.left  = gl + 'px';
+                sumBar.style.width = (gr - gl - 2) + 'px';
+                sumBar.style.background = groupColor;
+                gTrack.appendChild(sumBar);
+            }
+        }
+        rowsArea.appendChild(gTrack);
+
+        // ── Tasks ──
+        if (!group.collapsed) {
+            (group.tasks || []).forEach(task => {
+                totalTasks++;
+                if (task.status === 'done') doneTasks++;
+                if (task.status === 'blocked') blockedTasks++;
+                const taskEnd = ganttParseDate(task.endDate);
+                if (taskEnd >= today && (!nextDeadline || taskEnd < nextDeadline)) nextDeadline = taskEnd;
+
+                // Sidebar task row
+                const tSide = document.createElement('div');
+                tSide.className = 'gantt-task-sidebar-row';
+                const statusDot = document.createElement('div');
+                statusDot.className = 'gantt-task-status-dot';
+                statusDot.style.background = ganttStatusColor(task, groupColor);
+                const tLbl = document.createElement('span');
+                tLbl.className = 'gantt-task-label';
+                tLbl.textContent = task.name || 'Untitled';
+                tSide.append(statusDot, tLbl);
+                tSide.onclick = () => ganttOpenDetail(project, group.id, task.id);
+                sidebarBody.appendChild(tSide);
+
+                // Timeline task track + bar
+                const tTrack = document.createElement('div');
+                tTrack.className = 'gantt-task-track';
+                const { left, width } = ganttBarPixels(task, cols, colWidth);
+                const barColor = ganttStatusColor(task, groupColor);
+                const textColor = getContrastColor(barColor.startsWith('#') ? barColor : '#429eff');
+                const bar = document.createElement('div');
+                bar.className = 'gantt-bar';
+                bar.style.left   = left + 'px';
+                bar.style.width  = width + 'px';
+                bar.style.background = barColor;
+                bar.style.color  = textColor;
+                if (task.progress > 0) {
+                    const prog = document.createElement('div');
+                    prog.className = 'gantt-bar-progress';
+                    prog.style.width = task.progress + '%';
+                    bar.appendChild(prog);
+                }
+                const barLbl = document.createElement('span');
+                barLbl.className = 'gantt-bar-label';
+                barLbl.textContent = task.name || 'Untitled';
+                bar.appendChild(barLbl);
+                bar.onclick = () => ganttOpenDetail(project, group.id, task.id);
+                tTrack.appendChild(bar);
+                rowsArea.appendChild(tTrack);
+            });
+        }
+    });
+
+    // Update stats bar
+    const statGroups = document.getElementById('gantt-stat-groups');
+    const statTasks  = document.getElementById('gantt-stat-tasks');
+    const donePct    = document.getElementById('gantt-done-pct');
+    const blockedPct = document.getElementById('gantt-blocked-pct');
+    const nextDl     = document.getElementById('gantt-next-deadline');
+    if (statGroups) statGroups.querySelector('span').textContent = groups.length + ' Group' + (groups.length !== 1 ? 's' : '');
+    if (statTasks)  statTasks.querySelector('span').textContent  = totalTasks + ' Task' + (totalTasks !== 1 ? 's' : '');
+    if (donePct)    donePct.textContent   = totalTasks ? Math.round(doneTasks/totalTasks*100)+'% Done' : '0% Done';
+    if (blockedPct) blockedPct.textContent = totalTasks ? Math.round(blockedTasks/totalTasks*100)+'% Blocked' : '0% Blocked';
+    if (nextDl)     nextDl.textContent    = nextDeadline ? 'Next: '+nextDeadline.toLocaleDateString('en',{month:'short',day:'numeric'}) : 'No upcoming deadlines';
+
+    // Scroll sync: sidebar mirrors timeline vertical scroll
+    const timeline = document.getElementById('gantt-timeline');
+    if (timeline && !timeline._scrollListenerAttached) {
+        timeline._scrollListenerAttached = true;
+        timeline.addEventListener('scroll', () => {
+            if (sidebarBody) sidebarBody.scrollTop = timeline.scrollTop;
+        });
+    }
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// MOODGANTT — Interactions
+// ══════════════════════════════════════════════════════════════════════════
+function ganttAddGroup(project) {
+    const id = Date.now();
+    const colors = ['#429eff','#a78bfa','#34d399','#f59e0b','#f87171','#60a5fa','#fb923c'];
+    const color  = colors[(project.data.groups.length) % colors.length];
+    project.data.groups.push({ id, name: 'New Group', color, collapsed: false, tasks: [] });
+    renderGanttView(project);
+    scheduleAutoSave();
+    showToast('Group added.');
+}
+
+function ganttAddTask(project, groupId) {
+    const group = project.data.groups.find(g => g.id === groupId);
+    if (!group) return;
+    const today    = ganttFormatDate(ganttToday());
+    const nextWeek = ganttFormatDate(ganttAddDays(ganttToday(), 7));
+    const id = Date.now();
+    group.tasks.push({ id, name: 'New Task', startDate: today, endDate: nextWeek, progress: 0, status: '', assignee: '', notes: '' });
+    renderGanttView(project);
+    scheduleAutoSave();
+    showToast('Task added.');
+}
+
+function ganttStartGroupRename(labelEl, group, project) {
+    const input = document.createElement('input');
+    input.className = 'gantt-group-rename-input';
+    input.value = group.name;
+    labelEl.replaceWith(input);
+    input.focus(); input.select();
+    const finish = () => {
+        const newName = input.value.trim() || group.name;
+        group.name = newName;
+        input.replaceWith(labelEl);
+        labelEl.textContent = newName;
+        scheduleAutoSave();
+    };
+    input.addEventListener('blur', finish);
+    input.addEventListener('keydown', e => { if (e.key === 'Enter') input.blur(); if (e.key === 'Escape') { input.value = group.name; input.blur(); } });
+}
+
+function ganttOpenDetail(project, groupId, taskId) {
+    const group = project.data.groups.find(g => g.id === groupId);
+    const task  = group && group.tasks.find(t => t.id === taskId);
+    if (!task) return;
+
+    ganttDetailTarget = { project, groupId, taskId };
+
+    const panel = document.getElementById('gantt-detail-panel');
+    document.getElementById('gantt-detail-name').value      = task.name || '';
+    document.getElementById('gantt-detail-start').value     = task.startDate || '';
+    document.getElementById('gantt-detail-end').value       = task.endDate || '';
+    document.getElementById('gantt-detail-progress').value  = task.progress || 0;
+    document.getElementById('gantt-detail-progress-val').textContent = (task.progress || 0) + '%';
+    document.getElementById('gantt-detail-status').value    = task.status || '';
+    document.getElementById('gantt-detail-assignee').value  = task.assignee || '';
+    document.getElementById('gantt-detail-notes').value     = task.notes || '';
+
+    panel.classList.add('open');
+}
+
+function ganttCloseDetail() {
+    const panel = document.getElementById('gantt-detail-panel');
+    if (panel) panel.classList.remove('open');
+    ganttDetailTarget = null;
+}
+
+function ganttSyncDetailToTask() {
+    if (!ganttDetailTarget) return;
+    const { project, groupId, taskId } = ganttDetailTarget;
+    const group = project.data.groups.find(g => g.id === groupId);
+    const task  = group && group.tasks.find(t => t.id === taskId);
+    if (!task) return;
+    task.name      = document.getElementById('gantt-detail-name').value;
+    task.startDate = document.getElementById('gantt-detail-start').value;
+    task.endDate   = document.getElementById('gantt-detail-end').value;
+    task.progress  = parseInt(document.getElementById('gantt-detail-progress').value) || 0;
+    task.status    = document.getElementById('gantt-detail-status').value;
+    task.assignee  = document.getElementById('gantt-detail-assignee').value;
+    task.notes     = document.getElementById('gantt-detail-notes').value;
+    renderGanttView(project);
+    scheduleAutoSave();
+}
+
+function ganttDeleteTask() {
+    if (!ganttDetailTarget) return;
+    const { project, groupId, taskId } = ganttDetailTarget;
+    const group = project.data.groups.find(g => g.id === groupId);
+    if (!group) return;
+    group.tasks = group.tasks.filter(t => t.id !== taskId);
+    ganttCloseDetail();
+    renderGanttView(project);
+    scheduleAutoSave();
+    showToast('Task deleted.');
+}
+
+function ganttShiftView(project, direction) {
+    const zoom = project.data.zoomLevel || 'week';
+    const steps = { week: 4, month: 3, quarter: 2 };
+    const n = steps[zoom] * direction;
+    if (zoom === 'week') {
+        project.data.viewStartDate = ganttFormatDate(ganttAddDays(ganttParseDate(project.data.viewStartDate), n * 7));
+        project.data.viewEndDate   = ganttFormatDate(ganttAddDays(ganttParseDate(project.data.viewEndDate),   n * 7));
+    } else {
+        project.data.viewStartDate = ganttFormatDate(ganttAddMonths(ganttParseDate(project.data.viewStartDate), n));
+        project.data.viewEndDate   = ganttFormatDate(ganttAddMonths(ganttParseDate(project.data.viewEndDate),   n));
+    }
+    renderGanttView(project);
+    scheduleAutoSave();
+}
+
+function ganttJumpToToday(project) {
+    const today  = ganttToday();
+    const zoom   = project.data.zoomLevel || 'week';
+    const months = { week: 3, month: 6, quarter: 12 };
+    const half   = months[zoom];
+    project.data.viewStartDate = ganttFormatDate(ganttAddMonths(today, -half/2));
+    project.data.viewEndDate   = ganttFormatDate(ganttAddMonths(today,  half));
+    renderGanttView(project);
+    // Scroll to today
+    setTimeout(() => {
+        const cols     = ganttGetColumns(project.data.viewStartDate, project.data.viewEndDate, zoom);
+        const colWidth = GANTT_ZOOM[zoom].colWidth;
+        const offset   = ganttColOffset(today, cols, colWidth);
+        const timeline = document.getElementById('gantt-timeline');
+        if (timeline) timeline.scrollLeft = Math.max(0, offset - timeline.clientWidth / 2);
+    }, 50);
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// MOODGANTT — Wire up event listeners (called once on init)
+// ══════════════════════════════════════════════════════════════════════════
+function setupGanttListeners() {
+    const addMoodganttBtn = document.getElementById('add-moodgantt-tab-btn');
+    if (addMoodganttBtn) addMoodganttBtn.addEventListener('click', () => createNewProject('moodgantt'));
+
+    document.getElementById('gantt-add-group-btn')?.addEventListener('click', () => {
+        const proj = projects.find(p => p.id === activeProjectId);
+        if (proj && proj.type === 'moodgantt') ganttAddGroup(proj);
+    });
+
+    document.getElementById('gantt-today-btn')?.addEventListener('click', () => {
+        const proj = projects.find(p => p.id === activeProjectId);
+        if (proj && proj.type === 'moodgantt') ganttJumpToToday(proj);
+    });
+
+    document.getElementById('gantt-prev-btn')?.addEventListener('click', () => {
+        const proj = projects.find(p => p.id === activeProjectId);
+        if (proj && proj.type === 'moodgantt') ganttShiftView(proj, -1);
+    });
+
+    document.getElementById('gantt-next-btn')?.addEventListener('click', () => {
+        const proj = projects.find(p => p.id === activeProjectId);
+        if (proj && proj.type === 'moodgantt') ganttShiftView(proj, 1);
+    });
+
+    document.querySelectorAll('.gantt-zoom-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const proj = projects.find(p => p.id === activeProjectId);
+            if (!proj || proj.type !== 'moodgantt') return;
+            proj.data.zoomLevel = btn.dataset.zoom;
+            renderGanttView(proj);
+            scheduleAutoSave();
+        });
+    });
+
+    document.getElementById('gantt-detail-close')?.addEventListener('click', ganttCloseDetail);
+
+    // Sync detail fields live
+    ['gantt-detail-name','gantt-detail-start','gantt-detail-end','gantt-detail-status','gantt-detail-assignee','gantt-detail-notes'].forEach(id => {
+        document.getElementById(id)?.addEventListener('input', ganttSyncDetailToTask);
+        document.getElementById(id)?.addEventListener('change', ganttSyncDetailToTask);
+    });
+
+    document.getElementById('gantt-detail-progress')?.addEventListener('input', (e) => {
+        const val = document.getElementById('gantt-detail-progress-val');
+        if (val) val.textContent = e.target.value + '%';
+        ganttSyncDetailToTask();
+    });
+
+    document.getElementById('gantt-detail-delete')?.addEventListener('click', ganttDeleteTask);
+}
