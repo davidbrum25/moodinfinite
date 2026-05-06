@@ -1,4 +1,4 @@
-# Moodinfinite v0.9.9
+# Moodinfinite v1.0.0
 
 <div align="center">
   <img src="https://github.com/davidbrum25/moodinfinite/blob/main/_branding/_png/moodinfinite__Logotipo_alpha.png?raw=true" alt="Moodinfinite Logo" width="400"/>
@@ -135,6 +135,17 @@ If you find this tool useful and want to help me build more, consider supporting
 ---
 
 ## Update Log
+
+### ✨ v1.0.0 — Google Drive Cloud Sync & Persistence
+
+*   **☁️ Google Drive Integration:** Sign in with your Google account to save and load projects directly from your personal Drive. All files are stored in a dedicated `Moodinfinite` folder.
+*   **🔄 Seamless Cross-Device Sync:** Keep your projects in sync across all your devices. The app now handles conflict resolution and ensures your data is always safe.
+*   **💾 Persistent Sessions:** Stay logged in across page reloads. The app uses a secure silent refresh flow to keep your cloud connection active.
+*   **📊 Drive Storage Management:** Monitor your storage usage with a real-time meter in the account menu.
+*   **📂 Enhanced Cloud Picker:** Open projects from Drive with a premium file picker featuring live sorting (Date, Size, Name) and built-in file deletion.
+*   **🗑️ Remote File Management:** Delete unwanted projects from your Google Drive directly within the app interface.
+
+---
 
 ### ✨ v0.9.9 — UI Polish & Moodflow Minimap
 

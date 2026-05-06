@@ -1,6 +1,6 @@
 {
   "name": "moodinfinite",
-  "version": "0.9.9",
+  "version": "1.0.0",
   "dependencies": {
     "acorn": "^8.16.0",
     "acorn-walk": "^8.3.5",
