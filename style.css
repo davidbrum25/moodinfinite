@@ -247,13 +247,88 @@
         #moodprompt-container {
             background-color: var(--bg-page);
             color: var(--text-color);
-            padding: 5rem 1rem 8rem 1rem;
-            /* Adjusted padding for mobile */
+            padding: 0;
             box-sizing: border-box;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            align-items: stretch;
+            height: 100%;
+        }
+
+        .moodprompt-top-bar {
+            display: flex;
+            align-items: center;
+            gap: 2.5rem;
+            padding: 4rem 2.5rem 0.75rem 2.5rem;
+            background: rgba(20, 22, 30, 0.9);
+            border-bottom: 1px solid var(--border-color);
+            flex-shrink: 0;
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            z-index: 50;
+            width: 100%;
+            box-sizing: border-box;
+        }
+
+        .moodprompt-scroll-area {
+            flex: 1;
             overflow-y: auto;
+            padding: 2rem 1rem 8rem 1rem;
             display: flex;
             flex-direction: column;
             align-items: center;
+            width: 100%;
+        }
+
+        .moodprompt-top-bar .stats-item {
+            cursor: default;
+        }
+
+        .moodprompt-top-bar .bar-input {
+            background: transparent;
+            border: none;
+            color: var(--text-color);
+            font-size: 0.7rem;
+            font-weight: 800;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            outline: none;
+            padding: 2px 4px;
+            width: auto;
+            min-width: 50px;
+        }
+
+        .moodprompt-top-bar select.bar-input {
+            cursor: pointer;
+            appearance: none;
+            -webkit-appearance: none;
+        }
+
+        .moodprompt-top-bar .stats-item:hover {
+            color: var(--text-color);
+        }
+
+        .moodprompt-top-bar .stats-item:hover iconify-icon {
+            filter: drop-shadow(0 0 12px var(--switch-bg-checked));
+        }
+
+        .moodprompt-top-bar .form-input {
+            background: rgba(0,0,0,0.2);
+            border: 1px solid var(--border-color);
+            color: var(--text-color);
+            border-radius: 0.75rem;
+            padding: 0.75rem 1rem;
+            font-size: 0.9rem;
+            outline: none;
+            transition: all 0.2s;
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+        }
+
+        .moodprompt-top-bar .form-input:focus {
+            border-color: var(--switch-bg-checked);
+            background: rgba(0,0,0,0.3);
         }
 
         .prompt-list {
@@ -329,6 +404,10 @@
 
         .prompt-delete-btn:hover {
             color: #ef4444;
+        }
+
+        .prompt-copy-btn:hover {
+            color: #44ef9b;
         }
 
         .platform-select-wrapper {
@@ -437,6 +516,39 @@
             padding: 4px;
         }
 
+        .slot-action-btn {
+            position: absolute;
+            bottom: 5px;
+            background: rgba(0,0,0,0.6);
+            backdrop-filter: blur(4px);
+            -webkit-backdrop-filter: blur(4px);
+            color: white;
+            border-radius: 4px;
+            padding: 4px 6px;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: background 0.2s;
+            z-index: 10;
+        }
+        
+        .slot-action-btn:hover {
+            background: var(--switch-bg-checked);
+        }
+
+        .image-upload-slot:hover .slot-action-btn {
+            display: flex;
+        }
+
+        .zoom-btn {
+            right: 5px;
+        }
+
+        .replace-btn {
+            left: 5px;
+        }
+
         .image-upload-slot img {
             width: 100%;
             height: 100%;
@@ -462,6 +574,60 @@
             border-color: var(--switch-bg-checked);
             box-shadow: 0 0 0 1px var(--switch-bg-checked);
         }
+
+        .prompt-tags-wrapper {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+            margin-top: 0.5rem;
+        }
+
+        .prompt-tags-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+        }
+
+        .prompt-tag {
+            background: rgba(66, 158, 255, 0.15);
+            border: 1px solid var(--switch-bg-checked);
+            color: var(--text-color);
+            padding: 0.2rem 0.6rem;
+            border-radius: 9999px;
+            font-size: 0.75rem;
+            display: flex;
+            align-items: center;
+            gap: 0.25rem;
+            transition: all 0.2s;
+        }
+
+        .prompt-tag iconify-icon {
+            cursor: pointer;
+            opacity: 0.7;
+        }
+
+        .prompt-tag iconify-icon:hover {
+            opacity: 1;
+            color: #ef4444;
+        }
+
+        .prompt-tag-input {
+            background: rgba(0, 0, 0, 0.2);
+            border: 1px solid var(--border-color);
+            border-radius: 0.5rem;
+            padding: 0.5rem 0.75rem;
+            color: var(--text-color);
+            font-size: 0.8rem;
+            outline: none;
+            width: 100%;
+            transition: border-color 0.2s;
+        }
+
+        .prompt-tag-input:focus {
+            border-color: var(--switch-bg-checked);
+        }
+
+
 
         #add-prompt-btn {
             position: fixed;
@@ -494,15 +660,18 @@
 
         /* --- STORYFLOW STYLES --- */
         #storyflow-container {
-            position: relative;
-            height: 100%;
-            width: 100%;
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
             display: none;
             flex-direction: column;
             overflow: hidden;
             box-sizing: border-box;
             background-color: var(--bg-page);
-            padding-top: calc(var(--tabs-bar-height) + 1rem); /* Precisely below tabs */
+            padding-top: calc(var(--tabs-bar-height) + 1rem);
+            padding-bottom: 160px; /* Minimap clearance at the container level */
         }
 
         #storyflow-stats-bar {
@@ -535,21 +704,22 @@
         }
 
         #storyflow-scroll-area {
-            flex-grow: 1;
+            flex: 1;
             overflow-x: auto;
             overflow-y: hidden;
-            padding: 1rem 2rem 1.5rem 2rem; /* Internal padding for cards */
-            margin-bottom: 170px; /* This lifts the entire scroll area (and its scrollbar) above the minimap */
+            padding: 1rem 2rem;
+            margin-bottom: 0; /* Margin moved to container padding */
             box-sizing: border-box;
             display: flex;
             align-items: stretch;
+            min-height: 0;
         }
 
         .storyflow-list {
             display: flex;
             flex-direction: row;
             gap: 2rem;
-            height: 100%;
+            min-height: 100%;
             align-items: stretch;
         }
 
@@ -707,8 +877,8 @@
             flex-direction: column;
             gap: 0.85rem;
             width: 320px;
-            height: auto; /* Let flex stretch handle it */
-            min-height: 500px;
+            height: auto; /* Let flex stretch handle it from .storyflow-list */
+            min-height: 100%; /* Force it to at least match parent height */
             flex-shrink: 0;
             transition: transform 0.2s cubic-bezier(0.2, 0, 0, 1), opacity 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
             content-visibility: auto;
@@ -893,20 +1063,7 @@
             border-bottom-color: var(--switch-bg-checked);
         }
 
-        .story-desc-area {
-            background: rgba(0, 0, 0, 0.2);
-            border: 1px solid var(--border-color);
-            border-radius: 0.5rem;
-            padding: 0.75rem;
-            color: var(--text-color);
-            font-family: inherit;
-            font-size: 0.85rem;
-            min-height: 80px;
-            max-height: 200px;
-            resize: vertical;
-            outline: none;
-            line-height: 1.4;
-        }
+
 
         .story-desc-area:focus {
             border-color: var(--switch-bg-checked);
@@ -3766,3 +3923,35 @@
             text-transform: uppercase;
             letter-spacing: 0.05em;
         }
+
+#toast-container {
+    position: fixed;
+    bottom: 2rem;
+    right: 2rem;
+    z-index: 10000;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    pointer-events: none;
+}
+
+.toast {
+    background: var(--bg-ui);
+    color: var(--text-color);
+    padding: 12px 20px;
+    border-radius: 8px;
+    border: 1px solid var(--switch-bg-checked);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+    font-size: 0.9rem;
+    opacity: 0;
+    transform: translateY(20px);
+    transition: opacity 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275), transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.toast.show {
+    opacity: 1;
+    transform: translateY(0);
+}

@@ -102,15 +102,27 @@ function saveToBrowser() {
 
 const genericIcon = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"/></svg>`;
 const platformData = {
-    higgsfield: { name: 'Higgsfield', icon: genericIcon },
-    openai_sora: { name: 'OpenAI Sora', icon: genericIcon },
     midjourney: { name: 'Midjourney', icon: `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="m8 3l4 8l5-5l5 15H2z"/></svg>` },
-    wanz_5: { name: 'Wan2.5', icon: genericIcon },
-    wanz_2: { name: 'Wan2.2', icon: genericIcon },
-    minimax: { name: 'Minimax', icon: genericIcon },
-    seedance: { name: 'Seedance', icon: genericIcon },
-    kling: { name: 'Kling', icon: genericIcon },
-    google_veo: { name: 'Google Veo', icon: genericIcon },
+    dalle3: { name: 'DALL-E 3', icon: genericIcon },
+    chatgpt: { name: 'ChatGPT', icon: genericIcon },
+    sd3: { name: 'Stable Diffusion 3', icon: genericIcon },
+    flux: { name: 'Flux', icon: genericIcon },
+    runway: { name: 'Runway Gen-3', icon: genericIcon },
+    luma: { name: 'Luma Dream Machine', icon: genericIcon },
+    kling: { name: 'Kling AI', icon: genericIcon },
+    sora: { name: 'OpenAI Sora', icon: genericIcon },
+    minimax: { name: 'Hailuo Minimax', icon: genericIcon },
+    pika: { name: 'Pika', icon: genericIcon },
+    veo: { name: 'Google Veo', icon: genericIcon },
+    leonardo: { name: 'Leonardo AI', icon: genericIcon },
+    hunyuan: { name: 'Hunyuan Video', icon: genericIcon },
+    wanvideo: { name: 'Wan Video', icon: genericIcon },
+    ltk: { name: 'LTK', icon: genericIcon },
+    mochi: { name: 'Mochi', icon: genericIcon },
+    nanobanana2: { name: 'Nano banana 2', icon: genericIcon },
+    seedream: { name: 'Seedream', icon: genericIcon },
+    haiper: { name: 'Haiper', icon: genericIcon },
+    genmo: { name: 'Genmo', icon: genericIcon },
     others: { name: '- Others', icon: genericIcon }
 };
 
@@ -377,7 +389,7 @@ function switchTab(projectId) {
         if (storyflowMinimap) storyflowMinimap.style.display = 'none';
         const ganttCont2 = document.getElementById('gantt-container');
         if (ganttCont2) ganttCont2.style.display = 'none';
-        moodpromptContainer.style.display = 'block';
+        moodpromptContainer.style.display = 'flex';
         renderMoodpromptView(newActiveProject);
     }
 
@@ -584,41 +596,290 @@ function renderTabs() {
     setTimeout(updateScrollIndicators, 0);
 }
 
+let moodpromptFilterPlatform = 'all';
+let moodpromptSearchQuery = '';
+
+function showToast(message) {
+    let container = document.getElementById('toast-container');
+    if (!container) {
+        container = document.createElement('div');
+        container.id = 'toast-container';
+        document.body.appendChild(container);
+    }
+    const toast = document.createElement('div');
+    toast.className = 'toast';
+    toast.innerHTML = `<iconify-icon icon="lucide:check-circle" style="color: var(--switch-bg-checked);"></iconify-icon> <span>${message}</span>`;
+    container.appendChild(toast);
+    
+    toast.offsetHeight;
+    toast.classList.add('show');
+    
+    setTimeout(() => {
+        toast.classList.remove('show');
+        setTimeout(() => toast.remove(), 300);
+    }, 3000);
+}
+
+function openLightbox(src) {
+    let overlay = document.getElementById('image-lightbox-overlay');
+    if (!overlay) {
+        overlay = document.createElement('div');
+        overlay.id = 'image-lightbox-overlay';
+        overlay.className = 'modal-overlay';
+        overlay.innerHTML = `
+            <div id="image-lightbox-modal" class="glass-modal" style="width: auto; max-width: 90vw; height: auto; max-height: 90vh; padding: 1rem; position: relative; background: rgba(20,20,20,0.8);">
+                <button id="close-lightbox-btn" class="modal-button cancel" style="position: absolute; top: -10px; right: -10px; width: 30px; height: 30px; padding: 0; border-radius: 50%; display: flex; align-items: center; justify-content: center; z-index: 10;">&times;</button>
+                <img id="lightbox-img" src="" style="max-width: 100%; max-height: calc(90vh - 2rem); object-fit: contain; border-radius: 0.5rem; display: block;">
+            </div>
+        `;
+        document.body.appendChild(overlay);
+        overlay.querySelector('#close-lightbox-btn').onclick = () => overlay.style.display = 'none';
+        overlay.onclick = (e) => { if (e.target === overlay) overlay.style.display = 'none'; };
+    }
+    overlay.querySelector('#lightbox-img').src = src;
+    overlay.style.display = 'flex';
+}
+
+function resolveVariables(text, project) {
+    if (!text || !project.data.variables) return text;
+    let resolved = text;
+    Object.entries(project.data.variables).forEach(([key, val]) => {
+        if (!key) return;
+        const regex = new RegExp(`\\{\\{${key}\\}\\}`, 'g');
+        resolved = resolved.replace(regex, val);
+    });
+    return resolved;
+}
+
+function openVariableManager(project) {
+    if (!project.data.variables) project.data.variables = {};
+    
+    let overlay = document.getElementById('variable-manager-overlay');
+    if (!overlay) {
+        overlay = document.createElement('div');
+        overlay.id = 'variable-manager-overlay';
+        overlay.className = 'modal-overlay';
+        document.body.appendChild(overlay);
+    }
+    
+    const renderContent = () => {
+        let html = `
+            <div class="glass-modal" style="width: 500px; max-width: 90vw;">
+                <h2>Variable Manager</h2>
+                <p style="color: var(--text-color-light); font-size: 0.9rem; margin-bottom: 1rem;">Define variables to use across all prompts in this project. Use {{variable_name}} in your text.</p>
+                <div id="var-list" style="display: flex; flex-direction: column; gap: 0.5rem; margin-bottom: 1rem; max-height: 300px; overflow-y: auto;">
+        `;
+        
+        Object.entries(project.data.variables).forEach(([key, val]) => {
+            html += `
+                <div style="display: flex; gap: 0.5rem;">
+                    <input type="text" class="form-input var-key" value="${key}" placeholder="Name (e.g. subject)" style="width: 30%;">
+                    <input type="text" class="form-input var-val" value="${val}" placeholder="Value" style="flex-grow: 1;">
+                    <button class="modal-button cancel delete-var-btn" data-key="${key}" style="padding: 0.5rem;">&times;</button>
+                </div>
+            `;
+        });
+        
+        html += `
+                </div>
+                <button id="add-var-btn" class="modal-button" style="width: 100%; margin-bottom: 1rem;"><iconify-icon icon="lucide:plus"></iconify-icon> Add Variable</button>
+                <div class="modal-buttons">
+                    <button id="close-var-btn" class="modal-button confirm">Done</button>
+                </div>
+            </div>
+        `;
+        
+        overlay.innerHTML = html;
+        
+        overlay.querySelectorAll('.delete-var-btn').forEach(btn => {
+            btn.onclick = (e) => {
+                delete project.data.variables[e.target.dataset.key];
+                saveToBrowser();
+                renderContent();
+            };
+        });
+        
+        const updateVars = () => {
+            const newVars = {};
+            const keys = overlay.querySelectorAll('.var-key');
+            const vals = overlay.querySelectorAll('.var-val');
+            keys.forEach((kInput, i) => {
+                const k = kInput.value.trim().replace(/[{}]/g, '');
+                const v = vals[i].value;
+                if (k) newVars[k] = v;
+            });
+            project.data.variables = newVars;
+            saveToBrowser();
+        };
+        
+        overlay.querySelectorAll('.var-key, .var-val').forEach(inp => { inp.onchange = updateVars; });
+        
+        overlay.querySelector('#add-var-btn').onclick = () => {
+            project.data.variables[`var${Object.keys(project.data.variables).length + 1}`] = '';
+            saveToBrowser();
+            renderContent();
+        };
+        
+        overlay.querySelector('#close-var-btn').onclick = () => overlay.style.display = 'none';
+    };
+    
+    renderContent();
+    overlay.style.display = 'flex';
+}
+
+function getTagColor(tag) {
+    const lowerTag = tag.toLowerCase();
+    const styleKeywords = ['style', 'art', 'cinematic', 'anime', 'painting', 'drawing', 'render', 'unreal', 'octane', 'photography'];
+    const charKeywords = ['character', 'boy', 'girl', 'man', 'woman', 'concept', 'sheet', 'pose'];
+    const lightKeywords = ['light', 'dark', 'sun', 'shadow', 'bright', 'neon', 'glow'];
+    
+    if (styleKeywords.some(k => lowerTag.includes(k))) return { bg: 'rgba(66, 158, 255, 0.15)', border: 'var(--switch-bg-checked)' }; // Blue
+    if (charKeywords.some(k => lowerTag.includes(k))) return { bg: 'rgba(34, 197, 94, 0.15)', border: '#22c55e' }; // Green
+    if (lightKeywords.some(k => lowerTag.includes(k))) return { bg: 'rgba(234, 179, 8, 0.15)', border: '#eab308' }; // Yellow
+    return { bg: 'rgba(255, 255, 255, 0.1)', border: 'var(--border-color)' }; // Default
+}
+
+function updateTagsDatalist(project) {
+    let datalist = document.getElementById('moodprompt-tags-list');
+    if (!datalist) {
+        datalist = document.createElement('datalist');
+        datalist.id = 'moodprompt-tags-list';
+        document.body.appendChild(datalist);
+    }
+    const allTags = new Set();
+    if (project && project.data && project.data.prompts) {
+        project.data.prompts.forEach(p => {
+            if (p.tags) p.tags.forEach(t => allTags.add(t));
+        });
+    }
+    datalist.innerHTML = '';
+    Array.from(allTags).sort().forEach(tag => {
+        const option = document.createElement('option');
+        option.value = tag;
+        datalist.appendChild(option);
+    });
+}
+
 function renderMoodpromptView(project) {
-    moodpromptContainer.innerHTML = '';
-    const promptList = document.createElement('div');
-    promptList.className = 'prompt-list';
+    updateTagsDatalist(project);
+    
+    let topBar = moodpromptContainer.querySelector('.moodprompt-top-bar');
+    let scrollArea = moodpromptContainer.querySelector('.moodprompt-scroll-area');
 
-    project.data.prompts.forEach((prompt, index) => { promptList.appendChild(createPromptCard(project, prompt, index)); });
+    if (!topBar || !scrollArea) {
+        moodpromptContainer.innerHTML = '';
+        
+        topBar = document.createElement('div');
+        topBar.className = 'moodprompt-top-bar';
 
-    promptList.addEventListener('dragover', (e) => { e.preventDefault(); });
+        // 1. Add Prompt Item
+        const addBtnItem = document.createElement('div');
+        addBtnItem.className = 'stats-item';
+        addBtnItem.style.cursor = 'pointer';
+        addBtnItem.innerHTML = `<iconify-icon icon="lucide:plus-circle" width="16" height="16"></iconify-icon> <span>Add New Prompt</span>`;
+        addBtnItem.onclick = () => {
+            const currentProject = projects.find(p => p.id === activeProjectId) || project;
+            currentProject.data.prompts.push({ id: Date.now(), title: 'New Prompt', platform: 'midjourney', mediaType: 'image', image1: null, image2: null, text: '', tags: [] });
+            renderMoodpromptView(currentProject);
+            saveToBrowser();
+        };
 
-    promptList.addEventListener('drop', (e) => {
-        e.preventDefault();
-        const oldIndex = parseInt(e.dataTransfer.getData('text/plain'), 10);
-        const dropTargetCard = e.target.closest('.prompt-card');
-        if (!dropTargetCard) return;
+        // 2. Filter Item
+        const filterItem = document.createElement('div');
+        filterItem.className = 'stats-item';
+        filterItem.innerHTML = `<iconify-icon icon="lucide:layers" width="16" height="16"></iconify-icon>`;
+        const filterSelect = document.createElement('select');
+        filterSelect.className = 'bar-input';
+        const allOption = document.createElement('option');
+        allOption.value = 'all';
+        allOption.textContent = 'All Providers';
+        filterSelect.appendChild(allOption);
+        Object.keys(platformData).forEach(key => {
+            const option = document.createElement('option');
+            option.value = key;
+            option.textContent = platformData[key].name;
+            filterSelect.appendChild(option);
+        });
+        filterSelect.value = moodpromptFilterPlatform;
+        filterSelect.onchange = (e) => {
+            moodpromptFilterPlatform = e.target.value;
+            const currentProject = projects.find(p => p.id === activeProjectId) || project;
+            renderMoodpromptView(currentProject);
+        };
+        filterItem.appendChild(filterSelect);
 
-        const allCards = Array.from(promptList.querySelectorAll('.prompt-card'));
-        const newIndex = allCards.indexOf(dropTargetCard);
+        // 3. Search Item
+        const searchItem = document.createElement('div');
+        searchItem.className = 'stats-item';
+        searchItem.innerHTML = `<iconify-icon icon="lucide:search" width="16" height="16"></iconify-icon>`;
+        const searchInput = document.createElement('input');
+        searchInput.type = 'text';
+        searchInput.className = 'bar-input';
+        searchInput.placeholder = 'Search tags...';
+        searchInput.value = moodpromptSearchQuery;
+        searchInput.style.width = '150px';
+        searchInput.oninput = (e) => {
+            moodpromptSearchQuery = e.target.value.toLowerCase();
+            const currentProject = projects.find(p => p.id === activeProjectId) || project;
+            renderMoodpromptView(currentProject);
+        };
+        searchItem.appendChild(searchInput);
 
-        if (oldIndex !== newIndex) {
-            const [movedPrompt] = project.data.prompts.splice(oldIndex, 1);
-            project.data.prompts.splice(newIndex, 0, movedPrompt);
-            renderMoodpromptView(project);
-        }
+        // 4. Variables Item
+        const varBtnItem = document.createElement('div');
+        varBtnItem.className = 'stats-item';
+        varBtnItem.style.cursor = 'pointer';
+        varBtnItem.style.marginLeft = 'auto';
+        varBtnItem.innerHTML = `<iconify-icon icon="lucide:braces" width="16" height="16"></iconify-icon> <span>Variables</span>`;
+        varBtnItem.onclick = () => {
+            const currentProject = projects.find(p => p.id === activeProjectId) || project;
+            openVariableManager(currentProject);
+        };
+
+        topBar.append(addBtnItem, filterItem, searchItem, varBtnItem);
+        moodpromptContainer.appendChild(topBar);
+
+        scrollArea = document.createElement('div');
+        scrollArea.className = 'moodprompt-scroll-area';
+        moodpromptContainer.appendChild(scrollArea);
+    }
+
+    let promptList = scrollArea.querySelector('.prompt-list');
+    if (!promptList) {
+        promptList = document.createElement('div');
+        promptList.className = 'prompt-list';
+        scrollArea.appendChild(promptList);
+
+        promptList.addEventListener('dragover', (e) => { e.preventDefault(); });
+        promptList.addEventListener('drop', (e) => {
+            e.preventDefault();
+            const currentProject = projects.find(p => p.id === activeProjectId) || project;
+            const oldIndex = parseInt(e.dataTransfer.getData('text/plain'), 10);
+            const dropTargetCard = e.target.closest('.prompt-card');
+            if (!dropTargetCard) return;
+
+            const allCards = Array.from(promptList.querySelectorAll('.prompt-card'));
+            const newIndex = allCards.indexOf(dropTargetCard);
+
+            if (oldIndex !== newIndex) {
+                const [movedPrompt] = currentProject.data.prompts.splice(oldIndex, 1);
+                currentProject.data.prompts.splice(newIndex, 0, movedPrompt);
+                renderMoodpromptView(currentProject);
+                saveToBrowser();
+            }
+        });
+    }
+
+    promptList.innerHTML = '';
+    const filteredPrompts = project.data.prompts.filter(p => {
+        const matchesPlatform = moodpromptFilterPlatform === 'all' || p.platform === moodpromptFilterPlatform;
+        const matchesSearch = !moodpromptSearchQuery || (p.tags && p.tags.some(t => t.toLowerCase().includes(moodpromptSearchQuery)));
+        return matchesPlatform && matchesSearch;
     });
 
-    moodpromptContainer.appendChild(promptList);
-
-    const addBtn = document.createElement('button');
-    addBtn.id = 'add-prompt-btn';
-    addBtn.innerHTML = `<iconify-icon icon="lucide:plus" width="18" height="18"></iconify-icon> Add New Prompt`;
-    addBtn.onclick = () => {
-        project.data.prompts.push({ id: Date.now(), title: 'New Prompt', platform: 'midjourney', mediaType: 'image', image1: null, image2: null, text: '' });
-        renderMoodpromptView(project);
-    };
-    moodpromptContainer.appendChild(addBtn);
+    filteredPrompts.forEach((prompt, index) => {
+        promptList.appendChild(createPromptCard(project, prompt, index));
+    });
 }
 
 function createPromptCard(project, prompt, index) {
@@ -675,6 +936,18 @@ function createPromptCard(project, prompt, index) {
     deleteBtn.title = 'Delete Prompt';
     deleteBtn.innerHTML = `<iconify-icon icon="lucide:trash-2" width="18" height="18"></iconify-icon>`;
     deleteBtn.onclick = () => { project.data.prompts.splice(index, 1); renderMoodpromptView(project); };
+    
+    const copyBtn = document.createElement('button');
+    copyBtn.className = 'tab-add-btn prompt-copy-btn';
+    copyBtn.title = 'Copy Prompt';
+    copyBtn.innerHTML = `<iconify-icon icon="lucide:copy" width="18" height="18"></iconify-icon>`;
+    copyBtn.onclick = () => {
+        const finalPrompt = resolveVariables(prompt.text, project);
+        navigator.clipboard.writeText(finalPrompt).then(() => {
+            showToast('Copied to clipboard!');
+        });
+    };
+    
     const body = document.createElement('div');
     body.className = 'prompt-body';
     const imagesContainer = document.createElement('div');
@@ -686,7 +959,48 @@ function createPromptCard(project, prompt, index) {
     promptText.className = 'prompt-text-area';
     promptText.placeholder = 'Enter your AI prompt here...';
     promptText.value = prompt.text;
-    promptText.onchange = (e) => prompt.text = e.target.value;
+    promptText.style.height = '150px';
+    
+    const textWrapper = document.createElement('div');
+    textWrapper.style.position = 'relative';
+    textWrapper.style.flexGrow = '1';
+    textWrapper.style.display = 'flex';
+    textWrapper.style.flexDirection = 'column';
+    
+    const expandBtn = document.createElement('button');
+    expandBtn.className = 'tab-add-btn';
+    expandBtn.style.position = 'absolute';
+    expandBtn.style.bottom = '10px';
+    expandBtn.style.right = '10px';
+    expandBtn.style.background = 'rgba(0,0,0,0.6)';
+    expandBtn.style.backdropFilter = 'blur(4px)';
+    expandBtn.style.WebkitBackdropFilter = 'blur(4px)';
+    expandBtn.style.padding = '4px 6px';
+    expandBtn.title = 'Expand/Collapse';
+    expandBtn.innerHTML = `<iconify-icon icon="lucide:maximize-2" width="16" height="16"></iconify-icon>`;
+    
+    let isExpanded = false;
+    expandBtn.onclick = () => {
+        isExpanded = !isExpanded;
+        if (isExpanded) {
+            promptText.style.height = 'auto';
+            promptText.style.height = promptText.scrollHeight + 'px';
+            expandBtn.innerHTML = `<iconify-icon icon="lucide:minimize-2" width="16" height="16"></iconify-icon>`;
+        } else {
+            promptText.style.height = '150px';
+            expandBtn.innerHTML = `<iconify-icon icon="lucide:maximize-2" width="16" height="16"></iconify-icon>`;
+        }
+    };
+    
+    promptText.oninput = (e) => {
+        prompt.text = e.target.value;
+        if (isExpanded) {
+            promptText.style.height = 'auto';
+            promptText.style.height = promptText.scrollHeight + 'px';
+        }
+    };
+
+    textWrapper.append(promptText, expandBtn);
     const setMediaType = (type) => {
         prompt.mediaType = type;
         imgBtn.classList.toggle('active', type === 'image');
@@ -696,9 +1010,86 @@ function createPromptCard(project, prompt, index) {
     imgBtn.onclick = () => setMediaType('image');
     vidBtn.onclick = () => setMediaType('video');
     setMediaType(prompt.mediaType);
-    controls.append(platformSelectWrapper, mediaToggle, deleteBtn);
+    const tagsWrapper = document.createElement('div');
+    tagsWrapper.className = 'prompt-tags-wrapper';
+    
+    const tagsList = document.createElement('div');
+    tagsList.className = 'prompt-tags-list';
+    
+    const renderTags = () => {
+        tagsList.innerHTML = '';
+        const tags = prompt.tags || [];
+        tags.forEach((tag, tIndex) => {
+            const tagEl = document.createElement('span');
+            tagEl.className = 'prompt-tag';
+            tagEl.textContent = tag;
+            const colors = getTagColor(tag);
+            tagEl.style.background = colors.bg;
+            tagEl.style.borderColor = colors.border;
+            const removeBtn = document.createElement('iconify-icon');
+            removeBtn.setAttribute('icon', 'lucide:x');
+            removeBtn.style.cursor = 'pointer';
+            removeBtn.onclick = () => {
+                prompt.tags.splice(tIndex, 1);
+                scheduleAutoSave();
+                renderTags();
+                updateTagsDatalist(project);
+            };
+            tagEl.appendChild(removeBtn);
+            tagsList.appendChild(tagEl);
+        });
+    };
+    renderTags();
+    
+    const tagInput = document.createElement('input');
+    tagInput.type = 'text';
+    tagInput.className = 'prompt-tag-input';
+    tagInput.placeholder = 'Add tag... (comma separated)';
+    tagInput.setAttribute('list', 'moodprompt-tags-list');
+    tagInput.oninput = (e) => {
+        if (e.target.value.includes(',')) {
+            const newTags = e.target.value.split(',').map(t => t.trim()).filter(t => t);
+            if (newTags.length > 0) {
+                if (!prompt.tags) prompt.tags = [];
+                prompt.tags.push(...newTags);
+                e.target.value = '';
+                scheduleAutoSave();
+                renderTags();
+                updateTagsDatalist(project);
+            } else {
+                e.target.value = '';
+            }
+        }
+    };
+    tagInput.onkeydown = (e) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            const val = e.target.value.trim();
+            if (val) {
+                if (!prompt.tags) prompt.tags = [];
+                prompt.tags.push(val);
+                e.target.value = '';
+                scheduleAutoSave();
+                renderTags();
+                updateTagsDatalist(project);
+            }
+        }
+    };
+    
+    tagsWrapper.append(tagsList, tagInput);
+
+    controls.append(platformSelectWrapper, mediaToggle, copyBtn, deleteBtn);
     header.append(titleContainer, controls);
-    body.append(imagesContainer, promptText);
+
+    body.style.flexDirection = 'column';
+    const contentRow = document.createElement('div');
+    contentRow.style.display = 'flex';
+    contentRow.style.gap = '1rem';
+    contentRow.style.flexDirection = 'row';
+    contentRow.style.width = '100%';
+    contentRow.append(imagesContainer, textWrapper);
+    
+    body.append(contentRow, tagsWrapper);
     card.append(header, body);
     return card;
 }
@@ -713,6 +1104,32 @@ function createImageSlot(project, prompt, slotNumber) {
         img.className = 'lazy-load';
         imageLazyObserver.observe(img);
         slot.appendChild(img);
+        
+        const zoomBtn = document.createElement('div');
+        zoomBtn.className = 'slot-action-btn zoom-btn';
+        zoomBtn.title = 'Zoom';
+        zoomBtn.innerHTML = '<iconify-icon icon="lucide:zoom-in"></iconify-icon>';
+        zoomBtn.onclick = (e) => { e.stopPropagation(); openLightbox(prompt[prop]); };
+        
+        const replaceBtn = document.createElement('div');
+        replaceBtn.className = 'slot-action-btn replace-btn';
+        replaceBtn.title = 'Replace Image';
+        replaceBtn.innerHTML = '<iconify-icon icon="lucide:refresh-cw"></iconify-icon>';
+        replaceBtn.onclick = (e) => {
+            e.stopPropagation();
+            promptImageInput.onchange = (ev) => {
+                const file = ev.target.files[0];
+                handleImageFile(file, (dataUrl) => {
+                    prompt[prop] = dataUrl;
+                    renderMoodpromptView(project);
+                    saveToBrowser();
+                });
+            };
+            promptImageInput.click();
+        };
+        
+        slot.appendChild(zoomBtn);
+        slot.appendChild(replaceBtn);
     } else {
         const placeholder = document.createElement('div');
         placeholder.className = 'placeholder';
@@ -923,7 +1340,7 @@ const noteFmtBtns = document.querySelectorAll('.note-fmt-btn');
 const noteBgColorInput = document.getElementById('note-bg-color-input');
 const centerSelectedBtn = document.getElementById('center-selected-btn');
 
-let cameraOffset, cameraZoom;
+let cameraOffset = { x: 0, y: 0 }, cameraZoom = 1;
 let items = [], selectedItems = [];
 let globalImageCache = {}; // Cache for image source data
 let historyStack, historyIndex;
@@ -5527,9 +5944,6 @@ if (colorseekerBasePicker) {
     colorseekerBasePicker.addEventListener('change', () => {
         saveToBrowser();
     });
-}
-if (addColorseekerTabBtn) {
-    addColorseekerTabBtn.addEventListener('click', () => createNewProject('colorseeker'));
 }
 
 // --- STORYFLOW ---

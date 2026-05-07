@@ -28,10 +28,12 @@
 <body>
     <div id="print-header" class="print-only">
         <div style="display: flex; align-items: center; gap: 1rem; margin-bottom: 0.5rem;">
-            <img src="https://raw.githubusercontent.com/davidbrum25/moodinfinite/refs/heads/main/fav_icon_alternative.png" alt="Logo" style="width: 32px; height: 32px;">
+            <img src="https://raw.githubusercontent.com/davidbrum25/moodinfinite/refs/heads/main/fav_icon_alternative.png"
+                alt="Logo" style="width: 32px; height: 32px;">
             <h1 id="print-project-name" style="margin: 0; font-size: 1.5rem; color: #000;">Project Name</h1>
         </div>
-        <div id="print-project-meta" style="font-size: 0.85rem; color: #666; border-bottom: 1px solid #eee; padding-bottom: 0.5rem; margin-bottom: 1.5rem;">
+        <div id="print-project-meta"
+            style="font-size: 0.85rem; color: #666; border-bottom: 1px solid #eee; padding-bottom: 0.5rem; margin-bottom: 1.5rem;">
             Board Type: <span id="print-board-type">Moodflow</span> | Date: <span id="print-date"></span>
         </div>
     </div>
@@ -55,7 +57,7 @@
         <button id="add-moodinfinite-tab-btn" class="tab-add-btn" title="New Moodinfinite Board">
             <iconify-icon icon="lucide:image" width="22" height="22"></iconify-icon>
         </button>
-        <button id="add-moodprompt-tab-btn" class="tab-add-btn" title="New Moodpront Board">
+        <button id="add-moodprompt-tab-btn" class="tab-add-btn" title="New Moodprompt Board">
             <iconify-icon icon="lucide:pen-tool" width="20" height="20"></iconify-icon>
         </button>
         <button id="add-colorseeker-tab-btn" class="tab-add-btn" title="New Moodtone Board">
@@ -117,7 +119,8 @@
             <div id="cloud-btn-wrapper" style="position: relative;">
                 <button id="cloud-login-btn" class="tab-add-btn cloud-login-btn" title="Sign in to Google Drive">
                     <!-- Avatar image (shown when logged in) -->
-                    <img id="cloud-avatar-img" src="" alt="Account" style="display:none; width:24px; height:24px; border-radius:50%; object-fit:cover;">
+                    <img id="cloud-avatar-img" src="" alt="Account"
+                        style="display:none; width:24px; height:24px; border-radius:50%; object-fit:cover;">
                     <!-- Default icon (shown when logged out) -->
                     <span id="cloud-avatar-icon" style="display:flex; align-items:center; justify-content:center;">
                         <iconify-icon icon="lucide:cloud" width="20" height="20"></iconify-icon>
@@ -140,16 +143,24 @@
             <textarea id="text-editor" style="display: none;"></textarea>
             <div id="left-bar">
                 <div id="toolbar-color-picker-container"><input type="color" id="toolbar-accent-color-picker"
-                        class="color-picker-input" title="Accent Color"></div><button id="eyedropper-btn"
-                    title="Eyedropper (E)" class="tool-button"><iconify-icon icon="lucide:pipette" width="18"
-                        height="18"></iconify-icon></button>
-                <div class="separator"></div><button id="add-image-btn" title="Add Image (I)"
-                    class="tool-button"><iconify-icon icon="lucide:image" width="20"
-                        height="20"></iconify-icon></button>
-                <div class="separator"></div><button id="select-tool-btn" title="Select (A)"
-                    class="tool-button active"><iconify-icon icon="lucide:mouse-pointer-2" width="20"
-                        height="20"></iconify-icon></button>
-                
+                        class="color-picker-input" title="Accent Color"></div>
+                <button id="eyedropper-btn" title="Eyedropper (E)" class="tool-button">
+                    <iconify-icon icon="lucide:pipette" width="18" height="18"></iconify-icon>
+                </button>
+                <button id="select-tool-btn" title="Select (A)" class="tool-button active">
+                    <iconify-icon icon="lucide:mouse-pointer-2" width="20" height="20"></iconify-icon>
+                </button>
+
+                <div class="separator"></div>
+                <button id="add-image-btn" title="Add Image (I)" class="tool-button">
+                    <iconify-icon icon="lucide:image" width="20" height="20"></iconify-icon>
+                </button>
+                <div class="separator"></div>
+
+                <button id="draw-btn" title="Draw (D)" class="tool-button">
+                    <iconify-icon icon="lucide:pencil" width="20" height="20"></iconify-icon>
+                </button>
+
                 <!-- Text Tools Group -->
                 <div class="tool-group">
                     <button class="tool-button" title="Text Tools (T, N, K, L)">
@@ -171,13 +182,6 @@
                         </button>
                     </div>
                 </div>
-
-                <button id="add-counter-btn" title="Add Counter"
-                    class="tool-button"><iconify-icon icon="lucide:hash" width="20"
-                        height="20"></iconify-icon></button>
-                <button id="draw-btn" title="Draw (D)"
-                    class="tool-button"><iconify-icon icon="lucide:pencil" width="20"
-                        height="20"></iconify-icon></button>
 
                 <!-- Shapes Group -->
                 <div class="tool-group">
@@ -201,11 +205,24 @@
                     </div>
                 </div>
 
-                <button id="add-measure-btn" title="Measure (M)"
-                    class="tool-button"><iconify-icon icon="lucide:ruler" width="20"
-                        height="20"></iconify-icon></button>
-                
+                <!-- Measurement & Counter Group -->
+                <div class="tool-group">
+                    <button class="tool-button" title="Measurement & Counter Tools (M, #)">
+                        <iconify-icon icon="lucide:ruler" width="20" height="20"></iconify-icon>
+                        <div class="group-indicator"></div>
+                    </button>
+                    <div class="tool-group-flyout">
+                        <button id="add-counter-btn" title="Add Counter" class="tool-button">
+                            <iconify-icon icon="lucide:hash" width="20" height="20"></iconify-icon>
+                        </button>
+                        <button id="add-measure-btn" title="Measure (M)" class="tool-button">
+                            <iconify-icon icon="lucide:ruler" width="20" height="20"></iconify-icon>
+                        </button>
+                    </div>
+                </div>
+
                 <div class="separator"></div>
+
                 <!-- Arrange Tools Group -->
                 <div class="tool-group">
                     <button id="align-btn" class="tool-button" title="Auto Arrange (Ctrl+Shift+A)" disabled>
@@ -220,10 +237,12 @@
                                     <iconify-icon icon="lucide:layout-grid" width="20" height="20"></iconify-icon>
                                 </button>
                                 <button id="align-row-btn" class="tool-button" title="Horizontal Row">
-                                    <iconify-icon icon="lucide:align-horizontal-distribute-center" width="20" height="20"></iconify-icon>
+                                    <iconify-icon icon="lucide:align-horizontal-distribute-center" width="20"
+                                        height="20"></iconify-icon>
                                 </button>
                                 <button id="align-col-btn" class="tool-button" title="Vertical Column">
-                                    <iconify-icon icon="lucide:align-vertical-distribute-center" width="20" height="20"></iconify-icon>
+                                    <iconify-icon icon="lucide:align-vertical-distribute-center" width="20"
+                                        height="20"></iconify-icon>
                                 </button>
                             </div>
                         </div>
@@ -241,13 +260,16 @@
                                     <iconify-icon icon="lucide:align-right" width="20" height="20"></iconify-icon>
                                 </button>
                                 <button id="align-top-btn" class="tool-button" title="Align Top">
-                                    <iconify-icon icon="lucide:align-start-vertical" width="20" height="20"></iconify-icon>
+                                    <iconify-icon icon="lucide:align-start-vertical" width="20"
+                                        height="20"></iconify-icon>
                                 </button>
                                 <button id="align-middle-v-btn" class="tool-button" title="Align Middle (Vertical)">
-                                    <iconify-icon icon="lucide:align-center-vertical" width="20" height="20"></iconify-icon>
+                                    <iconify-icon icon="lucide:align-center-vertical" width="20"
+                                        height="20"></iconify-icon>
                                 </button>
                                 <button id="align-bottom-btn" class="tool-button" title="Align Bottom">
-                                    <iconify-icon icon="lucide:align-end-vertical" width="20" height="20"></iconify-icon>
+                                    <iconify-icon icon="lucide:align-end-vertical" width="20"
+                                        height="20"></iconify-icon>
                                 </button>
                             </div>
                         </div>
@@ -265,7 +287,6 @@
                         </div>
                     </div>
                 </div>
-                <div class="separator"></div>
 
                 <!-- View Group -->
                 <div class="tool-group">
@@ -282,6 +303,8 @@
                         </button>
                     </div>
                 </div>
+
+                <div class="separator"></div>
 
                 <button id="open-help-btn" title="Help" class="tool-button">
                     <iconify-icon icon="lucide:info" width="20" height="20"></iconify-icon>
@@ -464,7 +487,8 @@
                 </div>
                 <div style="display: flex; flex-direction: column; gap: 0.5rem;">
                     <label style="color: var(--text-color-light); font-size: 0.85rem;">Base Color</label>
-                    <input type="color" id="colorseeker-base-picker" style="width: 100%; height: 36px; border: none; padding: 0; cursor: pointer; border-radius: 0.5rem; overflow: hidden; background: transparent;">
+                    <input type="color" id="colorseeker-base-picker"
+                        style="width: 100%; height: 36px; border: none; padding: 0; cursor: pointer; border-radius: 0.5rem; overflow: hidden; background: transparent;">
                 </div>
                 <div style="color: var(--text-color-light); font-size: 0.8rem; line-height: 1.6; margin-top: 0.5rem;">
                     <p style="margin: 0 0 0.25rem 0;"><strong style="color: var(--text-color);">SPACE</strong> Randomize
@@ -473,7 +497,8 @@
                     </p>
                     <p style="margin: 0 0 0.25rem 0;"><strong style="color: var(--text-color);">Shift+Click</strong> Set
                         as Base</p>
-                    <p style="margin: 0 0 0.25rem 0;"><strong style="color: var(--text-color);">L</strong> Lock / Unlock</p>
+                    <p style="margin: 0 0 0.25rem 0;"><strong style="color: var(--text-color);">L</strong> Lock / Unlock
+                    </p>
                     <p style="margin: 0;"><strong style="color: var(--text-color);">Shift+S</strong> Download PNG</p>
                 </div>
             </div>
@@ -487,11 +512,16 @@
     <div id="gantt-container" class="tab-content" style="display:none;">
         <!-- Stats bar -->
         <div id="gantt-stats-bar">
-            <div class="gantt-stat-item" id="gantt-stat-groups"><iconify-icon icon="lucide:layers" width="14" height="14"></iconify-icon><span>0 Groups</span></div>
-            <div class="gantt-stat-item" id="gantt-stat-tasks"><iconify-icon icon="lucide:check-square" width="14" height="14"></iconify-icon><span>0 Tasks</span></div>
-            <div class="gantt-stat-item" id="gantt-stat-done"><iconify-icon icon="lucide:check-circle" width="14" height="14" style="color:#22c55e"></iconify-icon><span id="gantt-done-pct">0% Done</span></div>
-            <div class="gantt-stat-item" id="gantt-stat-blocked"><iconify-icon icon="lucide:ban" width="14" height="14" style="color:#ef4444"></iconify-icon><span id="gantt-blocked-pct">0% Blocked</span></div>
-            <div class="gantt-stat-item" style="margin-left:auto;"><iconify-icon icon="lucide:calendar-clock" width="14" height="14"></iconify-icon><span id="gantt-next-deadline">No upcoming deadlines</span></div>
+            <div class="gantt-stat-item" id="gantt-stat-groups"><iconify-icon icon="lucide:layers" width="14"
+                    height="14"></iconify-icon><span>0 Groups</span></div>
+            <div class="gantt-stat-item" id="gantt-stat-tasks"><iconify-icon icon="lucide:check-square" width="14"
+                    height="14"></iconify-icon><span>0 Tasks</span></div>
+            <div class="gantt-stat-item" id="gantt-stat-done"><iconify-icon icon="lucide:check-circle" width="14"
+                    height="14" style="color:#22c55e"></iconify-icon><span id="gantt-done-pct">0% Done</span></div>
+            <div class="gantt-stat-item" id="gantt-stat-blocked"><iconify-icon icon="lucide:ban" width="14" height="14"
+                    style="color:#ef4444"></iconify-icon><span id="gantt-blocked-pct">0% Blocked</span></div>
+            <div class="gantt-stat-item" style="margin-left:auto;"><iconify-icon icon="lucide:calendar-clock" width="14"
+                    height="14"></iconify-icon><span id="gantt-next-deadline">No upcoming deadlines</span></div>
         </div>
         <!-- Main body: sidebar + timeline -->
         <div id="gantt-main">
@@ -520,12 +550,17 @@
                 <button class="gantt-zoom-btn" data-zoom="month">Month</button>
                 <button class="gantt-zoom-btn" data-zoom="quarter">Quarter</button>
             </div>
-            <div class="gantt-zoom-slider-group" style="display:flex; align-items:center; gap:0.5rem; margin-left:1rem;">
-                <iconify-icon icon="lucide:zoom-out" width="14" height="14" style="color:var(--text-color-light)"></iconify-icon>
-                <button id="gantt-zoom-out-btn" class="gantt-nav-btn" style="padding:0.25rem;"><iconify-icon icon="lucide:minus" width="12" height="12"></iconify-icon></button>
+            <div class="gantt-zoom-slider-group"
+                style="display:flex; align-items:center; gap:0.5rem; margin-left:1rem;">
+                <iconify-icon icon="lucide:zoom-out" width="14" height="14"
+                    style="color:var(--text-color-light)"></iconify-icon>
+                <button id="gantt-zoom-out-btn" class="gantt-nav-btn" style="padding:0.25rem;"><iconify-icon
+                        icon="lucide:minus" width="12" height="12"></iconify-icon></button>
                 <input type="range" id="gantt-zoom-slider" min="50" max="200" value="100" style="width:80px;">
-                <button id="gantt-zoom-in-btn" class="gantt-nav-btn" style="padding:0.25rem;"><iconify-icon icon="lucide:plus" width="12" height="12"></iconify-icon></button>
-                <iconify-icon icon="lucide:zoom-in" width="14" height="14" style="color:var(--text-color-light)"></iconify-icon>
+                <button id="gantt-zoom-in-btn" class="gantt-nav-btn" style="padding:0.25rem;"><iconify-icon
+                        icon="lucide:plus" width="12" height="12"></iconify-icon></button>
+                <iconify-icon icon="lucide:zoom-in" width="14" height="14"
+                    style="color:var(--text-color-light)"></iconify-icon>
             </div>
             <button id="gantt-today-btn" class="gantt-nav-btn" title="Jump to Today">
                 <iconify-icon icon="lucide:calendar-check" width="16" height="16"></iconify-icon> Today
@@ -543,7 +578,8 @@
     <div id="gantt-detail-panel">
         <div id="gantt-detail-header">
             <input id="gantt-detail-name" type="text" placeholder="Task name...">
-            <button id="gantt-detail-close"><iconify-icon icon="lucide:x" width="18" height="18"></iconify-icon></button>
+            <button id="gantt-detail-close"><iconify-icon icon="lucide:x" width="18"
+                    height="18"></iconify-icon></button>
         </div>
         <div id="gantt-detail-body">
             <div class="gantt-field">
@@ -573,7 +609,8 @@
                     <select id="gantt-detail-assignee" style="flex-grow: 1;">
                         <option value="">Unassigned</option>
                     </select>
-                    <button id="gantt-manage-workers-btn" title="Manage Workers" style="background: var(--bg-ui-hover); border: 1px solid var(--border-color); color: var(--text-color); border-radius: 0.5rem; padding: 0.25rem 0.5rem; cursor: pointer; display: flex; align-items: center; justify-content: center;">
+                    <button id="gantt-manage-workers-btn" title="Manage Workers"
+                        style="background: var(--bg-ui-hover); border: 1px solid var(--border-color); color: var(--text-color); border-radius: 0.5rem; padding: 0.25rem 0.5rem; cursor: pointer; display: flex; align-items: center; justify-content: center;">
                         <iconify-icon icon="lucide:users" width="14" height="14"></iconify-icon>
                     </button>
                 </div>
@@ -585,12 +622,18 @@
             <div class="gantt-field">
                 <label>Attachment</label>
                 <div style="display: flex; gap: 0.5rem; width: 100%; align-items: flex-start;">
-                    <div id="gantt-detail-attachment-preview" style="width: 40px; height: 40px; border-radius: 0.25rem; border: 1px dashed var(--border-color); display: flex; align-items: center; justify-content: center; overflow: hidden; background: var(--bg-ui-hover); flex-shrink: 0;">
-                        <iconify-icon icon="lucide:image" width="16" height="16" style="color: var(--text-color-light);"></iconify-icon>
+                    <div id="gantt-detail-attachment-preview"
+                        style="width: 40px; height: 40px; border-radius: 0.25rem; border: 1px dashed var(--border-color); display: flex; align-items: center; justify-content: center; overflow: hidden; background: var(--bg-ui-hover); flex-shrink: 0;">
+                        <iconify-icon icon="lucide:image" width="16" height="16"
+                            style="color: var(--text-color-light);"></iconify-icon>
                     </div>
                     <div style="display: flex; flex-direction: column; gap: 0.25rem; flex-grow: 1;">
-                        <button id="gantt-attach-img-btn" style="background: var(--bg-ui-hover); border: 1px solid var(--border-color); color: var(--text-color); border-radius: 0.5rem; padding: 0.25rem 0.5rem; cursor: pointer; text-align: left; font-size: 0.8rem; font-family: inherit;">Select from Asset Library...</button>
-                        <button id="gantt-clear-img-btn" style="background: transparent; border: none; color: #ef4444; padding: 0; cursor: pointer; text-align: left; font-size: 0.75rem; display: none;">Remove Attachment</button>
+                        <button id="gantt-attach-img-btn"
+                            style="background: var(--bg-ui-hover); border: 1px solid var(--border-color); color: var(--text-color); border-radius: 0.5rem; padding: 0.25rem 0.5rem; cursor: pointer; text-align: left; font-size: 0.8rem; font-family: inherit;">Select
+                            from Asset Library...</button>
+                        <button id="gantt-clear-img-btn"
+                            style="background: transparent; border: none; color: #ef4444; padding: 0; cursor: pointer; text-align: left; font-size: 0.75rem; display: none;">Remove
+                            Attachment</button>
                     </div>
                 </div>
             </div>
@@ -607,13 +650,17 @@
         <div id="gantt-workers-modal" class="glass-modal" style="width: 400px; max-width: 90vw;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
                 <h2 style="margin: 0;">Manage Workers</h2>
-                <button id="close-gantt-workers-btn" style="background: none; border: none; color: var(--text-color); cursor: pointer;"><iconify-icon icon="lucide:x" width="20" height="20"></iconify-icon></button>
+                <button id="close-gantt-workers-btn"
+                    style="background: none; border: none; color: var(--text-color); cursor: pointer;"><iconify-icon
+                        icon="lucide:x" width="20" height="20"></iconify-icon></button>
             </div>
             <div style="display: flex; gap: 0.5rem; margin-bottom: 1rem;">
-                <input type="text" id="new-worker-input" placeholder="New worker name..." class="form-input" style="flex-grow: 1; padding: 0.5rem; border-radius: 0.5rem; border: 1px solid var(--border-color); background: rgba(0,0,0,0.2); color: var(--text-color);">
+                <input type="text" id="new-worker-input" placeholder="New worker name..." class="form-input"
+                    style="flex-grow: 1; padding: 0.5rem; border-radius: 0.5rem; border: 1px solid var(--border-color); background: rgba(0,0,0,0.2); color: var(--text-color);">
                 <button id="add-worker-btn" class="modal-button confirm" style="padding: 0.5rem 1rem;">Add</button>
             </div>
-            <div id="gantt-workers-list" style="max-height: 300px; overflow-y: auto; display: flex; flex-direction: column; gap: 0.5rem;">
+            <div id="gantt-workers-list"
+                style="max-height: 300px; overflow-y: auto; display: flex; flex-direction: column; gap: 0.5rem;">
                 <!-- Worker items injected here -->
             </div>
         </div>
@@ -627,7 +674,8 @@
     <!-- User account dropdown menu (moved to root for blur effect) -->
     <div id="cloud-user-menu" class="cloud-user-menu">
         <div class="cloud-menu-profile">
-            <img id="cloud-menu-avatar" src="" alt="" style="width:36px; height:36px; border-radius:50%; object-fit:cover; flex-shrink:0;">
+            <img id="cloud-menu-avatar" src="" alt=""
+                style="width:36px; height:36px; border-radius:50%; object-fit:cover; flex-shrink:0;">
             <div class="cloud-menu-profile-info">
                 <span id="cloud-menu-name" class="cloud-menu-name">Google Account</span>
                 <span id="cloud-menu-email" class="cloud-menu-email"></span>
@@ -645,7 +693,7 @@
             Open from Drive
         </button>
         <div class="cloud-menu-divider"></div>
-        
+
         <!-- Autosave Settings -->
         <div class="cloud-menu-autosave-section">
             <div class="cloud-autosave-row">
@@ -668,7 +716,7 @@
                 </select>
             </div>
         </div>
-        
+
         <div class="cloud-menu-divider"></div>
         <button id="cloud-menu-switch" class="cloud-menu-item">
             <iconify-icon icon="lucide:refresh-cw" width="16" height="16"></iconify-icon>
@@ -988,19 +1036,26 @@
         </div>
     </div>
     <div id="asset-library-overlay" class="modal-overlay">
-        <div id="asset-library-modal" class="glass-modal" style="max-width: 800px; width: 90vw; height: 80vh; display: flex; flex-direction: column; text-align: left;">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; flex-shrink: 0; gap: 1rem;">
+        <div id="asset-library-modal" class="glass-modal"
+            style="max-width: 800px; width: 90vw; height: 80vh; display: flex; flex-direction: column; text-align: left;">
+            <div
+                style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; flex-shrink: 0; gap: 1rem;">
                 <h2 style="margin: 0; white-space: nowrap;">Asset Library</h2>
-                <select id="asset-library-filter" class="form-input" style="flex-grow: 1; max-width: 300px; background: rgba(0,0,0,0.2); border: 1px solid var(--border-color); color: var(--text-color); border-radius: 0.5rem; padding: 0.5rem;">
+                <select id="asset-library-filter" class="form-input"
+                    style="flex-grow: 1; max-width: 300px; background: rgba(0,0,0,0.2); border: 1px solid var(--border-color); color: var(--text-color); border-radius: 0.5rem; padding: 0.5rem;">
                     <option value="all">All Assets</option>
                 </select>
-                <button id="close-asset-library-btn" class="modal-button cancel" style="padding: 0.5rem; width: auto; height: auto; flex-shrink: 0;">&times;</button>
+                <button id="close-asset-library-btn" class="modal-button cancel"
+                    style="padding: 0.5rem; width: auto; height: auto; flex-shrink: 0;">&times;</button>
             </div>
-            <div id="asset-library-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 1rem; overflow-y: auto; padding-right: 0.5rem; flex-grow: 1; min-height: 0;">
+            <div id="asset-library-grid"
+                style="display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 1rem; overflow-y: auto; padding-right: 0.5rem; flex-grow: 1; min-height: 0;">
                 <!-- Images injected here -->
             </div>
-            <div id="asset-library-empty" style="display: none; flex-direction: column; align-items: center; justify-content: center; padding: 3rem; color: var(--text-color-light);">
-                <iconify-icon icon="lucide:image-off" width="48" height="48" style="margin-bottom: 1rem; opacity: 0.5;"></iconify-icon>
+            <div id="asset-library-empty"
+                style="display: none; flex-direction: column; align-items: center; justify-content: center; padding: 3rem; color: var(--text-color-light);">
+                <iconify-icon icon="lucide:image-off" width="48" height="48"
+                    style="margin-bottom: 1rem; opacity: 0.5;"></iconify-icon>
                 <p>No images found in your current session.</p>
             </div>
         </div>
@@ -1043,7 +1098,8 @@
         <div class="cloud-modal glass-modal cloud-picker-modal">
             <div class="cloud-picker-header">
                 <div style="display:flex; align-items:center; gap:0.5rem;">
-                    <iconify-icon icon="lucide:hard-drive" width="20" height="20" style="color:var(--switch-bg-checked);"></iconify-icon>
+                    <iconify-icon icon="lucide:hard-drive" width="20" height="20"
+                        style="color:var(--switch-bg-checked);"></iconify-icon>
                     <h2 class="cloud-modal-title" style="margin:0;">Open from Drive</h2>
                 </div>
                 <button id="cloud-picker-cancel" class="tab-add-btn" title="Cancel">
