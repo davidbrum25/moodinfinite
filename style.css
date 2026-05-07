@@ -1098,6 +1098,7 @@
         #help-modal-overlay,
         #toast-container,
         #tab-context-menu,
+        #gantt-context-menu,
         #storyflow-context-menu {
             position: fixed;
         }
@@ -1135,7 +1136,7 @@
             z-index: 5000;
         }
 
-        #context-menu, #storyflow-context-menu {
+        #context-menu, #storyflow-context-menu, #gantt-context-menu {
             position: absolute;
             z-index: 2100;
             background: var(--bg-ui);
@@ -2051,7 +2052,7 @@
                 margin: .1rem .25rem;
             }
 
-            #context-menu {
+            #context-menu, #storyflow-context-menu, #gantt-context-menu {
                 width: 220px;
                 padding: .5rem;
             }
@@ -2512,7 +2513,7 @@
 
             /* Hide all UI elements */
             #tabs-bar, #left-bar, #selection-toolbar, #mobile-tabs-popup, 
-            #context-menu, #tab-context-menu, #palette-panel, #icon-picker-panel,
+            #context-menu, #tab-context-menu, #storyflow-context-menu, #gantt-context-menu, #palette-panel, #icon-picker-panel,
             #storyflow-minimap, .tab-add-btn, .tool-button, .minimap-control-btn, 
             #toast-container, .scroll-indicator, #add-prompt-btn, .modal-overlay,
             .story-drag-handle, .story-image-overlay, .selection-tool-btn,
@@ -3171,7 +3172,7 @@
             flex-direction: column;
             height: 100%;
             width: 100%;
-            padding-top: var(--tabs-bar-height);
+            padding-top: calc(var(--tabs-bar-height) + 1rem);
             box-sizing: border-box;
             background: var(--bg-page);
             font-family: 'Inter', sans-serif;
@@ -3280,9 +3281,19 @@
             color: var(--text-color-light);
             cursor: pointer; padding: 2px;
             display: flex; align-items: center;
-            opacity: 0; transition: opacity 0.15s;
+            opacity: 0; transition: opacity 0.15s, transform 0.15s;
         }
-        .gantt-group-sidebar-row:hover .gantt-group-add-task-btn { opacity: 1; }
+        .gantt-group-del-btn {
+            background: none; border: none;
+            color: var(--text-red-500, #ef4444);
+            cursor: pointer; padding: 2px; margin-right: 4px;
+            display: flex; align-items: center;
+            opacity: 0; transition: opacity 0.15s, transform 0.15s;
+        }
+        .gantt-group-sidebar-row:hover .gantt-group-add-task-btn,
+        .gantt-group-sidebar-row:hover .gantt-group-del-btn { opacity: 0.7; }
+        .gantt-group-add-task-btn:hover { opacity: 1 !important; transform: scale(1.1); color: var(--text-color); }
+        .gantt-group-del-btn:hover { opacity: 1 !important; transform: scale(1.1); }
 
         .gantt-task-sidebar-row {
             height: 40px;
@@ -3294,6 +3305,14 @@
             gap: 0.4rem;
         }
         .gantt-task-sidebar-row:hover { background: var(--bg-ui-hover); }
+        .gantt-task-sidebar-row.drag-over {
+            background: var(--bg-ui-hover);
+            box-shadow: inset 0 2px 0 var(--switch-bg-checked);
+        }
+        .gantt-group-sidebar-row.drag-over {
+            background: var(--bg-ui-hover);
+            box-shadow: inset 0 0 0 2px var(--switch-bg-checked);
+        }
         .gantt-task-status-dot {
             width: 7px; height: 7px;
             border-radius: 50%;
@@ -3307,6 +3326,15 @@
             overflow: hidden;
             text-overflow: ellipsis;
         }
+        .gantt-task-del-btn {
+            background: none; border: none;
+            color: var(--text-red-500, #ef4444);
+            cursor: pointer; padding: 2px;
+            display: flex; align-items: center;
+            opacity: 0; transition: opacity 0.15s, transform 0.15s;
+        }
+        .gantt-task-sidebar-row:hover .gantt-task-del-btn { opacity: 0.7; }
+        .gantt-task-del-btn:hover { opacity: 1 !important; transform: scale(1.1); }
 
         /* ── TIMELINE ── */
         #gantt-timeline {
@@ -3437,6 +3465,30 @@
             pointer-events: none;
         }
 
+        .gantt-bar-handle-left, .gantt-bar-handle-right {
+            position: absolute;
+            top: 0; bottom: 0; width: 8px;
+            cursor: ew-resize;
+            background: rgba(255,255,255,0.25);
+            opacity: 0;
+            transition: opacity 0.2s;
+            z-index: 2;
+        }
+        .gantt-bar-handle-left { left: 0; border-top-left-radius: 6px; border-bottom-left-radius: 6px; }
+        .gantt-bar-handle-right { right: 0; border-top-right-radius: 6px; border-bottom-right-radius: 6px; }
+        .gantt-bar:hover .gantt-bar-handle-left, .gantt-bar:hover .gantt-bar-handle-right { opacity: 1; }
+
+        .gantt-bar-assignee {
+            font-size: 0.65rem;
+            font-weight: 400;
+            opacity: 0.6;
+            margin-left: auto;
+            padding-left: 0.5rem;
+            white-space: nowrap;
+            pointer-events: none;
+            z-index: 1;
+        }
+
         /* ── BOTTOM TOOLBAR ── */
         #gantt-bottom-bar {
             height: 44px;
@@ -3500,7 +3552,7 @@
         /* ── DETAIL PANEL ── */
         #gantt-detail-panel {
             position: fixed;
-            top: var(--tabs-bar-height);
+            top: calc(var(--tabs-bar-height) + 1rem);
             right: -340px;
             width: 320px;
             bottom: 0;
@@ -3623,4 +3675,94 @@
             font-family: inherit;
             padding: 2px 6px;
             outline: none;
+        }
+
+        /* ── TAB SWITCHER ── */
+        #tab-switcher-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.3);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            z-index: 10000;
+            align-items: center;
+            justify-content: center;
+            animation: fadeIn 0.15s ease;
+        }
+
+        #tab-switcher-modal {
+            background: var(--bg-ui);
+            border: 1px solid var(--border-color);
+            border-radius: 16px;
+            padding: 1rem;
+            width: 360px;
+            max-width: 90vw;
+            display: flex;
+            flex-direction: column;
+            gap: 0.4rem;
+            box-shadow: 0 16px 40px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.05);
+            max-height: 80vh;
+            overflow-y: auto;
+            animation: scaleIn 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+
+        .tab-switcher-item {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 0.75rem 1rem;
+            border-radius: 10px;
+            cursor: pointer;
+            border: 1px solid transparent;
+            transition: all 0.15s;
+            background: rgba(255,255,255,0.02);
+        }
+
+        .tab-switcher-item:hover {
+            background: rgba(255,255,255,0.05);
+        }
+
+        .tab-switcher-item.active {
+            background: var(--switch-bg-checked);
+            border-color: rgba(255,255,255,0.2);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+        }
+
+        .tab-switcher-item.active * {
+            color: #fff !important;
+        }
+
+        .tab-switcher-icon {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 32px;
+            height: 32px;
+            border-radius: 8px;
+            background: rgba(0,0,0,0.2);
+            color: var(--text-color);
+        }
+
+        .tab-switcher-details {
+            display: flex;
+            flex-direction: column;
+            flex: 1;
+            overflow: hidden;
+        }
+
+        .tab-switcher-name {
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: var(--text-color);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .tab-switcher-type {
+            font-size: 0.7rem;
+            color: var(--text-color-light);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
         }

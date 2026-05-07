@@ -515,9 +515,17 @@
         <div id="gantt-bottom-bar">
             <div class="gantt-zoom-group">
                 <span class="gantt-zoom-label">Zoom</span>
+                <button class="gantt-zoom-btn" data-zoom="day">Day</button>
                 <button class="gantt-zoom-btn active" data-zoom="week">Week</button>
                 <button class="gantt-zoom-btn" data-zoom="month">Month</button>
                 <button class="gantt-zoom-btn" data-zoom="quarter">Quarter</button>
+            </div>
+            <div class="gantt-zoom-slider-group" style="display:flex; align-items:center; gap:0.5rem; margin-left:1rem;">
+                <iconify-icon icon="lucide:zoom-out" width="14" height="14" style="color:var(--text-color-light)"></iconify-icon>
+                <button id="gantt-zoom-out-btn" class="gantt-nav-btn" style="padding:0.25rem;"><iconify-icon icon="lucide:minus" width="12" height="12"></iconify-icon></button>
+                <input type="range" id="gantt-zoom-slider" min="50" max="200" value="100" style="width:80px;">
+                <button id="gantt-zoom-in-btn" class="gantt-nav-btn" style="padding:0.25rem;"><iconify-icon icon="lucide:plus" width="12" height="12"></iconify-icon></button>
+                <iconify-icon icon="lucide:zoom-in" width="14" height="14" style="color:var(--text-color-light)"></iconify-icon>
             </div>
             <button id="gantt-today-btn" class="gantt-nav-btn" title="Jump to Today">
                 <iconify-icon icon="lucide:calendar-check" width="16" height="16"></iconify-icon> Today
@@ -561,17 +569,53 @@
             </div>
             <div class="gantt-field">
                 <label>Assignee</label>
-                <input type="text" id="gantt-detail-assignee" placeholder="Name...">
+                <div style="display: flex; gap: 0.5rem; width: 100%;">
+                    <select id="gantt-detail-assignee" style="flex-grow: 1;">
+                        <option value="">Unassigned</option>
+                    </select>
+                    <button id="gantt-manage-workers-btn" title="Manage Workers" style="background: var(--bg-ui-hover); border: 1px solid var(--border-color); color: var(--text-color); border-radius: 0.5rem; padding: 0.25rem 0.5rem; cursor: pointer; display: flex; align-items: center; justify-content: center;">
+                        <iconify-icon icon="lucide:users" width="14" height="14"></iconify-icon>
+                    </button>
+                </div>
             </div>
             <div class="gantt-field">
                 <label>Notes</label>
                 <textarea id="gantt-detail-notes" placeholder="Notes..."></textarea>
+            </div>
+            <div class="gantt-field">
+                <label>Attachment</label>
+                <div style="display: flex; gap: 0.5rem; width: 100%; align-items: flex-start;">
+                    <div id="gantt-detail-attachment-preview" style="width: 40px; height: 40px; border-radius: 0.25rem; border: 1px dashed var(--border-color); display: flex; align-items: center; justify-content: center; overflow: hidden; background: var(--bg-ui-hover); flex-shrink: 0;">
+                        <iconify-icon icon="lucide:image" width="16" height="16" style="color: var(--text-color-light);"></iconify-icon>
+                    </div>
+                    <div style="display: flex; flex-direction: column; gap: 0.25rem; flex-grow: 1;">
+                        <button id="gantt-attach-img-btn" style="background: var(--bg-ui-hover); border: 1px solid var(--border-color); color: var(--text-color); border-radius: 0.5rem; padding: 0.25rem 0.5rem; cursor: pointer; text-align: left; font-size: 0.8rem; font-family: inherit;">Select from Asset Library...</button>
+                        <button id="gantt-clear-img-btn" style="background: transparent; border: none; color: #ef4444; padding: 0; cursor: pointer; text-align: left; font-size: 0.75rem; display: none;">Remove Attachment</button>
+                    </div>
+                </div>
             </div>
         </div>
         <div id="gantt-detail-footer">
             <button id="gantt-detail-delete" class="gantt-detail-delete-btn">
                 <iconify-icon icon="lucide:trash-2" width="14" height="14"></iconify-icon> Delete Task
             </button>
+        </div>
+    </div>
+
+    <!-- Gantt Workers Modal -->
+    <div id="gantt-workers-modal-overlay" class="modal-overlay">
+        <div id="gantt-workers-modal" class="glass-modal" style="width: 400px; max-width: 90vw;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                <h2 style="margin: 0;">Manage Workers</h2>
+                <button id="close-gantt-workers-btn" style="background: none; border: none; color: var(--text-color); cursor: pointer;"><iconify-icon icon="lucide:x" width="20" height="20"></iconify-icon></button>
+            </div>
+            <div style="display: flex; gap: 0.5rem; margin-bottom: 1rem;">
+                <input type="text" id="new-worker-input" placeholder="New worker name..." class="form-input" style="flex-grow: 1; padding: 0.5rem; border-radius: 0.5rem; border: 1px solid var(--border-color); background: rgba(0,0,0,0.2); color: var(--text-color);">
+                <button id="add-worker-btn" class="modal-button confirm" style="padding: 0.5rem 1rem;">Add</button>
+            </div>
+            <div id="gantt-workers-list" style="max-height: 300px; overflow-y: auto; display: flex; flex-direction: column; gap: 0.5rem;">
+                <!-- Worker items injected here -->
+            </div>
         </div>
     </div>
 
@@ -696,6 +740,13 @@
         <div class="menu-item" id="close-context-tab-btn"><span class="menu-label text-red-500">Close Tab</span></div>
     </div>
 
+    <div id="gantt-context-menu" class="context-menu" style="display: none;">
+        <div class="menu-item" id="gantt-copy-link-btn">
+            <span class="menu-label">Copy Link to Canvas</span>
+            <iconify-icon icon="lucide:link" width="18" height="18"></iconify-icon>
+        </div>
+    </div>
+
     <div id="storyflow-context-menu" class="context-menu">
         <div class="menu-item" id="sf-add-left-btn">
             <span class="menu-label">Add Frame Left</span>
@@ -760,6 +811,16 @@
             <div class="modal-buttons">
                 <button id="cancel-close-btn" class="modal-button cancel">Cancel</button>
                 <button id="confirm-close-btn" class="modal-button confirm">Yes, Close Board</button>
+            </div>
+        </div>
+    </div>
+    <div id="delete-group-modal-overlay" class="modal-overlay">
+        <div id="delete-group-modal" class="glass-modal">
+            <h2 id="delete-modal-title">Delete Group?</h2>
+            <p id="delete-modal-desc">Are you sure you want to delete this group and all its tasks?</p>
+            <div class="modal-buttons">
+                <button id="cancel-delete-group-btn" class="modal-button cancel">Cancel</button>
+                <button id="confirm-delete-group-btn" class="modal-button confirm">Yes, Delete</button>
             </div>
         </div>
     </div>
@@ -970,6 +1031,11 @@
             </div>
             <button id="cloud-conflict-cancel" class="cloud-modal-cancel-link">Cancel</button>
         </div>
+    </div>
+
+    <!-- ─── TAB SWITCHER ────────────────────────────────────────────────── -->
+    <div id="tab-switcher-overlay" style="display: none;">
+        <div id="tab-switcher-modal"></div>
     </div>
 
     <!-- ─── CLOUD SYNC: Drive File Picker ───────────────────────────────── -->

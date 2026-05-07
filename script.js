@@ -130,6 +130,108 @@ function updateScrollIndicators() {
     }
 }
 
+// ── TAB SWITCHER ──
+let isTabSwitcherOpen = false;
+let tabSwitcherSelectedIndex = -1;
+
+function showTabSwitcher() {
+    isTabSwitcherOpen = true;
+    const overlay = document.getElementById('tab-switcher-overlay');
+    const modal = document.getElementById('tab-switcher-modal');
+    if (!overlay || !modal) return;
+    modal.innerHTML = '';
+    
+    if (projects.length === 0) return;
+    
+    const currentIdx = projects.findIndex(p => p.id === activeProjectId);
+    tabSwitcherSelectedIndex = (currentIdx + 1) % projects.length;
+    
+    projects.forEach((proj, idx) => {
+        const item = document.createElement('div');
+        item.className = 'tab-switcher-item' + (idx === tabSwitcherSelectedIndex ? ' active' : '');
+        item.dataset.index = idx;
+        
+        const iconDiv = document.createElement('div');
+        iconDiv.className = 'tab-switcher-icon';
+        
+        let iconStr = 'lucide:layout-template';
+        if (proj.type === 'moodgantt') iconStr = 'lucide:bar-chart-horizontal';
+        else if (proj.type === 'colorseeker') iconStr = 'lucide:palette';
+        else if (proj.type === 'storyflow') iconStr = 'lucide:layout-dashboard';
+        else if (proj.type === 'doc') iconStr = 'lucide:file-text';
+        
+        iconDiv.innerHTML = `<iconify-icon icon="${iconStr}" width="18" height="18"></iconify-icon>`;
+        
+        const details = document.createElement('div');
+        details.className = 'tab-switcher-details';
+        
+        const name = document.createElement('span');
+        name.className = 'tab-switcher-name';
+        name.textContent = proj.name;
+        
+        const type = document.createElement('span');
+        type.className = 'tab-switcher-type';
+        type.textContent = proj.type === 'storyflow' ? 'Moodflow' : (proj.type === 'moodgantt' ? 'Moodgantt' : proj.type);
+        
+        details.append(name, type);
+        item.append(iconDiv, details);
+        
+        item.addEventListener('mouseenter', () => {
+            tabSwitcherSelectedIndex = idx;
+            updateTabSwitcherSelection();
+        });
+        item.addEventListener('click', () => {
+            tabSwitcherSelectedIndex = idx;
+            executeTabSwitch();
+        });
+        
+        modal.appendChild(item);
+    });
+    
+    overlay.style.display = 'flex';
+}
+
+function updateTabSwitcherSelection() {
+    const modal = document.getElementById('tab-switcher-modal');
+    if (!modal) return;
+    const items = modal.querySelectorAll('.tab-switcher-item');
+    items.forEach((item, idx) => {
+        if (idx === tabSwitcherSelectedIndex) {
+            item.classList.add('active');
+            item.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+        } else {
+            item.classList.remove('active');
+        }
+    });
+}
+
+function cycleTabSwitcher() {
+    if (!isTabSwitcherOpen || projects.length === 0) return;
+    tabSwitcherSelectedIndex = (tabSwitcherSelectedIndex + 1) % projects.length;
+    updateTabSwitcherSelection();
+}
+
+function cycleTabSwitcherReverse() {
+    if (!isTabSwitcherOpen || projects.length === 0) return;
+    tabSwitcherSelectedIndex = (tabSwitcherSelectedIndex - 1 + projects.length) % projects.length;
+    updateTabSwitcherSelection();
+}
+
+function executeTabSwitch() {
+    if (!isTabSwitcherOpen) return;
+    const proj = projects[tabSwitcherSelectedIndex];
+    if (proj) {
+        switchTab(proj.id);
+    }
+    closeTabSwitcher();
+}
+
+function closeTabSwitcher() {
+    isTabSwitcherOpen = false;
+    const overlay = document.getElementById('tab-switcher-overlay');
+    if (overlay) overlay.style.display = 'none';
+}
+
 function createNewProject(type) {
     const newId = Date.now();
     let newProject;
@@ -733,6 +835,7 @@ const alignBtn = document.getElementById('align-btn');
 const contextMenu = document.getElementById('context-menu');
 const tabContextMenu = document.getElementById('tab-context-menu');
 const sfContextMenu = document.getElementById('storyflow-context-menu');
+const ganttContextMenu = document.getElementById('gantt-context-menu');
 const showGridToggle = document.getElementById('show-grid-toggle');
 const snapGridToggle = document.getElementById('snap-grid-toggle');
 const dropShadowToggle = document.getElementById('drop-shadow-toggle');
@@ -1154,6 +1257,7 @@ function setupEventListeners() {
 
     canvas.addEventListener('mousedown', onMouseDown);
     canvas.addEventListener('mouseup', onMouseUp);
+    canvas.addEventListener('auxclick', e => { if (e.button === 1) e.preventDefault(); });
     canvas.addEventListener('mousemove', onMouseMove);
     canvas.addEventListener('dblclick', onDoubleClick);
     canvas.addEventListener('wheel', e => { e.preventDefault(); adjustZoom(e, -e.deltaY * SCROLL_SENSITIVITY) });
@@ -1633,6 +1737,28 @@ function drawArrow(ctx, item) {
     ctx.restore();
 }
 function drawTextItem(ctx, item) {
+    if (item.ganttLink) {
+        const p = projects.find(p => p.id === item.ganttLink.projectId);
+        let task;
+        if (p && p.type === 'moodgantt') {
+            for (const g of p.data.groups) {
+                task = g.tasks.find(t => t.id === item.ganttLink.taskId);
+                if (task) break;
+            }
+        }
+        if (task) {
+            item.title = task.name;
+            item.text = `**Status:** ${task.status || 'None'}\n**Progress:** ${task.progress || 0}%\n**Assignee:** ${task.assignee || 'Unassigned'}\n**Dates:** ${task.startDate || 'TBD'} to ${task.endDate || 'TBD'}`;
+            if (task.status === 'done') item.color = '#22c55e';
+            else if (task.status === 'blocked') item.color = '#ef4444';
+            else if (task.status === 'review') item.color = '#f59e0b';
+            else item.color = '#429eff';
+        } else {
+            item.text = "(Gantt Task deleted)";
+            item.color = '#94a3b8';
+        }
+    }
+
     ctx.save();
     const cx = item.x + item.width / 2;
     const cy = item.y + item.height / 2;
@@ -2384,6 +2510,39 @@ function handleKeyDown(e) {
     const activeEl = document.activeElement;
     if (currentlyEditingText || (activeEl && (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA'))) { return; }
 
+    if (e.key === 'Tab' && e.shiftKey) {
+        e.preventDefault();
+        if (!isTabSwitcherOpen) {
+            showTabSwitcher();
+        } else {
+            cycleTabSwitcher();
+        }
+        return;
+    }
+
+    if (isTabSwitcherOpen) {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            executeTabSwitch();
+            return;
+        }
+        if (e.key === 'Escape') {
+            e.preventDefault();
+            closeTabSwitcher();
+            return;
+        }
+        if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            cycleTabSwitcher();
+            return;
+        }
+        if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            cycleTabSwitcherReverse();
+            return;
+        }
+    }
+
     if (e.key === 'Control' || e.key === 'Meta') {
         updateCursor(e);
     }
@@ -2414,6 +2573,48 @@ function handleKeyDown(e) {
                 const bar = bars[focusedIdx];
                 if (bar && bar._toggleLock) bar._toggleLock();
             }
+            return;
+        }
+    }
+    // Moodgantt global keys intercept
+    if (activeProject && activeProject.type === 'moodgantt') {
+        if (key === 'home') {
+            e.preventDefault();
+            ganttJumpToToday(activeProject);
+            return;
+        }
+        if (key === '+' || key === '=') {
+            e.preventDefault();
+            document.getElementById('gantt-zoom-in-btn')?.click();
+            return;
+        }
+        if (key === '-' || key === '_') {
+            e.preventDefault();
+            document.getElementById('gantt-zoom-out-btn')?.click();
+            return;
+        }
+        if (e.shiftKey && key === 'g') {
+            e.preventDefault();
+            ganttAddGroup(activeProject);
+            return;
+        }
+        if (e.shiftKey && key === 't') {
+            e.preventDefault();
+            if (activeProject.data.groups.length > 0) {
+                ganttAddTask(activeProject, activeProject.data.groups[activeProject.data.groups.length - 1].id);
+            } else {
+                showToast('Create a group first.');
+            }
+            return;
+        }
+        if (key === 'arrowleft') {
+            e.preventDefault();
+            ganttShiftView(activeProject, -1);
+            return;
+        }
+        if (key === 'arrowright') {
+            e.preventDefault();
+            ganttShiftView(activeProject, 1);
             return;
         }
     }
@@ -2472,6 +2673,9 @@ function handleKeyDown(e) {
 function handleKeyUp(e) {
     if (e.key === 'Control' || e.key === 'Meta') {
         updateCursor(e);
+    }
+    if (e.key === 'Shift' && isTabSwitcherOpen) {
+        executeTabSwitch();
     }
 }
 
@@ -2829,6 +3033,7 @@ function onMouseUp(e) {
         transformingHandle = null;
         originalItemState = null;
     } else if (e.button === 1) {
+        e.preventDefault();
         isDragging = !1; canvas.classList.remove('grabbing')
     }
     requestUpdate();
@@ -6316,6 +6521,7 @@ window.showToast          = showToast;
 const GANTT_MS_DAY = 86400000;
 const GANTT_STATUS_COLORS = { done: '#22c55e', review: '#f59e0b', blocked: '#ef4444' };
 const GANTT_ZOOM = {
+    day:     { colWidth: 60, label: (d) => ({ top: d.toLocaleString('en',{month:'short'}), bottom: d.getDate() }) },
     week:    { colWidth: 100, label: (d) => ({ top: d.toLocaleString('en',{month:'short'}), bottom: 'W'+ganttWeekNum(d) }) },
     month:   { colWidth: 120, label: (d) => ({ top: String(d.getFullYear()), bottom: d.toLocaleString('en',{month:'short'}) }) },
     quarter: { colWidth: 200, label: (d) => ({ top: String(d.getFullYear()), bottom: 'Q'+(Math.floor(d.getMonth()/3)+1) }) }
@@ -6351,7 +6557,10 @@ function ganttGetColumns(viewStartStr, viewEndStr, zoom) {
     const end = ganttParseDate(viewEndStr);
     const cols = [];
     let cur;
-    if (zoom === 'week') {
+    if (zoom === 'day') {
+        cur = ganttParseDate(viewStartStr);
+        while (cur <= end) { cols.push(new Date(cur)); cur = ganttAddDays(cur, 1); }
+    } else if (zoom === 'week') {
         cur = ganttFloorWeek(ganttParseDate(viewStartStr));
         while (cur <= end) { cols.push(new Date(cur)); cur = ganttAddDays(cur, 7); }
     } else if (zoom === 'month') {
@@ -6366,14 +6575,41 @@ function ganttGetColumns(viewStartStr, viewEndStr, zoom) {
 
 function ganttColOffset(date, cols, colWidth) {
     const ts = date.getTime();
+    let diffDays = 7;
+    if (cols.length > 1) {
+        const diffMs = cols[1].getTime() - cols[0].getTime();
+        if (diffMs <= GANTT_MS_DAY * 1.5) diffDays = 1;
+        else if (diffMs <= GANTT_MS_DAY * 7.5) diffDays = 7;
+        else if (diffMs <= GANTT_MS_DAY * 32) diffDays = 30;
+        else diffDays = 90;
+    }
+    
     for (let i = 0; i < cols.length; i++) {
-        const colEnd = i < cols.length-1 ? cols[i+1] : ganttAddDays(cols[i], 7);
+        const colEnd = i < cols.length-1 ? cols[i+1] : ganttAddDays(cols[i], diffDays);
         if (ts < colEnd.getTime()) {
             const fraction = (ts - cols[i].getTime()) / (colEnd.getTime() - cols[i].getTime());
             return (i + fraction) * colWidth;
         }
     }
     return cols.length * colWidth;
+}
+
+function ganttPixelToDate(pixelLeft, cols, colWidth, zoom) {
+    if (pixelLeft < 0) pixelLeft = 0;
+    let currentLeft = 0;
+    const diffDays = zoom === 'day' ? 1 : (zoom === 'week' ? 7 : (zoom === 'month' ? 30 : 90));
+    for (let i = 0; i < cols.length; i++) {
+        const nextDate = i < cols.length - 1 ? cols[i+1] : ganttAddDays(cols[i], diffDays);
+        if (pixelLeft >= currentLeft && pixelLeft < currentLeft + colWidth) {
+            const fraction = (pixelLeft - currentLeft) / colWidth;
+            return new Date(cols[i].getTime() + fraction * (nextDate.getTime() - cols[i].getTime()));
+        } else if (pixelLeft >= currentLeft + colWidth && i === cols.length - 1) {
+            const fraction = (pixelLeft - currentLeft) / colWidth;
+            return new Date(cols[i].getTime() + fraction * (nextDate.getTime() - cols[i].getTime()));
+        }
+        currentLeft += colWidth;
+    }
+    return cols[0] || ganttToday();
 }
 
 function ganttBarPixels(task, cols, colWidth) {
@@ -6392,12 +6628,16 @@ function ganttStatusColor(task, groupColor) {
 // MOODGANTT — Render
 // ══════════════════════════════════════════════════════════════════════════
 let ganttDetailTarget = null; // { project, groupId, taskId }
+let draggingGanttTaskInfo = null; // { group, task }
+let draggingGanttGroupInfo = null; // { group }
+let ganttContextTarget = null; // { projectId, groupId, taskId }
 
 function renderGanttView(project) {
     if (!project || project.type !== 'moodgantt') return;
 
     const zoom     = project.data.zoomLevel || 'week';
-    const colWidth = GANTT_ZOOM[zoom].colWidth;
+    const zoomScale = project.data.zoomScale || 1;
+    const colWidth = GANTT_ZOOM[zoom].colWidth * zoomScale;
     const cols     = ganttGetColumns(project.data.viewStartDate, project.data.viewEndDate, zoom);
     const totalW   = cols.length * colWidth;
     const today    = ganttToday();
@@ -6414,7 +6654,8 @@ function renderGanttView(project) {
     header.style.width = totalW + 'px';
     const labelCfg = GANTT_ZOOM[zoom].label;
     cols.forEach(colDate => {
-        const isToday = zoom === 'week' && Math.abs(colDate.getTime() - ganttFloorWeek(today).getTime()) < GANTT_MS_DAY;
+        const isToday = (zoom === 'day' && colDate.getTime() === today.getTime()) || 
+                        (zoom === 'week' && Math.abs(colDate.getTime() - ganttFloorWeek(today).getTime()) < GANTT_MS_DAY);
         const col = document.createElement('div');
         col.className = 'gantt-col-header' + (isToday ? ' is-today' : '');
         col.style.width = colWidth + 'px';
@@ -6464,12 +6705,106 @@ function renderGanttView(project) {
         lbl.textContent = group.name || 'Unnamed Group';
         lbl.title = 'Double-click to rename';
         lbl.ondblclick = (e) => { e.stopPropagation(); ganttStartGroupRename(lbl, group, project); };
+        const delGroupBtn = document.createElement('button');
+        delGroupBtn.className = 'gantt-group-del-btn';
+        delGroupBtn.title = 'Delete Group';
+        delGroupBtn.innerHTML = '<iconify-icon icon="lucide:trash-2" width="13" height="13"></iconify-icon>';
+        delGroupBtn.onclick = (e) => {
+            e.stopPropagation();
+            
+            const doDelete = () => {
+                project.data.groups = project.data.groups.filter(g => g.id !== group.id);
+                if (ganttDetailTarget && ganttDetailTarget.groupId === group.id) {
+                    ganttCloseDetail();
+                }
+                renderGanttView(project);
+                scheduleAutoSave();
+            };
+
+            if (e.shiftKey) {
+                doDelete();
+                return;
+            }
+
+            const overlay = document.getElementById('delete-group-modal-overlay');
+            const title = document.getElementById('delete-modal-title');
+            const desc = document.getElementById('delete-modal-desc');
+            const confirmBtn = document.getElementById('confirm-delete-group-btn');
+            const cancelBtn = document.getElementById('cancel-delete-group-btn');
+            
+            if (title) title.textContent = 'Delete Group?';
+            if (desc) desc.textContent = 'Are you sure you want to delete this group and all its tasks?';
+            
+            overlay.style.display = 'flex';
+            
+            confirmBtn.onclick = () => {
+                doDelete();
+                overlay.style.display = 'none';
+            };
+            
+            cancelBtn.onclick = () => {
+                overlay.style.display = 'none';
+            };
+        };
         const addTaskBtn = document.createElement('button');
         addTaskBtn.className = 'gantt-group-add-task-btn';
         addTaskBtn.title = 'Add Task';
         addTaskBtn.innerHTML = '<iconify-icon icon="lucide:plus" width="13" height="13"></iconify-icon>';
         addTaskBtn.onclick = (e) => { e.stopPropagation(); ganttAddTask(project, group.id); };
-        sRow.append(collapseBtn, dot, lbl, addTaskBtn);
+        sRow.append(collapseBtn, dot, lbl, delGroupBtn, addTaskBtn);
+        
+        sRow.draggable = true;
+        sRow.ondragstart = (e) => {
+            if (e.target.tagName === 'INPUT' || e.target.tagName === 'BUTTON') return;
+            draggingGanttGroupInfo = { group };
+            e.dataTransfer.effectAllowed = 'move';
+            setTimeout(() => sRow.style.opacity = '0.5', 0);
+        };
+        sRow.ondragend = (e) => {
+            sRow.style.opacity = '1';
+            draggingGanttGroupInfo = null;
+            document.querySelectorAll('.gantt-group-sidebar-row.drag-over').forEach(el => el.classList.remove('drag-over'));
+        };
+        
+        sRow.ondragover = (e) => {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'move';
+            sRow.classList.add('drag-over');
+        };
+        sRow.ondragleave = () => {
+            sRow.classList.remove('drag-over');
+        };
+        sRow.ondrop = (e) => {
+            e.preventDefault();
+            sRow.classList.remove('drag-over');
+            
+            if (draggingGanttTaskInfo) {
+                const srcGroup = draggingGanttTaskInfo.group;
+                const srcTask = draggingGanttTaskInfo.task;
+                
+                srcGroup.tasks = srcGroup.tasks.filter(t => t.id !== srcTask.id);
+                if (!group.tasks) group.tasks = [];
+                group.tasks.push(srcTask);
+                
+                renderGanttView(project);
+                scheduleAutoSave();
+            } else if (draggingGanttGroupInfo) {
+                const srcGroup = draggingGanttGroupInfo.group;
+                if (srcGroup.id === group.id) return;
+                
+                const srcIdx = project.data.groups.findIndex(g => g.id === srcGroup.id);
+                const targetIdx = project.data.groups.findIndex(g => g.id === group.id);
+                
+                if (srcIdx !== -1 && targetIdx !== -1) {
+                    project.data.groups.splice(srcIdx, 1);
+                    project.data.groups.splice(targetIdx, 0, srcGroup);
+                    
+                    renderGanttView(project);
+                    scheduleAutoSave();
+                }
+            }
+        };
+        
         sidebarBody.appendChild(sRow);
 
         // ── Timeline group track ──
@@ -6512,7 +6847,108 @@ function renderGanttView(project) {
                 const tLbl = document.createElement('span');
                 tLbl.className = 'gantt-task-label';
                 tLbl.textContent = task.name || 'Untitled';
-                tSide.append(statusDot, tLbl);
+                
+                const delBtn = document.createElement('button');
+                delBtn.className = 'gantt-task-del-btn';
+                delBtn.innerHTML = '<iconify-icon icon="lucide:trash-2" width="14" height="14"></iconify-icon>';
+                delBtn.onclick = (e) => {
+                    e.stopPropagation();
+                    
+                    const doDelete = () => {
+                        group.tasks = group.tasks.filter(t => t.id !== task.id);
+                        if (ganttDetailTarget && ganttDetailTarget.taskId === task.id) {
+                            ganttCloseDetail();
+                        }
+                        renderGanttView(project);
+                        scheduleAutoSave();
+                    };
+
+                    if (e.shiftKey) {
+                        doDelete();
+                        return;
+                    }
+
+                    const overlay = document.getElementById('delete-group-modal-overlay');
+                    const title = document.getElementById('delete-modal-title');
+                    const desc = document.getElementById('delete-modal-desc');
+                    const confirmBtn = document.getElementById('confirm-delete-group-btn');
+                    const cancelBtn = document.getElementById('cancel-delete-group-btn');
+                    
+                    if (title) title.textContent = 'Delete Task?';
+                    if (desc) desc.textContent = 'Are you sure you want to delete this task?';
+                    
+                    overlay.style.display = 'flex';
+                    
+                    confirmBtn.onclick = () => {
+                        doDelete();
+                        overlay.style.display = 'none';
+                    };
+                    
+                    cancelBtn.onclick = () => {
+                        overlay.style.display = 'none';
+                    };
+                };
+                
+                tSide.draggable = true;
+                tSide.oncontextmenu = (e) => {
+                    e.preventDefault();
+                    ganttContextTarget = { projectId: project.id, groupId: group.id, taskId: task.id };
+                    if (ganttContextMenu) {
+                        document.querySelectorAll('.context-menu').forEach(m => m.style.display = 'none');
+                        ganttContextMenu.style.display = 'block';
+                        ganttContextMenu.style.left = e.pageX + 'px';
+                        ganttContextMenu.style.top = e.pageY + 'px';
+                    }
+                };
+                tSide.ondragstart = (e) => {
+                    draggingGanttTaskInfo = { group, task };
+                    e.dataTransfer.effectAllowed = 'move';
+                    setTimeout(() => tSide.style.opacity = '0.5', 0);
+                };
+                
+                tSide.ondragend = (e) => {
+                    tSide.style.opacity = '1';
+                    draggingGanttTaskInfo = null;
+                    document.querySelectorAll('.gantt-task-sidebar-row.drag-over, .gantt-group-sidebar-row.drag-over').forEach(el => el.classList.remove('drag-over'));
+                };
+                
+                tSide.ondragover = (e) => {
+                    e.preventDefault();
+                    e.stopPropagation(); // prevent group ondragover
+                    e.dataTransfer.dropEffect = 'move';
+                    tSide.classList.add('drag-over');
+                };
+                
+                tSide.ondragleave = () => {
+                    tSide.classList.remove('drag-over');
+                };
+                
+                tSide.ondrop = (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    tSide.classList.remove('drag-over');
+                    if (!draggingGanttTaskInfo) return;
+                    
+                    const srcGroup = draggingGanttTaskInfo.group;
+                    const srcTask = draggingGanttTaskInfo.task;
+                    
+                    if (srcTask.id === task.id) return;
+                    
+                    srcGroup.tasks = srcGroup.tasks.filter(t => t.id !== srcTask.id);
+                    if (!group.tasks) group.tasks = [];
+                    const targetIdx = group.tasks.findIndex(t => t.id === task.id);
+                    
+                    if (targetIdx !== -1) {
+                        group.tasks.splice(targetIdx, 0, srcTask);
+                    } else {
+                        group.tasks.push(srcTask);
+                    }
+                    
+                    renderGanttView(project);
+                    scheduleAutoSave();
+                };
+                
+                tSide.append(statusDot, tLbl, delBtn);
                 tSide.onclick = () => ganttOpenDetail(project, group.id, task.id);
                 sidebarBody.appendChild(tSide);
 
@@ -6538,7 +6974,133 @@ function renderGanttView(project) {
                 barLbl.className = 'gantt-bar-label';
                 barLbl.textContent = task.name || 'Untitled';
                 bar.appendChild(barLbl);
-                bar.onclick = () => ganttOpenDetail(project, group.id, task.id);
+                
+                if (task.assignee) {
+                    const assigneeSpan = document.createElement('span');
+                    assigneeSpan.className = 'gantt-bar-assignee';
+                    assigneeSpan.textContent = task.assignee;
+                    assigneeSpan.style.color = textColor;
+                    bar.appendChild(assigneeSpan);
+                }
+
+                bar.oncontextmenu = (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    ganttContextTarget = { projectId: project.id, groupId: group.id, taskId: task.id };
+                    if (ganttContextMenu) {
+                        document.querySelectorAll('.context-menu').forEach(m => m.style.display = 'none');
+                        ganttContextMenu.style.display = 'block';
+                        ganttContextMenu.style.left = e.pageX + 'px';
+                        ganttContextMenu.style.top = e.pageY + 'px';
+                    }
+                };
+
+                // Handles for resizing
+                const leftHandle = document.createElement('div');
+                leftHandle.className = 'gantt-bar-handle-left';
+                const rightHandle = document.createElement('div');
+                rightHandle.className = 'gantt-bar-handle-right';
+                bar.append(leftHandle, rightHandle);
+
+                const setupHandleDrag = (handle, isLeft) => {
+                    handle.onmousedown = (e) => {
+                        if (e.button !== 0) return;
+                        e.stopPropagation();
+                        let isDraggingHandle = true;
+                        const startX = e.clientX;
+                        const initialLeft = left;
+                        const initialWidth = width;
+                        
+                        const mousemove = (ev) => {
+                            if (!isDraggingHandle) return;
+                            const delta = ev.clientX - startX;
+                            if (isLeft) {
+                                const newWidth = Math.max(10, initialWidth - delta);
+                                const newLeft = initialLeft + (initialWidth - newWidth);
+                                bar.style.left = newLeft + 'px';
+                                bar.style.width = newWidth + 'px';
+                            } else {
+                                const newWidth = Math.max(10, initialWidth + delta);
+                                bar.style.width = newWidth + 'px';
+                            }
+                        };
+                        
+                        const mouseup = (ev) => {
+                            if (!isDraggingHandle) return;
+                            isDraggingHandle = false;
+                            document.removeEventListener('mousemove', mousemove);
+                            document.removeEventListener('mouseup', mouseup);
+                            
+                            const deltaX = ev.clientX - startX;
+                            if (isLeft) {
+                                const newLeft = initialLeft + deltaX;
+                                const foundDate = ganttPixelToDate(newLeft, cols, colWidth, zoom);
+                                task.startDate = ganttFormatDate(foundDate);
+                                if (ganttParseDate(task.startDate) > ganttParseDate(task.endDate)) task.startDate = task.endDate;
+                            } else {
+                                const newRight = initialLeft + initialWidth + deltaX;
+                                const foundDate = ganttPixelToDate(newRight, cols, colWidth, zoom);
+                                task.endDate = ganttFormatDate(ganttAddDays(foundDate, -1));
+                                if (ganttParseDate(task.endDate) < ganttParseDate(task.startDate)) task.endDate = task.startDate;
+                            }
+                            
+                            renderGanttView(project);
+                            scheduleAutoSave();
+                        };
+                        document.addEventListener('mousemove', mousemove);
+                        document.addEventListener('mouseup', mouseup);
+                    };
+                };
+                
+                setupHandleDrag(leftHandle, true);
+                setupHandleDrag(rightHandle, false);
+                
+                // Task Dragging Logic
+                let isDraggingTask = false;
+                let startLeft = 0;
+                let startX = 0;
+                bar.onmousedown = (e) => {
+                    if (e.button !== 0) return;
+                    e.stopPropagation();
+                    isDraggingTask = true;
+                    startLeft = left;
+                    startX = e.clientX;
+                    
+                    const mousemove = (ev) => {
+                        if (!isDraggingTask) return;
+                        const delta = ev.clientX - startX;
+                        bar.style.left = Math.max(0, startLeft + delta) + 'px';
+                    };
+                    const mouseup = (ev) => {
+                        if (!isDraggingTask) return;
+                        isDraggingTask = false;
+                        document.removeEventListener('mousemove', mousemove);
+                        document.removeEventListener('mouseup', mouseup);
+                        
+                        const deltaLeft = ev.clientX - startX;
+                        if (Math.abs(deltaLeft) < 5) {
+                            ganttOpenDetail(project, group.id, task.id);
+                            bar.style.left = left + 'px';
+                            return;
+                        }
+                        
+                        // Calculate new date
+                        const newLeft = Math.max(0, startLeft + deltaLeft);
+                        const foundDate = ganttPixelToDate(newLeft, cols, colWidth, zoom);
+                        
+                        const msShift = foundDate.getTime() - ganttParseDate(task.startDate).getTime();
+                        const daysShift = Math.round(msShift / GANTT_MS_DAY);
+                        
+                        task.startDate = ganttFormatDate(ganttAddDays(ganttParseDate(task.startDate), daysShift));
+                        task.endDate = ganttFormatDate(ganttAddDays(ganttParseDate(task.endDate), daysShift));
+                        
+                        renderGanttView(project);
+                        scheduleAutoSave();
+                    };
+                    document.addEventListener('mousemove', mousemove);
+                    document.addEventListener('mouseup', mouseup);
+                };
+                
                 tTrack.appendChild(bar);
                 rowsArea.appendChild(tTrack);
             });
@@ -6623,8 +7185,36 @@ function ganttOpenDetail(project, groupId, taskId) {
     document.getElementById('gantt-detail-progress').value  = task.progress || 0;
     document.getElementById('gantt-detail-progress-val').textContent = (task.progress || 0) + '%';
     document.getElementById('gantt-detail-status').value    = task.status || '';
-    document.getElementById('gantt-detail-assignee').value  = task.assignee || '';
+    
+    // Populate assignees
+    const assigneeSelect = document.getElementById('gantt-detail-assignee');
+    assigneeSelect.innerHTML = '<option value="">Unassigned</option>';
+    const workers = project.data.workers || [];
+    workers.forEach(w => {
+        const opt = document.createElement('option');
+        opt.value = w;
+        opt.textContent = w;
+        assigneeSelect.appendChild(opt);
+    });
+    assigneeSelect.value = task.assignee || '';
+    
     document.getElementById('gantt-detail-notes').value     = task.notes || '';
+
+    // Attachment preview
+    const preview = document.getElementById('gantt-detail-attachment-preview');
+    const clearBtn = document.getElementById('gantt-clear-img-btn');
+    let imgSrc = task.attachment;
+    if (task.attachment && globalImageCache[task.attachment]) {
+        imgSrc = globalImageCache[task.attachment];
+    }
+    
+    if (imgSrc) {
+        preview.innerHTML = `<img src="${imgSrc}" style="width: 100%; height: 100%; object-fit: cover;">`;
+        clearBtn.style.display = 'block';
+    } else {
+        preview.innerHTML = '<iconify-icon icon="lucide:image" width="16" height="16" style="color: var(--text-color-light);"></iconify-icon>';
+        clearBtn.style.display = 'none';
+    }
 
     panel.classList.add('open');
 }
@@ -6652,25 +7242,54 @@ function ganttSyncDetailToTask() {
     scheduleAutoSave();
 }
 
-function ganttDeleteTask() {
+function ganttDeleteTask(e) {
     if (!ganttDetailTarget) return;
     const { project, groupId, taskId } = ganttDetailTarget;
     const group = project.data.groups.find(g => g.id === groupId);
     if (!group) return;
-    group.tasks = group.tasks.filter(t => t.id !== taskId);
-    ganttCloseDetail();
-    renderGanttView(project);
-    scheduleAutoSave();
-    showToast('Task deleted.');
+
+    const doDelete = () => {
+        group.tasks = group.tasks.filter(t => t.id !== taskId);
+        ganttCloseDetail();
+        renderGanttView(project);
+        scheduleAutoSave();
+        showToast('Task deleted.');
+    };
+
+    if (e && e.shiftKey) {
+        doDelete();
+        return;
+    }
+
+    const overlay = document.getElementById('delete-group-modal-overlay');
+    const title = document.getElementById('delete-modal-title');
+    const desc = document.getElementById('delete-modal-desc');
+    const confirmBtn = document.getElementById('confirm-delete-group-btn');
+    const cancelBtn = document.getElementById('cancel-delete-group-btn');
+    
+    if (title) title.textContent = 'Delete Task?';
+    if (desc) desc.textContent = 'Are you sure you want to delete this task?';
+    
+    overlay.style.display = 'flex';
+    
+    confirmBtn.onclick = () => {
+        doDelete();
+        overlay.style.display = 'none';
+    };
+    
+    cancelBtn.onclick = () => {
+        overlay.style.display = 'none';
+    };
 }
 
 function ganttShiftView(project, direction) {
     const zoom = project.data.zoomLevel || 'week';
-    const steps = { week: 4, month: 3, quarter: 2 };
+    const steps = { day: 7, week: 4, month: 3, quarter: 2 };
     const n = steps[zoom] * direction;
-    if (zoom === 'week') {
-        project.data.viewStartDate = ganttFormatDate(ganttAddDays(ganttParseDate(project.data.viewStartDate), n * 7));
-        project.data.viewEndDate   = ganttFormatDate(ganttAddDays(ganttParseDate(project.data.viewEndDate),   n * 7));
+    if (zoom === 'day' || zoom === 'week') {
+        const days = zoom === 'day' ? n : n * 7;
+        project.data.viewStartDate = ganttFormatDate(ganttAddDays(ganttParseDate(project.data.viewStartDate), days));
+        project.data.viewEndDate   = ganttFormatDate(ganttAddDays(ganttParseDate(project.data.viewEndDate),   days));
     } else {
         project.data.viewStartDate = ganttFormatDate(ganttAddMonths(ganttParseDate(project.data.viewStartDate), n));
         project.data.viewEndDate   = ganttFormatDate(ganttAddMonths(ganttParseDate(project.data.viewEndDate),   n));
@@ -6683,9 +7302,14 @@ function ganttJumpToToday(project) {
     const today  = ganttToday();
     const zoom   = project.data.zoomLevel || 'week';
     const months = { week: 3, month: 6, quarter: 12 };
-    const half   = months[zoom];
-    project.data.viewStartDate = ganttFormatDate(ganttAddMonths(today, -half/2));
-    project.data.viewEndDate   = ganttFormatDate(ganttAddMonths(today,  half));
+    if (zoom === 'day') {
+        project.data.viewStartDate = ganttFormatDate(ganttAddDays(today, -7));
+        project.data.viewEndDate   = ganttFormatDate(ganttAddDays(today,  14));
+    } else {
+        const half   = months[zoom];
+        project.data.viewStartDate = ganttFormatDate(ganttAddMonths(today, -half/2));
+        project.data.viewEndDate   = ganttFormatDate(ganttAddMonths(today,  half));
+    }
     renderGanttView(project);
     // Scroll to today
     setTimeout(() => {
@@ -6749,4 +7373,211 @@ function setupGanttListeners() {
     });
 
     document.getElementById('gantt-detail-delete')?.addEventListener('click', ganttDeleteTask);
+
+    document.getElementById('gantt-attach-img-btn')?.addEventListener('click', () => {
+        openAssetLibrary((imgData) => {
+            if (!ganttDetailTarget) return;
+            const { project, groupId, taskId } = ganttDetailTarget;
+            const group = project.data.groups.find(g => g.id === groupId);
+            const task  = group && group.tasks.find(t => t.id === taskId);
+            if (!task) return;
+            
+            const imageId = Object.keys(globalImageCache).find(k => globalImageCache[k] === imgData);
+            task.attachment = imageId || imgData;
+            
+            ganttOpenDetail(project, groupId, taskId);
+            scheduleAutoSave();
+        });
+    });
+
+    document.getElementById('gantt-clear-img-btn')?.addEventListener('click', () => {
+        if (!ganttDetailTarget) return;
+        const { project, groupId, taskId } = ganttDetailTarget;
+        const group = project.data.groups.find(g => g.id === groupId);
+        const task  = group && group.tasks.find(t => t.id === taskId);
+        if (!task) return;
+        
+        delete task.attachment;
+        ganttOpenDetail(project, groupId, taskId);
+        scheduleAutoSave();
+    });
+
+    document.getElementById('gantt-copy-link-btn')?.addEventListener('click', () => {
+        if (!ganttContextTarget) return;
+        const center = screenToWorld({ x: canvas.width / 2, y: canvas.height / 2 });
+        clipboard = [{
+            type: 'text',
+            x: center.x,
+            y: center.y,
+            width: 250,
+            height: 150,
+            title: '',
+            text: '',
+            ganttLink: { ...ganttContextTarget },
+            bgColor: '#ffffff',
+            opacity: 1,
+            rotation: 0
+        }];
+        internalClipboardTimestamp = Date.now();
+        showToast("Task link copied! Paste in any canvas board.");
+        if (ganttContextMenu) ganttContextMenu.style.display = 'none';
+    });
+
+    // Zoom slider and buttons logic
+    const zoomSlider = document.getElementById('gantt-zoom-slider');
+    const zoomInBtn = document.getElementById('gantt-zoom-in-btn');
+    const zoomOutBtn = document.getElementById('gantt-zoom-out-btn');
+    
+    if (zoomSlider) {
+        zoomSlider.addEventListener('input', (e) => {
+            const proj = projects.find(p => p.id === activeProjectId);
+            if (!proj || proj.type !== 'moodgantt') return;
+            proj.data.zoomScale = parseInt(e.target.value) / 100;
+            renderGanttView(proj);
+        });
+        zoomSlider.addEventListener('change', scheduleAutoSave);
+    }
+    
+    const updateZoomFromWheelOrBtn = (delta) => {
+        const proj = projects.find(p => p.id === activeProjectId);
+        if (!proj || proj.type !== 'moodgantt') return;
+        let scale = proj.data.zoomScale || 1;
+        scale += delta;
+        scale = Math.max(0.5, Math.min(2.0, scale)); // Clamp to 50% - 200%
+        proj.data.zoomScale = scale;
+        if (zoomSlider) zoomSlider.value = Math.round(scale * 100);
+        renderGanttView(proj);
+        scheduleAutoSave();
+    };
+
+    if (zoomInBtn) zoomInBtn.addEventListener('click', () => updateZoomFromWheelOrBtn(0.1));
+    if (zoomOutBtn) zoomOutBtn.addEventListener('click', () => updateZoomFromWheelOrBtn(-0.1));
+
+    // Mouse wheel to zoom and pan on timeline
+    const timeline = document.getElementById('gantt-timeline');
+    if (timeline) {
+        timeline.addEventListener('wheel', (e) => {
+            // Zoom if no shift key is pressed, or if ctrl key is pressed
+            if (e.deltaY !== 0 && !e.shiftKey) {
+                e.preventDefault();
+                updateZoomFromWheelOrBtn(e.deltaY > 0 ? -0.1 : 0.1);
+            }
+        }, { passive: false });
+        
+        let isPanning = false;
+        let panStartX = 0;
+        let panScrollLeft = 0;
+        
+        timeline.addEventListener('mousedown', (e) => {
+            if (e.button === 1 || (e.button === 0 && e.shiftKey)) { // Middle click or shift+left click
+                e.preventDefault();
+                isPanning = true;
+                panStartX = e.clientX;
+                panScrollLeft = timeline.scrollLeft;
+                timeline.style.cursor = 'grabbing';
+            }
+        });
+        
+        window.addEventListener('mousemove', (e) => {
+            if (isPanning) {
+                const deltaX = e.clientX - panStartX;
+                timeline.scrollLeft = panScrollLeft - deltaX;
+            }
+        });
+        
+        window.addEventListener('mouseup', (e) => {
+            if (isPanning) {
+                isPanning = false;
+                timeline.style.cursor = '';
+            }
+        });
+    }
+    
+    // Worker Management Modal
+    const manageWorkersBtn = document.getElementById('gantt-manage-workers-btn');
+    const workersModal = document.getElementById('gantt-workers-modal-overlay');
+    const closeWorkersBtn = document.getElementById('close-gantt-workers-btn');
+    const addWorkerBtn = document.getElementById('add-worker-btn');
+    const newWorkerInput = document.getElementById('new-worker-input');
+    const workersList = document.getElementById('gantt-workers-list');
+
+    const renderWorkersList = () => {
+        const proj = projects.find(p => p.id === activeProjectId);
+        if (!proj || proj.type !== 'moodgantt') return;
+        workersList.innerHTML = '';
+        const workers = proj.data.workers || [];
+        workers.forEach((worker, idx) => {
+            const div = document.createElement('div');
+            div.style.display = 'flex';
+            div.style.justifyContent = 'space-between';
+            div.style.alignItems = 'center';
+            div.style.padding = '0.5rem';
+            div.style.background = 'rgba(0,0,0,0.1)';
+            div.style.borderRadius = '0.5rem';
+            
+            const span = document.createElement('span');
+            span.textContent = worker;
+            span.style.color = 'var(--text-color)';
+            
+            const delBtn = document.createElement('button');
+            delBtn.innerHTML = '<iconify-icon icon="lucide:trash-2" width="14" height="14"></iconify-icon>';
+            delBtn.style.background = 'none';
+            delBtn.style.border = 'none';
+            delBtn.style.color = 'var(--text-red-500, #ef4444)';
+            delBtn.style.cursor = 'pointer';
+            delBtn.onclick = () => {
+                proj.data.workers.splice(idx, 1);
+                renderWorkersList();
+                if (ganttDetailTarget && ganttDetailTarget.project === proj) {
+                    ganttOpenDetail(proj, ganttDetailTarget.groupId, ganttDetailTarget.taskId); // refresh select options
+                }
+                scheduleAutoSave();
+            };
+            
+            div.append(span, delBtn);
+            workersList.appendChild(div);
+        });
+    };
+
+    if (manageWorkersBtn) {
+        manageWorkersBtn.addEventListener('click', () => {
+            workersModal.style.display = 'flex';
+            renderWorkersList();
+            setTimeout(() => newWorkerInput.focus(), 50);
+        });
+    }
+
+    if (closeWorkersBtn) {
+        closeWorkersBtn.addEventListener('click', () => {
+            workersModal.style.display = 'none';
+        });
+    }
+
+    if (addWorkerBtn) {
+        addWorkerBtn.addEventListener('click', () => {
+            const proj = projects.find(p => p.id === activeProjectId);
+            if (!proj || proj.type !== 'moodgantt') return;
+            const name = newWorkerInput.value.trim();
+            if (name) {
+                proj.data.workers = proj.data.workers || [];
+                if (!proj.data.workers.includes(name)) {
+                    proj.data.workers.push(name);
+                    newWorkerInput.value = '';
+                    renderWorkersList();
+                    if (ganttDetailTarget && ganttDetailTarget.project === proj) {
+                        ganttOpenDetail(proj, ganttDetailTarget.groupId, ganttDetailTarget.taskId); // refresh select options
+                    }
+                    scheduleAutoSave();
+                } else {
+                    showToast('Worker already exists');
+                }
+            }
+        });
+    }
+    
+    if (newWorkerInput) {
+        newWorkerInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') addWorkerBtn.click();
+        });
+    }
 }
