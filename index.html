@@ -681,14 +681,13 @@
                 <span id="cloud-menu-email" class="cloud-menu-email"></span>
             </div>
         </div>
-        <!-- Storage meter -->
-        <div id="cloud-menu-storage" class="cloud-menu-storage" style="display:none;"></div>
         <div class="cloud-menu-divider"></div>
-        <button id="cloud-menu-save" class="cloud-menu-item">
+
+        <button id="cloud-menu-save" class="cloud-menu-item" title="Ctrl+Alt+S">
             <iconify-icon icon="lucide:cloud-upload" width="16" height="16"></iconify-icon>
             Save to Drive
         </button>
-        <button id="cloud-menu-open" class="cloud-menu-item">
+        <button id="cloud-menu-open" class="cloud-menu-item" title="Ctrl+Alt+O">
             <iconify-icon icon="lucide:cloud-download" width="16" height="16"></iconify-icon>
             Open from Drive
         </button>
@@ -718,6 +717,8 @@
         </div>
 
         <div class="cloud-menu-divider"></div>
+        <!-- Storage meter -->
+        <div id="cloud-menu-storage" class="cloud-menu-storage" style="display:none;"></div>
         <button id="cloud-menu-switch" class="cloud-menu-item">
             <iconify-icon icon="lucide:refresh-cw" width="16" height="16"></iconify-icon>
             Switch Account
@@ -1006,7 +1007,7 @@
                 <h3>General Hotkeys</h3>
                 <ul>
                     <li><strong>New Board:</strong> Shift+N</li>
-                    <li><strong>Open / Save Project:</strong> Ctrl+O / Ctrl+S</li>
+                    <li><strong>Open / Save Project:</strong> Ctrl+O / Ctrl+S (Local), Ctrl+Alt+O / Ctrl+Alt+S (Cloud)</li>
                     <li><strong>Export PNG:</strong> Shift+S (Download) or <strong>Shift+C</strong> (Copy to Clipboard)
                     </li>
                     <li><strong>Edit Operations:</strong> Ctrl+C (Copy), Ctrl+X (Cut), Ctrl+V (Paste), Ctrl+D

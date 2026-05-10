@@ -3161,8 +3161,7 @@
         /* ─── STORAGE METER (account menu) ───────────────────────────────── */
         .cloud-menu-storage {
             padding: 0.5rem 0.6rem 0.35rem;
-            border-bottom: 1px solid var(--border-color);
-            margin-bottom: 0.1rem;
+            margin-bottom: 0.25rem;
         }
 
         .cloud-storage-row {

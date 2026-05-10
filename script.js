@@ -3044,6 +3044,8 @@ function handleKeyDown(e) {
         if (e.shiftKey && key === 'a') { e.preventDefault(); autoAlignSelection(); return; }
         if (e.shiftKey && key === 'z') { e.preventDefault(); redoLastAction(); return; }
         if (e.shiftKey && key === 'g') { e.preventDefault(); ungroupSelectedItems(); return; }
+        if (e.altKey && key === 's') { e.preventDefault(); if (typeof CloudSync !== 'undefined') CloudSync.saveCurrentProject(); return; }
+        if (e.altKey && key === 'o') { e.preventDefault(); if (typeof CloudSync !== 'undefined') CloudSync.openFromDrive(); return; }
         if (key === 's') { e.preventDefault(); saveProject(); return; }
         if (key === 'o') { e.preventDefault(); projectInput.click(); return; }
         if (key === 'z') { e.preventDefault(); undoLastAction(); return; }
