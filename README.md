@@ -1,4 +1,4 @@
-# Moodinfinite v1.0.0
+# Moodinfinite v1.1.0
 
 ![Moodinfinite Logo](https://github.com/davidbrum25/moodinfinite/blob/main/_branding/_png/moodinfinite__Logotipo_alpha.png?raw=true)
 
@@ -88,6 +88,17 @@ Each Moodprompt file consists of **Prompt Cards**, which feature:
 * **Production Notes:** Dedicated fields for Title, Action/Dialogue, Duration, and Camera notes.
 * **Drag & Drop:** Easily reorder your story beats to refine the narrative.
 
+### Moodlist Tabs
+
+**Moodlist** is a structured, Google Keep–style checklist environment. It's perfect for managing tasks, tracking assets, or organizing ideas into color-coded cards.
+
+* **Checklist Cards:** Create reorderable checklists with rich-text titles and distinct color backgrounds.
+* **Visual Attachments:** Attach images directly to your cards for visual reference or inspiration.
+* **Smart Pinning:** Pin important lists to the top of your board for instant access.
+* **Rapid Entry:** Use `Enter` to quickly add multiple items in a row without losing focus.
+* **Live Filter:** Instantly search through your cards by title or item content via the top search bar.
+* **Drag-to-Reorder:** Use the dedicated grip handles to intuitively rearrange items within a list.
+
 ### Persistence & Storage
 
 * **LocalForage Auto-Saving:** Your entire workspace (projects, tabs, images, history) is silently saved in the browser's database and restored automatically on reload.
@@ -136,6 +147,18 @@ If you find this tool useful and want to help me build more, consider supporting
 ---
 
 ## Update Log
+
+### ✨ v1.1.0 — Moodlist & Rapid Organization
+
+* **📋 Moodlist Tab Type:** A brand new project type inspired by Google Keep. Organize your thoughts into checklists with images and color coding.
+* **📍 Smart Pinning:** Pin cards to the top of your Moodlist for easy prioritization.
+* **🖼️ Image Attachments:** Upload images to individual cards to keep your visual references alongside your tasks.
+* **🎨 Color-Coded Boards:** Choose from 11 curated dark-mode color themes for each list card.
+* **⚡ Rapid Item Entry:** Optimized "Add Item" flow that keeps focus in the field for high-speed list creation.
+* **⠿ Drag-to-Reorder:** Integrated HTML5 drag-and-drop system for reordering list items with dedicated grip handles.
+* **🔍 Live Card Filtering:** Real-time search across all list cards in your project.
+
+---
 
 ### ✨ v1.0.0 — Google Drive Cloud Sync & Persistence
 

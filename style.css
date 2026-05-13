@@ -4391,7 +4391,7 @@
 
 .ml-card-item {
     display: flex;
-    align-items: flex-start;
+    align-items: center;
     gap: 0.5rem;
     cursor: pointer;
     padding: 0.2rem 0;
@@ -4435,6 +4435,45 @@
 }
 .ml-card:hover .ml-card-add-item { opacity: 0.6; }
 .ml-card-add-item:hover { opacity: 1 !important; }
+
+.ml-card-item-del {
+    background: transparent;
+    border: none;
+    color: var(--text-color-light);
+    cursor: pointer;
+    padding: 0.15rem;
+    border-radius: 0.25rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    margin-left: auto;
+    opacity: 0;
+    transition: opacity 0.15s, color 0.15s;
+}
+.ml-card-item:hover .ml-card-item-del { opacity: 0.6; }
+.ml-card-item-del:hover { opacity: 1 !important; color: #ef4444; }
+
+/* Drag handle */
+.ml-drag-handle {
+    cursor: grab;
+    color: var(--text-color-light);
+    opacity: 0;
+    transition: opacity 0.15s;
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
+    padding: 0 2px 0 0;
+}
+.ml-card-item:hover .ml-drag-handle { opacity: 0.4; }
+.ml-drag-handle:hover { opacity: 1 !important; }
+.ml-drag-handle:active { cursor: grabbing; }
+
+/* Drag states */
+.ml-card-item.ml-dragging { opacity: 0.35; }
+.ml-card-item.ml-drag-over-top    { box-shadow: 0 -2px 0 0 var(--switch-bg-checked); }
+.ml-card-item.ml-drag-over-bottom { box-shadow: 0  2px 0 0 var(--switch-bg-checked); }
+
 
 .ml-card-inline-add {
     display: flex;

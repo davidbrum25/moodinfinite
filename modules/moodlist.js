@@ -314,12 +314,18 @@ function _buildCard(card, project, grid) {
 
     // Items
     const itemsHtml = card.items.map(item => `
-        <label class="ml-card-item${item.checked ? ' checked' : ''}" data-item-id="${item.id}">
+        <div class="ml-card-item${item.checked ? ' checked' : ''}" data-item-id="${item.id}" draggable="true">
+            <span class="ml-drag-handle" title="Drag to reorder">
+                <iconify-icon icon="lucide:grip-vertical" width="14" height="14"></iconify-icon>
+            </span>
             <span class="ml-card-checkbox">
                 <iconify-icon icon="${item.checked ? 'lucide:check-square' : 'lucide:square'}" width="15" height="15"></iconify-icon>
             </span>
             <span class="ml-card-item-text">${_escapeHtml(item.text)}</span>
-        </label>
+            <button class="ml-card-item-del" title="Delete item" tabindex="-1">
+                <iconify-icon icon="lucide:x" width="12" height="12"></iconify-icon>
+            </button>
+        </div>
     `).join('');
 
     const pinnedIcon = card.pinned
@@ -362,16 +368,22 @@ function _buildCard(card, project, grid) {
 
 /* ─── WIRE CARD INTERACTIONS ────────────────────────────────────────────── */
 function _wireCard(el, card, project, grid) {
-    // Toggle checkboxes
-    el.querySelectorAll('.ml-card-item').forEach(labelEl => {
-        labelEl.addEventListener('click', () => {
-            const itemId = labelEl.dataset.itemId;
-            const item = card.items.find(i => i.id === itemId);
+    // Toggle checkboxes + delete item buttons
+    el.querySelectorAll('.ml-card-item').forEach(itemEl => {
+        itemEl.addEventListener('click', (e) => {
+            if (e.target.closest('.ml-card-item-del')) return;
+            const item = card.items.find(i => i.id === itemEl.dataset.itemId);
             if (item) {
                 item.checked = !item.checked;
                 scheduleAutoSave();
                 renderMoodlistCards(project, grid);
             }
+        });
+        itemEl.querySelector('.ml-card-item-del')?.addEventListener('click', (e) => {
+            e.stopPropagation();
+            card.items = card.items.filter(i => i.id !== itemEl.dataset.itemId);
+            scheduleAutoSave();
+            renderMoodlistCards(project, grid);
         });
     });
 
@@ -389,34 +401,82 @@ function _wireCard(el, card, project, grid) {
 
     // Inline add item
     el.querySelector('.ml-card-add-item').addEventListener('click', () => {
+        const itemsContainer = el.querySelector('.ml-card-items');
+
         const input = document.createElement('div');
         input.className = 'ml-card-inline-add';
         input.innerHTML = `
             <span class="ml-check-placeholder"><iconify-icon icon="lucide:circle" width="14" height="14"></iconify-icon></span>
             <input type="text" placeholder="New item…" class="ml-inline-input">
         `;
-        el.querySelector('.ml-card-items').appendChild(input);
+        itemsContainer.appendChild(input);
         const inp = input.querySelector('.ml-inline-input');
         inp.focus();
+
+        let anyAdded = false;
+
+        const addInPlace = () => {
+            const text = inp.value.trim();
+            if (!text) return;
+
+            // 1. Push to data
+            const newItem = { id: mlId(), text, checked: false };
+            card.items.push(newItem);
+            scheduleAutoSave();
+            anyAdded = true;
+
+            // 2. Insert a visible row immediately BEFORE the inline input
+            const row = document.createElement('div');
+            row.className = 'ml-card-item';
+            row.dataset.itemId = newItem.id;
+            row.innerHTML = `
+                <span class="ml-drag-handle" title="Drag to reorder">
+                    <iconify-icon icon="lucide:grip-vertical" width="14" height="14"></iconify-icon>
+                </span>
+                <span class="ml-card-checkbox">
+                    <iconify-icon icon="lucide:square" width="15" height="15"></iconify-icon>
+                </span>
+                <span class="ml-card-item-text">${_escapeHtml(text)}</span>
+                <button class="ml-card-item-del" title="Delete item" tabindex="-1">
+                    <iconify-icon icon="lucide:x" width="12" height="12"></iconify-icon>
+                </button>
+            `;
+            row.addEventListener('click', (e) => {
+                if (e.target.closest('.ml-card-item-del')) return;
+                newItem.checked = !newItem.checked;
+                row.classList.toggle('checked', newItem.checked);
+                row.querySelector('.ml-card-checkbox iconify-icon').setAttribute('icon',
+                    newItem.checked ? 'lucide:check-square' : 'lucide:square');
+                scheduleAutoSave();
+            });
+            row.querySelector('.ml-card-item-del').addEventListener('click', (e) => {
+                e.stopPropagation();
+                card.items = card.items.filter(i => i.id !== newItem.id);
+                row.remove();
+                scheduleAutoSave();
+            });
+            itemsContainer.insertBefore(row, input);
+
+            // 3. Clear field, keep focus
+            inp.value = '';
+        };
+
         inp.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter') {
-                e.preventDefault();
-                const text = inp.value.trim();
-                if (text) {
-                    card.items.push({ id: mlId(), text, checked: false });
-                    scheduleAutoSave();
-                    renderMoodlistCards(project, grid);
-                } else {
-                    input.remove();
-                }
+            if (e.key === 'Enter') { e.preventDefault(); addInPlace(); }
+            if (e.key === 'Escape') {
+                input.remove();
+                if (anyAdded) renderMoodlistCards(project, grid);
             }
-            if (e.key === 'Escape') input.remove();
         });
+
         inp.addEventListener('blur', () => {
             const text = inp.value.trim();
             if (text) {
                 card.items.push({ id: mlId(), text, checked: false });
                 scheduleAutoSave();
+                anyAdded = true;
+            }
+            if (anyAdded) {
                 renderMoodlistCards(project, grid);
             } else {
                 input.remove();
@@ -431,7 +491,7 @@ function _wireCard(el, card, project, grid) {
         renderMoodlistCards(project, grid);
     });
 
-    // Delete
+    // Delete card
     el.querySelector('.ml-card-delete-btn').addEventListener('click', () => {
         project.data.cards = project.data.cards.filter(c => c.id !== card.id);
         scheduleAutoSave();
@@ -488,7 +548,73 @@ function _wireCard(el, card, project, grid) {
     document.addEventListener('click', () => {
         colorPickerEl.style.display = 'none';
     }, { once: false });
+
+    // Drag-to-reorder
+    _wireDragDrop(el.querySelector('.ml-card-items'), card, project, grid);
 }
+
+/* ─── DRAG-AND-DROP REORDER ─────────────────────────────────────────────── */
+function _wireDragDrop(container, card, project, grid) {
+    let draggedId = null;
+    let pointerOnHandle = false; // track if mousedown originated on the grip handle
+
+    // Must use mousedown (fires before dragstart) to know if drag started from handle
+    container.addEventListener('mousedown', (e) => {
+        pointerOnHandle = !!e.target.closest('.ml-drag-handle');
+    });
+
+    container.addEventListener('dragstart', (e) => {
+        if (!pointerOnHandle) { e.preventDefault(); return; }
+        const row = e.target.closest('.ml-card-item');
+        if (!row) return;
+        draggedId = row.dataset.itemId;
+        e.dataTransfer.effectAllowed = 'move';
+        setTimeout(() => row.classList.add('ml-dragging'), 0);
+    });
+
+    container.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+        const row = e.target.closest('.ml-card-item');
+        container.querySelectorAll('.ml-card-item').forEach(r =>
+            r.classList.remove('ml-drag-over-top', 'ml-drag-over-bottom'));
+        if (!row || row.dataset.itemId === draggedId) return;
+        const midY = row.getBoundingClientRect().top + row.getBoundingClientRect().height / 2;
+        row.classList.add(e.clientY < midY ? 'ml-drag-over-top' : 'ml-drag-over-bottom');
+    });
+
+    container.addEventListener('dragleave', (e) => {
+        if (!container.contains(e.relatedTarget)) {
+            container.querySelectorAll('.ml-card-item').forEach(r =>
+                r.classList.remove('ml-drag-over-top', 'ml-drag-over-bottom'));
+        }
+    });
+
+    container.addEventListener('drop', (e) => {
+        e.preventDefault();
+        const row = e.target.closest('.ml-card-item');
+        if (!row || !draggedId || row.dataset.itemId === draggedId) return;
+
+        const midY = row.getBoundingClientRect().top + row.getBoundingClientRect().height / 2;
+        const dropBefore = e.clientY < midY;
+
+        const fromIdx = card.items.findIndex(i => i.id === draggedId);
+        const targetId = row.dataset.itemId;
+        const [moved] = card.items.splice(fromIdx, 1);
+        const toIdx = card.items.findIndex(i => i.id === targetId);
+        card.items.splice(dropBefore ? toIdx : toIdx + 1, 0, moved);
+
+        scheduleAutoSave();
+        renderMoodlistCards(project, grid);
+    });
+
+    container.addEventListener('dragend', () => {
+        draggedId = null;
+        container.querySelectorAll('.ml-card-item').forEach(r =>
+            r.classList.remove('ml-dragging', 'ml-drag-over-top', 'ml-drag-over-bottom'));
+    });
+}
+
 
 /* ─── UTILS ─────────────────────────────────────────────────────────────── */
 function _escapeHtml(str) {
