@@ -47,6 +47,10 @@ const imageLazyObserver = new IntersectionObserver((entries, observer) => {
 let autoSaveTimeout = null;
 function scheduleAutoSave() {
     clearTimeout(autoSaveTimeout);
+    const activeProject = projects.find(p => p.id === activeProjectId);
+    if (activeProject && activeProject.data) {
+        activeProject.data._isDirty = true;
+    }
     autoSaveTimeout = setTimeout(saveToBrowser, 1500);
 }
 
@@ -170,6 +174,7 @@ function showTabSwitcher() {
         if (proj.type === 'moodgantt') iconStr = 'lucide:bar-chart-horizontal';
         else if (proj.type === 'colorseeker') iconStr = 'lucide:palette';
         else if (proj.type === 'storyflow') iconStr = 'lucide:layout-dashboard';
+        else if (proj.type === 'moodlist') iconStr = 'lucide:list-check';
         else if (proj.type === 'doc') iconStr = 'lucide:file-text';
         
         iconDiv.innerHTML = `<iconify-icon icon="${iconStr}" width="18" height="18"></iconify-icon>`;
@@ -183,7 +188,10 @@ function showTabSwitcher() {
         
         const type = document.createElement('span');
         type.className = 'tab-switcher-type';
-        type.textContent = proj.type === 'storyflow' ? 'Moodflow' : (proj.type === 'moodgantt' ? 'Moodgantt' : proj.type);
+        type.textContent = proj.type === 'storyflow' ? 'Moodflow'
+            : proj.type === 'moodgantt' ? 'Moodgantt'
+            : proj.type === 'moodlist' ? 'Moodlist'
+            : proj.type;
         
         details.append(name, type);
         item.append(iconDiv, details);
@@ -294,6 +302,14 @@ function createNewProject(type) {
         const gEnd   = ganttFormatDate(ganttAddMonths(ganttToday(), 6));
         newProject = { id: newId, type: 'moodgantt', name: `Plan ${gcnt + 1}`,
             data: { zoomLevel: 'week', viewStartDate: gToday, viewEndDate: gEnd, groups: [], canvasBackgroundColor: defaultCanvasBg, accentColor: defaultAccent, gridColor: defaultGridColor } };
+    } else if (type === 'moodlist') {
+        const lcnt = projects.filter(p => p.type === 'moodlist').length;
+        newProject = {
+            id: newId,
+            type: 'moodlist',
+            name: `List ${lcnt + 1}`,
+            data: { cards: [] }
+        };
     } else {
         const projectCount = projects.filter(p => p.type === 'moodprompt').length;
         newProject = {
@@ -349,6 +365,8 @@ function switchTab(projectId) {
         if (storyflowMinimap) storyflowMinimap.style.display = 'none';
         const ganttCont = document.getElementById('gantt-container');
         if (ganttCont) ganttCont.style.display = 'none';
+        const moodlistContMI = document.getElementById('moodlist-container');
+        if (moodlistContMI) moodlistContMI.style.display = 'none';
         resizeCanvas();
     } else if (newActiveProject.type === 'colorseeker') {
         moodinfiniteContainer.style.display = 'none';
@@ -359,6 +377,8 @@ function switchTab(projectId) {
         if (storyflowMinimap) storyflowMinimap.style.display = 'none';
         const ganttCont = document.getElementById('gantt-container');
         if (ganttCont) ganttCont.style.display = 'none';
+        const moodlistContCS = document.getElementById('moodlist-container');
+        if (moodlistContCS) moodlistContCS.style.display = 'none';
         renderColorSeeker(projectId);
     } else if (newActiveProject.type === 'storyflow') {
         moodinfiniteContainer.style.display = 'none';
@@ -369,6 +389,8 @@ function switchTab(projectId) {
         if (storyflowMinimap) storyflowMinimap.style.display = 'flex';
         const ganttCont = document.getElementById('gantt-container');
         if (ganttCont) ganttCont.style.display = 'none';
+        const moodlistContSF = document.getElementById('moodlist-container');
+        if (moodlistContSF) moodlistContSF.style.display = 'none';
         renderStoryflowView(newActiveProject);
     } else if (newActiveProject.type === 'moodgantt') {
         moodinfiniteContainer.style.display = 'none';
@@ -379,8 +401,22 @@ function switchTab(projectId) {
         moodpromptContainer.style.display = 'none';
         const ganttCont = document.getElementById('gantt-container');
         if (ganttCont) ganttCont.style.display = 'flex';
+        const moodlistCont = document.getElementById('moodlist-container');
+        if (moodlistCont) moodlistCont.style.display = 'none';
         ganttCloseDetail();
         renderGanttView(newActiveProject);
+    } else if (newActiveProject.type === 'moodlist') {
+        moodinfiniteContainer.style.display = 'none';
+        moodpromptContainer.style.display = 'none';
+        if (colorseekerContainer) colorseekerContainer.style.display = 'none';
+        if (storyflowContainer) storyflowContainer.style.display = 'none';
+        const sfm3 = document.getElementById('storyflow-minimap');
+        if (sfm3) sfm3.style.display = 'none';
+        const ganttCont2 = document.getElementById('gantt-container');
+        if (ganttCont2) ganttCont2.style.display = 'none';
+        const moodlistCont = document.getElementById('moodlist-container');
+        if (moodlistCont) moodlistCont.style.display = 'flex';
+        if (typeof renderMoodlistView === 'function') renderMoodlistView(newActiveProject);
     } else {
         moodinfiniteContainer.style.display = 'none';
         if (colorseekerContainer) colorseekerContainer.style.display = 'none';
@@ -389,6 +425,8 @@ function switchTab(projectId) {
         if (storyflowMinimap) storyflowMinimap.style.display = 'none';
         const ganttCont2 = document.getElementById('gantt-container');
         if (ganttCont2) ganttCont2.style.display = 'none';
+        const moodlistCont2 = document.getElementById('moodlist-container');
+        if (moodlistCont2) moodlistCont2.style.display = 'none';
         moodpromptContainer.style.display = 'flex';
         renderMoodpromptView(newActiveProject);
     }
@@ -512,7 +550,9 @@ function renderTabs() {
                     ? `<iconify-icon icon="lucide:clapperboard" width="16" height="16"></iconify-icon>`
                     : project.type === 'moodgantt'
                         ? `<iconify-icon icon="lucide:gantt-chart" width="16" height="16"></iconify-icon>`
-                        : `<iconify-icon icon="lucide:pen-tool" width="16" height="16"></iconify-icon>`;
+                        : project.type === 'moodlist'
+                            ? `<iconify-icon icon="lucide:list-check" width="16" height="16"></iconify-icon>`
+                            : `<iconify-icon icon="lucide:pen-tool" width="16" height="16"></iconify-icon>`;
 
         const nameSpan = document.createElement('span');
         nameSpan.className = 'tab-name';
@@ -4064,6 +4104,15 @@ function loadFileAsNewTab(fileContent, fileName) {
             loadProject(fileContent);
             return;
         }
+        if (data.cards && Array.isArray(data.cards)) {
+            const newId = Date.now();
+            const newProject = { id: newId, type: 'moodlist', name: name, data: { cards: data.cards } };
+            projects.push(newProject);
+            renderTabs();
+            switchTab(newId);
+            showToast("Moodlist file loaded successfully.");
+            return;
+        }
         showToast("Failed to load project. Unknown format.", "error");
     } catch (err) {
         console.error("Failed to load project:", err);
@@ -4119,6 +4168,79 @@ function loadFileFromObject(t) {
         o.readAsText(t);
     }
 }
+
+/**
+ * Reloads the data for the current active project from a .mood (zip) blob.
+ * Used for background sync.
+ */
+window.reloadCurrentProjectFromBlob = async function(blob) {
+    const activeProject = projects.find(p => p.id === activeProjectId);
+    if (!activeProject) return;
+
+    try {
+        const zip = await window.JSZip.loadAsync(blob);
+        const rootKey = Object.keys(zip.files).find(k => k.endsWith('data.json'));
+        if (!rootKey) return;
+
+        const jsonStr = await zip.file(rootKey).async("string");
+        const data = JSON.parse(jsonStr);
+
+        // Update image cache
+        const promises = Object.keys(data.globalImageCache || {}).map(async id => {
+            const relativePath = data.globalImageCache[id];
+            if (relativePath.startsWith('images/')) {
+                const rootDirName = rootKey.split('data.json')[0];
+                const file = zip.file(rootDirName + relativePath);
+                if (file) {
+                    const b64 = await file.async("base64");
+                    globalImageCache[id] = "data:image/webp;base64," + b64;
+                }
+            } else {
+                globalImageCache[id] = relativePath;
+            }
+        });
+        await Promise.all(promises);
+
+        // Update project data
+        if (activeProject.type === 'moodinfinite') {
+            // Special handling for moodinfinite global variables
+            const t = data;
+            canvasBackgroundColor = t.canvasBackgroundColor || '#0d0d0d';
+            accentColor = t.accentColor || '#429eff';
+            gridColor = t.gridColor || '#f9f8f6';
+            showGrid = t.showGrid ?? true;
+            snapToGrid = t.snapToGrid ?? true;
+            showDropShadow = t.showDropShadow ?? true;
+            gridSize = t.gridSize || 50;
+            gridOpacity = t.gridOpacity || .05;
+
+            const processedItems = t.items || [];
+            restoreImages(processedItems);
+            
+            activeProject.data.items = [
+                ...processedItems.filter(i => i.type !== 'comment'),
+                ...processedItems.filter(i => i.type === 'comment')
+            ];
+            
+            // Sync the global items variable if this is still the active project
+            if (activeProjectId === activeProject.id) {
+                items = activeProject.data.items;
+                updateUIColors();
+                requestUpdate();
+            }
+        } else {
+            // General reload for other types
+            activeProject.data = { ...activeProject.data, ...data };
+            if (activeProjectId === activeProject.id) {
+                switchTab(activeProjectId); // Full refresh
+            }
+        }
+        return true;
+    } catch (e) {
+        console.error("Failed to reload project from blob:", e);
+        return false;
+    }
+};
 
 function handleImageUpload(e) { if (!e.target.files) return; const t = screenToWorld({ x: canvas.width / 2, y: canvas.height / 2 }); processFiles(e.target.files, t); imageInput.value = '' }
 function handleProjectUpload(e) { const t = e.target.files[0]; if (!t) return; loadFileFromObject(t); projectInput.value = '' }
@@ -7743,6 +7865,9 @@ function ganttJumpToToday(project) {
 function setupGanttListeners() {
     const addMoodganttBtn = document.getElementById('add-moodgantt-tab-btn');
     if (addMoodganttBtn) addMoodganttBtn.addEventListener('click', () => createNewProject('moodgantt'));
+
+    const addMoodlistBtn = document.getElementById('add-moodlist-tab-btn');
+    if (addMoodlistBtn) addMoodlistBtn.addEventListener('click', () => createNewProject('moodlist'));
 
     document.getElementById('gantt-add-group-btn')?.addEventListener('click', () => {
         const proj = projects.find(p => p.id === activeProjectId);

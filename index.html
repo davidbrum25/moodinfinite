@@ -69,6 +69,9 @@
         <button id="add-moodgantt-tab-btn" class="tab-add-btn" title="New Moodgantt Board">
             <iconify-icon icon="lucide:gantt-chart" width="20" height="20"></iconify-icon>
         </button>
+        <button id="add-moodlist-tab-btn" class="tab-add-btn" title="New Moodlist Board">
+            <iconify-icon icon="lucide:list-check" width="20" height="20"></iconify-icon>
+        </button>
 
         <div style="width: 1px; background-color: var(--border-color); margin: 8px 4px; align-self: stretch;"></div>
 
@@ -573,6 +576,9 @@
             </button>
         </div>
     </div>
+
+    <!-- ═══ MOODLIST CONTAINER ═══ -->
+    <div id="moodlist-container" class="tab-content moodlist-container" style="display:none;"></div>
 
     <!-- Gantt task detail panel -->
     <div id="gantt-detail-panel">
@@ -1133,6 +1139,7 @@
     </div>
 
     <script src="script.js"></script>
+    <script src="modules/moodlist.js"></script>
     <script src="cloud.js"></script>
 </body>
 
