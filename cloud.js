@@ -118,14 +118,31 @@ const CloudSync = (() => {
     /**
      * Requests an access token. Resolves immediately if token is valid,
      * otherwise opens the Google sign-in popup.
+     * If GIS hasn't finished loading yet, waits up to 8 s before failing.
      */
     function _ensureAuth() {
         return new Promise((resolve, reject) => {
             if (_isTokenValid()) return resolve(_accessToken);
+
+            // If GIS is not ready yet, wait briefly for it instead of failing immediately.
+            // This covers the case where the user triggers an action before the async
+            // GIS script has fully initialised.
             if (!_ready) {
-                reject(new Error('Google Identity Services not loaded. Refresh and try again.'));
+                const deadline = Date.now() + 8000;
+                const waitPoll = setInterval(() => {
+                    if (_ready) {
+                        clearInterval(waitPoll);
+                        _pendingResolve = resolve;
+                        _pendingReject = reject;
+                        _tokenClient.requestAccessToken({ prompt: _userInfo ? '' : 'select_account' });
+                    } else if (Date.now() >= deadline) {
+                        clearInterval(waitPoll);
+                        reject(new Error('Google Identity Services not loaded. Refresh and try again.'));
+                    }
+                }, 150);
                 return;
             }
+
             _pendingResolve = resolve;
             _pendingReject = reject;
             _tokenClient.requestAccessToken({ prompt: _userInfo ? '' : 'select_account' });
@@ -166,10 +183,14 @@ const CloudSync = (() => {
     // ─── LIST DRIVE FILES ───────────────────────────────────────────────────
     async function listFiles() {
         await _ensureAuth();
-        const fId = await _ensureFolder();
-        // Search for .mood files in the app folder OR shared with the user
-        // Note: drive.file scope limits us to files we created or the user opened with our app
-        const q = encodeURIComponent(`(name contains '.mood' or name contains '.zip') and trashed=false`);
+        await _ensureFolder();
+        // With drive.file scope the parent folder ID is unreliable across sessions,
+        // so we search all accessible files and exclude folders by mimeType.
+        const q = encodeURIComponent(
+            `(name contains '.mood' or name contains '.zip') ` +
+            `and mimeType != 'application/vnd.google-apps.folder' ` +
+            `and trashed=false`
+        );
         const result = await _fetchJSON(
             `${DRIVE_API}/files?q=${q}&fields=files(id,name,modifiedTime,size,createdTime)&orderBy=modifiedTime desc`,
             { headers: _driveHeaders() }
@@ -325,6 +346,33 @@ const CloudSync = (() => {
             keepLocalBtn.addEventListener('click', onLocal);
             keepDriveBtn.addEventListener('click', onDrive);
             cancelBtn.addEventListener('click', onCancel);
+        });
+    }
+
+    // ─── DELETE CONFIRM DIALOG ───────────────────────────────────────────────
+    function _showDeleteConfirmDialog(fileName) {
+        return new Promise(resolve => {
+            const overlay     = document.getElementById('cloud-delete-confirm-overlay');
+            const descEl      = document.getElementById('cloud-delete-confirm-desc');
+            const confirmBtn  = document.getElementById('cloud-delete-confirm-btn');
+            const cancelBtn   = document.getElementById('cloud-delete-cancel-btn');
+
+            if (descEl) descEl.textContent = `Are you sure you want to permanently delete "${fileName}" from Google Drive? This action cannot be undone.`;
+            overlay.style.display = 'flex';
+
+            function cleanup() {
+                overlay.style.display = 'none';
+                confirmBtn.removeEventListener('click', onConfirm);
+                cancelBtn.removeEventListener('click', onCancel);
+                overlay.removeEventListener('click', onOverlay);
+            }
+            function onConfirm() { cleanup(); resolve(true); }
+            function onCancel()  { cleanup(); resolve(false); }
+            function onOverlay(e) { if (e.target === overlay) { cleanup(); resolve(false); } }
+
+            confirmBtn.addEventListener('click', onConfirm);
+            cancelBtn.addEventListener('click', onCancel);
+            overlay.addEventListener('click', onOverlay);
         });
     }
 
@@ -504,7 +552,7 @@ const CloudSync = (() => {
                     });
                     item.querySelector('.cloud-picker-delete-btn').addEventListener('click', async (e) => {
                         e.stopPropagation();
-                        if (confirm(`Delete "${f.name}"?`)) {
+                        if (await _showDeleteConfirmDialog(f.name)) {
                             await deleteFile(f.id);
                             const updated = await listFiles();
                             _renderList(updated);
@@ -794,23 +842,22 @@ const CloudSync = (() => {
 
     // ─── INIT ────────────────────────────────────────────────────────────────
     function init() {
-        // Wait for the GIS library to be available
+        // cloud.js is loaded at the bottom of <body>, so the 'load' event has
+        // already fired by the time init() runs. Poll immediately instead.
         if (window.google?.accounts?.oauth2) {
             _initGIS();
         } else {
-            window.addEventListener('load', () => {
-                // Poll briefly since the GIS script is async
-                let attempts = 0;
-                const poll = setInterval(() => {
-                    if (window.google?.accounts?.oauth2) {
-                        clearInterval(poll);
-                        _initGIS();
-                    } else if (++attempts > 20) {
-                        clearInterval(poll);
-                        console.warn('[CloudSync] GIS library failed to load.');
-                    }
-                }, 200);
-            });
+            // Poll for up to 15 s (75 × 200 ms) for the async GIS script to load.
+            let attempts = 0;
+            const poll = setInterval(() => {
+                if (window.google?.accounts?.oauth2) {
+                    clearInterval(poll);
+                    _initGIS();
+                } else if (++attempts > 75) {
+                    clearInterval(poll);
+                    console.warn('[CloudSync] GIS library failed to load after 15 s.');
+                }
+            }, 200);
         }
 
         // Wire up the user account menu

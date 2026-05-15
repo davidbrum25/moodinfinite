@@ -2266,14 +2266,14 @@ function drawTextItem(ctx, item) {
     // Title Section
     if (item.title && item.title.trim() !== "") {
         ctx.fillStyle = textPrimary;
-        ctx.font = `bold 16px '${item.fontFamily || 'Nunito'}', sans-serif`;
+        ctx.font = `bold 24px '${item.fontFamily || 'Nunito'}', sans-serif`;
         ctx.textAlign = 'left';
         ctx.textBaseline = 'top';
 
         const titleLines = wrapText(ctx, item.title, item.width - pX * 2);
         titleLines.forEach(line => {
             ctx.fillText(line, x + pX, currY);
-            currY += 22; // Slightly more line height for title
+            currY += 32; // Slightly more line height for title
         });
         currY += 10;
     }
@@ -4484,27 +4484,7 @@ function moveSelectedDown() {
     }
 }
 
-function duplicateItems() {
-    if (selectedItems.length === 0) return;
-    const e = selectedItems, t = [], o = 20 / cameraZoom;
-    e.forEach(e => {
-        const a = JSON.parse(JSON.stringify(e));
-        a.id = Date.now() + Math.random();
-        a.isPinned = !1;
-        reattachImages(e, a);
-        a.x += o;
-        a.y += o;
-        if (a.type === 'arrow' || a.type === 'measure') { a.startX += o; a.startY += o; a.endX += o; a.endY += o }
-        else if (a.type === 'stroke') { a.points.forEach(e => { e.x += o; e.y += o }) }
-        addItemToLayeredItems(a);
-        t.push(a)
-    });
-    selectedItems = t;
-    updateSelectionToolbar();
-    updateLeftBarState();
-    saveStateForUndo();
-    showToast(`${t.length} item${t.length > 1 ? 's' : ''} duplicated.`)
-}
+
 function flipHorizontal() {
     if (selectedItems.length === 0) return;
     selectedItems.forEach(item => {
@@ -4882,9 +4862,9 @@ function updateNoteDimensions(item) {
     let totalH = 40;
 
     if (item.title && item.title.trim() !== "") {
-        testCtx.font = `bold 16px Nunito`;
+        testCtx.font = `bold 24px Nunito`;
         const titleLines = wrapText(testCtx, item.title, maxWidth);
-        totalH += titleLines.length * 22;
+        totalH += titleLines.length * 32;
         totalH += 10;
     }
 
