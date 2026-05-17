@@ -410,7 +410,7 @@ const CloudSync = (() => {
      * Called when the user triggers "Save to Drive".
      * Serialises the current active project into a .mood blob and uploads it.
      */
-    async function saveCurrentProject() {
+    async function saveCurrentProject(isAutoSave = false) {
         try {
             setCloudStatus('syncing');
             showCloudToast('Saving to Google Drive…', 'info');
@@ -421,7 +421,7 @@ const CloudSync = (() => {
 
             const fileName = `${(activeProject?.name || 'moodboard').replace(/[^a-z0-9 _-]/gi, '_')}.mood`;
 
-            const fileId = await uploadFile(blob, fileName);
+            const fileId = await uploadFile(blob, fileName, isAutoSave);
             if (fileId) {
                 // Fetch latest metadata to get exact modifiedTime from Drive
                 const meta = await _fetchJSON(`${DRIVE_API}/files/${fileId}?fields=id,modifiedTime,version`, { headers: _driveHeaders() });

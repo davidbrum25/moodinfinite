@@ -1821,19 +1821,23 @@ function setupEventListeners() {
         onContextMenu(fakeEvent);
     });
 
-    if (addArrowBtn) addArrowBtn.addEventListener('click', () => setCurrentTool('arrow'));
-    if (addTextBtn) addTextBtn.addEventListener('click', () => setCurrentTool('text'));
-    if (addCommentBtn) addCommentBtn.addEventListener('click', () => setCurrentTool('comment'));
-    if (addLinkBtn) addLinkBtn.addEventListener('click', () => setCurrentTool('link'));
-    if (addBoxBtn) addBoxBtn.addEventListener('click', () => setCurrentTool('box'));
-    if (addCircleBtn) addCircleBtn.addEventListener('click', () => setCurrentTool('circle'));
-    if (addMeasureBtn) addMeasureBtn.addEventListener('click', () => setCurrentTool('measure'));
-    if (addGridBtn) addGridBtn.addEventListener('click', () => setCurrentTool('grid'));
-    if (addTextListBtn) addTextListBtn.addEventListener('click', () => setCurrentTool('textList'));
-    if (addCounterBtn) addCounterBtn.addEventListener('click', () => setCurrentTool('counter'));
-    if (drawBtn) drawBtn.addEventListener('click', () => setCurrentTool('draw'));
-    if (eyedropperBtn) eyedropperBtn.addEventListener('click', () => setCurrentTool('eyedropper'));
-    if (selectToolBtn) selectToolBtn.addEventListener('click', () => setCurrentTool(null));
+    document.body.addEventListener('click', (e) => {
+        const btn = e.target.closest('#left-bar .tool-button');
+        if (!btn) return;
+        if (btn.id === 'add-arrow-btn') setCurrentTool('arrow');
+        else if (btn.id === 'add-text-btn') setCurrentTool('text');
+        else if (btn.id === 'add-comment-btn') setCurrentTool('comment');
+        else if (btn.id === 'add-link-btn') setCurrentTool('link');
+        else if (btn.id === 'add-box-btn') setCurrentTool('box');
+        else if (btn.id === 'add-circle-btn') setCurrentTool('circle');
+        else if (btn.id === 'add-measure-btn') setCurrentTool('measure');
+        else if (btn.id === 'add-grid-btn') setCurrentTool('grid');
+        else if (btn.id === 'add-textList-btn') setCurrentTool('textList');
+        else if (btn.id === 'add-counter-btn') setCurrentTool('counter');
+        else if (btn.id === 'draw-btn') setCurrentTool('draw');
+        else if (btn.id === 'eyedropper-btn') setCurrentTool('eyedropper');
+        else if (btn.id === 'select-tool-btn') setCurrentTool(null);
+    });
 
     if (alignBtn) alignBtn.addEventListener('click', autoAlignSelection);
     const alignGridBtn = document.getElementById('align-grid-btn');
@@ -3084,7 +3088,7 @@ function handleKeyDown(e) {
         if (e.shiftKey && key === 'a') { e.preventDefault(); autoAlignSelection(); return; }
         if (e.shiftKey && key === 'z') { e.preventDefault(); redoLastAction(); return; }
         if (e.shiftKey && key === 'g') { e.preventDefault(); ungroupSelectedItems(); return; }
-        if (e.altKey && key === 's') { e.preventDefault(); if (typeof CloudSync !== 'undefined') CloudSync.saveCurrentProject(); return; }
+        if (e.altKey && key === 's') { e.preventDefault(); if (typeof CloudSync !== 'undefined') CloudSync.saveCurrentProject(true); return; }
         if (e.altKey && key === 'o') { e.preventDefault(); if (typeof CloudSync !== 'undefined') CloudSync.openFromDrive(); return; }
         if (key === 's') { e.preventDefault(); saveProject(); return; }
         if (key === 'o') { e.preventDefault(); projectInput.click(); return; }
@@ -3662,17 +3666,20 @@ function onMouseMove(e) {
         const deltaY = worldPos.y - moveStart.y;
         const doSnap = e.shiftKey ? !snapToGrid : snapToGrid; // Toggle snap with Shift
 
+        let currentDeltaX = deltaX;
+        let currentDeltaY = deltaY;
+
+        const movableItems = selectedItems.filter(i => !i.isPinned);
+        if (doSnap && movableItems.length > 0) {
+            const anchor = movableItems[0];
+            const snappedX = Math.round((anchor.originalX + deltaX) / gridSize) * gridSize;
+            const snappedY = Math.round((anchor.originalY + deltaY) / gridSize) * gridSize;
+            currentDeltaX = snappedX - anchor.originalX;
+            currentDeltaY = snappedY - anchor.originalY;
+        }
+
         selectedItems.forEach(item => {
             if (item.isPinned) return;
-            let currentDeltaX = deltaX;
-            let currentDeltaY = deltaY;
-
-            if (doSnap && selectedItems.length === 1) { // Only snap single items for simplicity
-                const snappedX = Math.round((item.originalX + deltaX) / gridSize) * gridSize;
-                const snappedY = Math.round((item.originalY + deltaY) / gridSize) * gridSize;
-                currentDeltaX = snappedX - item.originalX;
-                currentDeltaY = snappedY - item.originalY;
-            }
 
             item.x = item.originalX + currentDeltaX;
             item.y = item.originalY + currentDeltaY;
@@ -4559,36 +4566,51 @@ function setCurrentTool(e) {
     const buttons = document.querySelectorAll('#left-bar .tool-button');
     console.log('Found', buttons.length, 'tool buttons');
     buttons.forEach(btn => btn.classList.remove('active'));
-    canvas.classList.remove('eyedropper-active');
+    
+    const activeCanvas = document.getElementById('moodboard-canvas');
+    if (activeCanvas) activeCanvas.classList.remove('eyedropper-active');
 
     if (currentTool === null) {
-        if (selectToolBtn) selectToolBtn.classList.add('active');
+        const selectBtn = document.getElementById('select-tool-btn');
+        if (selectBtn) selectBtn.classList.add('active');
     } else if (currentTool === 'arrow') {
-        if (addArrowBtn) addArrowBtn.classList.add('active');
+        const arrowBtn = document.getElementById('add-arrow-btn');
+        if (arrowBtn) arrowBtn.classList.add('active');
     } else if (currentTool === 'text') {
-        if (addTextBtn) addTextBtn.classList.add('active');
+        const textBtn = document.getElementById('add-text-btn');
+        if (textBtn) textBtn.classList.add('active');
     } else if (currentTool === 'comment') {
-        if (addCommentBtn) addCommentBtn.classList.add('active');
+        const commentBtn = document.getElementById('add-comment-btn');
+        if (commentBtn) commentBtn.classList.add('active');
     } else if (currentTool === 'link') {
-        if (addLinkBtn) addLinkBtn.classList.add('active');
+        const linkBtn = document.getElementById('add-link-btn');
+        if (linkBtn) linkBtn.classList.add('active');
     } else if (currentTool === 'box') {
-        if (addBoxBtn) addBoxBtn.classList.add('active');
+        const boxBtn = document.getElementById('add-box-btn');
+        if (boxBtn) boxBtn.classList.add('active');
     } else if (currentTool === 'circle') {
-        if (addCircleBtn) addCircleBtn.classList.add('active');
+        const circleBtn = document.getElementById('add-circle-btn');
+        if (circleBtn) circleBtn.classList.add('active');
     } else if (currentTool === 'measure') {
-        if (addMeasureBtn) addMeasureBtn.classList.add('active');
+        const measureBtn = document.getElementById('add-measure-btn');
+        if (measureBtn) measureBtn.classList.add('active');
     } else if (currentTool === 'grid') {
-        if (addGridBtn) addGridBtn.classList.add('active');
+        const gridBtn = document.getElementById('add-grid-btn');
+        if (gridBtn) gridBtn.classList.add('active');
     } else if (currentTool === 'textList') {
-        if (addTextListBtn) addTextListBtn.classList.add('active');
+        const textListBtn = document.getElementById('add-textList-btn');
+        if (textListBtn) textListBtn.classList.add('active');
     } else if (currentTool === 'counter') {
-        if (addCounterBtn) addCounterBtn.classList.add('active');
+        const counterBtn = document.getElementById('add-counter-btn');
+        if (counterBtn) counterBtn.classList.add('active');
     } else if (currentTool === 'draw') {
+        const drawBtn = document.getElementById('draw-btn');
         if (drawBtn) drawBtn.classList.add('active');
     } else if (currentTool === 'eyedropper') {
-        if (eyedropperBtn) {
-            eyedropperBtn.classList.add('active');
-            canvas.classList.add('eyedropper-active');
+        const eyedropBtn = document.getElementById('eyedropper-btn');
+        if (eyedropBtn) {
+            eyedropBtn.classList.add('active');
+            if (activeCanvas) activeCanvas.classList.add('eyedropper-active');
         }
     }
 
