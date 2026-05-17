@@ -4571,6 +4571,19 @@
     .ml-search { width: 120px; }
 }
 
+body.no-blur {
+    --bg-ui: rgb(35, 38, 51);
+    --bg-ui-hover: rgb(55, 58, 71);
+}
+
+body.no-blur #note-editor-modal {
+    background: rgb(35, 38, 51) !important;
+}
+
+body.no-blur #note-editor-overlay {
+    background: rgba(13, 15, 20, 0.98) !important;
+}
+
 body.no-blur * {
     backdrop-filter: none !important;
     -webkit-backdrop-filter: none !important;
