@@ -4576,7 +4576,11 @@ body.no-blur {
     --bg-ui-hover: rgb(55, 58, 71);
 }
 
-body.no-blur #note-editor-modal {
+body.no-blur #note-editor-modal,
+body.no-blur #context-menu,
+body.no-blur #tab-context-menu,
+body.no-blur #gantt-context-menu,
+body.no-blur #storyflow-context-menu {
     background: rgb(35, 38, 51) !important;
 }
 
