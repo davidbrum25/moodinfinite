@@ -537,6 +537,7 @@ function renderTabs() {
         const tab = document.createElement('div');
         tab.className = 'tab-item';
         tab.classList.toggle('active', project.id === currentActive);
+        tab.classList.toggle('pinned', !!project.pinned);
         tab.dataset.id = project.id;
         tab.draggable = true;
 
@@ -617,6 +618,10 @@ function renderTabs() {
             document.querySelectorAll('#context-menu, #tab-context-menu').forEach(m => m.style.display = 'none');
             const menu = document.getElementById('tab-context-menu');
             menu.dataset.tabId = project.id;
+            const pinLabel = document.querySelector('#pin-tab-btn .menu-label');
+            if (pinLabel) {
+                pinLabel.textContent = project.pinned ? 'Unpin' : 'Pin to Start';
+            }
             showAndPositionMenu(menu, e);
         });
 
@@ -1296,6 +1301,7 @@ const ganttContextMenu = document.getElementById('gantt-context-menu');
 const showGridToggle = document.getElementById('show-grid-toggle');
 const snapGridToggle = document.getElementById('snap-grid-toggle');
 const dropShadowToggle = document.getElementById('drop-shadow-toggle');
+const uiBlurToggle = document.getElementById('ui-blur-toggle');
 const showNotificationsToggle = document.getElementById('show-notifications-toggle');
 const gridSizeSlider = document.getElementById('grid-size-slider');
 const gridSizeValue = document.getElementById('grid-size-value');
@@ -1403,7 +1409,7 @@ let isSelectingBox = false, selectionBox = { startX: 0, startY: 0, endX: 0, endY
 let currentlyEditingText = null;
 let hoveredItem = null;
 let isDraggingConnector = false, tempConnector = null, hoveredPort = null, hoveredConnector = null;
-let showGrid = true, snapToGrid = true, showDropShadow = true, showNotifications = true;
+let showGrid = true, snapToGrid = true, showDropShadow = true, showNotifications = true, showUiBlur = true;
 let gridSize = 50, gridOpacity = 0.05;
 let currentProjectName = 'moodinfinite';
 const HISTORY_LIMIT = 50;
@@ -1465,7 +1471,7 @@ function showAndPositionMenu(menu, event) { menu.style.display = 'block'; const 
 
 function saveSettings() {
     try {
-        const settings = { showGrid, snapToGrid, showDropShadow, showNotifications, gridSize, gridOpacity };
+        const settings = { showGrid, snapToGrid, showDropShadow, showNotifications, showUiBlur, gridSize, gridOpacity };
         localStorage.setItem('moodinfinite-settings', JSON.stringify(settings));
     } catch (error) { console.error("Could not save settings to localStorage:", error); }
 }
@@ -1479,6 +1485,7 @@ function loadSettings() {
             snapToGrid = settings.snapToGrid ?? snapToGrid;
             showDropShadow = settings.showDropShadow ?? showDropShadow;
             showNotifications = settings.showNotifications ?? showNotifications;
+            showUiBlur = settings.showUiBlur ?? showUiBlur;
             gridSize = settings.gridSize ?? gridSize;
             gridOpacity = settings.gridOpacity ?? gridOpacity;
             defaultCanvasBg = settings.defaultCanvasBg ?? defaultCanvasBg;
@@ -1508,6 +1515,8 @@ function applySettingsToUI() {
     showGridToggle.checked = showGrid;
     snapGridToggle.checked = snapToGrid;
     dropShadowToggle.checked = showDropShadow;
+    if (uiBlurToggle) uiBlurToggle.checked = showUiBlur;
+    document.body.classList.toggle('no-blur', !showUiBlur);
     showNotificationsToggle.checked = showNotifications;
     gridSizeSlider.value = gridSize;
     gridSizeValue.textContent = `${gridSize}px`;
@@ -1518,7 +1527,19 @@ function applySettingsToUI() {
 
 function setupEventListeners() {
     tabsList.addEventListener('dragover', e => { e.preventDefault(); const t = document.querySelector('.tab-item.dragging'); if (!t) return; const o = getDragAfterElement(tabsList, e.clientX); if (o == null) { tabsList.appendChild(t) } else { tabsList.insertBefore(t, o) } });
-    tabsList.addEventListener('drop', e => { e.preventDefault(); const t = parseInt(e.dataTransfer.getData('text/plain')); if (isNaN(t)) return; const o = Array.from(tabsList.querySelectorAll('.tab-item')).map(e => parseInt(e.dataset.id)); projects.sort((e, t) => o.indexOf(e.id) - o.indexOf(t.id)); renderTabs() });
+    tabsList.addEventListener('drop', e => { 
+        e.preventDefault(); 
+        const t = parseInt(e.dataTransfer.getData('text/plain')); 
+        if (isNaN(t)) return; 
+        const o = Array.from(tabsList.querySelectorAll('.tab-item')).map(e => parseInt(e.dataset.id)); 
+        projects.sort((a, b) => o.indexOf(a.id) - o.indexOf(b.id)); 
+        projects.sort((a, b) => {
+            if (a.pinned && !b.pinned) return -1;
+            if (!a.pinned && b.pinned) return 1;
+            return 0;
+        });
+        renderTabs(); 
+    });
     tabsList.addEventListener('wheel', e => { if (tabsList.scrollWidth <= tabsList.clientWidth || e.deltaY === 0) return; e.preventDefault(); tabsList.scrollLeft += e.deltaY; });
     tabsList.addEventListener('dblclick', e => { if (e.target === tabsList) createNewProject('moodinfinite'); });
     tabsList.addEventListener('scroll', updateScrollIndicators);
@@ -1557,6 +1578,26 @@ function setupEventListeners() {
 
     const sendTabToStartBtn = document.getElementById('send-tab-to-start-btn');
     const sendTabToLastBtn = document.getElementById('send-tab-to-last-btn');
+    const pinTabBtn = document.getElementById('pin-tab-btn');
+
+    if (pinTabBtn) pinTabBtn.addEventListener('click', () => {
+        const id = tabContextMenu.dataset.tabId;
+        if (id) {
+            const project = projects.find(p => p.id.toString() === id.toString());
+            if (project) {
+                project.pinned = !project.pinned;
+                projects.sort((a, b) => {
+                    if (a.pinned && !b.pinned) return -1;
+                    if (!a.pinned && b.pinned) return 1;
+                    return 0;
+                });
+                renderTabs();
+                saveToBrowser();
+                showToast(project.pinned ? 'Tab pinned to start.' : 'Tab unpinned.');
+            }
+        }
+        tabContextMenu.style.display = 'none';
+    });
 
     if (sendTabToStartBtn) sendTabToStartBtn.addEventListener('click', () => {
         const id = tabContextMenu.dataset.tabId;
@@ -1870,6 +1911,7 @@ function setupEventListeners() {
     if (showGridToggle) showGridToggle.addEventListener('change', e => { showGrid = e.target.checked; saveSettings() });
     if (snapGridToggle) snapGridToggle.addEventListener('change', e => { snapToGrid = e.target.checked; saveSettings() });
     if (dropShadowToggle) dropShadowToggle.addEventListener('change', e => { showDropShadow = e.target.checked; saveSettings() });
+    if (uiBlurToggle) uiBlurToggle.addEventListener('change', e => { showUiBlur = e.target.checked; document.body.classList.toggle('no-blur', !showUiBlur); saveSettings() });
     if (showNotificationsToggle) showNotificationsToggle.addEventListener('change', e => { showNotifications = e.target.checked; saveSettings() });
 
     if (gridSizeSlider) gridSizeSlider.addEventListener('input', e => { gridSize = parseInt(e.target.value); gridSizeValue.textContent = `${gridSize}px`; saveSettings() });
