@@ -644,7 +644,7 @@ function renderTabs() {
 let moodpromptFilterPlatform = 'all';
 let moodpromptSearchQuery = '';
 
-function showToast(message) {
+function showToastDeprecated(message) {
     let container = document.getElementById('toast-container');
     if (!container) {
         container = document.createElement('div');
@@ -1365,6 +1365,7 @@ const closeHelpBtn = document.getElementById('close-help-btn');
 const selectToolBtn = document.getElementById('select-tool-btn');
 const downloadImageBtn = document.getElementById('download-image-btn');
 const contextConnectBtn = document.getElementById('context-connect-btn');
+const copyForMoodlistBtn = document.getElementById('copy-for-moodlist-btn');
 const downloadSeparator = document.getElementById('download-separator');
 const addLinkBtn = document.getElementById('add-link-btn');
 const inputModalOverlay = document.getElementById('input-modal-overlay');
@@ -2011,6 +2012,14 @@ function setupEventListeners() {
     }
 
     if (downloadImageBtn) downloadImageBtn.addEventListener('click', downloadSourceImage);
+    if (copyForMoodlistBtn) {
+        copyForMoodlistBtn.addEventListener('click', () => {
+            if (selectedItems.length === 1 && selectedItems[0].type === 'textList') {
+                copyListForMoodlist(selectedItems[0]);
+                contextMenu.style.display = 'none';
+            }
+        });
+    }
 
     // Modal confirmation is handled at the end of the file
 
@@ -3884,6 +3893,11 @@ function onContextMenu(e) {
     const canConnect = selectedItems.length === 1 && !['connector', 'stroke', 'measure'].includes(selectedItems[0].type);
     contextConnectBtn.style.display = canConnect ? 'flex' : 'none';
 
+    const isTextList = selectedItems.length === 1 && selectedItems[0].type === 'textList';
+    if (copyForMoodlistBtn) {
+        copyForMoodlistBtn.style.display = isTextList ? 'flex' : 'none';
+    }
+
     showAndPositionMenu(contextMenu, e)
 }
 function confirmNewBoard() { if (items.length > 0) { showConfirmationModal() } else { resetBoard() } }
@@ -4295,6 +4309,98 @@ function handleImageUpload(e) { if (!e.target.files) return; const t = screenToW
 function handleProjectUpload(e) { const t = e.target.files[0]; if (!t) return; loadFileFromObject(t); projectInput.value = '' }
 
 function handlePaste(e) {
+    const activeProject = projects.find(p => p.id === activeProjectId);
+    if (activeProject && activeProject.type === 'moodlist') {
+        const text = e.clipboardData.getData('text');
+        if (text) {
+            try {
+                const data = JSON.parse(text);
+                if (data && data.type === 'moodlist-card') {
+                    e.preventDefault();
+                    const newCard = {
+                        id: Date.now() + '_' + Math.random().toString(36).slice(2, 9),
+                        title: data.title || 'Pasted List',
+                        color: '',
+                        pinned: false,
+                        image: null,
+                        items: (data.items || []).map(it => ({
+                            id: Date.now() + '_' + Math.random().toString(36).slice(2, 9),
+                            text: it.text || '',
+                            checked: !!it.checked
+                        }))
+                    };
+                    if (!activeProject.data.cards) activeProject.data.cards = [];
+                    activeProject.data.cards.unshift(newCard);
+                    scheduleAutoSave();
+                    
+                    if (typeof renderMoodlistView === 'function') {
+                        renderMoodlistView(activeProject);
+                    }
+                    showToast('List pasted as a new Moodlist card!');
+                    return;
+                }
+            } catch (err) {
+                // Fallback: parse as plain text checklist if it has lines
+                const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+                if (lines.length > 0) {
+                    e.preventDefault();
+                    let title = 'Pasted List';
+                    let itemsList = [];
+                    let startIdx = 0;
+                    
+                    if (lines[0].startsWith('# ')) {
+                        title = lines[0].substring(2).trim();
+                        startIdx = 1;
+                    } else if (lines.length > 1 && !lines[0].startsWith('-') && !lines[0].startsWith('*') && !lines[0].match(/^\[[ x]\]/)) {
+                        title = lines[0];
+                        startIdx = 1;
+                    }
+                    
+                    for (let i = startIdx; i < lines.length; i++) {
+                        let line = lines[i];
+                        let checked = false;
+                        
+                        if (line.startsWith('- [ ] ') || line.startsWith('* [ ] ')) {
+                            line = line.substring(6);
+                        } else if (line.startsWith('- [x] ') || line.startsWith('* [x] ') || line.startsWith('- [X] ') || line.startsWith('* [X] ')) {
+                            line = line.substring(6);
+                            checked = true;
+                        } else if (line.startsWith('- ') || line.startsWith('* ')) {
+                            line = line.substring(2);
+                        }
+                        
+                        itemsList.push({
+                            id: Date.now() + '_' + Math.random().toString(36).slice(2, 9) + '_' + i,
+                            text: line,
+                            checked: checked
+                        });
+                    }
+                    
+                    if (itemsList.length > 0) {
+                        const newCard = {
+                            id: Date.now() + '_' + Math.random().toString(36).slice(2, 9),
+                            title: title,
+                            color: '',
+                            pinned: false,
+                            image: null,
+                            items: itemsList
+                        };
+                        if (!activeProject.data.cards) activeProject.data.cards = [];
+                        activeProject.data.cards.unshift(newCard);
+                        scheduleAutoSave();
+                        
+                        if (typeof renderMoodlistView === 'function') {
+                            renderMoodlistView(activeProject);
+                        }
+                        showToast('Pasted text as a new Moodlist card!');
+                        return;
+                    }
+                }
+            }
+        }
+        return;
+    }
+
     const files = Array.from(e.clipboardData.items)
         .filter(item => item.type.startsWith('image/'))
         .map(item => item.getAsFile());
@@ -4384,6 +4490,24 @@ function copyItems(e = !0) {
     });
     internalClipboardTimestamp = Date.now();
     if (e) { showToast(`${selectedItems.length} item${selectedItems.length > 1 ? 's' : ''} copied.`) }
+}
+
+function copyListForMoodlist(item) {
+    if (!item || item.type !== 'textList') return;
+    const exportData = {
+        type: 'moodlist-card',
+        title: item.title || '',
+        items: (item.items || []).map(it => ({
+            text: it.text || '',
+            checked: !!it.completed
+        }))
+    };
+    navigator.clipboard.writeText(JSON.stringify(exportData)).then(() => {
+        showToast('List copied! Switch to a Moodlist tab and press Ctrl+V to import.');
+    }).catch(err => {
+        console.error('Failed to copy to clipboard:', err);
+        showToast('Failed to copy list.', 'error');
+    });
 }
 
 function cutItems() {
