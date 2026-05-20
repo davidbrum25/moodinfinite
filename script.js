@@ -476,6 +476,10 @@ function switchTab(projectId) {
     });
     scheduleAutoSave();
     requestUpdate();
+    
+    if (window.CloudSync && typeof window.CloudSync.updateIndicator === 'function') {
+        window.CloudSync.updateIndicator();
+    }
 }
 
 function closeTab(projectId, event) {
@@ -1385,6 +1389,7 @@ const cancelNoteBtn = document.getElementById('cancel-note-btn');
 const confirmNoteBtn = document.getElementById('confirm-note-btn');
 const noteFmtBtns = document.querySelectorAll('.note-fmt-btn');
 const noteBgColorInput = document.getElementById('note-bg-color-input');
+const noteBgColorWrapper = document.getElementById('note-bg-color-wrapper');
 const centerSelectedBtn = document.getElementById('center-selected-btn');
 
 let cameraOffset = { x: 0, y: 0 }, cameraZoom = 1;
@@ -1399,6 +1404,7 @@ let clipboard = [];
 let internalClipboardTimestamp = 0;
 let isMovingItems = false, moveStart = { x: 0, y: 0 };
 let currentTool = null, isDrawing = false;
+let _pickingForElement = null; // 'color' or 'bgColor'
 let defaultCanvasBg = '#0d0d0d', defaultAccent = '#429eff', defaultGridColor = '#f9f8f6';
 let canvasBackgroundColor = defaultCanvasBg, accentColor = defaultAccent, gridColor = defaultGridColor;
 let isConnectionMode = false;
@@ -1996,6 +2002,54 @@ function setupEventListeners() {
             if (selectedItems.length === 1 && selectedItems[0].type === 'text') {
                 selectedItems[0].bgColor = e.target.value;
                 saveStateForUndo();
+            }
+        });
+    }
+
+    const itemColorEyedropper = document.getElementById('item-color-eyedropper');
+    if (itemColorEyedropper) {
+        itemColorEyedropper.addEventListener('click', async () => {
+            if (window.EyeDropper) {
+                const eyeDropper = new EyeDropper();
+                try {
+                    const result = await eyeDropper.open();
+                    const hexColor = result.sRGBHex;
+                    if (selectedItems.length === 1 && (['box', 'circle', 'text', 'measure', 'comment', 'link', 'textList'].includes(selectedItems[0].type))) {
+                        selectedItems[0].color = hexColor;
+                        if (itemColorPicker) itemColorPicker.value = hexColor;
+                        saveStateForUndo();
+                        requestUpdate();
+                    }
+                } catch (e) {
+                    console.log("EyeDropper closed or cancelled");
+                }
+            } else {
+                _pickingForElement = 'color';
+                setCurrentTool('eyedropper');
+            }
+        });
+    }
+
+    const noteBgEyedropper = document.getElementById('note-bg-eyedropper');
+    if (noteBgEyedropper) {
+        noteBgEyedropper.addEventListener('click', async () => {
+            if (window.EyeDropper) {
+                const eyeDropper = new EyeDropper();
+                try {
+                    const result = await eyeDropper.open();
+                    const hexColor = result.sRGBHex;
+                    if (selectedItems.length === 1 && selectedItems[0].type === 'text') {
+                        selectedItems[0].bgColor = hexColor;
+                        if (noteBgColorInput) noteBgColorInput.value = hexColor;
+                        saveStateForUndo();
+                        requestUpdate();
+                    }
+                } catch (e) {
+                    console.log("EyeDropper closed or cancelled");
+                }
+            } else {
+                _pickingForElement = 'bgColor';
+                setCurrentTool('eyedropper');
             }
         });
     }
@@ -3293,9 +3347,25 @@ function onMouseDown(e) {
     if (currentTool === 'eyedropper') {
         const pixelData = ctx.getImageData(t.x, t.y, 1, 1).data;
         const hexColor = rgbToHex(pixelData[0], pixelData[1], pixelData[2]);
-        accentColor = hexColor;
-        updateUIColors();
-        saveSettings();
+        
+        if (_pickingForElement && selectedItems.length === 1) {
+            const item = selectedItems[0];
+            if (_pickingForElement === 'bgColor') {
+                item.bgColor = hexColor;
+                if (noteBgColorInput) noteBgColorInput.value = hexColor;
+            } else {
+                item.color = hexColor;
+                if (itemColorPicker) itemColorPicker.value = hexColor;
+            }
+            saveStateForUndo();
+            requestUpdate();
+        } else {
+            accentColor = hexColor;
+            updateUIColors();
+            saveSettings();
+        }
+        
+        _pickingForElement = null;
         setCurrentTool(null);
         return;
     }
@@ -4918,10 +4988,10 @@ function updateSelectionToolbar() {
         if (canHaveColor) {
             itemColorPicker.value = selectedItems[0].color || accentColor;
             if (selectedItems[0].type === 'text') {
-                noteBgColorInput.style.display = 'block';
+                if (noteBgColorWrapper) noteBgColorWrapper.style.display = 'flex';
                 noteBgColorInput.value = selectedItems[0].bgColor || '#ffffff';
             } else {
-                noteBgColorInput.style.display = 'none';
+                if (noteBgColorWrapper) noteBgColorWrapper.style.display = 'none';
             }
         }
 
@@ -7392,7 +7462,10 @@ function renderGanttView(project) {
     let nextDeadline = null;
 
     groups.forEach(group => {
-        const groupColor = group.color || 'var(--switch-bg-checked)';
+        let groupColor = group.color;
+        if (!groupColor || groupColor.startsWith('var(')) {
+            groupColor = accentColor || '#429eff';
+        }
 
         // ── Sidebar group row ──
         const sRow = document.createElement('div');
@@ -7403,9 +7476,42 @@ function renderGanttView(project) {
         collapseBtn.innerHTML = '<iconify-icon icon="lucide:chevron-down" width="14" height="14"></iconify-icon>';
         collapseBtn.title = group.collapsed ? 'Expand' : 'Collapse';
         collapseBtn.onclick = (e) => { e.stopPropagation(); group.collapsed = !group.collapsed; renderGanttView(project); scheduleAutoSave(); };
-        const dot = document.createElement('div');
+        
+        const dot = document.createElement('input');
+        dot.type = 'color';
         dot.className = 'gantt-group-color-dot';
-        dot.style.background = groupColor;
+        dot.value = groupColor;
+        dot.title = 'Choose group color';
+        dot.onclick = (e) => e.stopPropagation();
+        dot.oninput = (e) => {
+            const newColor = e.target.value;
+            group.color = newColor;
+            
+            // Update summary bars in real-time
+            const sumBars = rowsArea.querySelectorAll(`.gantt-group-summary-bar[data-group-id="${group.id}"]`);
+            sumBars.forEach(bar => {
+                bar.style.background = newColor;
+            });
+            
+            // Update task status dots and task timeline bars in real-time
+            (group.tasks || []).forEach(task => {
+                if (!GANTT_STATUS_COLORS[task.status]) {
+                    const sDot = sidebarBody.querySelector(`.gantt-task-status-dot[data-task-id="${task.id}"]`);
+                    if (sDot) sDot.style.background = newColor;
+                    
+                    const tBar = rowsArea.querySelector(`.gantt-bar[data-task-id="${task.id}"]`);
+                    if (tBar) {
+                        tBar.style.background = newColor;
+                        tBar.style.color = getContrastColor(newColor);
+                    }
+                }
+            });
+        };
+        dot.onchange = (e) => {
+            group.color = e.target.value;
+            scheduleAutoSave();
+            renderGanttView(project);
+        };
         const lbl = document.createElement('span');
         lbl.className = 'gantt-group-label';
         lbl.textContent = group.name || 'Unnamed Group';
@@ -7527,6 +7633,7 @@ function renderGanttView(project) {
             if (gr > gl) {
                 const sumBar = document.createElement('div');
                 sumBar.className = 'gantt-group-summary-bar';
+                sumBar.dataset.groupId = group.id;
                 sumBar.style.left  = gl + 'px';
                 sumBar.style.width = (gr - gl - 2) + 'px';
                 sumBar.style.background = groupColor;
@@ -7550,6 +7657,8 @@ function renderGanttView(project) {
                 const statusDot = document.createElement('div');
                 statusDot.className = 'gantt-task-status-dot';
                 statusDot.style.background = ganttStatusColor(task, groupColor);
+                statusDot.dataset.groupId = group.id;
+                statusDot.dataset.taskId = task.id;
                 const tLbl = document.createElement('span');
                 tLbl.className = 'gantt-task-label';
                 tLbl.textContent = task.name || 'Untitled';
@@ -7670,6 +7779,8 @@ function renderGanttView(project) {
                 bar.style.width  = width + 'px';
                 bar.style.background = barColor;
                 bar.style.color  = textColor;
+                bar.dataset.groupId = group.id;
+                bar.dataset.taskId = task.id;
                 if (task.progress > 0) {
                     const prog = document.createElement('div');
                     prog.className = 'gantt-bar-progress';

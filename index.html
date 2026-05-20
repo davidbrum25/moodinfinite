@@ -122,7 +122,8 @@
             <div id="cloud-btn-wrapper" style="position: relative;">
                 <button id="cloud-login-btn" class="tab-add-btn cloud-login-btn" title="Sign in to Google Drive">
                     <!-- Avatar image (shown when logged in) -->
-                    <img id="cloud-avatar-img" src="" alt="Account"
+                    <img id="cloud-avatar-img" src="" alt="Account" referrerpolicy="no-referrer"
+                        onerror="this.style.display='none'; document.getElementById('cloud-avatar-icon').style.display='flex';"
                         style="display:none; width:24px; height:24px; border-radius:50%; object-fit:cover;">
                     <!-- Default icon (shown when logged out) -->
                     <span id="cloud-avatar-icon" style="display:flex; align-items:center; justify-content:center;">
@@ -315,11 +316,23 @@
             </div>
             <div id="selection-toolbar">
                 <div id="item-color-tool-container"
-                    style="display: none; align-items: center; gap: 0.35rem; border-right: 1px solid var(--border-color); padding-right: 0.35rem; margin-right: 0.35rem;">
-                    <input type="color" id="item-color-picker" class="color-picker-input" title="Item / Accent Color"
-                        style="width: 28px; height: 28px;">
-                    <input type="color" id="note-bg-color-input" class="color-picker-input" title="Background Color"
-                        style="width: 28px; height: 28px; display: none;">
+                    style="display: none; align-items: center; gap: 0.5rem; border-right: 1px solid var(--border-color); padding-right: 0.5rem; margin-right: 0.5rem;">
+                    <div class="color-picker-wrapper" style="display: flex; align-items: center; gap: 0.2rem;">
+                        <input type="color" id="item-color-picker" class="color-picker-input" title="Item / Accent Color"
+                            style="width: 28px; height: 28px;">
+                        <button id="item-color-eyedropper" class="selection-tool-btn" title="Pick Item Color from Canvas"
+                            style="width: 24px; height: 24px; padding: 0; display: flex; align-items: center; justify-content: center;">
+                            <iconify-icon icon="lucide:pipette" width="14" height="14"></iconify-icon>
+                        </button>
+                    </div>
+                    <div class="color-picker-wrapper" id="note-bg-color-wrapper" style="display: none; align-items: center; gap: 0.2rem;">
+                        <input type="color" id="note-bg-color-input" class="color-picker-input" title="Background Color"
+                            style="width: 28px; height: 28px;">
+                        <button id="note-bg-eyedropper" class="selection-tool-btn" title="Pick Background Color from Canvas"
+                            style="width: 24px; height: 24px; padding: 0; display: flex; align-items: center; justify-content: center;">
+                            <iconify-icon icon="lucide:pipette" width="14" height="14"></iconify-icon>
+                        </button>
+                    </div>
                 </div>
                 <div id="measure-tools-container"
                     style="display: none; align-items: center; gap: 0.35rem; border-right: 1px solid var(--border-color); padding-right: 0.35rem; margin-right: 0.35rem;">
@@ -554,7 +567,7 @@
                 <button class="gantt-zoom-btn" data-zoom="quarter">Quarter</button>
             </div>
             <div class="gantt-zoom-slider-group"
-                style="display:flex; align-items:center; gap:0.5rem; margin-left:1rem;">
+                style="display:flex; align-items:center; gap:0.5rem; margin-left:0.5rem;">
                 <iconify-icon icon="lucide:zoom-out" width="14" height="14"
                     style="color:var(--text-color-light)"></iconify-icon>
                 <button id="gantt-zoom-out-btn" class="gantt-nav-btn" style="padding:0.25rem;"><iconify-icon
@@ -680,7 +693,8 @@
     <!-- User account dropdown menu (moved to root for blur effect) -->
     <div id="cloud-user-menu" class="cloud-user-menu">
         <div class="cloud-menu-profile">
-            <img id="cloud-menu-avatar" src="" alt=""
+            <img id="cloud-menu-avatar" src="" alt="" referrerpolicy="no-referrer"
+                onerror="this.src=&quot;data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2'/><circle cx='12' cy='7' r='4'/></svg>&quot;;"
                 style="width:36px; height:36px; border-radius:50%; object-fit:cover; flex-shrink:0;">
             <div class="cloud-menu-profile-info">
                 <span id="cloud-menu-name" class="cloud-menu-name">Google Account</span>
@@ -1073,6 +1087,14 @@
         </div>
     </div>
     <div id="toast-container"></div>
+
+    <!-- ─── CLOUD SYNC: Bottom-left status indicator ──────────────────── -->
+    <div id="cloud-sync-indicator" class="cloud-sync-indicator">
+        <iconify-icon id="cloud-sync-icon" icon="lucide:cloud" width="16" height="16"></iconify-icon>
+        <div class="cloud-sync-text-container">
+            <span class="cloud-sync-text"></span>
+        </div>
+    </div>
 
     <!-- ─── CLOUD SYNC: Conflict Resolution Modal ────────────────────────── -->
     <div id="cloud-conflict-overlay" class="cloud-modal-overlay" style="display:none;">

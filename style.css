@@ -2905,6 +2905,112 @@
             50%       { opacity: 0.5; transform: scale(1.3); }
         }
 
+        /* ─── BOTTOM-LEFT CLOUD SYNC INDICATOR ───────────────────────────── */
+        .cloud-sync-indicator {
+            position: fixed;
+            bottom: 1.5rem;
+            left: 1.5rem;
+            z-index: 9999;
+            display: flex;
+            align-items: center;
+            background: var(--bg-ui);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid var(--border-color);
+            border-radius: 99px;
+            padding: 6px;
+            cursor: pointer;
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+            transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+            max-width: 28px;
+            overflow: hidden;
+            white-space: nowrap;
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        .cloud-sync-indicator.visible {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        #cloud-sync-icon {
+            font-size: 16px;
+            width: 16px;
+            height: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            transition: color 0.3s ease, filter 0.3s ease;
+        }
+
+        .cloud-sync-text-container {
+            opacity: 0;
+            max-width: 0;
+            overflow: hidden;
+            transition: opacity 0.2s ease, max-width 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+            margin-left: 0;
+            display: flex;
+            align-items: center;
+        }
+
+        .cloud-sync-text {
+            font-size: 0.82rem;
+            font-weight: 500;
+            color: var(--text-color-strong);
+            padding-right: 8px;
+            padding-left: 4px;
+        }
+
+        .cloud-sync-indicator.visible:hover {
+            max-width: 400px;
+            padding: 6px 12px;
+        }
+
+        .cloud-sync-indicator.visible:hover .cloud-sync-text-container {
+            opacity: 1;
+            max-width: 350px;
+            margin-left: 8px;
+        }
+
+        .cloud-sync-indicator.synced #cloud-sync-icon {
+            color: #22c55e;
+            filter: drop-shadow(0 0 4px rgba(34, 197, 94, 0.4));
+        }
+
+        .cloud-sync-indicator.syncing #cloud-sync-icon {
+            color: #eab308;
+            filter: drop-shadow(0 0 4px rgba(234, 179, 8, 0.4));
+            animation: syncPulse 1.2s infinite ease-in-out;
+        }
+
+        .cloud-sync-indicator.error #cloud-sync-icon {
+            color: #f97316;
+            filter: drop-shadow(0 0 4px rgba(249, 115, 22, 0.4));
+        }
+
+        .cloud-sync-indicator.remote-change #cloud-sync-icon {
+            color: #ef4444;
+            filter: drop-shadow(0 0 6px rgba(239, 68, 68, 0.8));
+            animation: syncPulse 1.5s infinite ease-in-out;
+        }
+
+        .cloud-sync-indicator.not-synced #cloud-sync-icon {
+            color: #94a3b8;
+            filter: drop-shadow(0 0 4px rgba(148, 163, 184, 0.4));
+        }
+
+        .cloud-sync-indicator.not-logged-in #cloud-sync-icon {
+            color: #64748b;
+            filter: drop-shadow(0 0 4px rgba(100, 116, 139, 0.3));
+        }
+
+        @keyframes syncPulse {
+            0%, 100% { transform: scale(1); opacity: 1; }
+            50%       { transform: scale(1.15); opacity: 0.7; }
+        }
+
         /* ─── ACCOUNT DROPDOWN MENU ─────────────────────────────────────── */
         .cloud-user-menu {
             position: fixed;
@@ -3432,9 +3538,34 @@
         }
         .gantt-group-sidebar-row:hover { background: var(--bg-ui-hover); }
         .gantt-group-color-dot {
-            width: 10px; height: 10px;
+            -webkit-appearance: none;
+            -moz-appearance: none;
+            appearance: none;
+            width: 12px; height: 12px;
             border-radius: 50%;
             flex-shrink: 0;
+            border: none;
+            padding: 0;
+            cursor: pointer;
+            background: none;
+            outline: none;
+            box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.1);
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        .gantt-group-color-dot:hover {
+            transform: scale(1.2);
+            box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.2);
+        }
+        .gantt-group-color-dot::-webkit-color-swatch-wrapper {
+            padding: 0;
+        }
+        .gantt-group-color-dot::-webkit-color-swatch {
+            border: none;
+            border-radius: 50%;
+        }
+        .gantt-group-color-dot::-moz-color-swatch {
+            border: none;
+            border-radius: 50%;
         }
         .gantt-group-label {
             flex: 1;
@@ -3672,6 +3803,7 @@
             flex-shrink: 0;
             display: flex;
             align-items: center;
+            justify-content: center;
             gap: 0.5rem;
             padding: 0 1rem;
             background: var(--bg-ui);

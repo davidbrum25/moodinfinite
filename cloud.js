@@ -434,6 +434,7 @@ const CloudSync = (() => {
                     activeProject.data._cloudModifiedTime = meta.modifiedTime;
                     activeProject.data._cloudVersion = meta.version;
                     activeProject.data._isDirty = false; // Mark as clean after save
+                    activeProject.data._needsMergeOrReload = false;
                 }
                 setCloudStatus('synced');
             } else {
@@ -655,16 +656,87 @@ const CloudSync = (() => {
 
     // ─── CLOUD STATUS INDICATOR ──────────────────────────────────────────────
     function setCloudStatus(state) {
-        const btn = document.getElementById('cloud-login-btn');
-        const indicator = document.getElementById('cloud-status-dot');
-        if (!btn || !indicator) return;
+        // Delegate to updateBottomLeftIndicator to ensure both indicators remain synced
+        updateBottomLeftIndicator(state);
+    }
 
-        indicator.className = 'cloud-status-dot';
-        if (state === 'syncing') { indicator.classList.add('syncing'); }
-        else if (state === 'synced') { indicator.classList.add('synced'); setTimeout(() => { if (indicator.classList.contains('synced')) setCloudStatus('idle'); }, 3000); }
-        else if (state === 'error') { indicator.classList.add('error'); }
-        else if (state === 'remote-change') { indicator.classList.add('remote-change'); }
-        // 'idle' → no class, dot hidden
+    // ─── BOTTOM-LEFT SYNC INDICATOR ──────────────────────────────────────────
+    function updateBottomLeftIndicator(forceState = null) {
+        const indicator = document.getElementById('cloud-sync-indicator');
+        if (!indicator) return;
+
+        // Show indicator on all tabs!
+        indicator.classList.add('visible');
+
+        // Determine active project
+        const activeProject = window.projects?.find(p => p.id === window.activeProjectId);
+
+        // Determine state
+        let state = forceState;
+        if (state === 'idle') state = null; // mapping 'idle' to fallback
+        
+        if (!state) {
+            if (!_userInfo) {
+                state = 'not-logged-in';
+            } else if (!activeProject || !activeProject.data || !activeProject.data._cloudFileId) {
+                state = 'not-synced';
+            } else if (activeProject.data._needsMergeOrReload) {
+                state = 'remote-change';
+            } else {
+                state = 'synced'; // default state
+            }
+        }
+
+        // Apply state classes to bottom-left indicator
+        indicator.classList.remove('synced', 'syncing', 'error', 'remote-change', 'not-synced', 'not-logged-in');
+        indicator.classList.add(state);
+
+        // Update icon attribute
+        const iconEl = indicator.querySelector('#cloud-sync-icon');
+        if (iconEl) {
+            if (state === 'remote-change' || state === 'error') {
+                iconEl.setAttribute('icon', 'lucide:cloud-alert');
+            } else if (state === 'syncing') {
+                iconEl.setAttribute('icon', 'lucide:cloud-sync');
+            } else if (state === 'not-synced' || state === 'not-logged-in') {
+                iconEl.setAttribute('icon', 'lucide:cloud-off');
+            } else {
+                iconEl.setAttribute('icon', 'lucide:cloud');
+            }
+        }
+
+        // Update text
+        const textEl = indicator.querySelector('.cloud-sync-text');
+        if (textEl) {
+            if (state === 'remote-change') {
+                textEl.textContent = 'Remote changes detected. Save to merge or reload.';
+            } else if (state === 'syncing') {
+                textEl.textContent = 'Syncing with Drive...';
+            } else if (state === 'error') {
+                textEl.textContent = 'Sync error';
+            } else if (state === 'not-synced') {
+                textEl.textContent = 'Local board. Click to sync to Drive.';
+            } else if (state === 'not-logged-in') {
+                textEl.textContent = 'Sign in to sync with Google Drive.';
+            } else {
+                textEl.textContent = 'Cloud Synced';
+            }
+        }
+
+        // Also update the toolbar status dot to match the active tab state!
+        const statusDot = document.getElementById('cloud-status-dot');
+        if (statusDot) {
+            statusDot.className = 'cloud-status-dot';
+            if (state === 'syncing') {
+                statusDot.classList.add('syncing');
+            } else if (state === 'synced') {
+                statusDot.classList.add('synced');
+            } else if (state === 'error') {
+                statusDot.classList.add('error');
+            } else if (state === 'remote-change') {
+                statusDot.classList.add('remote-change');
+            }
+        }
     }
 
     // ─── BACKGROUND SYNC ────────────────────────────────────────────────────
@@ -693,8 +765,13 @@ const CloudSync = (() => {
                     _reloadActiveProject(fileId, meta);
                 } else {
                     // Local is dirty, notify user
+                    activeProject.data._needsMergeOrReload = true;
                     setCloudStatus('remote-change');
-                    showCloudToast('Remote changes detected. Save to merge or reload.', 'info');
+                }
+            } else {
+                if (activeProject.data._needsMergeOrReload) {
+                    activeProject.data._needsMergeOrReload = false;
+                    setCloudStatus('idle');
                 }
             }
         } catch (err) {
@@ -742,6 +819,7 @@ const CloudSync = (() => {
                 activeProject.data._cloudModifiedTime = meta.modifiedTime;
                 activeProject.data._cloudVersion = meta.version;
                 activeProject.data._isDirty = false;
+                activeProject.data._needsMergeOrReload = false;
             }
             setCloudStatus('synced');
             showCloudToast('Project synced with remote changes ✓', 'success');
@@ -782,6 +860,7 @@ const CloudSync = (() => {
         if (menuEmail) menuEmail.textContent = _userInfo.email;
         if (menuName) menuName.textContent = _userInfo.name;
         if (loginBtn) loginBtn.title = `Signed in as ${_userInfo.email}`;
+        updateBottomLeftIndicator();
     }
 
     // Loads the storage meter — called only when the menu is opened (user gesture, token is valid)
@@ -819,13 +898,16 @@ const CloudSync = (() => {
     function _updateUI_loggedOut() {
         const avatarImg = document.getElementById('cloud-avatar-img');
         const avatarIcon = document.getElementById('cloud-avatar-icon');
+        const menuAvatar = document.getElementById('cloud-menu-avatar');
         const menuEmail = document.getElementById('cloud-menu-email');
         const menuName = document.getElementById('cloud-menu-name');
 
         if (avatarImg) { avatarImg.src = ''; avatarImg.style.display = 'none'; }
+        if (menuAvatar) { menuAvatar.src = ''; menuAvatar.style.display = 'none'; }
         if (avatarIcon) avatarIcon.style.display = 'flex';
         if (menuEmail) menuEmail.textContent = '';
         if (menuName) menuName.textContent = '';
+        updateBottomLeftIndicator();
     }
 
     // ─── SIGN-IN (PUBLIC ENTRY POINT) ─────────────────────────────────────
@@ -924,6 +1006,16 @@ const CloudSync = (() => {
             signOut();
         });
 
+        // Bottom-left sync indicator click
+        document.getElementById('cloud-sync-indicator')?.addEventListener('click', () => {
+            const activeProject = window.projects?.find(p => p.id === window.activeProjectId);
+            if (!_userInfo) {
+                signIn();
+            } else if (activeProject) {
+                saveCurrentProject();
+            }
+        });
+
         // Conflict dialog buttons handled inside _showConflictDialog
 
         // Drive file picker cancel
@@ -1019,6 +1111,7 @@ const CloudSync = (() => {
         openFromDrive,
         setCloudStatus,
         showCloudToast,
+        updateIndicator: updateBottomLeftIndicator,
         get isLoggedIn() { return !!_userInfo; },
         get userInfo() { return _userInfo; },
     };
