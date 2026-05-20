@@ -3080,7 +3080,7 @@ function drawGroupItem(e, t) {
 
 function handleKeyDown(e) {
     const activeEl = document.activeElement;
-    if (currentlyEditingText || (activeEl && (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA'))) { return; }
+    if (currentlyEditingText || (activeEl && (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA' || activeEl.tagName === 'SELECT' || activeEl.isContentEditable))) { return; }
 
     if (e.key === 'Tab' && e.shiftKey) {
         e.preventDefault();
