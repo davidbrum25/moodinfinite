@@ -1804,6 +1804,12 @@ function setupEventListeners() {
     }, { capture: true, passive: true });
 
     window.addEventListener('paste', handlePaste);
+
+    // Prevent global middle-click paste/autoscroll behavior (typical on Linux)
+    window.addEventListener('mousedown', e => { if (e.button === 1) e.preventDefault(); });
+    window.addEventListener('mouseup', e => { if (e.button === 1) e.preventDefault(); });
+    window.addEventListener('auxclick', e => { if (e.button === 1) e.preventDefault(); });
+
     canvas.addEventListener('dragover', handleDragOver);
     canvas.addEventListener('dragleave', handleDragLeave);
     canvas.addEventListener('drop', handleDrop);
@@ -4379,6 +4385,38 @@ function handleImageUpload(e) { if (!e.target.files) return; const t = screenToW
 function handleProjectUpload(e) { const t = e.target.files[0]; if (!t) return; loadFileFromObject(t); projectInput.value = '' }
 
 function handlePaste(e) {
+    const text = e.clipboardData.getData('text');
+    if (text) {
+        try {
+            const data = JSON.parse(text);
+            if (data && data.type === 'moodinfinite-items' && Array.isArray(data.items)) {
+                e.preventDefault();
+                clipboard = data.items;
+                internalClipboardTimestamp = Date.now();
+                
+                // Add any missing images to the local globalImageCache
+                clipboard.forEach(item => {
+                    const registerImage = (imgItem) => {
+                        if (imgItem.type === 'image' && imgItem.imgSrc) {
+                            if (!imgItem.imageId) {
+                                imgItem.imageId = 'img_' + Math.random().toString(36).substr(2, 9);
+                            }
+                            globalImageCache[imgItem.imageId] = imgItem.imgSrc;
+                        } else if (imgItem.type === 'group' && Array.isArray(imgItem.items)) {
+                            imgItem.items.forEach(registerImage);
+                        }
+                    };
+                    registerImage(item);
+                });
+                
+                pasteItems();
+                return;
+            }
+        } catch (err) {
+            // Not JSON or not our signature, continue to normal pasting checks
+        }
+    }
+
     const activeProject = projects.find(p => p.id === activeProjectId);
     if (activeProject && activeProject.type === 'moodlist') {
         const text = e.clipboardData.getData('text');
@@ -4541,24 +4579,32 @@ function copyItems(e = !0) {
     if (selectedItems.length === 0) return;
     clipboard = selectedItems.map(e => {
         const t = JSON.parse(JSON.stringify(e));
-        if (e.type === 'image') {
-            // Keep imageId for internal copy/paste
-            t.imageId = e.imageId;
-            // Also keep imgSrc for safety or external paste if we ever support it
-            // But for now, let's rely on cache to avoid memory spike
-            // t.imgSrc = e.img.src; 
-            delete t.img;
-        } else if (e.type === 'group') {
-            e.items.forEach((e, o) => {
-                if (e.type === 'image') {
-                    t.items[o].imageId = e.imageId;
-                    delete t.items[o].img;
-                }
-            })
-        }
-        return t
+        
+        const attachSrc = (item, source) => {
+            if (item.type === 'image') {
+                item.imageId = source.imageId;
+                item.imgSrc = globalImageCache[source.imageId];
+                delete item.img;
+            } else if (item.type === 'group' && Array.isArray(item.items)) {
+                item.items.forEach((child, i) => attachSrc(child, source.items[i]));
+            }
+        };
+        attachSrc(t, e);
+        
+        return t;
     });
     internalClipboardTimestamp = Date.now();
+
+    try {
+        const exportData = {
+            type: 'moodinfinite-items',
+            items: clipboard
+        };
+        navigator.clipboard.writeText(JSON.stringify(exportData));
+    } catch (err) {
+        console.warn('[Clipboard] Failed to write to system clipboard:', err);
+    }
+
     if (e) { showToast(`${selectedItems.length} item${selectedItems.length > 1 ? 's' : ''} copied.`) }
 }
 
@@ -8275,6 +8321,7 @@ function setupGanttListeners() {
 
     // Mouse wheel to zoom and pan on timeline
     const timeline = document.getElementById('gantt-timeline');
+    const sidebarBody = document.getElementById('gantt-sidebar-body');
     if (timeline) {
         timeline.addEventListener('wheel', (e) => {
             // Zoom if no shift key is pressed, or if ctrl key is pressed
@@ -8283,25 +8330,50 @@ function setupGanttListeners() {
                 updateZoomFromWheelOrBtn(e.deltaY > 0 ? -0.1 : 0.1);
             }
         }, { passive: false });
+
+        if (sidebarBody) {
+            sidebarBody.addEventListener('wheel', (e) => {
+                if (e.deltaY !== 0) {
+                    e.preventDefault();
+                    timeline.scrollTop += e.deltaY;
+                }
+            }, { passive: false });
+        }
         
         let isPanning = false;
         let panStartX = 0;
+        let panStartY = 0;
         let panScrollLeft = 0;
+        let panScrollTop = 0;
+        let panTarget = null;
         
-        timeline.addEventListener('mousedown', (e) => {
+        const startPanning = (e, target) => {
             if (e.button === 1 || (e.button === 0 && e.shiftKey)) { // Middle click or shift+left click
                 e.preventDefault();
                 isPanning = true;
+                panTarget = target;
                 panStartX = e.clientX;
+                panStartY = e.clientY;
                 panScrollLeft = timeline.scrollLeft;
-                timeline.style.cursor = 'grabbing';
+                panScrollTop = timeline.scrollTop;
+                if (target === 'timeline') timeline.style.cursor = 'grabbing';
+                else if (sidebarBody) sidebarBody.style.cursor = 'grabbing';
             }
-        });
+        };
+
+        timeline.addEventListener('mousedown', (e) => startPanning(e, 'timeline'));
+        if (sidebarBody) {
+            sidebarBody.addEventListener('mousedown', (e) => startPanning(e, 'sidebar'));
+        }
         
         window.addEventListener('mousemove', (e) => {
             if (isPanning) {
                 const deltaX = e.clientX - panStartX;
-                timeline.scrollLeft = panScrollLeft - deltaX;
+                const deltaY = e.clientY - panStartY;
+                if (panTarget === 'timeline') {
+                    timeline.scrollLeft = panScrollLeft - deltaX;
+                }
+                timeline.scrollTop = panScrollTop - deltaY;
             }
         });
         
@@ -8309,6 +8381,7 @@ function setupGanttListeners() {
             if (isPanning) {
                 isPanning = false;
                 timeline.style.cursor = '';
+                if (sidebarBody) sidebarBody.style.cursor = '';
             }
         });
     }

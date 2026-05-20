@@ -17,6 +17,36 @@ const CloudSync = (() => {
     const SCOPES = 'https://www.googleapis.com/auth/drive.file openid email profile';
     const FOLDER_NAME = 'Moodinfinite';
 
+    const BOARD_TYPE_LABELS = {
+        'moodinfinite': 'Moodboard',
+        'colorseeker': 'Moodtone',
+        'storyflow': 'Moodflow',
+        'moodgantt': 'Moodgantt',
+        'moodlist': 'Moodlist',
+        'moodprompt': 'Moodprompt',
+        'unknown': 'Unknown Board'
+    };
+
+    const BOARD_TYPE_ICONS = {
+        'moodinfinite': 'lucide:image',
+        'colorseeker': 'lucide:swatch-book',
+        'storyflow': 'lucide:clapperboard',
+        'moodgantt': 'lucide:gantt-chart',
+        'moodlist': 'lucide:list-check',
+        'moodprompt': 'lucide:pen-tool',
+        'unknown': 'lucide:help-circle'
+    };
+
+    const BOARD_TYPE_COLORS = {
+        'moodinfinite': '#429eff',
+        'colorseeker': '#ec4899',
+        'storyflow': '#eab308',
+        'moodgantt': '#10b981',
+        'moodlist': '#8b5cf6',
+        'moodprompt': '#f97316',
+        'unknown': '#94a3b8'
+    };
+
     // ─── STATE ──────────────────────────────────────────────────────────────
     let _tokenClient = null;
     let _accessToken = null;
@@ -192,7 +222,7 @@ const CloudSync = (() => {
             `and trashed=false`
         );
         const result = await _fetchJSON(
-            `${DRIVE_API}/files?q=${q}&fields=files(id,name,modifiedTime,size,createdTime)&orderBy=modifiedTime desc`,
+            `${DRIVE_API}/files?q=${q}&fields=files(id,name,modifiedTime,size,createdTime,appProperties)&orderBy=modifiedTime desc`,
             { headers: _driveHeaders() }
         );
         return result.files || [];
@@ -234,7 +264,7 @@ const CloudSync = (() => {
      * the Moodinfinite folder the user is asked what to do (keep local / keep drive / cancel).
      * Returns the Drive file ID.
      */
-    async function uploadFile(blob, fileName, isAutoSave = false) {
+    async function uploadFile(blob, fileName, boardType, isAutoSave = false) {
         await _ensureAuth();
         const fId = await _ensureFolder();
 
@@ -243,7 +273,7 @@ const CloudSync = (() => {
             `name='${fileName}' and '${fId}' in parents and trashed=false`
         );
         const existing = await _fetchJSON(
-            `${DRIVE_API}/files?q=${q}&fields=files(id,name,modifiedTime)`,
+            `${DRIVE_API}/files?q=${q}&fields=files(id,name,modifiedTime,appProperties)`,
             { headers: _driveHeaders() }
         );
 
@@ -258,15 +288,23 @@ const CloudSync = (() => {
             if (choice === 'cancel') return null;
             if (choice === 'keep-drive') return driveFile.id;
             // choice === 'keep-local' → overwrite below
-            return await _patchFile(driveFile.id, blob);
+            const fileId = await _patchFile(driveFile.id, blob);
+            await _updateMetadata(driveFile.id, boardType);
+            return fileId;
         }
 
         // New file upload
-        return await _createFile(blob, fileName, fId);
+        return await _createFile(blob, fileName, boardType, fId);
     }
 
-    async function _createFile(blob, fileName, folderId) {
-        const metadata = { name: fileName, parents: [folderId] };
+    async function _createFile(blob, fileName, boardType, folderId) {
+        const metadata = { 
+            name: fileName, 
+            parents: [folderId] 
+        };
+        if (boardType) {
+            metadata.appProperties = { boardType: boardType };
+        }
         const form = new FormData();
         form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
         form.append('file', blob);
@@ -293,6 +331,27 @@ const CloudSync = (() => {
         if (!res.ok) throw new Error(`Update failed: ${res.status}`);
         const json = await res.json();
         return json.id;
+    }
+
+    async function _updateMetadata(fileId, boardType) {
+        if (!boardType) return;
+        try {
+            const metadata = {
+                appProperties: {
+                    boardType: boardType
+                }
+            };
+            const res = await fetch(`${DRIVE_API}/files/${fileId}`, {
+                method: 'PATCH',
+                headers: _driveHeaders(),
+                body: JSON.stringify(metadata),
+            });
+            if (!res.ok) {
+                console.warn(`[CloudSync] Failed to update metadata for file ${fileId}: ${res.status}`);
+            }
+        } catch (err) {
+            console.warn(`[CloudSync] Error updating metadata for file ${fileId}:`, err);
+        }
     }
 
     // ─── DOWNLOAD FILE ──────────────────────────────────────────────────────
@@ -421,7 +480,7 @@ const CloudSync = (() => {
 
             const fileName = `${(activeProject?.name || 'moodboard').replace(/[^a-z0-9 _-]/gi, '_')}.mood`;
 
-            const fileId = await uploadFile(blob, fileName, isAutoSave);
+            const fileId = await uploadFile(blob, fileName, activeProject?.type || 'moodinfinite', isAutoSave);
             if (fileId) {
                 // Fetch latest metadata to get exact modifiedTime from Drive
                 const meta = await _fetchJSON(`${DRIVE_API}/files/${fileId}?fields=id,modifiedTime,version`, { headers: _driveHeaders() });
@@ -468,7 +527,7 @@ const CloudSync = (() => {
             showCloudToast('Loading project from Drive…', 'info');
             
             // Get metadata first to store version/modifiedTime
-            const meta = await _fetchJSON(`${DRIVE_API}/files/${fileId}?fields=id,name,modifiedTime,version`, { headers: _driveHeaders() });
+            const meta = await _fetchJSON(`${DRIVE_API}/files/${fileId}?fields=id,name,modifiedTime,version,appProperties`, { headers: _driveHeaders() });
             
             const blob = await downloadFile(fileId);
             const file = new File([blob], meta.name || 'project.mood');
@@ -487,6 +546,11 @@ const CloudSync = (() => {
                     newProj.data._cloudVersion = meta.version;
                     newProj.data._isDirty = false;
                     _startSyncPolling(); // Ensure polling is active
+
+                    // If boardType is not set in Drive metadata, update it now
+                    if (newProj.type && (!meta.appProperties || !meta.appProperties.boardType)) {
+                        _updateMetadata(fileId, newProj.type);
+                    }
                 }
             }, 1000);
 
@@ -525,6 +589,24 @@ const CloudSync = (() => {
                     case 'size-asc':      sorted.sort((a, b) => parseInt(a.size || 0) - parseInt(b.size || 0));        break;
                     case 'name-asc':      sorted.sort((a, b) => a.name.localeCompare(b.name));                         break;
                     case 'name-desc':     sorted.sort((a, b) => b.name.localeCompare(a.name));                         break;
+                    case 'type-asc':
+                        sorted.sort((a, b) => {
+                            const typeA = BOARD_TYPE_LABELS[a.appProperties?.boardType] || BOARD_TYPE_LABELS['unknown'];
+                            const typeB = BOARD_TYPE_LABELS[b.appProperties?.boardType] || BOARD_TYPE_LABELS['unknown'];
+                            const cmp = typeA.localeCompare(typeB);
+                            if (cmp !== 0) return cmp;
+                            return a.name.localeCompare(b.name);
+                        });
+                        break;
+                    case 'type-desc':
+                        sorted.sort((a, b) => {
+                            const typeA = BOARD_TYPE_LABELS[a.appProperties?.boardType] || BOARD_TYPE_LABELS['unknown'];
+                            const typeB = BOARD_TYPE_LABELS[b.appProperties?.boardType] || BOARD_TYPE_LABELS['unknown'];
+                            const cmp = typeB.localeCompare(typeA);
+                            if (cmp !== 0) return cmp;
+                            return a.name.localeCompare(b.name);
+                        });
+                        break;
                 }
                 return sorted;
             }
@@ -541,10 +623,17 @@ const CloudSync = (() => {
                     item.className = 'cloud-picker-item';
                     const date = new Date(f.modifiedTime).toLocaleDateString();
                     const sizeStr = _fmtBytes(parseInt(f.size || 0, 10));
+
+                    const boardType = f.appProperties?.boardType || 'unknown';
+                    const typeLabel = BOARD_TYPE_LABELS[boardType] || BOARD_TYPE_LABELS['unknown'];
+                    const typeIcon  = BOARD_TYPE_ICONS[boardType] || BOARD_TYPE_ICONS['unknown'];
+                    const typeColor = BOARD_TYPE_COLORS[boardType] || BOARD_TYPE_COLORS['unknown'];
+
                     item.innerHTML = `
+                        <iconify-icon class="cloud-picker-icon" icon="${typeIcon}" style="color: ${typeColor}; font-size: 18px; width: 18px; height: 18px;" width="18" height="18"></iconify-icon>
                         <div class="cloud-picker-info">
                             <span class="cloud-picker-name">${f.name}</span>
-                            <span class="cloud-picker-meta">${date} · ${sizeStr}</span>
+                            <span class="cloud-picker-meta">${date} · ${sizeStr} · ${typeLabel}</span>
                         </div>
                         <button class="cloud-picker-delete-btn"><iconify-icon icon="lucide:trash-2"></iconify-icon></button>
                     `;
@@ -1090,7 +1179,7 @@ const CloudSync = (() => {
                 const blob = await _buildProjectBlob(proj);
                 if (blob) {
                     const fileName = `${(proj.name || 'moodboard').replace(/[^a-z0-9 _-]/gi, '_')}.mood`;
-                    await uploadFile(blob, fileName, true);
+                    await uploadFile(blob, fileName, proj.type, true);
                     savedAny = true;
                 }
             }
