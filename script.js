@@ -58,6 +58,7 @@ function serializeItems(itemArray) {
     return itemArray.map(t => {
         const e = { ...t };
         if (e.type === 'image') delete e.img;
+        else if (e.type === 'video') delete e.video;
         else if (e.type === 'group' && e.items) e.items = serializeItems(e.items);
         return e;
     });
@@ -70,6 +71,21 @@ function restoreImages(itemArray) {
             if (t.imageId && globalImageCache[t.imageId]) img.src = globalImageCache[t.imageId];
             else if (t.img) img.src = t.img;
             t.img = img;
+        } else if (t.type === 'video') {
+            const video = document.createElement('video');
+            video.loop = true;
+            video.muted = true;
+            video.playsInline = true;
+            
+            if (t.videoId && globalVideoCache[t.videoId]) {
+                const videoData = globalVideoCache[t.videoId];
+                video.src = videoData instanceof Blob ? URL.createObjectURL(videoData) : videoData;
+            } else if (t.videoSrc) {
+                video.src = t.videoSrc;
+            }
+            
+            video.play().catch(e => console.log("Autoplay prevented:", e));
+            t.video = video;
         } else if (t.type === 'group' && t.items) {
             restoreImages(t.items);
         }
@@ -100,6 +116,7 @@ function saveToBrowser() {
     });
     window.localforage.setItem('moodinfinite_projects', projectsToSave);
     window.localforage.setItem('moodinfinite_cache', globalImageCache);
+    window.localforage.setItem('moodinfinite_video_cache', globalVideoCache);
     window.localforage.setItem('moodinfinite_active_tab', activeProjectId);
 }
 
@@ -1285,8 +1302,15 @@ function toggleMobileTabsPopup() {
 const canvas = document.getElementById('moodboard-canvas');
 const ctx = canvas.getContext('2d');
 const imageInput = document.getElementById('image-input');
+const videoInput = document.getElementById('video-input');
 const projectInput = document.getElementById('project-input');
 const addImageBtn = document.getElementById('add-image-btn');
+const addVideoBtn = document.getElementById('add-video-btn');
+const videoPlayAllBtn = document.getElementById('video-play-all-btn');
+const videoPauseAllBtn = document.getElementById('video-pause-all-btn');
+const videoToolsContainer = document.getElementById('video-tools-container');
+const videoPlayPauseBtn = document.getElementById('video-play-pause-btn');
+const videoMuteBtn = document.getElementById('video-mute-btn');
 const addTextBtn = document.getElementById('add-text-btn');
 const addCommentBtn = document.getElementById('add-comment-btn');
 const addArrowBtn = document.getElementById('add-arrow-btn');
@@ -1395,6 +1419,7 @@ const centerSelectedBtn = document.getElementById('center-selected-btn');
 let cameraOffset = { x: 0, y: 0 }, cameraZoom = 1;
 let items = [], selectedItems = [];
 let globalImageCache = {}; // Cache for image source data
+let globalVideoCache = {}; // Cache for video files (Blobs or URLs)
 let historyStack, historyIndex;
 
 const MAX_ZOOM = 5, MIN_ZOOM = 0.1, SCROLL_SENSITIVITY = 0.0005;
@@ -1850,6 +1875,54 @@ function setupEventListeners() {
 
     if (addImageBtn) addImageBtn.addEventListener('click', () => imageInput.click());
     if (imageInput) imageInput.addEventListener('change', handleImageUpload);
+    if (addVideoBtn) addVideoBtn.addEventListener('click', () => videoInput.click());
+    if (videoInput) videoInput.addEventListener('change', handleVideoUpload);
+    if (videoPlayAllBtn) {
+        videoPlayAllBtn.addEventListener('click', (ev) => {
+            ev.stopPropagation();
+            let changed = false;
+            const process = (itemList) => {
+                itemList.forEach(item => {
+                    if (item.type === 'video' && item.video) {
+                        item.video.play().catch(e => console.log("Autoplay prevented:", e));
+                        item.isPlaying = true;
+                        changed = true;
+                    } else if (item.type === 'group' && item.items) {
+                        process(item.items);
+                    }
+                });
+            };
+            process(items);
+            if (changed) {
+                updateSelectionToolbar();
+                requestUpdate();
+                saveStateForUndo();
+            }
+        });
+    }
+    if (videoPauseAllBtn) {
+        videoPauseAllBtn.addEventListener('click', (ev) => {
+            ev.stopPropagation();
+            let changed = false;
+            const process = (itemList) => {
+                itemList.forEach(item => {
+                    if (item.type === 'video' && item.video) {
+                        item.video.pause();
+                        item.isPlaying = false;
+                        changed = true;
+                    } else if (item.type === 'group' && item.items) {
+                        process(item.items);
+                    }
+                });
+            };
+            process(items);
+            if (changed) {
+                updateSelectionToolbar();
+                requestUpdate();
+                saveStateForUndo();
+            }
+        });
+    }
     if (projectInput) projectInput.addEventListener('change', handleProjectUpload);
     if (mobileTabsBtn) mobileTabsBtn.addEventListener('click', toggleMobileTabsPopup);
     if (connectBtn) {
@@ -1958,6 +2031,37 @@ function setupEventListeners() {
     }
 
     if (toggleBoxStyleBtn) toggleBoxStyleBtn.addEventListener('click', toggleBoxStyle);
+    if (videoPlayPauseBtn) {
+        videoPlayPauseBtn.addEventListener('click', () => {
+            if (selectedItems.length === 1 && selectedItems[0].type === 'video') {
+                const item = selectedItems[0];
+                if (item.video) {
+                    if (item.video.paused) {
+                        item.video.play().catch(e => console.log(e));
+                        item.isPlaying = true;
+                    } else {
+                        item.video.pause();
+                        item.isPlaying = false;
+                    }
+                    updateSelectionToolbar();
+                    requestUpdate();
+                }
+            }
+        });
+    }
+    if (videoMuteBtn) {
+        videoMuteBtn.addEventListener('click', () => {
+            if (selectedItems.length === 1 && selectedItems[0].type === 'video') {
+                const item = selectedItems[0];
+                if (item.video) {
+                    item.video.muted = !item.video.muted;
+                    item.isMuted = item.video.muted;
+                    updateSelectionToolbar();
+                    requestUpdate();
+                }
+            }
+        });
+    }
     if (groupBtn) groupBtn.addEventListener('click', groupSelectedItems);
     if (groupOrderedBtn) groupOrderedBtn.addEventListener('click', groupOrderedItems);
     if (ungroupBtn) ungroupBtn.addEventListener('click', ungroupSelectedItems);
@@ -2176,7 +2280,12 @@ function draw() {
                 const box = getItemBoundingBox(e);
                 if (box.x + box.width < viewport.minX || box.x > viewport.maxX ||
                     box.y + box.height < viewport.minY || box.y > viewport.maxY) {
+                    if (e.type === 'video' && e.video && !e.video.paused) {
+                        e.video.pause();
+                    }
                     return;
+                } else if (e.type === 'video' && e.video && e.video.paused && e.isPlaying) {
+                    e.video.play().catch(err => {});
                 }
             }
 
@@ -2191,6 +2300,7 @@ function draw() {
             }
 
             if (e.type === 'image') drawImageItem(ctx, e);
+            else if (e.type === 'video') drawVideoItem(ctx, e);
             else if (e.type === 'arrow') drawArrow(ctx, e);
             else if (e.type === 'text') drawTextItem(ctx, e);
             else if (e.type === 'box') drawBoxItem(ctx, e);
@@ -2584,6 +2694,63 @@ function drawImageItem(ctx, item) {
     ctx.restore();
 }
 
+function drawVideoItem(ctx, item) {
+    if (!item.video) return;
+    ctx.save();
+    const centerX = item.x + item.width / 2;
+    const centerY = item.y + item.height / 2;
+    ctx.translate(centerX, centerY);
+    ctx.rotate(item.rotation);
+    ctx.scale(item.scaleX || 1, item.scaleY || 1);
+    ctx.globalAlpha = item.opacity ?? 1;
+    try {
+        ctx.drawImage(item.video, -item.width / 2, -item.height / 2, item.width, item.height);
+        
+        // Draw overlay if paused
+        if (item.video.paused) {
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
+            ctx.fillRect(-item.width / 2, -item.height / 2, item.width, item.height);
+            
+            ctx.fillStyle = '#ffffff';
+            ctx.beginPath();
+            const size = Math.min(item.width, item.height) * 0.15;
+            ctx.moveTo(-size / 2, -size);
+            ctx.lineTo(size, 0);
+            ctx.lineTo(-size / 2, size);
+            ctx.closePath();
+            ctx.fill();
+        }
+    } catch (e) {
+        // Fallback
+    }
+
+    if (item.label) {
+        const labelText = item.label;
+        ctx.font = `bold ${14 / cameraZoom}px Inter, sans-serif`;
+        const textMetrics = ctx.measureText(labelText);
+        const padding = 6 / cameraZoom;
+        const labelWidth = textMetrics.width + padding * 2;
+        const labelHeight = 20 / cameraZoom;
+        const labelX = -item.width / 2 + 10 / cameraZoom;
+        const labelY = -item.height / 2 + 10 / cameraZoom;
+
+        ctx.fillStyle = accentColor;
+        ctx.beginPath();
+        if (ctx.roundRect) {
+            ctx.roundRect(labelX, labelY, labelWidth, labelHeight, 4 / cameraZoom);
+        } else {
+            ctx.rect(labelX, labelY, labelWidth, labelHeight);
+        }
+        ctx.fill();
+
+        ctx.fillStyle = '#ffffff';
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(labelText, labelX + padding, labelY + labelHeight / 2);
+    }
+    ctx.restore();
+}
+
 function drawMeasureItem(ctx, item) {
     const PIXELS_PER_INCH = 96, PIXELS_PER_CM = PIXELS_PER_INCH / 2.54;
     ctx.save();
@@ -2780,7 +2947,7 @@ function drawTextListItem(e, t) {
 }
 function drawStrokeItem(e, t) { if (t.points.length < 2) return; e.save(); e.strokeStyle = t.color; e.lineWidth = 4 / cameraZoom; e.lineCap = 'round'; e.lineJoin = 'round'; e.beginPath(); e.moveTo(t.points[0].x, t.points[0].y); for (let o = 1; o < t.points.length; o++) { e.lineTo(t.points[o].x, t.points[o].y) } e.stroke(); e.restore() }
 function getItemPorts(e) {
-    if (!['group', 'image', 'box', 'circle', 'textList', 'comment', 'text', 'reroute'].includes(e.type)) return [];
+    if (!['group', 'image', 'video', 'box', 'circle', 'textList', 'comment', 'text', 'reroute'].includes(e.type)) return [];
     if (e.type === 'reroute') {
         return [
             { side: 'left', x: e.x, y: e.y, item: e },
@@ -3257,6 +3424,20 @@ function onDoubleClick(e) {
     const t = screenToWorld(getEventLocation(e)), o = getItemAtPosition(t);
     if (o && (o.type === 'text' || o.type === 'comment' || o.type === 'textList') && !o.isPinned) {
         editText(o);
+        return;
+    }
+    if (o && o.type === 'video' && !o.isPinned) {
+        if (o.video) {
+            if (o.video.paused) {
+                o.video.play().catch(e => console.log(e));
+                o.isPlaying = true;
+            } else {
+                o.video.pause();
+                o.isPlaying = false;
+            }
+            updateSelectionToolbar();
+            requestUpdate();
+        }
         return;
     }
     if (o && o.type === 'counter' && !o.isPinned) {
@@ -4141,10 +4322,13 @@ function saveProject() {
         };
 
         const localCache = {};
+        const localVideoCache = {};
         const usedImageIds = new Set();
+        const usedVideoIds = new Set();
         const extractUsedIds = (arr) => {
             arr.forEach(item => {
                 if (item.type === 'image' && item.imageId) usedImageIds.add(item.imageId);
+                if (item.type === 'video' && item.videoId) usedVideoIds.add(item.videoId);
                 if (item.type === 'group' && item.items) extractUsedIds(item.items);
             });
         };
@@ -4183,8 +4367,25 @@ function saveProject() {
             });
         });
 
-        Promise.all(promises).then(() => {
+        const videoFolder = rootDir.folder("videos");
+        const videoPromises = Array.from(usedVideoIds).map(id => {
+            return new Promise((resolve) => {
+                const videoData = globalVideoCache[id];
+                if (!videoData) return resolve();
+                if (videoData instanceof Blob) {
+                    videoFolder.file(`${id}.bin`, videoData);
+                    localVideoCache[id] = `videos/${id}.bin`;
+                    resolve();
+                } else {
+                    localVideoCache[id] = videoData;
+                    resolve();
+                }
+            });
+        });
+
+        Promise.all([...promises, ...videoPromises]).then(() => {
             eJSON.globalImageCache = localCache;
+            eJSON.globalVideoCache = localVideoCache;
             rootDir.file("data.json", JSON.stringify(eJSON, null, 2));
             zip.generateAsync({ type: "blob" }).then(function (content) {
                 const n = document.createElement('a');
@@ -4294,8 +4495,23 @@ function loadFileFromObject(t) {
                     }
                     return Promise.resolve();
                 });
-                Promise.all(promises).then(() => {
+                const videoPromises = Object.keys(data.globalVideoCache || {}).map(id => {
+                    const relativePath = data.globalVideoCache[id];
+                    if (relativePath && relativePath.startsWith('videos/')) {
+                        const file = zip.file(rootDirName + relativePath);
+                        if (file) {
+                            return file.async("blob").then(videoBlob => {
+                                globalVideoCache[id] = videoBlob;
+                            });
+                        }
+                    } else {
+                        globalVideoCache[id] = relativePath;
+                    }
+                    return Promise.resolve();
+                });
+                Promise.all([...promises, ...videoPromises]).then(() => {
                     data.globalImageCache = globalImageCache;
+                    data.globalVideoCache = globalVideoCache;
                     loadFileAsNewTab(JSON.stringify(data), t.name);
                     scheduleAutoSave();
                 });
@@ -4338,7 +4554,20 @@ window.reloadCurrentProjectFromBlob = async function(blob) {
                 globalImageCache[id] = relativePath;
             }
         });
-        await Promise.all(promises);
+        const videoPromises = Object.keys(data.globalVideoCache || {}).map(async id => {
+            const relativePath = data.globalVideoCache[id];
+            if (relativePath && relativePath.startsWith('videos/')) {
+                const rootDirName = rootKey.split('data.json')[0];
+                const file = zip.file(rootDirName + relativePath);
+                if (file) {
+                    const videoBlob = await file.async("blob");
+                    globalVideoCache[id] = videoBlob;
+                }
+            } else {
+                globalVideoCache[id] = relativePath;
+            }
+        });
+        await Promise.all([...promises, ...videoPromises]);
 
         // Update project data
         if (activeProject.type === 'moodinfinite') {
@@ -4382,6 +4611,7 @@ window.reloadCurrentProjectFromBlob = async function(blob) {
 };
 
 function handleImageUpload(e) { if (!e.target.files) return; const t = screenToWorld({ x: canvas.width / 2, y: canvas.height / 2 }); processFiles(e.target.files, t); imageInput.value = '' }
+function handleVideoUpload(e) { if (!e.target.files) return; const t = screenToWorld({ x: canvas.width / 2, y: canvas.height / 2 }); processVideoFiles(e.target.files, t); videoInput.value = '' }
 function handleProjectUpload(e) { const t = e.target.files[0]; if (!t) return; loadFileFromObject(t); projectInput.value = '' }
 
 function handlePaste(e) {
@@ -4509,12 +4739,17 @@ function handlePaste(e) {
         return;
     }
 
-    const files = Array.from(e.clipboardData.items)
+    const imageFiles = Array.from(e.clipboardData.items)
         .filter(item => item.type.startsWith('image/'))
         .map(item => item.getAsFile());
+    const videoFiles = Array.from(e.clipboardData.items)
+        .filter(item => item.type.startsWith('video/'))
+        .map(item => item.getAsFile());
     const isInternalClipboardOld = (Date.now() - internalClipboardTimestamp) > 500;
-    if (files.length > 0 && isInternalClipboardOld) {
-        processFiles(files, screenToWorld({ x: canvas.width / 2, y: canvas.height / 2 }));
+    if ((imageFiles.length > 0 || videoFiles.length > 0) && isInternalClipboardOld) {
+        const center = screenToWorld({ x: canvas.width / 2, y: canvas.height / 2 });
+        if (imageFiles.length > 0) processFiles(imageFiles, center);
+        if (videoFiles.length > 0) processVideoFiles(videoFiles, center);
         return;
     }
     if (clipboard.length > 0) {
@@ -4524,7 +4759,22 @@ function handlePaste(e) {
 
 function handleDragOver(e) { e.preventDefault(); canvas.style.outline = `2px dashed ${accentColor}`; canvas.style.outlineOffset = '-10px' }
 function handleDragLeave(e) { e.preventDefault(); canvas.style.outline = 'none' }
-function handleDrop(e) { e.preventDefault(); handleDragLeave(e); if (!e.dataTransfer.files) return; const t = e.dataTransfer.files[0]; if (t && (t.name.endsWith('.json') || t.name.endsWith('.zip') || t.name.endsWith('.mood'))) { loadFileFromObject(t); } else { processFiles(e.dataTransfer.files, screenToWorld(getEventLocation(e))) } }
+function handleDrop(e) {
+    e.preventDefault();
+    handleDragLeave(e);
+    if (!e.dataTransfer.files) return;
+    const t = e.dataTransfer.files[0];
+    if (t && (t.name.endsWith('.json') || t.name.endsWith('.zip') || t.name.endsWith('.mood'))) {
+        loadFileFromObject(t);
+    } else {
+        const files = Array.from(e.dataTransfer.files);
+        const imageFiles = files.filter(f => f.type.startsWith('image/'));
+        const videoFiles = files.filter(f => f.type.startsWith('video/'));
+        const worldPos = screenToWorld(getEventLocation(e));
+        if (imageFiles.length > 0) processFiles(imageFiles, worldPos);
+        if (videoFiles.length > 0) processVideoFiles(videoFiles, worldPos);
+    }
+}
 function handleImageFile(file, callback) {
     if (file && file.type.startsWith('image/')) {
         const reader = new FileReader();
@@ -4573,6 +4823,58 @@ function processFiles(files, worldPos) {
     });
     setTimeout(saveStateForUndo, 500);
 }
+
+function processVideoFiles(files, worldPos) {
+    Array.from(files).forEach((file, index) => {
+        if (!file.type.startsWith('video/')) return;
+        
+        const videoId = 'video_' + Date.now() + '_' + index + '_' + Math.random().toString(36).substr(2, 9);
+        
+        // Store raw Blob in globalVideoCache
+        globalVideoCache[videoId] = file;
+        
+        const video = document.createElement('video');
+        video.loop = true;
+        video.muted = true;
+        video.playsInline = true;
+        
+        const objectURL = URL.createObjectURL(file);
+        
+        video.addEventListener('loadedmetadata', () => {
+            const aspectRatio = video.videoWidth / video.videoHeight || 16/9;
+            const initialWidth = 320;
+            const initialHeight = initialWidth / aspectRatio;
+            
+            addItemToLayeredItems({
+                id: Date.now() + index,
+                type: 'video',
+                videoId: videoId,
+                videoSrc: objectURL, // runtime object URL
+                video: video, // runtime HTMLVideoElement
+                x: worldPos.x - initialWidth / 2 + index * 20,
+                y: worldPos.y - initialHeight / 2 + index * 20,
+                width: initialWidth,
+                height: initialHeight,
+                originalWidth: initialWidth,
+                originalHeight: initialHeight,
+                rotation: 0,
+                isPinned: false,
+                opacity: 1,
+                scaleX: 1,
+                scaleY: 1,
+                isPlaying: true,
+                isMuted: true
+            });
+            
+            video.play().catch(e => console.log("Autoplay prevented:", e));
+            bringSelectedToFront();
+        });
+
+        video.src = objectURL;
+    });
+    setTimeout(saveStateForUndo, 500);
+}
+
 function downloadSourceImage() { if (selectedItems.length !== 1 || selectedItems[0].type !== 'image') return; const e = selectedItems[0], t = document.createElement('a'); t.href = e.img.src; try { const e = new URL(t.href), o = e.pathname.split('/'); t.download = o[o.length - 1] || 'source_image' } catch (e) { t.download = 'source_image.png' } document.body.appendChild(t); t.click(); document.body.removeChild(t); showToast("Source image download started.") }
 
 function copyItems(e = !0) {
@@ -4585,6 +4887,12 @@ function copyItems(e = !0) {
                 item.imageId = source.imageId;
                 item.imgSrc = globalImageCache[source.imageId];
                 delete item.img;
+            } else if (item.type === 'video') {
+                item.videoId = source.videoId;
+                item.videoSrc = globalVideoCache[source.videoId] instanceof Blob 
+                    ? URL.createObjectURL(globalVideoCache[source.videoId]) 
+                    : globalVideoCache[source.videoId];
+                delete item.video;
             } else if (item.type === 'group' && Array.isArray(item.items)) {
                 item.items.forEach((child, i) => attachSrc(child, source.items[i]));
             }
@@ -4651,6 +4959,20 @@ function pasteItems() {
                 }
                 delete e.imgSrc;
                 e.img = img;
+            } else if (e.type === 'video') {
+                const video = document.createElement('video');
+                video.loop = true;
+                video.muted = true;
+                video.playsInline = true;
+                if (e.videoId && globalVideoCache[e.videoId]) {
+                    const videoData = globalVideoCache[e.videoId];
+                    video.src = videoData instanceof Blob ? URL.createObjectURL(videoData) : videoData;
+                } else if (e.videoSrc) {
+                    video.src = e.videoSrc;
+                }
+                delete e.videoSrc;
+                video.play().catch(err => console.log("Autoplay prevented:", err));
+                e.video = video;
             } else if (e.type === 'group') {
                 e.items.forEach(r)
             }
@@ -4686,6 +5008,22 @@ function duplicateItems() {
                     img.src = item.img.src;
                 }
                 clone.img = img;
+            } else if (item.type === 'video') {
+                clone.videoId = item.videoId;
+                const video = document.createElement('video');
+                video.loop = true;
+                video.muted = true;
+                video.playsInline = true;
+                if (item.videoId && globalVideoCache[item.videoId]) {
+                    const videoData = globalVideoCache[item.videoId];
+                    video.src = videoData instanceof Blob ? URL.createObjectURL(videoData) : videoData;
+                } else if (item.videoSrc) {
+                    video.src = item.videoSrc;
+                } else if (item.video) {
+                    video.src = item.video.src;
+                }
+                video.play().catch(err => console.log("Autoplay prevented:", err));
+                clone.video = video;
             } else if (item.type === 'link') {
                 delete clone.iconImage;
                 delete clone.iconLoading;
@@ -5015,6 +5353,16 @@ function updateSelectionToolbar() {
         gridToolsContainer.style.display = isGrid ? 'flex' : 'none';
         measureToolsContainer.style.display = isMeasure ? 'flex' : 'none';
         itemColorToolContainer.style.display = canHaveColor ? 'flex' : 'none';
+        
+        const isVideo = selectedItems.length === 1 && selectedItems[0].type === 'video';
+        if (videoToolsContainer) videoToolsContainer.style.display = isVideo ? 'flex' : 'none';
+        if (isVideo && selectedItems[0].video) {
+            const item = selectedItems[0];
+            const playPauseIcon = videoPlayPauseBtn.querySelector('iconify-icon');
+            const muteIcon = videoMuteBtn.querySelector('iconify-icon');
+            if (playPauseIcon) playPauseIcon.setAttribute('icon', item.video.paused ? 'lucide:play' : 'lucide:pause');
+            if (muteIcon) muteIcon.setAttribute('icon', item.video.muted ? 'lucide:volume-x' : 'lucide:volume-2');
+        }
 
         if (isTextOrCommentOrList) {
             const e = selectedItems[0];
@@ -5068,6 +5416,7 @@ function updateSelectionToolbar() {
         gridToolsContainer.style.display = 'none';
         measureToolsContainer.style.display = 'none';
         iconToolsContainer.style.display = 'none';
+        if (videoToolsContainer) videoToolsContainer.style.display = 'none';
         linkToolsContainer.style.display = 'none';
         activeGizmo = null
     }
@@ -5720,7 +6069,10 @@ setupEventListeners();
 setupGanttListeners();
 buildPaletteMenu();
 
-window.localforage.getItem('moodinfinite_cache').then(cache => {
+window.localforage.getItem('moodinfinite_video_cache').then(vCache => {
+    if (vCache) globalVideoCache = vCache;
+    return window.localforage.getItem('moodinfinite_cache');
+}).then(cache => {
     if (cache) globalImageCache = cache;
     return window.localforage.getItem('moodinfinite_projects');
 }).then(savedProjects => {
@@ -7332,6 +7684,8 @@ window.__moodinfinite = {
 Object.defineProperty(window, 'projects',         { get: () => projects,         configurable: true });
 Object.defineProperty(window, 'activeProjectId',  { get: () => activeProjectId,  configurable: true });
 Object.defineProperty(window, 'globalImageCache', { get: () => globalImageCache, configurable: true });
+Object.defineProperty(window, 'globalVideoCache', { get: () => globalVideoCache, configurable: true });
+Object.defineProperty(window, 'items',            { get: () => items,            configurable: true });
 window.serializeItems     = serializeItems;
 window.loadFileFromObject = loadFileFromObject;
 window.showToast          = showToast;

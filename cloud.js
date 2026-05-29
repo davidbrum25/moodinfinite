@@ -691,14 +691,18 @@ const CloudSync = (() => {
                 };
 
                 const cache = window.globalImageCache || {};
+                const videoCache = window.globalVideoCache || {};
                 const usedIds = new Set();
+                const usedVideoIds = new Set();
                 const extractIds = arr => arr?.forEach(i => {
                     if (i.type === 'image' && i.imageId) usedIds.add(i.imageId);
+                    if (i.type === 'video' && i.videoId) usedVideoIds.add(i.videoId);
                     if (i.type === 'group' && i.items) extractIds(i.items);
                 });
                 extractIds(items);
 
                 const localCache = {};
+                const localVideoCache = {};
                 const promises = Array.from(usedIds).map(id => new Promise(res => {
                     const b64 = cache[id];
                     if (!b64 || !b64.startsWith('data:image')) { localCache[id] = b64; return res(); }
@@ -717,8 +721,23 @@ const CloudSync = (() => {
                     img.src = b64;
                 }));
 
-                Promise.all(promises).then(() => {
+                const videoFolder = rootDir.folder('videos');
+                const videoPromises = Array.from(usedVideoIds).map(id => new Promise(res => {
+                    const videoData = videoCache[id];
+                    if (!videoData) return res();
+                    if (videoData instanceof Blob) {
+                        videoFolder.file(`${id}.bin`, videoData);
+                        localVideoCache[id] = `videos/${id}.bin`;
+                        res();
+                    } else {
+                        localVideoCache[id] = videoData;
+                        res();
+                    }
+                }));
+
+                Promise.all([...promises, ...videoPromises]).then(() => {
                     eJSON.globalImageCache = localCache;
+                    eJSON.globalVideoCache = localVideoCache;
                     rootDir.file('data.json', JSON.stringify(eJSON, null, 2));
                     zip.generateAsync({ type: 'blob' }).then(resolve).catch(reject);
                 }).catch(reject);
@@ -1203,6 +1222,7 @@ const CloudSync = (() => {
         updateIndicator: updateBottomLeftIndicator,
         get isLoggedIn() { return !!_userInfo; },
         get userInfo() { return _userInfo; },
+        buildProjectBlob: _buildProjectBlob,
     };
 
 })();

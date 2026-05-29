@@ -5,6 +5,7 @@
     "acorn": "^8.16.0",
     "acorn-walk": "^8.3.5",
     "escodegen": "^2.1.0",
+    "jszip": "^3.10.1",
     "puppeteer": "^24.27.0"
   },
   "description": "<div align=\"center\">   <img src=\"https://github.com/davidbrum25/moodinfinite/blob/main/_branding/_png/moodinfinite__Logotipo_alpha.png?raw=true\" alt=\"Moodinfinite Logo\" width=\"400\"/> </div>",
