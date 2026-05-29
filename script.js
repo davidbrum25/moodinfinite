@@ -1420,6 +1420,10 @@ let cameraOffset = { x: 0, y: 0 }, cameraZoom = 1;
 let items = [], selectedItems = [];
 let globalImageCache = {}; // Cache for image source data
 let globalVideoCache = {}; // Cache for video files (Blobs or URLs)
+let _webpBlobCache = {};   // In-memory cache for WebP compressed blobs: imageId -> WebP Blob
+window.globalImageCache = globalImageCache;
+window.globalVideoCache = globalVideoCache;
+window._webpBlobCache = _webpBlobCache;
 let historyStack, historyIndex;
 
 const MAX_ZOOM = 5, MIN_ZOOM = 0.1, SCROLL_SENSITIVITY = 0.0005;
@@ -4345,6 +4349,13 @@ function saveProject() {
                     return resolve();
                 }
 
+                // Check WebP Blob cache first
+                if (_webpBlobCache[id]) {
+                    imgFolder.file(`${id}.webp`, _webpBlobCache[id]);
+                    localCache[id] = `images/${id}.webp`;
+                    return resolve();
+                }
+
                 const img = new Image();
                 img.onload = () => {
                     const canvas = document.createElement('canvas');
@@ -4354,6 +4365,7 @@ function saveProject() {
                     ctx.drawImage(img, 0, 0);
                     canvas.toBlob(blob => {
                         if (blob) {
+                            _webpBlobCache[id] = blob; // Cache the compressed blob
                             imgFolder.file(`${id}.webp`, blob);
                             localCache[id] = `images/${id}.webp`;
                         } else {

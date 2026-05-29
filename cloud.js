@@ -57,6 +57,7 @@ const CloudSync = (() => {
     let _isSilentRefresh = false;  // true during background token renewal
     let _syncTimer = null;         // Timer for background sync polling
     let _lastCheckTime = 0;        // Last time we checked for updates
+    const _webpBlobCache = window._webpBlobCache || {};     // Share the in-memory cache with script.js
 
     // Pending callback after auth (resolve queues)
     let _pendingResolve = null;
@@ -265,7 +266,14 @@ const CloudSync = (() => {
      * Returns the Drive file ID.
      */
     async function uploadFile(blob, fileName, boardType, isAutoSave = false) {
-        await _ensureAuth();
+        if (isAutoSave) {
+            if (!_isTokenValid()) {
+                console.warn('[CloudSync] Autosave cancelled: Google token expired or invalid.');
+                return null;
+            }
+        } else {
+            await _ensureAuth();
+        }
         const fId = await _ensureFolder();
 
         // Check if file already exists
@@ -472,6 +480,14 @@ const CloudSync = (() => {
     async function saveCurrentProject(isAutoSave = false) {
         try {
             setCloudStatus('syncing');
+
+            if (!isAutoSave) {
+                await _ensureAuth();
+            } else if (!_isTokenValid()) {
+                setCloudStatus('idle');
+                return;
+            }
+
             showCloudToast('Saving to Google Drive…', 'info');
 
             const activeProject = window.projects?.find(p => p.id === window.activeProjectId);
@@ -706,14 +722,27 @@ const CloudSync = (() => {
                 const promises = Array.from(usedIds).map(id => new Promise(res => {
                     const b64 = cache[id];
                     if (!b64 || !b64.startsWith('data:image')) { localCache[id] = b64; return res(); }
+
+                    // Check WebP Blob cache first
+                    if (_webpBlobCache[id]) {
+                        imgFolder.file(`${id}.webp`, _webpBlobCache[id]);
+                        localCache[id] = `images/${id}.webp`;
+                        return res();
+                    }
+
                     const img = new Image();
                     img.onload = () => {
                         const c = document.createElement('canvas');
                         c.width = img.width; c.height = img.height;
                         c.getContext('2d').drawImage(img, 0, 0);
                         c.toBlob(blob => {
-                            if (blob) { imgFolder.file(`${id}.webp`, blob); localCache[id] = `images/${id}.webp`; }
-                            else { localCache[id] = b64; }
+                            if (blob) {
+                                _webpBlobCache[id] = blob; // Cache the compressed blob
+                                imgFolder.file(`${id}.webp`, blob);
+                                localCache[id] = `images/${id}.webp`;
+                            } else {
+                                localCache[id] = b64;
+                            }
                             res();
                         }, 'image/webp', 0.9);
                     };
@@ -1186,26 +1215,37 @@ const CloudSync = (() => {
     async function runAutoSave() {
         if (!_userInfo || !_isTokenValid()) return;
         
-        let savedAny = false;
-        for (const proj of window.projects || []) {
-            if (!proj.data) continue;
-            const localMod = proj.data._localModified || 0;
-            const cloudSave = proj.data._cloudSaved || 0;
-            
-            if (localMod > cloudSave) {
-                proj.data._cloudSaved = Date.now();
-                console.log(`[CloudSync] Autosaving "${proj.name}"...`);
-                const blob = await _buildProjectBlob(proj);
-                if (blob) {
-                    const fileName = `${(proj.name || 'moodboard').replace(/[^a-z0-9 _-]/gi, '_')}.mood`;
-                    await uploadFile(blob, fileName, proj.type, true);
-                    savedAny = true;
+        try {
+            let savedAny = false;
+            for (const proj of window.projects || []) {
+                if (!proj.data) continue;
+                const localMod = proj.data._localModified || 0;
+                const cloudSave = proj.data._cloudSaved || 0;
+                
+                if (localMod > cloudSave) {
+                    const oldCloudSaved = proj.data._cloudSaved;
+                    proj.data._cloudSaved = Date.now();
+                    console.log(`[CloudSync] Autosaving "${proj.name}"...`);
+                    const blob = await _buildProjectBlob(proj);
+                    if (blob) {
+                        const fileName = `${(proj.name || 'moodboard').replace(/[^a-z0-9 _-]/gi, '_')}.mood`;
+                        const fileId = await uploadFile(blob, fileName, proj.type, true);
+                        if (fileId) {
+                            savedAny = true;
+                        } else {
+                            proj.data._cloudSaved = oldCloudSaved;
+                        }
+                    } else {
+                        proj.data._cloudSaved = oldCloudSaved;
+                    }
                 }
             }
-        }
-        
-        if (savedAny) {
-            setCloudStatus('synced');
+            
+            if (savedAny) {
+                setCloudStatus('synced');
+            }
+        } catch (err) {
+            console.warn('[CloudSync] Autosave failed:', err);
         }
     }
 
