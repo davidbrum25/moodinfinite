@@ -76,15 +76,8 @@ function restoreImages(itemArray) {
             video.loop = true;
             video.muted = true;
             video.playsInline = true;
-            
-            if (t.videoId && globalVideoCache[t.videoId]) {
-                const videoData = globalVideoCache[t.videoId];
-                video.src = videoData instanceof Blob ? URL.createObjectURL(videoData) : videoData;
-            } else if (t.videoSrc) {
-                video.src = t.videoSrc;
-            }
-            
-            video.play().catch(e => console.log("Autoplay prevented:", e));
+            video.addEventListener('play', () => { registerVideoFrameCallback(video); });
+            t.isPlaying = t.isPlaying !== false;
             t.video = video;
         } else if (t.type === 'group' && t.items) {
             restoreImages(t.items);
@@ -355,6 +348,18 @@ function switchTab(projectId) {
             currentProject.data.cameraZoom = cameraZoom;
             currentProject.data.historyStack = historyStack;
             currentProject.data.historyIndex = historyIndex;
+
+            // Pause all playing videos in the project we are leaving
+            const pauseAllVideos = (itemList) => {
+                itemList.forEach(item => {
+                    if (item.type === 'video' && item.video && !item.video.paused) {
+                        item.video.pause();
+                    } else if (item.type === 'group' && item.items) {
+                        pauseAllVideos(item.items);
+                    }
+                });
+            };
+            pauseAllVideos(items);
         }
     }
 
@@ -1888,6 +1893,14 @@ function setupEventListeners() {
             const process = (itemList) => {
                 itemList.forEach(item => {
                     if (item.type === 'video' && item.video) {
+                        if (!item.video.src) {
+                            if (item.videoId && globalVideoCache[item.videoId]) {
+                                const videoData = globalVideoCache[item.videoId];
+                                item.video.src = videoData instanceof Blob ? URL.createObjectURL(videoData) : videoData;
+                            } else if (item.videoSrc) {
+                                item.video.src = item.videoSrc;
+                            }
+                        }
                         item.video.play().catch(e => console.log("Autoplay prevented:", e));
                         item.isPlaying = true;
                         changed = true;
@@ -2041,6 +2054,14 @@ function setupEventListeners() {
                 const item = selectedItems[0];
                 if (item.video) {
                     if (item.video.paused) {
+                        if (!item.video.src) {
+                            if (item.videoId && globalVideoCache[item.videoId]) {
+                                const videoData = globalVideoCache[item.videoId];
+                                item.video.src = videoData instanceof Blob ? URL.createObjectURL(videoData) : videoData;
+                            } else if (item.videoSrc) {
+                                item.video.src = item.videoSrc;
+                            }
+                        }
                         item.video.play().catch(e => console.log(e));
                         item.isPlaying = true;
                     } else {
@@ -2247,8 +2268,56 @@ function setupEventListeners() {
     });
 }
 function resizeCanvas() { if (!activeProjectId || projects.find(e => e.id === activeProjectId)?.type !== 'moodinfinite') return; const t = document.getElementById('content-area'), o = canvas.width, a = canvas.height, i = t.clientWidth, r = t.clientHeight; if (o === i && a === r) return; cameraOffset.x -= (i - o) / (2 * cameraZoom); cameraOffset.y -= (r - a) / (2 * cameraZoom); canvas.width = i; canvas.height = r; requestUpdate(); }
+function registerVideoFrameCallback(video) {
+    if (video._hasFrameCallback) return;
+    if (video.requestVideoFrameCallback) {
+        video._hasFrameCallback = true;
+        const cb = () => {
+            if (!video.paused) {
+                needsUpdate = true;
+                video.requestVideoFrameCallback(cb);
+            } else {
+                video._hasFrameCallback = false;
+            }
+        };
+        video.requestVideoFrameCallback(cb);
+    }
+}
+
+function hasPlayingVideoInViewport() {
+    if (!activeProjectId) return false;
+    const activeProject = projects.find(p => p.id === activeProjectId);
+    if (!activeProject || activeProject.type !== 'moodinfinite') return false;
+
+    return items.some(e => {
+        if (e.type !== 'video' || !e.video || e.video.paused) return false;
+        
+        if (e.video.requestVideoFrameCallback) {
+            registerVideoFrameCallback(e.video);
+            return false;
+        }
+
+        const padding = 50 / cameraZoom;
+        const vStart = screenToWorld({ x: -padding, y: -padding });
+        const vEnd = screenToWorld({ x: canvas.width + padding, y: canvas.height + padding });
+        if (!vStart || !vEnd) return false;
+        
+        const minX = Math.min(vStart.x, vEnd.x);
+        const maxX = Math.max(vStart.x, vEnd.x);
+        const minY = Math.min(vStart.y, vEnd.y);
+        const maxY = Math.max(vStart.y, vEnd.y);
+        
+        const box = getItemBoundingBox(e);
+        return !(box.x + box.width < minX || box.x > maxX ||
+                 box.y + box.height < minY || box.y > maxY);
+    });
+}
+
 function gameLoop() {
-    draw();
+    if (needsUpdate || hasPlayingVideoInViewport()) {
+        draw();
+        needsUpdate = false;
+    }
     requestAnimationFrame(gameLoop);
 }
 
@@ -2284,12 +2353,39 @@ function draw() {
                 const box = getItemBoundingBox(e);
                 if (box.x + box.width < viewport.minX || box.x > viewport.maxX ||
                     box.y + box.height < viewport.minY || box.y > viewport.maxY) {
-                    if (e.type === 'video' && e.video && !e.video.paused) {
-                        e.video.pause();
+                    if (e.type === 'video' && e.video) {
+                        if (!e.video.paused) {
+                            e.video.pause();
+                        }
+                        const viewportWidth = viewport.maxX - viewport.minX;
+                        const viewportHeight = viewport.maxY - viewport.minY;
+                        const farThresholdX = viewportWidth * 2;
+                        const farThresholdY = viewportHeight * 2;
+                        if (box.x + box.width < viewport.minX - farThresholdX || box.x > viewport.maxX + farThresholdX ||
+                            box.y + box.height < viewport.minY - farThresholdY || box.y > viewport.maxY + farThresholdY) {
+                            if (e.video.src) {
+                                e.video.removeAttribute('src');
+                                e.video.load();
+                            }
+                        }
                     }
                     return;
-                } else if (e.type === 'video' && e.video && e.video.paused && e.isPlaying) {
-                    e.video.play().catch(err => {});
+                } else if (e.type === 'video' && e.video) {
+                    if (cameraZoom < 0.15) {
+                        if (!e.video.paused) e.video.pause();
+                    } else {
+                        if (!e.video.src) {
+                            if (e.videoId && globalVideoCache[e.videoId]) {
+                                const videoData = globalVideoCache[e.videoId];
+                                e.video.src = videoData instanceof Blob ? URL.createObjectURL(videoData) : videoData;
+                            } else if (e.videoSrc) {
+                                e.video.src = e.videoSrc;
+                            }
+                        }
+                        if (e.video.paused && e.isPlaying) {
+                            e.video.play().catch(err => {});
+                        }
+                    }
                 }
             }
 
@@ -2707,22 +2803,102 @@ function drawVideoItem(ctx, item) {
     ctx.rotate(item.rotation);
     ctx.scale(item.scaleX || 1, item.scaleY || 1);
     ctx.globalAlpha = item.opacity ?? 1;
+
+    const isLoaded = item.video.src && item.video.readyState >= 2;
+
     try {
-        ctx.drawImage(item.video, -item.width / 2, -item.height / 2, item.width, item.height);
-        
-        // Draw overlay if paused
-        if (item.video.paused) {
-            ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
+        if (isLoaded) {
+            let shouldDrawFrame = true;
+            if (!item.video.paused && cameraZoom < 0.4) {
+                item._frameCount = (item._frameCount || 0) + 1;
+                const skipFactor = cameraZoom < 0.25 ? 3 : 2;
+                if (item._frameCount % skipFactor !== 0) {
+                    shouldDrawFrame = false;
+                }
+            }
+
+            if (shouldDrawFrame) {
+                ctx.drawImage(item.video, -item.width / 2, -item.height / 2, item.width, item.height);
+                if (cameraZoom < 0.4) {
+                    if (!item._offscreenCanvas) {
+                        item._offscreenCanvas = document.createElement('canvas');
+                    }
+                    if (item._offscreenCanvas.width !== item.width || item._offscreenCanvas.height !== item.height) {
+                        item._offscreenCanvas.width = item.width;
+                        item._offscreenCanvas.height = item.height;
+                    }
+                    const oCtx = item._offscreenCanvas.getContext('2d');
+                    oCtx.drawImage(item.video, 0, 0, item.width, item.height);
+                    item._hasCachedFrame = true;
+                }
+            } else if (item._hasCachedFrame && item._offscreenCanvas) {
+                ctx.drawImage(item._offscreenCanvas, -item.width / 2, -item.height / 2, item.width, item.height);
+            } else {
+                ctx.drawImage(item.video, -item.width / 2, -item.height / 2, item.width, item.height);
+            }
+            
+            // Draw overlay if paused
+            if (item.video.paused) {
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
+                ctx.fillRect(-item.width / 2, -item.height / 2, item.width, item.height);
+                
+                // Draw a beautiful glassmorphic circular play button
+                const btnRadius = Math.min(item.width, item.height) * 0.15;
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
+                ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
+                ctx.lineWidth = 2 / cameraZoom;
+                ctx.beginPath();
+                ctx.arc(0, 0, btnRadius, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.stroke();
+                
+                // Play triangle
+                ctx.fillStyle = '#ffffff';
+                ctx.beginPath();
+                const triSize = btnRadius * 0.4;
+                ctx.moveTo(-triSize * 0.3, -triSize * 0.6);
+                ctx.lineTo(triSize * 0.7, 0);
+                ctx.lineTo(-triSize * 0.3, triSize * 0.6);
+                ctx.closePath();
+                ctx.fill();
+            }
+        } else {
+            // Draw a beautiful glassmorphic loading placeholder
+            ctx.fillStyle = 'rgba(20, 20, 20, 0.75)';
             ctx.fillRect(-item.width / 2, -item.height / 2, item.width, item.height);
             
-            ctx.fillStyle = '#ffffff';
+            // Rounded glass border
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
+            ctx.lineWidth = 1 / cameraZoom;
+            ctx.strokeRect(-item.width / 2, -item.height / 2, item.width, item.height);
+            
+            // Draw a loading icon/spinner (pulsing circle)
+            const pulseRadius = Math.min(item.width, item.height) * 0.12;
+            const time = Date.now() / 1000;
+            const pulse = Math.abs(Math.sin(time * 2));
+            
+            // Outer pulsing glow
+            ctx.fillStyle = `rgba(66, 158, 255, ${0.1 + pulse * 0.15})`;
             ctx.beginPath();
-            const size = Math.min(item.width, item.height) * 0.15;
-            ctx.moveTo(-size / 2, -size);
-            ctx.lineTo(size, 0);
-            ctx.lineTo(-size / 2, size);
-            ctx.closePath();
+            ctx.arc(0, 0, pulseRadius * (1 + pulse * 0.2), 0, Math.PI * 2);
             ctx.fill();
+            
+            // Inner core spinning arc
+            ctx.strokeStyle = 'rgba(66, 158, 255, 0.8)';
+            ctx.lineWidth = 3 / cameraZoom;
+            ctx.beginPath();
+            ctx.arc(0, 0, pulseRadius, time * 5, time * 5 + Math.PI * 1.5);
+            ctx.stroke();
+            
+            // Loading text or video symbol
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
+            ctx.font = `${11 / cameraZoom}px Inter, sans-serif`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('LOADING', 0, pulseRadius + 22 / cameraZoom);
+            
+            // Request an update to keep the pulse/spinner animating
+            requestUpdate();
         }
     } catch (e) {
         // Fallback
@@ -3433,6 +3609,14 @@ function onDoubleClick(e) {
     if (o && o.type === 'video' && !o.isPinned) {
         if (o.video) {
             if (o.video.paused) {
+                if (!o.video.src) {
+                    if (o.videoId && globalVideoCache[o.videoId]) {
+                        const videoData = globalVideoCache[o.videoId];
+                        o.video.src = videoData instanceof Blob ? URL.createObjectURL(videoData) : videoData;
+                    } else if (o.videoSrc) {
+                        o.video.src = o.videoSrc;
+                    }
+                }
                 o.video.play().catch(e => console.log(e));
                 o.isPlaying = true;
             } else {
@@ -4849,6 +5033,7 @@ function processVideoFiles(files, worldPos) {
         video.loop = true;
         video.muted = true;
         video.playsInline = true;
+        video.addEventListener('play', () => { registerVideoFrameCallback(video); });
         
         const objectURL = URL.createObjectURL(file);
         
@@ -4976,14 +5161,8 @@ function pasteItems() {
                 video.loop = true;
                 video.muted = true;
                 video.playsInline = true;
-                if (e.videoId && globalVideoCache[e.videoId]) {
-                    const videoData = globalVideoCache[e.videoId];
-                    video.src = videoData instanceof Blob ? URL.createObjectURL(videoData) : videoData;
-                } else if (e.videoSrc) {
-                    video.src = e.videoSrc;
-                }
-                delete e.videoSrc;
-                video.play().catch(err => console.log("Autoplay prevented:", err));
+                video.addEventListener('play', () => { registerVideoFrameCallback(video); });
+                e.isPlaying = e.isPlaying !== false;
                 e.video = video;
             } else if (e.type === 'group') {
                 e.items.forEach(r)
@@ -5022,19 +5201,13 @@ function duplicateItems() {
                 clone.img = img;
             } else if (item.type === 'video') {
                 clone.videoId = item.videoId;
+                clone.videoSrc = item.videoSrc || (item.video ? item.video.src : '');
                 const video = document.createElement('video');
                 video.loop = true;
                 video.muted = true;
                 video.playsInline = true;
-                if (item.videoId && globalVideoCache[item.videoId]) {
-                    const videoData = globalVideoCache[item.videoId];
-                    video.src = videoData instanceof Blob ? URL.createObjectURL(videoData) : videoData;
-                } else if (item.videoSrc) {
-                    video.src = item.videoSrc;
-                } else if (item.video) {
-                    video.src = item.video.src;
-                }
-                video.play().catch(err => console.log("Autoplay prevented:", err));
+                video.addEventListener('play', () => { registerVideoFrameCallback(video); });
+                clone.isPlaying = item.isPlaying !== false;
                 clone.video = video;
             } else if (item.type === 'link') {
                 delete clone.iconImage;
@@ -6389,6 +6562,7 @@ function drawLinkItem(ctx, item) {
 const colorseekerModeSelect = document.getElementById('colorseeker-mode-select');
 const colorseekerBasePicker = document.getElementById('colorseeker-base-picker');
 const colorseekerPalette = document.getElementById('colorseeker-palette');
+const colorseekerHexList = document.getElementById('colorseeker-hex-list');
 
 function hexToHsl(hex) {
     let result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
@@ -6522,6 +6696,10 @@ function renderColorSeeker(projectId) {
     if (colorseekerModeSelect) colorseekerModeSelect.value = project.data.mode || 'shades';
     if (colorseekerBasePicker) colorseekerBasePicker.value = project.data.baseColor || '#ffffff';
     if (!project.data.colors) project.data.colors = generatePalette(project.data.baseColor, project.data.mode, project.data.lockedColors);
+
+    if (colorseekerHexList && project.data.colors) {
+        colorseekerHexList.textContent = project.data.colors.map(c => c.toUpperCase()).join(',');
+    }
 
     // Track which bar is "focused" for the L hotkey
     window._colorseekerFocusedIndex = null;
@@ -6715,6 +6893,30 @@ if (colorseekerBasePicker) {
     });
     colorseekerBasePicker.addEventListener('change', () => {
         saveToBrowser();
+    });
+}
+
+if (colorseekerHexList) {
+    colorseekerHexList.addEventListener('click', () => {
+        const textToCopy = colorseekerHexList.textContent.trim();
+        if (textToCopy) {
+            navigator.clipboard.writeText(textToCopy)
+                .then(() => {
+                    showToast('Copied palette to clipboard!');
+                })
+                .catch(err => {
+                    console.error('Could not copy palette: ', err);
+                });
+        }
+    });
+
+    colorseekerHexList.addEventListener('mouseenter', () => {
+        colorseekerHexList.style.background = 'rgba(255, 255, 255, 0.05)';
+        colorseekerHexList.style.borderColor = 'rgba(255, 255, 255, 0.25)';
+    });
+    colorseekerHexList.addEventListener('mouseleave', () => {
+        colorseekerHexList.style.background = 'rgba(0,0,0,0.2)';
+        colorseekerHexList.style.borderColor = 'var(--border-color)';
     });
 }
 
