@@ -608,6 +608,45 @@ async function assertNextImprovements(page) {
         const gantt = await page.$('#gantt-container');
         await gantt.screenshot({ path: path.join(shotDir, 'moodgantt-dependency.png') });
     }
+
+    await page.evaluate(() => {
+        const board = projects.find((p) => p.type === 'moodinfinite');
+        switchTab(board.id);
+        (0, eval)('selectedItems.length = 0');
+        items.length = 0;
+        draw();
+    });
+    await page.waitForSelector('#canvas-template-picker button[data-template="flowchart"]');
+    await page.click('#canvas-template-picker button[data-template="flowchart"]');
+    await page.waitForFunction(() => items.some((item) => item.type === 'connector'));
+    const flow = await page.evaluate(() => {
+        draw();
+        const conn = items.find((item) => item.type === 'connector');
+        const canvasEl = document.getElementById('moodboard-canvas');
+        const onScreen = items.filter((item) => item.type === 'box').every((box) => {
+            const point = worldToScreen({ x: box.x + box.width / 2, y: box.y + box.height / 2 });
+            return point.x > 40 && point.x < canvasEl.width - 40 && point.y > 40 && point.y < canvasEl.height - 40;
+        });
+        return {
+            boxes: items.filter((item) => item.type === 'box').length,
+            route: !!(conn && conn.route && conn.route.length >= 2),
+            guideHidden: document.getElementById('canvas-empty-guide').hidden,
+            onScreen,
+        };
+    });
+    assert.equal(flow.boxes, 2, 'flowchart template did not place two boxes');
+    assert.equal(flow.route, true, 'flowchart connector has no route');
+    assert.equal(flow.guideHidden, true, 'empty guide stayed up after a template');
+    assert.equal(flow.onScreen, true, 'flowchart template was placed outside the current view');
+    if (shotDir) await page.screenshot({ path: path.join(shotDir, 'canvas-template.png') });
+
+    await page.evaluate(() => { items.length = 0; draw(); });
+    await page.click('#canvas-template-picker button[data-template="moodboard"]');
+    await page.waitForFunction(() => items.some((item) => item.type === 'text') && items.some((item) => item.type === 'comment') && items.some((item) => item.type === 'box'));
+
+    await page.evaluate(() => { items.length = 0; draw(); });
+    await page.click('#canvas-template-picker button[data-template="image-grid"]');
+    await page.waitForFunction(() => items.some((item) => item.type === 'grid' && item.rows === 2 && item.cols === 3));
 }
 
 const server = startServer();

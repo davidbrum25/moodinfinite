@@ -25,7 +25,7 @@ Moodgantt is the timeline cousin of that task list. Asana-style dependency lines
 
 ## What is missing
 
-**Moodinfinite canvas.** Milanote starts you from a template or a photo library. This canvas holds images, text, comments, links, drawings, shapes, and connectors, and it saves locally. An empty board names the first tools. The corner shows zoom and a minimap of where the view sits. A selected image takes a caption. While you drag, the board says whether snap is on, including the Shift override. Connectors stay beside the shapes they join. Still missing: a frame tool, templates, and a built-in photo library.
+**Moodinfinite canvas.** Milanote starts you from a template or a photo library. This canvas holds images, text, comments, links, drawings, shapes, and connectors, and it saves locally. An empty board names the first tools. The corner shows zoom and a minimap of where the view sits. A selected image takes a caption. While you drag, the board says whether snap is on, including the Shift override. Connectors stay beside the shapes they join. Still missing: a frame tool and a built-in photo library. An empty board can start from a moodboard, a flowchart, or an image grid.
 
 **Moodprompt.** PromptHero is a public search across models, with the picture next to the words. Moodprompt is a private working set: platform, media type, references, tags, variables, and a copy control that says Copied. An empty tab explains how to add the first card. There is no version of a prompt, and no side-by-side of the text and a generated result beyond the two reference slots.
 
@@ -55,22 +55,22 @@ These six are the finish line for this pass. Each one is in the running app.
 12. **Palette length and order** (Moodtone). Add swatch appends a color, Remove takes one away while at least two remain, and dropping a swatch on another reorders the row. Space still rebuilds the harmony.
 13. **Due date on a card item** (Moodlist). Each checklist row has a date. The existing search matches that date.
 14. **Task dependency** (Moodgantt). A task can depend on another. Dragging the predecessor pushes the dependent task by the same number of days, and a line joins the two bars.
+15. **Starter templates** (Moodinfinite canvas). An empty board offers Moodboard, Flowchart, and Image grid. Each one places that layout on the canvas.
 
 ## Next
 
-The next list is clear. Later items stay below.
+The next list is clear. The first later item, starter templates, is now in the app. The rest stay below.
 
 ## Later
 
 Larger work. Still no new board type.
 
-1. **Starter templates** (Moodinfinite canvas). A few empty layouts for a moodboard, a flowchart of connectors, and a grid of images.
-2. **Photo search on the image tool** (Moodinfinite canvas, image). Search a stock library without leaving the board.
-3. **Web clipper for the link tool** (Moodinfinite canvas, link). Save an image or URL from another tab onto the canvas.
-4. **Draw on a story frame** (Moodflow, and the canvas draw tool's behavior). Sketch on the frame instead of only uploading a picture.
-5. **Script view** (Moodflow). Edit every frame's action and dialogue in one column, then return to the horizontal board.
-6. **Colors from an image** (Moodtone, eyedropper). Build a palette from a canvas image, not only from a base hex.
-7. **Send a palette to the canvas** (Moodtone and Moodinfinite canvas). Drop the five swatches onto the board as boxes.
-8. **Subtasks** (Moodlist). Indent a row under the one above it.
-9. **Prompt versions** (Moodprompt). Keep the previous text of a card when it changes, and put it back in one step.
-10. **Shared boards.** Realtime editing is out of scope until the single-player finish above is in place. Local save and Drive sync stay the way work moves between machines.
+1. **Photo search on the image tool** (Moodinfinite canvas, image). Search a stock library without leaving the board.
+2. **Web clipper for the link tool** (Moodinfinite canvas, link). Save an image or URL from another tab onto the canvas.
+3. **Draw on a story frame** (Moodflow, and the canvas draw tool's behavior). Sketch on the frame instead of only uploading a picture.
+4. **Script view** (Moodflow). Edit every frame's action and dialogue in one column, then return to the horizontal board.
+5. **Colors from an image** (Moodtone, eyedropper). Build a palette from a canvas image, not only from a base hex.
+6. **Send a palette to the canvas** (Moodtone and Moodinfinite canvas). Drop the five swatches onto the board as boxes.
+7. **Subtasks** (Moodlist). Indent a row under the one above it.
+8. **Prompt versions** (Moodprompt). Keep the previous text of a card when it changes, and put it back in one step.
+9. **Shared boards.** Realtime editing is out of scope until the single-player finish above is in place. Local save and Drive sync stay the way work moves between machines.

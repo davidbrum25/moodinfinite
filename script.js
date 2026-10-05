@@ -2735,6 +2735,52 @@ function resetCanvasZoom() {
 const canvasZoomReadout = document.getElementById('canvas-zoom-readout');
 if (canvasZoomReadout) canvasZoomReadout.addEventListener('click', resetCanvasZoom);
 
+function applyCanvasTemplate(kind) {
+    const project = projects.find(p => p.id === activeProjectId);
+    if (!project || project.type !== 'moodinfinite' || items.length) return;
+    const accent = accentColor || '#429eff';
+    const stamp = Date.now();
+    const mid = screenToWorld({ x: canvas.width / 2, y: canvas.height / 2 });
+    const ox = mid.x - 300;
+    const oy = mid.y - 90;
+    const base = { rotation: 0, isPinned: false, opacity: 1, scaleX: 1, scaleY: 1 };
+    let next = [];
+    if (kind === 'moodboard') {
+        next = [
+            { ...base, id: stamp + '-note', type: 'text', text: 'Collect references here', title: 'Mood', x: ox, y: oy, width: 220, height: 150, fontSize: 16, fontFamily: 'Nunito', color: accent },
+            { ...base, id: stamp + '-phrase', type: 'comment', text: 'A feeling or phrase', x: ox + 260, y: oy + 20, width: 200, height: 110, fontSize: 16, fontFamily: 'Nunito', textAlign: 'left', fontWeight: 'bold', fontStyle: 'normal', color: '#f5d76e', icon: 'none' },
+            { ...base, id: stamp + '-swatch', type: 'box', color: accent, x: ox + 500, y: oy + 20, width: 120, height: 120, style: 'fill' },
+        ];
+    } else if (kind === 'flowchart') {
+        const sourceId = stamp + '-start';
+        const targetId = stamp + '-next';
+        next = [
+            { ...base, id: sourceId, type: 'box', color: accent, x: ox + 40, y: oy + 80, width: 160, height: 80, style: 'fill' },
+            { ...base, id: targetId, type: 'box', color: accent, x: ox + 360, y: oy + 80, width: 160, height: 80, style: 'fill' },
+            { id: stamp + '-link', type: 'connector', sourceId, sourcePort: 'right', targetId, targetPort: 'left', color: accent },
+        ];
+    } else if (kind === 'image-grid') {
+        next = [
+            { ...base, id: stamp + '-grid', type: 'grid', color: accent, x: ox + 80, y: oy, width: 420, height: 280, rows: 2, cols: 3 },
+        ];
+    } else {
+        return;
+    }
+    saveStateForUndo();
+    next.forEach(item => items.push(item));
+    syncActiveMoodboard();
+    requestUpdate();
+}
+
+const canvasTemplatePicker = document.getElementById('canvas-template-picker');
+if (canvasTemplatePicker) {
+    canvasTemplatePicker.addEventListener('click', (event) => {
+        const button = event.target.closest('[data-template]');
+        if (!button) return;
+        applyCanvasTemplate(button.dataset.template);
+    });
+}
+
 function drawSelection(e) { if (e.type === 'reroute') { ctx.save(); ctx.strokeStyle = accentColor; ctx.lineWidth = 2 / cameraZoom; ctx.beginPath(); ctx.arc(e.x, e.y, 12 / cameraZoom, 0, Math.PI * 2); ctx.stroke(); ctx.restore(); return } if (selectedItems.length > 1) { drawSelectionOutline(e); return } if ((e.type === 'arrow' || e.type === 'measure') && !e.isPinned) { const t = 8 / cameraZoom, o = invertColor(canvasBackgroundColor); ctx.save(); ctx.fillStyle = o; ctx.shadowColor = 'rgba(0, 0, 0, 0.4)'; ctx.shadowBlur = 4 / cameraZoom; ctx.beginPath(); ctx.arc(e.startX, e.startY, t, 0, Math.PI * 2); ctx.fill(); if (hoveredArrowHandle === 'start') { ctx.strokeStyle = accentColor; ctx.lineWidth = 2 / cameraZoom; ctx.stroke() } ctx.beginPath(); ctx.arc(e.endX, e.endY, t, 0, Math.PI * 2); ctx.fill(); if (hoveredArrowHandle === 'end') { ctx.strokeStyle = accentColor; ctx.lineWidth = 2 / cameraZoom; ctx.stroke() } ctx.restore(); return } if (e.type === 'stroke') { if (!isDrawing) drawSelectionOutline(e); return } ctx.save(); const t = e.x + e.width / 2, o = e.y + e.height / 2; ctx.translate(t, o); ctx.rotate(e.rotation); ctx.strokeStyle = accentColor; ctx.lineWidth = 2 / cameraZoom; ctx.strokeRect(-e.width / 2, -e.height / 2, e.width, e.height); if (activeGizmo && !e.isPinned) { const t = invertColor(canvasBackgroundColor), o = 8 / cameraZoom; ctx.shadowColor = 'rgba(0, 0, 0, 0.4)'; ctx.shadowBlur = 4 / cameraZoom; ctx.fillStyle = t; ctx.strokeStyle = t; if (activeGizmo === 'scale') { const t = e.width / 2, a = e.height / 2; ctx.beginPath(); ctx.arc(t, a, o, 0, Math.PI * 2); ctx.fill(); if (hoveredGizmo === 'scale') { ctx.strokeStyle = accentColor; ctx.lineWidth = 2 / cameraZoom; ctx.stroke() } } else if (activeGizmo === 'rotate') { const t = e.width / 2, a = -e.height / 2, i = a - 20 / cameraZoom; ctx.beginPath(); ctx.moveTo(t, a); ctx.lineTo(t, i); ctx.stroke(); ctx.beginPath(); ctx.arc(t, i, o, 0, Math.PI * 2); ctx.fill(); if (hoveredGizmo === 'rotate') { ctx.strokeStyle = accentColor; ctx.lineWidth = 2 / cameraZoom; ctx.stroke() } } } ctx.restore() }
 function drawSelectionOutline(e) { ctx.save(); const t = getItemBoundingBox(e); ctx.strokeStyle = accentColor; ctx.lineWidth = 2 / cameraZoom; ctx.setLineDash([6 / cameraZoom, 4 / cameraZoom]); ctx.strokeRect(t.x, t.y, t.width, t.height); ctx.restore() }
 function drawSelectionBox() {

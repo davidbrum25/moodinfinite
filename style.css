@@ -1392,6 +1392,29 @@
             line-height: 1.5;
         }
 
+        #canvas-template-picker {
+            display: flex;
+            justify-content: center;
+            gap: 0.45rem;
+            margin-top: 0.85rem;
+            pointer-events: auto;
+        }
+
+        #canvas-template-picker button {
+            padding: 0.35rem 0.7rem;
+            border-radius: 999px;
+            border: 1px solid var(--border-color);
+            background: rgba(255, 255, 255, 0.06);
+            color: var(--text-color);
+            font: 600 0.78rem/1 Inter, sans-serif;
+            cursor: pointer;
+        }
+
+        #canvas-template-picker button:hover {
+            border-color: var(--switch-bg-checked);
+            color: var(--switch-bg-checked);
+        }
+
         #canvas-empty-guide kbd {
             display: inline-block;
             margin: 0 0.1rem;
