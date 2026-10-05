@@ -35,7 +35,7 @@ Moodgantt is the timeline cousin of that task list. Asana-style dependency lines
 
 **Moodgantt.** The timeline can hold groups, tasks, dates, progress, status, workers, and zoom. An empty plan asks for the first group. Tasks do not depend on each other, so a slip does not push the next bar.
 
-**Moodlist.** Todoist adds due dates, priorities, subtasks, and reminders. Moodlist already has the Keep-style card, color, pin, search, images, and a real empty state ("No cards yet"). Items are one level deep.
+**Moodlist.** Todoist adds priorities, subtasks, and reminders. Moodlist has the Keep-style card, color, pin, search, images, an empty state ("No cards yet"), and a due date on each row. Search matches that date. Items are one level deep.
 
 ## Now
 
@@ -53,13 +53,13 @@ These six are the finish line for this pass. Each one is in the running app.
 10. **Prompt copy stays on the card** (Moodprompt). The copy control on the card shows Copied.
 11. **Animatic playback** (Moodflow). Play walks the frames in order and holds each one for its duration. Stop ends it.
 12. **Palette length and order** (Moodtone). Add swatch appends a color, Remove takes one away while at least two remain, and dropping a swatch on another reorders the row. Space still rebuilds the harmony.
+13. **Due date on a card item** (Moodlist). Each checklist row has a date. The existing search matches that date.
 
 ## Next
 
 Still inside the current boards and tools.
 
-1. **Due date on a card item** (Moodlist). One date field on a checklist row, surfaced by the search that already exists.
-2. **Task dependency** (Moodgantt). A line from one bar to the next, so moving a task shows what it pushes.
+1. **Task dependency** (Moodgantt). A line from one bar to the next, so moving a task shows what it pushes.
 
 ## Later
 

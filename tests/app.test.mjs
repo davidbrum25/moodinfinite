@@ -527,6 +527,35 @@ async function assertNextImprovements(page) {
     const orderAfter = (await page.$eval('#colorseeker-hex-list', (el) => el.textContent.trim())).split(',').map((s) => s.trim().toLowerCase());
     assert.equal(orderAfter[2], orderBefore[0], `drag did not move the first swatch: ${orderBefore} -> ${orderAfter}`);
     assert.notEqual(orderAfter.join(','), orderBefore.join(','));
+
+    await page.evaluate(() => createNewProject('moodlist'));
+    await page.waitForSelector('.ml-item-text');
+    await page.type('.ml-add-title', 'Pack');
+    await page.type('.ml-item-text', 'Tickets');
+    await page.click('.ml-save-btn');
+    await page.waitForSelector('.ml-card .ml-item-due');
+    await page.$eval('.ml-card .ml-item-due', (el) => {
+        el.value = '2026-11-02';
+        el.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    await page.type('.ml-search', '2026-11-02');
+    await page.waitForFunction(() => document.querySelectorAll('.ml-card').length === 1);
+    const found = await page.evaluate(() => ({
+        title: document.querySelector('.ml-card-title')?.textContent?.trim(),
+        due: document.querySelector('.ml-card .ml-item-due')?.value,
+    }));
+    assert.equal(found.title, 'Pack');
+    assert.equal(found.due, '2026-11-02');
+    if (shotDir) {
+        mkdirSync(shotDir, { recursive: true });
+        const list = await page.$('#moodlist-container');
+        await list.screenshot({ path: path.join(shotDir, 'moodlist-due.png') });
+    }
+    await page.$eval('.ml-search', (el) => {
+        el.value = '1999-01-01';
+        el.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    await page.waitForFunction(() => document.querySelectorAll('.ml-card').length === 0);
 }
 
 const server = startServer();

@@ -285,7 +285,7 @@ function renderMoodlistCards(project, grid) {
     if (query) {
         cards = cards.filter(c =>
             (c.title || '').toLowerCase().includes(query) ||
-            c.items.some(i => (i.text || '').toLowerCase().includes(query))
+            c.items.some(i => (i.text || '').toLowerCase().includes(query) || (i.due || '').toLowerCase().includes(query))
         );
     }
 
@@ -349,6 +349,7 @@ function _buildCard(card, project, grid) {
                 <iconify-icon icon="${item.checked ? 'lucide:check-square' : 'lucide:square'}" width="15" height="15"></iconify-icon>
             </span>
             <span class="ml-card-item-text">${_escapeHtml(item.text)}</span>
+            <input type="date" class="ml-item-due" title="Due date"${item.due ? ` value="${_escapeAttr(item.due)}"` : ''}>
             <button class="ml-card-item-del" title="Delete item" tabindex="-1">
                 <iconify-icon icon="lucide:x" width="12" height="12"></iconify-icon>
             </button>
@@ -397,9 +398,10 @@ function _buildCard(card, project, grid) {
 function _wireCard(el, card, project, grid) {
     // Toggle checkboxes + delete item buttons
     el.querySelectorAll('.ml-card-item').forEach(itemEl => {
+        const item = card.items.find(i => i.id === itemEl.dataset.itemId);
+        _wireItemDue(itemEl, item);
         itemEl.addEventListener('click', (e) => {
-            if (e.target.closest('.ml-card-item-del')) return;
-            const item = card.items.find(i => i.id === itemEl.dataset.itemId);
+            if (e.target.closest('.ml-card-item-del') || e.target.closest('.ml-item-due')) return;
             if (item) {
                 item.checked = !item.checked;
                 scheduleAutoSave();
@@ -464,12 +466,14 @@ function _wireCard(el, card, project, grid) {
                     <iconify-icon icon="lucide:square" width="15" height="15"></iconify-icon>
                 </span>
                 <span class="ml-card-item-text">${_escapeHtml(text)}</span>
+                <input type="date" class="ml-item-due" title="Due date">
                 <button class="ml-card-item-del" title="Delete item" tabindex="-1">
                     <iconify-icon icon="lucide:x" width="12" height="12"></iconify-icon>
                 </button>
             `;
+            _wireItemDue(row, newItem);
             row.addEventListener('click', (e) => {
-                if (e.target.closest('.ml-card-item-del')) return;
+                if (e.target.closest('.ml-card-item-del') || e.target.closest('.ml-item-due')) return;
                 newItem.checked = !newItem.checked;
                 row.classList.toggle('checked', newItem.checked);
                 row.querySelector('.ml-card-checkbox iconify-icon').setAttribute('icon',
@@ -651,6 +655,20 @@ function _escapeHtml(str) {
         .replace(/>/g,'&gt;')
         .replace(/"/g,'&quot;');
 }
+function _wireItemDue(itemEl, item) {
+    const due = itemEl.querySelector('.ml-item-due');
+    if (!due || !item) return;
+    const stop = (e) => e.stopPropagation();
+    due.addEventListener('click', stop);
+    due.addEventListener('pointerdown', stop);
+    due.addEventListener('mousedown', stop);
+    due.addEventListener('change', (e) => {
+        e.stopPropagation();
+        item.due = due.value || '';
+        scheduleAutoSave();
+    });
+}
+
 function _escapeAttr(str) {
     return String(str).replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 }
