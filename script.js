@@ -1478,7 +1478,33 @@ let gridSize = 50, gridOpacity = 0.05;
 let currentProjectName = 'moodinfinite';
 const HISTORY_LIMIT = 50;
 let needsUpdate = true;
-function requestUpdate() { needsUpdate = true; }
+// True while a mouse or touch button is down. Firefox does not present canvas
+// frames that were painted from requestAnimationFrame during that time.
+let pointerHeld = false;
+let presentedDrawTimer = 0;
+
+function requestUpdate() {
+    needsUpdate = true;
+    if (pointerHeld) schedulePresentedDraw();
+}
+
+function schedulePresentedDraw() {
+    if (presentedDrawTimer) return;
+    presentedDrawTimer = setTimeout(flushPresentedDraw, 0);
+}
+
+function flushPresentedDraw() {
+    presentedDrawTimer = 0;
+    if (!needsUpdate && !hasPlayingVideoInViewport()) return;
+    needsUpdate = false;
+    draw();
+    if (needsUpdate && pointerHeld) schedulePresentedDraw();
+}
+
+function setPointerHeldFromEvent(e) {
+    if (e && typeof e.buttons === 'number') pointerHeld = e.buttons !== 0;
+    else pointerHeld = false;
+}
 
 function getLuminance(hex) {
     if (!hex) return 0;
@@ -1821,6 +1847,28 @@ function setupEventListeners() {
     canvas.addEventListener('mouseup', onMouseUp);
     canvas.addEventListener('auxclick', e => { if (e.button === 1) e.preventDefault(); });
     canvas.addEventListener('mousemove', onMouseMove);
+    // Middle-button pan. Capture runs before Firefox/Linux autoscroll, and
+    // setPointerCapture keeps the drag if the default action still takes the target.
+    canvas.addEventListener('pointerdown', e => {
+        if (e.button !== 1) return;
+        e.preventDefault();
+        pointerHeld = true;
+        try { canvas.setPointerCapture(e.pointerId); } catch (err) { /* already released */ }
+        beginCanvasPan(e);
+    }, true);
+    canvas.addEventListener('pointermove', e => {
+        if (!isDragging || (e.buttons & 4) === 0) return;
+        applyCanvasPan(e);
+    });
+    canvas.addEventListener('pointerup', e => {
+        if (e.button !== 1) return;
+        endCanvasPan();
+        setPointerHeldFromEvent(e);
+    });
+    canvas.addEventListener('pointercancel', () => {
+        endCanvasPan();
+        pointerHeld = false;
+    });
     canvas.addEventListener('dblclick', onDoubleClick);
     canvas.addEventListener('wheel', e => { e.preventDefault(); adjustZoom(e, -e.deltaY * SCROLL_SENSITIVITY) });
     canvas.addEventListener('contextmenu', onContextMenu);
@@ -1862,10 +1910,24 @@ function setupEventListeners() {
 
     window.addEventListener('paste', handlePaste);
 
-    // Prevent global middle-click paste/autoscroll behavior (typical on Linux)
-    window.addEventListener('mousedown', e => { if (e.button === 1) e.preventDefault(); });
-    window.addEventListener('mouseup', e => { if (e.button === 1) e.preventDefault(); });
-    window.addEventListener('auxclick', e => { if (e.button === 1) e.preventDefault(); });
+    // Prevent global middle-click paste/autoscroll behavior (typical on Linux).
+    // Capture phase so the default action is cancelled before it steals the drag.
+    window.addEventListener('mousedown', e => { if (e.button === 1) e.preventDefault(); }, true);
+    window.addEventListener('mouseup', e => {
+        if (e.button === 1) {
+            e.preventDefault();
+            endCanvasPan();
+        }
+        setPointerHeldFromEvent(e);
+    }, true);
+    window.addEventListener('auxclick', e => { if (e.button === 1) e.preventDefault(); }, true);
+    window.addEventListener('mousemove', e => {
+        if (isDragging && (e.buttons & 4)) applyCanvasPan(e);
+    }, true);
+    window.addEventListener('blur', () => {
+        pointerHeld = false;
+        endCanvasPan();
+    });
 
     canvas.addEventListener('dragover', handleDragOver);
     canvas.addEventListener('dragleave', handleDragLeave);
@@ -2052,7 +2114,8 @@ function setupEventListeners() {
             if (key === 'canvasBackgroundColor') canvasBackgroundColor = value;
             else if (key === 'accentColor') accentColor = value;
             else if (key === 'gridColor') gridColor = value;
-            updateUIColors()
+            updateUIColors();
+            requestUpdate();
         }
     };
 
@@ -2150,7 +2213,9 @@ function setupEventListeners() {
         itemColorPicker.addEventListener('input', e => {
             if (selectedItems.length === 1 && (['box', 'circle', 'text', 'measure', 'comment', 'link', 'textList'].includes(selectedItems[0].type))) {
                 selectedItems[0].color = e.target.value;
+                selectedItems[0]._isDirty = true;
                 saveStateForUndo();
+                requestUpdate();
             }
         });
     }
@@ -2159,7 +2224,9 @@ function setupEventListeners() {
         noteBgColorInput.addEventListener('input', e => {
             if (selectedItems.length === 1 && selectedItems[0].type === 'text') {
                 selectedItems[0].bgColor = e.target.value;
+                selectedItems[0]._isDirty = true;
                 saveStateForUndo();
+                requestUpdate();
             }
         });
     }
@@ -2352,8 +2419,11 @@ function hasPlayingVideoInViewport() {
 
 function gameLoop() {
     if (needsUpdate || hasPlayingVideoInViewport()) {
-        draw();
-        needsUpdate = false;
+        if (pointerHeld) schedulePresentedDraw();
+        else {
+            draw();
+            needsUpdate = false;
+        }
     }
     requestAnimationFrame(gameLoop);
 }
@@ -3744,12 +3814,43 @@ function getEventLocation(e) {
         y: (e.clientY || (e.touches && e.touches[0] ? e.touches[0].clientY : 0)) - rect.top
     };
 }
+function beginCanvasPan(e) {
+    if (currentlyEditingText) finishEditingText();
+    if (e && e.preventDefault) e.preventDefault();
+    const loc = getEventLocation(e);
+    if (!isDragging) {
+        isDragging = true;
+        dragStart.x = loc.x / cameraZoom - cameraOffset.x;
+        dragStart.y = loc.y / cameraZoom - cameraOffset.y;
+        canvas.classList.add('grabbing');
+    }
+    requestUpdate();
+}
+function applyCanvasPan(e) {
+    if (!isDragging) return;
+    const loc = getEventLocation(e);
+    cameraOffset.x = loc.x / cameraZoom - dragStart.x;
+    cameraOffset.y = loc.y / cameraZoom - dragStart.y;
+    requestUpdate();
+}
+function endCanvasPan() {
+    if (!isDragging) return;
+    isDragging = false;
+    canvas.classList.remove('grabbing');
+    requestUpdate();
+}
 function onMouseDown(e) {
+    pointerHeld = true;
     requestUpdate();
     if (contextMenu) contextMenu.style.display = 'none';
     if (tabContextMenu) tabContextMenu.style.display = 'none';
     if (iconPickerPanel) iconPickerPanel.style.display = 'none';
     if (palettePanel) palettePanel.classList.remove('open');
+
+    if (e.button === 1) {
+        beginCanvasPan(e);
+        return;
+    }
 
     if (isConnectionMode) {
         const t = getEventLocation(e);
@@ -3989,27 +4090,29 @@ function onMouseDown(e) {
             updateSelectionToolbar();
             updateLeftBarState();
         }
-    } else if (e.button === 1) {
-        e.preventDefault();
-        isDragging = true;
-        const loc = getEventLocation(e);
-        dragStart.x = loc.x / cameraZoom - cameraOffset.x;
-        dragStart.y = loc.y / cameraZoom - cameraOffset.y;
-        canvas.classList.add('grabbing');
     }
     requestUpdate();
 }
 function onMouseUp(e) {
+    setPointerHeldFromEvent(e);
+    if (e.button === 1) {
+        if (e.preventDefault) e.preventDefault();
+        endCanvasPan();
+        requestUpdate();
+        return;
+    }
     if (e.button === 0) {
         if (isRearrangingList) {
             isRearrangingList = false;
             rearrangingListObj = null;
             rearrangingItemIndex = -1;
             canvas.style.cursor = 'default';
+            requestUpdate();
             return;
         }
         if (isDraggingConnector) {
             isDraggingConnector = false;
+            requestUpdate();
             if (tempConnector) {
                 if (tempConnector.targetId && tempConnector.targetPort &&
                     (tempConnector.sourceId !== tempConnector.targetId || tempConnector.sourcePort !== tempConnector.targetPort)) {
@@ -4049,9 +4152,6 @@ function onMouseUp(e) {
         isTransformingArrow = false;
         transformingHandle = null;
         originalItemState = null;
-    } else if (e.button === 1) {
-        e.preventDefault();
-        isDragging = !1; canvas.classList.remove('grabbing')
     }
     requestUpdate();
 }
@@ -4074,6 +4174,7 @@ function onMouseMove(e) {
             syncTextListProperty(rearrangingListObj);
             saveStateForUndo();
         }
+        requestUpdate();
         return;
     }
 
@@ -4091,12 +4192,14 @@ function onMouseMove(e) {
             tempConnector.targetId = hoveredPort.item.id;
             tempConnector.targetPort = hoveredPort.side;
         }
+        requestUpdate();
         return;
     }
 
     if (isSelectingBox) {
         selectionBox.endX = worldPos.x;
         selectionBox.endY = worldPos.y;
+        requestUpdate();
         return;
     }
     if (isTransformingArrow && selectedItems.length === 1) {
@@ -4116,6 +4219,7 @@ function onMouseMove(e) {
             item.width = bbox.width;
             item.height = bbox.height;
         }
+        requestUpdate();
         return;
     }
     if (isTransforming && selectedItems.length === 1) {
@@ -4302,8 +4406,7 @@ function onMouseMove(e) {
             item.height = bbox.height;
         }
     } else if (isDragging) {
-        cameraOffset.x = getEventLocation(e).x / cameraZoom - dragStart.x;
-        cameraOffset.y = getEventLocation(e).y / cameraZoom - dragStart.y;
+        applyCanvasPan(e);
     }
 
     // Update cursor based on hover state if not dragging/drawing etc.
@@ -5420,7 +5523,12 @@ function distributeHorizontally() { if (selectedItems.length < 3) return; const 
 function distributeVertically() { if (selectedItems.length < 3) return; const sorted = [...selectedItems].sort((a, b) => getItemBoundingBox(a).y - getItemBoundingBox(b).y); const first = getItemBoundingBox(sorted[0]); const last = getItemBoundingBox(sorted[sorted.length - 1]); const totalHeight = sorted.reduce((s, i) => s + getItemBoundingBox(i).height, 0); const gap = (last.y + last.height - first.y - totalHeight) / (sorted.length - 1); let cursor = first.y; sorted.forEach(item => { const bb = getItemBoundingBox(item); moveItem(item, 0, cursor - bb.y); cursor += bb.height + gap; }); saveStateForUndo(); requestUpdate(); }
 function updateLeftBarState() { const needsTwo = selectedItems.length < 2; const needsThree = selectedItems.length < 3; alignBtn.disabled = needsTwo; const ids = ['align-grid-btn','align-row-btn','align-col-btn','align-left-btn','align-center-h-btn','align-right-btn','align-top-btn','align-middle-v-btn','align-bottom-btn']; ids.forEach(id => { const b = document.getElementById(id); if (b) b.disabled = needsTwo; }); ['distribute-h-btn','distribute-v-btn'].forEach(id => { const b = document.getElementById(id); if (b) b.disabled = needsThree; }); }
 function getContrastColor(hex) { if (hex.indexOf('#') === 0) { hex = hex.slice(1) } if (hex.length === 3) { hex = hex[0] + hex[0] + hex[1] + hex[1] + hex[2] + hex[2] } if (hex.length !== 6) { return '#0d0d0d' } const r = parseInt(hex.slice(0, 2), 16), g = parseInt(hex.slice(2, 4), 16), b = parseInt(hex.slice(4, 6), 16), yiq = ((r * 299) + (g * 587) + (b * 114)) / 1000; return (yiq >= 128) ? '#262626' : '#ffffff' }
-function updateUIColors() { const e = document.documentElement.style, t = getContrastColor(canvasBackgroundColor); e.setProperty('--bg-page', canvasBackgroundColor); e.setProperty('--text-color-active-tab', t); e.setProperty('--contrast-color-light', hexToRgba(t, 0.6)); e.setProperty('--bg-ui', 'rgba(35, 38, 51, 0.4)'); e.setProperty('--bg-ui-hover', 'rgba(55, 58, 71, 0.5)'); e.setProperty('--text-color', '#e2e8f0'); e.setProperty('--text-color-light', '#94a3b8'); e.setProperty('--text-color-strong', '#ffffff'); e.setProperty('--border-color', 'rgba(255, 255, 255, 0.1)'); e.setProperty('--switch-bg-checked', accentColor); canvas.style.backgroundColor = canvasBackgroundColor; bgColorPicker.value = canvasBackgroundColor; accentColorPicker.value = accentColor; toolbarAccentColorPicker.value = accentColor; gridColorPicker.value = gridColor; renderTabs() }
+function syncColorInput(input, value) {
+    // Writing .value while the native picker is open closes it in Firefox.
+    if (!input || document.activeElement === input) return;
+    input.value = value;
+}
+function updateUIColors() { const e = document.documentElement.style, t = getContrastColor(canvasBackgroundColor); e.setProperty('--bg-page', canvasBackgroundColor); e.setProperty('--text-color-active-tab', t); e.setProperty('--contrast-color-light', hexToRgba(t, 0.6)); e.setProperty('--bg-ui', 'rgba(35, 38, 51, 0.4)'); e.setProperty('--bg-ui-hover', 'rgba(55, 58, 71, 0.5)'); e.setProperty('--text-color', '#e2e8f0'); e.setProperty('--text-color-light', '#94a3b8'); e.setProperty('--text-color-strong', '#ffffff'); e.setProperty('--border-color', 'rgba(255, 255, 255, 0.1)'); e.setProperty('--switch-bg-checked', accentColor); canvas.style.backgroundColor = canvasBackgroundColor; syncColorInput(bgColorPicker, canvasBackgroundColor); syncColorInput(accentColorPicker, accentColor); syncColorInput(toolbarAccentColorPicker, accentColor); syncColorInput(gridColorPicker, gridColor); renderTabs(); requestUpdate(); }
 function setCurrentTool(e) {
     console.log('setCurrentTool called with:', e);
     if (currentTool === e && e !== null) { return }

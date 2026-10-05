@@ -99,6 +99,161 @@ function isFirstParty(text) {
     return /script\.js|modules\/moodlist\.js|cloud\.js/.test(text);
 }
 
+function wait(ms) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function exerciseBoardInteractions(page) {
+    const canvas = await page.$('#moodboard-canvas');
+    const canvasBox = await canvas.boundingBox();
+    const toPage = (sx, sy) => ({ x: canvasBox.x + sx, y: canvasBox.y + sy });
+    let middleDown = false;
+    let leftDown = false;
+    const release = async () => {
+        if (middleDown) {
+            await page.mouse.up({ button: 'middle' });
+            middleDown = false;
+        }
+        if (leftDown) {
+            await page.mouse.up();
+            leftDown = false;
+        }
+    };
+
+    try {
+        const panBefore = await page.evaluate(() => screenToWorld({ x: 420, y: 280 }));
+        await page.mouse.move(canvasBox.x + 420, canvasBox.y + 280);
+        await page.mouse.down({ button: 'middle' });
+        middleDown = true;
+        await page.mouse.move(canvasBox.x + 560, canvasBox.y + 400, { steps: 6 });
+        await wait(80);
+        const pan = await page.evaluate((before) => ({
+            before,
+            during: screenToWorld({ x: 420, y: 280 }),
+            stillDown: document.getElementById('moodboard-canvas').classList.contains('grabbing'),
+        }), panBefore);
+        await release();
+
+        const dragSpot = await page.evaluate(() => {
+            items.length = 0;
+            items.push({
+                id: 'drag', type: 'box', color: '#ff40c0', x: 200, y: 180, width: 100, height: 80,
+                rotation: 0, isPinned: false, style: 'fill', opacity: 1, scaleX: 1, scaleY: 1,
+            });
+            draw();
+            return worldToScreen({ x: 250, y: 220 });
+        });
+        const dragStart = toPage(dragSpot.x, dragSpot.y);
+        await page.mouse.move(dragStart.x, dragStart.y);
+        await page.mouse.down();
+        leftDown = true;
+        await page.mouse.move(dragStart.x + 140, dragStart.y + 70, { steps: 6 });
+        await wait(80);
+        const drag = await page.evaluate(() => {
+            const item = items.find((i) => i.id === 'drag');
+            // Inset from the corner. The selection chrome sits on the center and the edges.
+            const at = worldToScreen({ x: item.x + 16, y: item.y + 16 });
+            const pixel = document.getElementById('moodboard-canvas').getContext('2d').getImageData(Math.round(at.x), Math.round(at.y), 1, 1).data;
+            return {
+                x: item.x,
+                y: item.y,
+                moved: Math.hypot(item.x - 200, item.y - 180) > 20,
+                pixel: [pixel[0], pixel[1], pixel[2], pixel[3]],
+            };
+        });
+        await release();
+        await wait(40);
+
+        const color = await page.evaluate(() => {
+            const input = document.getElementById('toolbar-accent-color-picker');
+            input.focus();
+            input.value = '#12ab34';
+            input.dispatchEvent(new Event('input', { bubbles: true }));
+            const itemInput = document.getElementById('item-color-picker');
+            itemInput.focus();
+            itemInput.value = '#00ff00';
+            itemInput.dispatchEvent(new Event('input', { bubbles: true }));
+            const item = items.find((i) => i.id === 'drag');
+            return {
+                css: getComputedStyle(document.documentElement).getPropertyValue('--switch-bg-checked').trim().toLowerCase(),
+                inputKept: input.value.toLowerCase(),
+                itemColor: item ? item.color : null,
+                barBackdrop: getComputedStyle(document.getElementById('left-bar')).backdropFilter,
+                appearance: getComputedStyle(input).getPropertyValue('-moz-appearance') || getComputedStyle(input).appearance,
+            };
+        });
+        await wait(80);
+        color.itemPixel = await page.evaluate(() => {
+            const item = items.find((i) => i.id === 'drag');
+            const at = worldToScreen({ x: item.x + 16, y: item.y + 16 });
+            const pixel = document.getElementById('moodboard-canvas').getContext('2d').getImageData(Math.round(at.x), Math.round(at.y), 1, 1).data;
+            return [pixel[0], pixel[1], pixel[2], pixel[3]];
+        });
+
+        await page.evaluate(() => { items.length = 0; draw(); });
+        const selectFrom = toPage(160, 140);
+        await page.mouse.move(selectFrom.x, selectFrom.y);
+        await page.mouse.down();
+        leftDown = true;
+        await page.mouse.move(selectFrom.x + 180, selectFrom.y + 120, { steps: 5 });
+        await wait(80);
+        const boxSelect = await page.evaluate((origin) => {
+            const canvas = document.getElementById('moodboard-canvas');
+            const ctx = canvas.getContext('2d');
+            const x = Math.round(origin.x + 90);
+            const y = Math.round(origin.y + 60);
+            const pixel = ctx.getImageData(x, y, 1, 1).data;
+            return { pixel: [pixel[0], pixel[1], pixel[2], pixel[3]], painted: pixel[2] > pixel[0] + 8 };
+        }, { x: 160, y: 140 });
+        await release();
+
+        const port = await page.evaluate(() => {
+            items.length = 0;
+            const box = (id, x, y) => ({
+                id, type: 'box', color: '#223044', x, y, width: 120, height: 80,
+                rotation: 0, isPinned: false, style: 'fill', opacity: 1, scaleX: 1, scaleY: 1,
+            });
+            items.push(box('a', 80, 80), box('b', 420, 240));
+            draw();
+            const right = getItemPorts(items[0]).find((p) => p.side === 'right');
+            const start = worldToScreen({ x: right.x, y: right.y });
+            const along = worldToScreen({ x: right.x + 18, y: right.y });
+            return { start, along };
+        });
+        const portPage = toPage(port.start.x, port.start.y);
+        await page.mouse.move(portPage.x, portPage.y);
+        await wait(30);
+        await page.mouse.down();
+        leftDown = true;
+        await page.mouse.move(portPage.x + 150, portPage.y + 30, { steps: 5 });
+        await wait(80);
+        const connector = await page.evaluate((along) => {
+            const canvas = document.getElementById('moodboard-canvas');
+            const ctx = canvas.getContext('2d');
+            let painted = false;
+            let pixel = [0, 0, 0, 0];
+            for (let dy = -4; dy <= 4 && !painted; dy++) {
+                for (let dx = -4; dx <= 4; dx++) {
+                    const sample = ctx.getImageData(Math.round(along.x + dx), Math.round(along.y + dy), 1, 1).data;
+                    pixel = [sample[0], sample[1], sample[2], sample[3]];
+                    const blue = sample[2] > 140 && sample[2] > sample[0] + 40;
+                    const green = sample[1] > 140 && sample[1] > sample[0] + 40;
+                    if (blue || green) {
+                        painted = true;
+                        break;
+                    }
+                }
+            }
+            return { painted, pixel };
+        }, port.along);
+        await release();
+
+        return { pan, drag, color, boxSelect, connector };
+    } finally {
+        await release();
+    }
+}
+
 const server = startServer();
 const pageErrors = [];
 try {
@@ -158,7 +313,7 @@ try {
 
     for (const [id, type] of BOARD_BUTTONS) {
         const before = await page.evaluate(() => projects.length);
-        await page.click('#' + id);
+        await page.$eval('#' + id, (btn) => btn.click());
         const after = await page.evaluate((expected) => {
             const last = projects[projects.length - 1];
             return {
@@ -306,6 +461,18 @@ try {
     assert.equal(roundTrip.afterUndo.sameArray, true);
     assert.deepEqual(roundTrip.afterRedo, ['video', 'box', 'box']);
 
+    const interactions = await exerciseBoardInteractions(page);
+    assert.ok(Math.hypot(interactions.pan.during.x - interactions.pan.before.x, interactions.pan.during.y - interactions.pan.before.y) > 20, `middle-click pan did not move the camera before mouseup: ${JSON.stringify(interactions.pan)}`);
+    assert.equal(interactions.pan.stillDown, true);
+    assert.ok(interactions.drag.moved, `select drag did not move the box: ${JSON.stringify(interactions.drag)}`);
+    assert.ok(interactions.drag.pixel[0] > 200 && interactions.drag.pixel[2] > 120, `drag was not painted while the button was held: ${JSON.stringify(interactions.drag.pixel)}`);
+    assert.equal(interactions.boxSelect.painted, true, 'selection rectangle was not painted while dragging');
+    assert.equal(interactions.connector.painted, true, 'connector preview was not painted while dragging');
+    assert.ok(interactions.color.css.includes('12ab34'), `accent color did not apply: ${interactions.color.css}`);
+    assert.equal(interactions.color.inputKept, '#12ab34');
+    assert.ok(interactions.color.itemPixel[1] > 180, `item color was not painted: ${JSON.stringify(interactions.color.itemPixel)}`);
+    assert.notEqual(interactions.color.barBackdrop, 'none');
+
     const hot = [];
     for (let i = 0; i < 2; i++) hot.push(await measureHotPath(page));
     for (const result of hot) {
@@ -325,6 +492,32 @@ try {
     const lateErrors = pageErrors.filter(isFirstParty);
     assert.deepEqual(lateErrors, [], `first-party errors:\n${lateErrors.join('\n')}`);
     await browser.close();
+
+    const firefox = await puppeteer.launch({
+        browser: 'firefox',
+        executablePath: '/usr/bin/firefox',
+        headless: true,
+    });
+    const ffPage = await firefox.newPage();
+    const ffErrors = [];
+    ffPage.on('pageerror', (err) => ffErrors.push(String(err && err.stack || err)));
+    await ffPage.setViewport({ width: 1280, height: 800 });
+    await ffPage.goto(`http://127.0.0.1:${PORT}/`, { waitUntil: 'domcontentloaded', timeout: 30000 });
+    await ffPage.waitForFunction(() => window.projects && window.projects.length > 0 && typeof draw === 'function', { timeout: 15000 });
+    const ff = await exerciseBoardInteractions(ffPage);
+    assert.ok(Math.hypot(ff.pan.during.x - ff.pan.before.x, ff.pan.during.y - ff.pan.before.y) > 20, `firefox pan: ${JSON.stringify(ff.pan)}`);
+    assert.equal(ff.pan.stillDown, true);
+    assert.ok(ff.drag.moved, `firefox drag: ${JSON.stringify(ff.drag)}`);
+    assert.ok(ff.drag.pixel[0] > 200 && ff.drag.pixel[2] > 120, `firefox drag paint: ${JSON.stringify(ff.drag.pixel)}`);
+    assert.equal(ff.boxSelect.painted, true, `firefox selection paint: ${JSON.stringify(ff.boxSelect)}`);
+    assert.equal(ff.connector.painted, true, `firefox connector paint: ${JSON.stringify(ff.connector)}`);
+    assert.ok(ff.color.css.includes('12ab34'), ff.color.css);
+    assert.equal(ff.color.inputKept, '#12ab34');
+    assert.ok(ff.color.itemPixel[1] > 180, `firefox item color: ${JSON.stringify(ff.color)}`);
+    assert.equal(ff.color.barBackdrop, 'none', `firefox left bar still blurs over the color input: ${ff.color.barBackdrop}`);
+    assert.notEqual(ff.color.appearance, 'none');
+    assert.deepEqual(ffErrors.filter(isFirstParty), []);
+    await firefox.close();
 } catch (err) {
     console.error(server.getLog());
     throw err;

@@ -4724,3 +4724,26 @@ body.no-blur * {
     backdrop-filter: none !important;
     -webkit-backdrop-filter: none !important;
 }
+
+/* Firefox will not open input[type=color] when the control uses appearance:none
+   or any ancestor has backdrop-filter. Keep the blur on other engines. */
+@supports (-moz-appearance: none) {
+    .color-picker-input,
+    #colorseeker-base-picker,
+    input[type="color"] {
+        -moz-appearance: auto !important;
+        appearance: auto !important;
+        overflow: visible !important;
+    }
+
+    #left-bar,
+    #context-menu,
+    #selection-toolbar,
+    #tab-context-menu,
+    #gantt-context-menu,
+    #storyflow-context-menu,
+    #colorseeker-sidebar,
+    .tool-group-flyout {
+        backdrop-filter: none !important;
+    }
+}
