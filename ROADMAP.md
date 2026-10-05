@@ -33,7 +33,7 @@ Moodgantt is the timeline cousin of that task list. Asana-style dependency lines
 
 **Moodflow.** Boords adds drawing on the frame and a script view. Moodflow has the frame, the notes, the duration slider, camera choices, status, reorder, paste, a minimap, an empty-story prompt, and Play, which holds each frame for its duration. Drawing on the frame and a script column are still missing.
 
-**Moodgantt.** The timeline can hold groups, tasks, dates, progress, status, workers, and zoom. An empty plan asks for the first group. Tasks do not depend on each other, so a slip does not push the next bar.
+**Moodgantt.** The timeline can hold groups, tasks, dates, progress, status, workers, and zoom. An empty plan asks for the first group. A task can depend on another. Dragging the first task pushes the dependent bar by the same number of days, and a line joins them.
 
 **Moodlist.** Todoist adds priorities, subtasks, and reminders. Moodlist has the Keep-style card, color, pin, search, images, an empty state ("No cards yet"), and a due date on each row. Search matches that date. Items are one level deep.
 
@@ -54,12 +54,11 @@ These six are the finish line for this pass. Each one is in the running app.
 11. **Animatic playback** (Moodflow). Play walks the frames in order and holds each one for its duration. Stop ends it.
 12. **Palette length and order** (Moodtone). Add swatch appends a color, Remove takes one away while at least two remain, and dropping a swatch on another reorders the row. Space still rebuilds the harmony.
 13. **Due date on a card item** (Moodlist). Each checklist row has a date. The existing search matches that date.
+14. **Task dependency** (Moodgantt). A task can depend on another. Dragging the predecessor pushes the dependent task by the same number of days, and a line joins the two bars.
 
 ## Next
 
-Still inside the current boards and tools.
-
-1. **Task dependency** (Moodgantt). A line from one bar to the next, so moving a task shows what it pushes.
+The next list is clear. Later items stay below.
 
 ## Later
 

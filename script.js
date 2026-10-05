@@ -9225,6 +9225,7 @@ function renderGanttView(project) {
                         
                         task.startDate = ganttFormatDate(ganttAddDays(ganttParseDate(task.startDate), daysShift));
                         task.endDate = ganttFormatDate(ganttAddDays(ganttParseDate(task.endDate), daysShift));
+                        ganttPushDependents(project, task.id, daysShift);
                         
                         renderGanttView(project);
                         scheduleAutoSave();
@@ -9269,6 +9270,8 @@ function renderGanttView(project) {
     if (blockedPct) blockedPct.textContent = totalTasks ? Math.round(blockedTasks/totalTasks*100)+'% Blocked' : '0% Blocked';
     if (nextDl)     nextDl.textContent    = nextDeadline ? 'Next: '+nextDeadline.toLocaleDateString('en',{month:'short',day:'numeric'}) : 'No upcoming deadlines';
 
+    ganttDrawDependencies(project, rowsArea);
+
     // Scroll sync: sidebar mirrors timeline vertical scroll
     const timeline = document.getElementById('gantt-timeline');
     if (timeline && !timeline._scrollListenerAttached) {
@@ -9282,6 +9285,73 @@ function renderGanttView(project) {
 // ══════════════════════════════════════════════════════════════════════════
 // MOODGANTT — Interactions
 // ══════════════════════════════════════════════════════════════════════════
+function ganttPushDependents(project, predecessorId, days, seen) {
+    if (!days) return;
+    const guard = seen || new Set();
+    const key = String(predecessorId);
+    if (guard.has(key)) return;
+    guard.add(key);
+    (project.data.groups || []).forEach(group => {
+        (group.tasks || []).forEach(task => {
+            if (String(task.dependsOn) !== key) return;
+            task.startDate = ganttFormatDate(ganttAddDays(ganttParseDate(task.startDate), days));
+            task.endDate = ganttFormatDate(ganttAddDays(ganttParseDate(task.endDate), days));
+            ganttPushDependents(project, task.id, days, guard);
+        });
+    });
+}
+
+function ganttFillDepends(project, task) {
+    const sel = document.getElementById('gantt-detail-depends');
+    if (!sel) return;
+    const current = task.dependsOn ? String(task.dependsOn) : '';
+    sel.innerHTML = '<option value="">None</option>';
+    (project.data.groups || []).forEach(group => {
+        (group.tasks || []).forEach(other => {
+            if (String(other.id) === String(task.id)) return;
+            const opt = document.createElement('option');
+            opt.value = String(other.id);
+            opt.textContent = other.name || 'Untitled';
+            sel.appendChild(opt);
+        });
+    });
+    sel.value = [...sel.options].some(opt => opt.value === current) ? current : '';
+}
+
+function ganttDrawDependencies(project, rowsArea) {
+    const previous = rowsArea.querySelector('.gantt-dep-layer');
+    if (previous) previous.remove();
+    const linked = [];
+    (project.data.groups || []).forEach(group => {
+        (group.tasks || []).forEach(task => { if (task.dependsOn) linked.push(task); });
+    });
+    if (!linked.length) return;
+    const area = rowsArea.getBoundingClientRect();
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('class', 'gantt-dep-layer');
+    svg.style.width = rowsArea.scrollWidth + 'px';
+    svg.style.height = Math.max(rowsArea.scrollHeight, 1) + 'px';
+    linked.forEach(task => {
+        const from = rowsArea.querySelector(`.gantt-bar[data-task-id="${task.dependsOn}"]`);
+        const to = rowsArea.querySelector(`.gantt-bar[data-task-id="${task.id}"]`);
+        if (!from || !to) return;
+        const start = from.getBoundingClientRect();
+        const end = to.getBoundingClientRect();
+        const x1 = start.right - area.left + rowsArea.scrollLeft;
+        const y1 = start.top + start.height / 2 - area.top + rowsArea.scrollTop;
+        const x2 = end.left - area.left + rowsArea.scrollLeft;
+        const y2 = end.top + end.height / 2 - area.top + rowsArea.scrollTop;
+        const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        path.setAttribute('class', 'gantt-dep-line');
+        path.setAttribute('data-from', String(task.dependsOn));
+        path.setAttribute('data-to', String(task.id));
+        const mid = (x1 + x2) / 2;
+        path.setAttribute('d', `M ${x1} ${y1} L ${mid} ${y1} L ${mid} ${y2} L ${x2} ${y2}`);
+        svg.appendChild(path);
+    });
+    if (svg.childNodes.length) rowsArea.appendChild(svg);
+}
+
 function ganttAddGroup(project) {
     const id = Date.now();
     const colors = ['#429eff','#a78bfa','#34d399','#f59e0b','#f87171','#60a5fa','#fb923c'];
@@ -9297,8 +9367,9 @@ function ganttAddTask(project, groupId) {
     if (!group) return;
     const today    = ganttFormatDate(ganttToday());
     const nextWeek = ganttFormatDate(ganttAddDays(ganttToday(), 7));
-    const id = Date.now();
-    group.tasks.push({ id, name: 'New Task', startDate: today, endDate: nextWeek, progress: 0, status: '', assignee: '', notes: '' });
+    let id = Date.now();
+    while (group.tasks.some(t => t.id === id)) id += 1;
+    group.tasks.push({ id, name: 'New Task', startDate: today, endDate: nextWeek, progress: 0, status: '', assignee: '', notes: '', dependsOn: '' });
     renderGanttView(project);
     scheduleAutoSave();
     showToast('Task added.');
@@ -9349,6 +9420,7 @@ function ganttOpenDetail(project, groupId, taskId) {
     assigneeSelect.value = task.assignee || '';
     
     document.getElementById('gantt-detail-notes').value     = task.notes || '';
+    ganttFillDepends(project, task);
 
     // Attachment preview
     const preview = document.getElementById('gantt-detail-attachment-preview');
@@ -9381,9 +9453,14 @@ function ganttSyncDetailToTask() {
     const group = project.data.groups.find(g => g.id === groupId);
     const task  = group && group.tasks.find(t => t.id === taskId);
     if (!task) return;
+    const previousStart = ganttParseDate(task.startDate);
     task.name      = document.getElementById('gantt-detail-name').value;
-    task.startDate = document.getElementById('gantt-detail-start').value;
-    task.endDate   = document.getElementById('gantt-detail-end').value;
+    task.startDate = document.getElementById('gantt-detail-start').value || task.startDate;
+    task.endDate   = document.getElementById('gantt-detail-end').value || task.endDate;
+    const dependsEl = document.getElementById('gantt-detail-depends');
+    task.dependsOn = dependsEl && dependsEl.value && dependsEl.value !== String(task.id) ? dependsEl.value : '';
+    const daysShift = Math.round((ganttParseDate(task.startDate).getTime() - previousStart.getTime()) / GANTT_MS_DAY);
+    if (daysShift) ganttPushDependents(project, task.id, daysShift);
     task.progress  = parseInt(document.getElementById('gantt-detail-progress').value) || 0;
     task.status    = document.getElementById('gantt-detail-status').value;
     task.assignee  = document.getElementById('gantt-detail-assignee').value;
@@ -9514,7 +9591,7 @@ function setupGanttListeners() {
     document.getElementById('gantt-detail-close')?.addEventListener('click', ganttCloseDetail);
 
     // Sync detail fields live
-    ['gantt-detail-name','gantt-detail-start','gantt-detail-end','gantt-detail-status','gantt-detail-assignee','gantt-detail-notes'].forEach(id => {
+    ['gantt-detail-name','gantt-detail-start','gantt-detail-end','gantt-detail-depends','gantt-detail-status','gantt-detail-assignee','gantt-detail-notes'].forEach(id => {
         document.getElementById(id)?.addEventListener('input', ganttSyncDetailToTask);
         document.getElementById(id)?.addEventListener('change', ganttSyncDetailToTask);
     });

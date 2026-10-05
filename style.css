@@ -3964,6 +3964,19 @@
         #gantt-rows-area {
             position: relative;
         }
+        .gantt-dep-layer {
+            position: absolute;
+            left: 0;
+            top: 0;
+            overflow: visible;
+            pointer-events: none;
+            z-index: 6;
+        }
+        .gantt-dep-line {
+            fill: none;
+            stroke: #8ec5ff;
+            stroke-width: 2;
+        }
         .gantt-group-track {
             height: 48px;
             position: relative;

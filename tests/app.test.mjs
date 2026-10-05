@@ -556,6 +556,58 @@ async function assertNextImprovements(page) {
         el.dispatchEvent(new Event('input', { bubbles: true }));
     });
     await page.waitForFunction(() => document.querySelectorAll('.ml-card').length === 0);
+
+    await page.evaluate(() => createNewProject('moodgantt'));
+    await page.click('#gantt-empty-add');
+    await page.waitForSelector('.gantt-group-add-task-btn');
+    await page.click('.gantt-group-add-task-btn');
+    await page.waitForSelector('.gantt-bar');
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    await page.click('.gantt-group-add-task-btn');
+    await page.waitForFunction(() => document.querySelectorAll('.gantt-bar').length >= 2);
+    const predecessorId = await page.$eval('.gantt-bar', (bar) => bar.dataset.taskId);
+    const taskLabels = await page.$$('.gantt-task-label');
+    await taskLabels[1].click();
+    await page.waitForSelector('#gantt-detail-depends');
+    await page.select('#gantt-detail-depends', predecessorId);
+    await page.waitForSelector('.gantt-dep-line');
+    await page.waitForFunction(() => {
+        const box = document.getElementById('gantt-detail-close').getBoundingClientRect();
+        return box.left >= 0 && box.right <= window.innerWidth && box.width > 0;
+    });
+    await page.click('#gantt-detail-close');
+    const beforeMove = await page.evaluate(() => {
+        const project = projects.find((p) => p.id === activeProjectId);
+        const tasks = project.data.groups[0].tasks;
+        return {
+            starts: tasks.map((task) => task.startDate),
+            left: [...document.querySelectorAll('.gantt-bar')].map((bar) => parseFloat(bar.style.left)),
+        };
+    });
+    const predecessorBar = await page.$('.gantt-bar');
+    const barBox = await predecessorBar.boundingBox();
+    await page.mouse.move(barBox.x + Math.min(24, barBox.width / 2), barBox.y + barBox.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(barBox.x + Math.min(24, barBox.width / 2) + 160, barBox.y + barBox.height / 2, { steps: 8 });
+    await page.mouse.up();
+    const afterMove = await page.evaluate(() => {
+        const project = projects.find((p) => p.id === activeProjectId);
+        const tasks = project.data.groups[0].tasks;
+        return {
+            starts: tasks.map((task) => task.startDate),
+            left: [...document.querySelectorAll('.gantt-bar')].map((bar) => parseFloat(bar.style.left)),
+            line: !!document.querySelector('.gantt-dep-line'),
+        };
+    });
+    assert.notEqual(afterMove.starts[0], beforeMove.starts[0], 'dragging the predecessor did not change its start');
+    assert.notEqual(afterMove.starts[1], beforeMove.starts[1], 'the dependent task was not pushed');
+    assert.ok(afterMove.left[1] > beforeMove.left[1], `dependent bar did not move right: ${beforeMove.left[1]} -> ${afterMove.left[1]}`);
+    assert.equal(afterMove.line, true, 'dependency line disappeared after the move');
+    if (shotDir) {
+        mkdirSync(shotDir, { recursive: true });
+        const gantt = await page.$('#gantt-container');
+        await gantt.screenshot({ path: path.join(shotDir, 'moodgantt-dependency.png') });
+    }
 }
 
 const server = startServer();
