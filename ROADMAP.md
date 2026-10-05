@@ -25,15 +25,15 @@ Moodgantt is the timeline cousin of that task list. Asana-style dependency lines
 
 ## What is missing
 
-**Moodinfinite canvas.** Milanote starts you from a template or a photo library and lets a caption live on the image. This canvas can already hold images, text, comments, links, drawings, shapes, and connectors, and it saves locally. A new board is a blank grid with no hint, and the zoom level is invisible. Connectors now stay beside the shapes they join. They still do not offer a minimap, a frame, or a template. The eyedropper, measure tool, and grid exist. Snap to grid is a setting, not something you can see while you drag.
+**Moodinfinite canvas.** Milanote starts you from a template or a photo library. This canvas holds images, text, comments, links, drawings, shapes, and connectors, and it saves locally. An empty board names the first tools. The corner shows zoom and a minimap of where the view sits. A selected image takes a caption. While you drag, the board says whether snap is on, including the Shift override. Connectors stay beside the shapes they join. Still missing: a frame tool, templates, and a built-in photo library.
 
-**Moodprompt.** PromptHero is a public search across models, with the picture next to the words. Moodprompt is a private working set: platform, media type, references, tags, copy, and variables. A new prompt tab is an empty scroll area. There is no version of a prompt, and no side-by-side of the text and a generated result beyond the two reference slots.
+**Moodprompt.** PromptHero is a public search across models, with the picture next to the words. Moodprompt is a private working set: platform, media type, references, tags, variables, and a copy control that says Copied. An empty tab explains how to add the first card. There is no version of a prompt, and no side-by-side of the text and a generated result beyond the two reference slots.
 
-**Moodtone.** Coolors and Moodtone both generate with the spacebar and lock a color. Coolors also reorders columns, changes how many colors there are, extracts a palette from a photo, and shows a copied state on the color. Moodtone already shows hex, RGB, HSL, and CMYK on hover, and a toast on copy. The swatch itself did not say that the copy happened.
+**Moodtone.** Coolors and Moodtone both generate with the spacebar and lock a color. A swatch says Copied when you click it, and the hover line shows hex, RGB, HSL, and CMYK. Coolors also reorders columns, changes how many colors there are, and extracts a palette from a photo. Moodtone is still the generated set.
 
-**Moodflow.** Boords adds drawing on the frame, a script view, and an animatic that plays each frame for its duration. Moodflow already has the frame, the notes, the duration slider, camera choices, status, reorder, paste, and a minimap. A new story has zero frames and no invitation to add the first one. There is no playback.
+**Moodflow.** Boords adds drawing on the frame and a script view. Moodflow has the frame, the notes, the duration slider, camera choices, status, reorder, paste, a minimap, an empty-story prompt, and Play, which holds each frame for its duration. Drawing on the frame and a script column are still missing.
 
-**Moodgantt.** The timeline can hold groups, tasks, dates, progress, status, workers, and zoom. A new plan is an empty sidebar. Tasks do not depend on each other, so a slip does not push the next bar.
+**Moodgantt.** The timeline can hold groups, tasks, dates, progress, status, workers, and zoom. An empty plan asks for the first group. Tasks do not depend on each other, so a slip does not push the next bar.
 
 **Moodlist.** Todoist adds due dates, priorities, subtasks, and reminders. Moodlist already has the Keep-style card, color, pin, search, images, and a real empty state ("No cards yet"). Items are one level deep.
 
@@ -47,19 +47,19 @@ These six are the finish line for this pass. Each one is in the running app.
 4. **Story empty state** (Moodflow). A story with no frames says "No frames yet" and **Add a frame** creates the first frame.
 5. **Plan empty state** (Moodgantt). A plan with no groups says "No groups yet" and **Add a group** creates the first group.
 6. **Swatch copy confirmation** (Moodtone). Clicking a palette swatch marks that swatch with the word Copied.
+7. **Canvas minimap** (Moodinfinite canvas, view). When the board is larger than the window, the corner map shows the items and a frame for the current view. Panning moves that frame.
+8. **Snap state while dragging** (Moodinfinite canvas, select). While a selection moves, the board says Snap on or Snap off. Holding Shift flips the saved snap setting and the label says so.
+9. **Image caption** (Moodinfinite canvas, image). Select an image and type in Caption. The words sit on the image.
+10. **Prompt copy stays on the card** (Moodprompt). The copy control on the card shows Copied.
+11. **Animatic playback** (Moodflow). Play walks the frames in order and holds each one for its duration. Stop ends it.
 
 ## Next
 
-Do these after the now-tier. They stay inside the current boards and tools.
+Still inside the current boards and tools.
 
-1. **Canvas minimap** (Moodinfinite canvas, view). Moodflow already has one. The canvas should show where you are when the board is larger than the window.
-2. **Snap state while dragging** (Moodinfinite canvas, select). The snap-to-grid setting should be visible on the board, including the Shift override, so a move does not feel like it jumped.
-3. **Image caption** (Moodinfinite canvas, image). Select an image and type a caption on it, the way a Milanote image takes a label without a separate text box.
-4. **Prompt copy stays on the card** (Moodprompt). The copy button should show that the text was copied, the same way a Moodtone swatch now does.
-5. **Animatic playback** (Moodflow). Play the frames in order, each for its duration, so pacing can be checked without leaving the board.
-6. **Palette length and order** (Moodtone). Add, remove, and drag swatches. Coolors treats that as basic; Moodtone is fixed at the generated set.
-7. **Due date on a card item** (Moodlist). One date field on a checklist row, surfaced by the search that already exists.
-8. **Task dependency** (Moodgantt). A line from one bar to the next, so moving a task shows what it pushes.
+1. **Palette length and order** (Moodtone). Add, remove, and drag swatches. Coolors treats that as basic; Moodtone is still the generated set.
+2. **Due date on a card item** (Moodlist). One date field on a checklist row, surfaced by the search that already exists.
+3. **Task dependency** (Moodgantt). A line from one bar to the next, so moving a task shows what it pushes.
 
 ## Later
 

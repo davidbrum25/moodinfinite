@@ -356,6 +356,153 @@ async function assertNowTierPolish(page) {
     assert.equal(await page.$eval('.colorseeker-copied', (el) => el.textContent.trim()), 'Copied');
 }
 
+async function assertNextImprovements(page) {
+    const shotDir = process.env.POLISH_SHOT_DIR;
+
+    const mini = await page.evaluate(() => {
+        const board = projects.find((p) => p.type === 'moodinfinite');
+        switchTab(board.id);
+        (0, eval)('selectedItems.length = 0');
+        items.length = 0;
+        const shape = (id, x, y) => ({
+            id, type: 'box', color: '#429eff', x, y, width: 140, height: 90,
+            rotation: 0, isPinned: false, style: 'fill', opacity: 1, scaleX: 1, scaleY: 1,
+        });
+        items.push(shape('near-map', 40, 40), shape('far-map', 4200, 40));
+        draw();
+        const c = document.getElementById('moodboard-canvas');
+        const farScreen = worldToScreen({ x: 4200, y: 40 });
+        const view = document.getElementById('canvas-minimap-viewport');
+        return {
+            hidden: document.getElementById('canvas-minimap').hidden,
+            farOffscreen: farScreen.x > c.width + 20,
+            left: parseFloat(view.style.left),
+        };
+    });
+    assert.equal(mini.hidden, false, 'minimap hidden while the board is larger than the window');
+    assert.equal(mini.farOffscreen, true, 'far item was already inside the window');
+    await page.evaluate(() => {
+        (0, eval)('cameraOffset.x -= 2400');
+        draw();
+    });
+    const afterLeft = await page.$eval('#canvas-minimap-viewport', (el) => parseFloat(el.style.left));
+    assert.ok(afterLeft > mini.left + 8, `minimap viewport did not track the pan (${mini.left} -> ${afterLeft})`);
+    if (shotDir) {
+        mkdirSync(shotDir, { recursive: true });
+        await page.screenshot({ path: path.join(shotDir, 'canvas-minimap.png') });
+    }
+
+    const canvasEl = await page.$('#moodboard-canvas');
+    const canvasBox = await canvasEl.boundingBox();
+    const toPage = (x, y) => ({ x: canvasBox.x + x, y: canvasBox.y + y });
+
+    const dragSpot = await page.evaluate(() => {
+        (0, eval)('cameraZoom = 1');
+        (0, eval)('cameraOffset.x = canvas.width / 2');
+        (0, eval)('cameraOffset.y = canvas.height / 2');
+        (0, eval)('selectedItems.length = 0');
+        items.length = 0;
+        items.push({
+            id: 'snap-box', type: 'box', color: '#ff40c0', x: 180, y: 160, width: 120, height: 80,
+            rotation: 0, isPinned: false, style: 'fill', opacity: 1, scaleX: 1, scaleY: 1,
+        });
+        draw();
+        return worldToScreen({ x: 240, y: 200 });
+    });
+    const start = toPage(dragSpot.x, dragSpot.y);
+    await page.mouse.move(start.x, start.y);
+    await page.mouse.down();
+    try {
+        await page.mouse.move(start.x + 36, start.y + 24, { steps: 4 });
+        const on = await page.$eval('#canvas-snap-indicator', (el) => ({ hidden: el.hidden, text: el.textContent.trim() }));
+        assert.equal(on.hidden, false, 'snap indicator hidden during drag');
+        assert.equal(on.text, 'Snap on');
+        await page.keyboard.down('Shift');
+        await page.mouse.move(start.x + 70, start.y + 48, { steps: 3 });
+        assert.equal(await page.$eval('#canvas-snap-indicator', (el) => el.textContent.trim()), 'Snap off (Shift)');
+        await page.keyboard.up('Shift');
+        await page.mouse.move(start.x + 90, start.y + 60, { steps: 2 });
+        assert.equal(await page.$eval('#canvas-snap-indicator', (el) => el.textContent.trim()), 'Snap on');
+    } finally {
+        try { await page.keyboard.up('Shift'); } catch { /* already up */ }
+        await page.mouse.up();
+    }
+    assert.equal(await page.$eval('#canvas-snap-indicator', (el) => el.hidden), true, 'snap indicator stayed up after the drag');
+
+    const captionSpot = await page.evaluate(async () => {
+        const img = new Image();
+        img.src = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
+        await img.decode();
+        items.length = 0;
+        items.push({
+            id: 'cap-img', type: 'image', img, caption: '', x: 260, y: 180, width: 220, height: 160,
+            rotation: 0, isPinned: false, opacity: 1, scaleX: 1, scaleY: 1,
+        });
+        (0, eval)('selectedItems.length = 0');
+        draw();
+        return worldToScreen({ x: 370, y: 260 });
+    });
+    const capAt = toPage(captionSpot.x, captionSpot.y);
+    await page.mouse.click(capAt.x, capAt.y);
+    await page.waitForSelector('#image-caption-container');
+    assert.notEqual(await page.$eval('#image-caption-container', (el) => getComputedStyle(el).display), 'none');
+    await page.click('#image-caption-input');
+    await page.keyboard.type('Hello');
+    await page.waitForFunction(() => {
+        const item = items.find((i) => i.id === 'cap-img');
+        return item && item.caption === 'Hello';
+    });
+    const pixel = await page.evaluate(() => {
+        draw();
+        const item = items.find((i) => i.id === 'cap-img');
+        const at = worldToScreen({ x: item.x + 14, y: item.y + 20 });
+        const data = document.getElementById('moodboard-canvas').getContext('2d').getImageData(Math.round(at.x), Math.round(at.y), 1, 1).data;
+        return [data[0], data[1], data[2], data[3]];
+    });
+    assert.ok(pixel[1] > 80 && pixel[1] > pixel[0], `caption badge was not painted on the image: ${JSON.stringify(pixel)}`);
+
+    await page.evaluate(() => {
+        (0, eval)('moodpromptFilterPlatform = "all"');
+        (0, eval)('moodpromptSearchQuery = ""');
+        createNewProject('moodprompt');
+    });
+    await page.click('#moodprompt-empty-add');
+    await page.waitForSelector('.prompt-copy-btn');
+    await page.click('.prompt-copy-btn');
+    await page.waitForSelector('.prompt-copied');
+    assert.equal(await page.$eval('.prompt-copied', (el) => el.textContent.trim()), 'Copied');
+    if (shotDir) {
+        mkdirSync(shotDir, { recursive: true });
+        const pane = await page.$('#moodprompt-container');
+        await pane.screenshot({ path: path.join(shotDir, 'moodprompt-copied.png') });
+    }
+
+    await page.evaluate(() => createNewProject('storyflow'));
+    await page.evaluate(() => {
+        const project = projects.find((p) => p.id === activeProjectId);
+        project.data.frames.push(
+            { id: 'f1', title: 'Open', image: null, description: 'First beat', meta: { duration: '1s', camera: '', audio: '' } },
+            { id: 'f2', title: 'Close', image: null, description: 'Second beat', meta: { duration: '1s', camera: '', audio: '' } },
+        );
+        renderStoryflowView(project);
+    });
+    await page.click('#storyflow-play-btn');
+    await page.waitForFunction(() => {
+        const cur = document.querySelector('.story-card.animatic-current .story-card-index');
+        return cur && cur.textContent.trim() === '1';
+    });
+    if (shotDir) {
+        const story = await page.$('#storyflow-container');
+        await story.screenshot({ path: path.join(shotDir, 'moodflow-animatic.png') });
+    }
+    await page.waitForFunction(() => {
+        const cur = document.querySelector('.story-card.animatic-current .story-card-index');
+        return cur && cur.textContent.trim() === '2';
+    }, { timeout: 4000 });
+    assert.equal(await page.$eval('#storyflow-play-btn', (el) => el.textContent.trim()), 'Stop');
+    await page.evaluate(() => stopStoryflowAnimatic());
+}
+
 const server = startServer();
 const pageErrors = [];
 try {
@@ -683,6 +830,7 @@ try {
     }));
 
     await assertNowTierPolish(page);
+    await assertNextImprovements(page);
 
     const lateErrors = pageErrors.filter(isFirstParty);
     assert.deepEqual(lateErrors, [], `first-party errors:\n${lateErrors.join('\n')}`);

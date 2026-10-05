@@ -1066,9 +1066,21 @@ function createPromptCard(project, prompt, index) {
     copyBtn.innerHTML = `<iconify-icon icon="lucide:copy" width="18" height="18"></iconify-icon>`;
     copyBtn.onclick = () => {
         const finalPrompt = resolveVariables(prompt.text, project);
-        navigator.clipboard.writeText(finalPrompt).then(() => {
-            showToast('Copied to clipboard!');
-        });
+        const markCopied = () => {
+            document.querySelectorAll('.prompt-copied').forEach((node) => node.remove());
+            const tag = document.createElement('span');
+            tag.className = 'prompt-copied';
+            tag.textContent = 'Copied';
+            copyBtn.appendChild(tag);
+        };
+        try {
+            const pending = navigator.clipboard && navigator.clipboard.writeText(finalPrompt);
+            if (pending && typeof pending.then === 'function') pending.then(markCopied).catch(markCopied);
+            else markCopied();
+        } catch (err) {
+            markCopied();
+        }
+        showToast('Copied to clipboard!');
     };
     
     const body = document.createElement('div');
@@ -1368,6 +1380,17 @@ const videoPauseAllBtn = document.getElementById('video-pause-all-btn');
 const videoToolsContainer = document.getElementById('video-tools-container');
 const videoPlayPauseBtn = document.getElementById('video-play-pause-btn');
 const videoMuteBtn = document.getElementById('video-mute-btn');
+const imageCaptionContainer = document.getElementById('image-caption-container');
+const imageCaptionInput = document.getElementById('image-caption-input');
+if (imageCaptionInput) {
+    imageCaptionInput.addEventListener('input', () => {
+        if (selectedItems.length === 1 && selectedItems[0].type === 'image') {
+            selectedItems[0].caption = imageCaptionInput.value;
+            selectedItems[0]._isDirty = true;
+            requestUpdate();
+        }
+    });
+}
 const addTextBtn = document.getElementById('add-text-btn');
 const addCommentBtn = document.getElementById('add-comment-btn');
 const addArrowBtn = document.getElementById('add-arrow-btn');
@@ -2626,6 +2649,76 @@ function syncCanvasChrome() {
         const show = items.length === 0;
         if (guide.hidden === show) guide.hidden = !show;
     }
+    syncCanvasMinimap();
+}
+
+function syncCanvasMinimap() {
+    const root = document.getElementById('canvas-minimap');
+    const map = document.getElementById('canvas-minimap-map');
+    const view = document.getElementById('canvas-minimap-viewport');
+    if (!root || !map || !view || !canvas) return;
+    if (!items.length) {
+        if (!root.hidden) root.hidden = true;
+        return;
+    }
+    if (root.hidden) root.hidden = false;
+
+    const tl = screenToWorld({ x: 0, y: 0 });
+    const br = screenToWorld({ x: canvas.width, y: canvas.height });
+    let minX = Math.min(tl.x, br.x);
+    let minY = Math.min(tl.y, br.y);
+    let maxX = Math.max(tl.x, br.x);
+    let maxY = Math.max(tl.y, br.y);
+    for (let i = 0; i < items.length; i++) {
+        const box = items[i] && items[i]._cachedBox;
+        if (!box) continue;
+        if (box.x < minX) minX = box.x;
+        if (box.y < minY) minY = box.y;
+        const right = box.x + box.width;
+        const bottom = box.y + box.height;
+        if (right > maxX) maxX = right;
+        if (bottom > maxY) maxY = bottom;
+    }
+    const worldW = Math.max(1, maxX - minX);
+    const worldH = Math.max(1, maxY - minY);
+    const mw = map.width;
+    const mh = map.height;
+    const mctx = map.getContext('2d');
+    mctx.clearRect(0, 0, mw, mh);
+    mctx.fillStyle = '#429eff';
+    for (let i = 0; i < items.length; i++) {
+        const box = items[i] && items[i]._cachedBox;
+        if (!box || box.width <= 0 || box.height <= 0) continue;
+        const x = ((box.x - minX) / worldW) * mw;
+        const y = ((box.y - minY) / worldH) * mh;
+        const w = Math.max(1.5, (box.width / worldW) * mw);
+        const h = Math.max(1.5, (box.height / worldH) * mh);
+        mctx.fillRect(x, y, w, h);
+    }
+    const pad = 4;
+    const vx = ((Math.min(tl.x, br.x) - minX) / worldW) * mw;
+    const vy = ((Math.min(tl.y, br.y) - minY) / worldH) * mh;
+    const vw = (Math.abs(br.x - tl.x) / worldW) * mw;
+    const vh = (Math.abs(br.y - tl.y) / worldH) * mh;
+    view.style.left = (pad + vx) + 'px';
+    view.style.top = (pad + vy) + 'px';
+    view.style.width = Math.max(6, vw) + 'px';
+    view.style.height = Math.max(6, vh) + 'px';
+}
+
+function syncSnapIndicator(active, shiftKey) {
+    const el = document.getElementById('canvas-snap-indicator');
+    if (!el) return;
+    if (!active) {
+        if (!el.hidden) el.hidden = true;
+        return;
+    }
+    const snapping = shiftKey ? !snapToGrid : snapToGrid;
+    const text = snapping
+        ? (shiftKey ? 'Snap on (Shift)' : 'Snap on')
+        : (shiftKey ? 'Snap off (Shift)' : 'Snap off');
+    if (el.hidden) el.hidden = false;
+    if (el.textContent !== text) el.textContent = text;
 }
 
 function resetCanvasZoom() {
@@ -2953,8 +3046,8 @@ function drawImageItem(ctx, item) {
         // Fallback
     }
 
-    if (item.label) {
-        const labelText = item.label;
+    const labelText = item.caption || item.label;
+    if (labelText) {
         ctx.font = `bold ${14 / cameraZoom}px Inter, sans-serif`;
         const textMetrics = ctx.measureText(labelText);
         const padding = 6 / cameraZoom;
@@ -4334,6 +4427,7 @@ function onMouseUp(e) {
         return;
     }
     if (e.button === 0) {
+        syncSnapIndicator(false);
         if (isRearrangingList) {
             isRearrangingList = false;
             rearrangingListObj = null;
@@ -4555,6 +4649,7 @@ function onMouseMove(e) {
         const deltaX = worldPos.x - moveStart.x;
         const deltaY = worldPos.y - moveStart.y;
         const doSnap = e.shiftKey ? !snapToGrid : snapToGrid; // Toggle snap with Shift
+        syncSnapIndicator(true, !!e.shiftKey);
 
         let currentDeltaX = deltaX;
         let currentDeltaY = deltaY;
@@ -5938,7 +6033,14 @@ function updateSelectionToolbar() {
         itemColorToolContainer.style.display = canHaveColor ? 'flex' : 'none';
         
         const isVideo = selectedItems.length === 1 && selectedItems[0].type === 'video';
+        const isImage = selectedItems.length === 1 && selectedItems[0].type === 'image';
         if (videoToolsContainer) videoToolsContainer.style.display = isVideo ? 'flex' : 'none';
+        if (imageCaptionContainer) {
+            imageCaptionContainer.style.display = isImage ? 'flex' : 'none';
+            if (isImage && imageCaptionInput && document.activeElement !== imageCaptionInput) {
+                imageCaptionInput.value = selectedItems[0].caption || '';
+            }
+        }
         if (isVideo && selectedItems[0].video) {
             const item = selectedItems[0];
             const playPauseIcon = videoPlayPauseBtn.querySelector('iconify-icon');
@@ -6001,6 +6103,7 @@ function updateSelectionToolbar() {
         iconToolsContainer.style.display = 'none';
         if (videoToolsContainer) videoToolsContainer.style.display = 'none';
         linkToolsContainer.style.display = 'none';
+        if (imageCaptionContainer) imageCaptionContainer.style.display = 'none';
         activeGizmo = null
     }
 }
@@ -7358,6 +7461,61 @@ if (colorseekerHexList) {
 }
 
 // --- STORYFLOW ---
+
+let storyflowAnimaticTimer = 0;
+
+function stopStoryflowAnimatic() {
+    if (storyflowAnimaticTimer) {
+        clearTimeout(storyflowAnimaticTimer);
+        storyflowAnimaticTimer = 0;
+    }
+    document.querySelectorAll('.story-card.animatic-current').forEach((card) => card.classList.remove('animatic-current'));
+    const btn = document.getElementById('storyflow-play-btn');
+    if (btn) {
+        btn.textContent = 'Play';
+        btn.classList.remove('is-playing');
+    }
+}
+
+function playStoryflowAnimatic(project) {
+    const btn = document.getElementById('storyflow-play-btn');
+    if (btn && btn.classList.contains('is-playing')) {
+        stopStoryflowAnimatic();
+        return;
+    }
+    if (!project || project.type !== 'storyflow' || !project.data || !project.data.frames || !project.data.frames.length) {
+        showToast('Add a frame before playing.', 'error');
+        return;
+    }
+    stopStoryflowAnimatic();
+    if (btn) {
+        btn.textContent = 'Stop';
+        btn.classList.add('is-playing');
+    }
+    const showFrame = (index) => {
+        const playing = document.getElementById('storyflow-play-btn');
+        if (!playing || !playing.classList.contains('is-playing')) return;
+        const cards = document.querySelectorAll('#storyflow-scroll-area .story-card');
+        cards.forEach((card, i) => card.classList.toggle('animatic-current', i === index));
+        if (cards[index] && cards[index].scrollIntoView) cards[index].scrollIntoView({ inline: 'center', block: 'nearest' });
+        const frame = project.data.frames[index];
+        const seconds = Math.max(1, parseFloat(frame && frame.meta && frame.meta.duration) || 3);
+        if (index + 1 < project.data.frames.length) {
+            storyflowAnimaticTimer = setTimeout(() => showFrame(index + 1), seconds * 1000);
+        } else {
+            storyflowAnimaticTimer = setTimeout(() => stopStoryflowAnimatic(), seconds * 1000);
+        }
+    };
+    showFrame(0);
+}
+
+const storyflowPlayBtn = document.getElementById('storyflow-play-btn');
+if (storyflowPlayBtn) {
+    storyflowPlayBtn.addEventListener('click', () => {
+        const project = projects.find((p) => p.id === activeProjectId);
+        playStoryflowAnimatic(project);
+    });
+}
 
 function renderStoryflowView(project) {
     if (!storyflowContainer) return;

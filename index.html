@@ -149,6 +149,11 @@
                 <p>Press <kbd>T</kbd> for text, <kbd>I</kbd> for an image, or <kbd>B</kbd> for a box. Middle-click drags the canvas.</p>
             </div>
             <button id="canvas-zoom-readout" type="button" title="Reset zoom to 100%">100%</button>
+            <div id="canvas-minimap" hidden title="Board overview">
+                <canvas id="canvas-minimap-map" width="160" height="96"></canvas>
+                <div id="canvas-minimap-viewport"></div>
+            </div>
+            <div id="canvas-snap-indicator" hidden>Snap on</div>
 
             <textarea id="text-editor" style="display: none;"></textarea>
             <div id="left-bar">
@@ -336,6 +341,9 @@
                 </button>
             </div>
             <div id="selection-toolbar">
+                <div id="image-caption-container" style="display: none;">
+                    <input id="image-caption-input" type="text" maxlength="80" placeholder="Caption" title="Caption on this image" autocomplete="off">
+                </div>
                 <div id="item-color-tool-container"
                     style="display: none; align-items: center; gap: 0.5rem; border-right: 1px solid var(--border-color); padding-right: 0.5rem; margin-right: 0.5rem;">
                     <div class="color-picker-wrapper" style="display: flex; align-items: center; gap: 0.2rem;">
@@ -456,6 +464,7 @@
                     <iconify-icon icon="lucide:film" width="16" height="16"></iconify-icon>
                     <span id="stats-frames-count">0 Frames</span>
                 </div>
+                <button id="storyflow-play-btn" type="button" title="Play frames for their durations">Play</button>
                 <div class="stats-item">
                     <iconify-icon icon="lucide:clock" width="16" height="16"></iconify-icon>
                     <span id="stats-total-duration">0s Total</span>
