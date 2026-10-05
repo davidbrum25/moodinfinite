@@ -33,7 +33,7 @@ Moodgantt is the timeline cousin of that task list. Asana-style dependency lines
 
 **Moodflow.** Moodflow has the frame, the notes, the duration slider, camera choices, status, reorder, paste, a minimap, an empty-story prompt, Play, drawing on the frame, and a script column. Script edits every frame's action and dialogue, then Board returns to the horizontal frames.
 
-**Moodgantt.** The timeline can hold groups, tasks, dates, progress, status, workers, and zoom. An empty plan asks for the first group. A task can depend on another. Dragging the first task pushes the dependent bar by the same number of days, and a line joins them.
+**Moodgantt.** The timeline can hold groups, tasks, dates, progress, status, workers, and zoom. An empty plan asks for the first group. A task can depend on another. Dragging the first task, or dragging its start edge, pushes the dependent bar by the same number of days, and a line joins them.
 
 **Moodlist.** Todoist adds priorities, subtasks, and reminders. Moodlist has the Keep-style card, color, pin, search, images, an empty state ("No cards yet"), and a due date on each row. Search matches that date. Indent tucks a row one level under the row above it. The first row stays flush.
 
@@ -54,7 +54,7 @@ These six are the finish line for this pass. Each one is in the running app.
 11. **Animatic playback** (Moodflow). Play walks the frames in order and holds each one for its duration. Stop ends it.
 12. **Palette length and order** (Moodtone). Add swatch appends a color, Remove takes one away while at least two remain, and dropping a swatch on another reorders the row. Space still rebuilds the harmony.
 13. **Due date on a card item** (Moodlist). Each checklist row has a date. The existing search matches that date.
-14. **Task dependency** (Moodgantt). A task can depend on another. Dragging the predecessor pushes the dependent task by the same number of days, and a line joins the two bars.
+14. **Task dependency** (Moodgantt). A task can depend on another. Dragging the predecessor, or dragging its start edge, pushes the dependent task by the same number of days, and a line joins the two bars.
 15. **Starter templates** (Moodinfinite canvas). An empty board offers Moodboard, Flowchart, and Image grid. Each one places that layout on the canvas.
 16. **Draw on a story frame** (Moodflow). Draw on the frame stores a stroke and paints it on the frame.
 17. **Script view** (Moodflow). Script lists every frame's action and dialogue in one column. Edits show on the frames after returning to the board.

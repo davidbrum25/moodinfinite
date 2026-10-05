@@ -9545,10 +9545,13 @@ function renderGanttView(project) {
                             
                             const deltaX = ev.clientX - startX;
                             if (isLeft) {
+                                const previousStart = task.startDate;
                                 const newLeft = initialLeft + deltaX;
                                 const foundDate = ganttPixelToDate(newLeft, cols, colWidth, zoom);
                                 task.startDate = ganttFormatDate(foundDate);
                                 if (ganttParseDate(task.startDate) > ganttParseDate(task.endDate)) task.startDate = task.endDate;
+                                const daysShift = Math.round((ganttParseDate(task.startDate).getTime() - ganttParseDate(previousStart).getTime()) / GANTT_MS_DAY);
+                                if (daysShift) ganttPushDependents(project, task.id, daysShift);
                             } else {
                                 const newRight = initialLeft + initialWidth + deltaX;
                                 const foundDate = ganttPixelToDate(newRight, cols, colWidth, zoom);

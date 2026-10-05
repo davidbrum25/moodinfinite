@@ -648,6 +648,36 @@ async function assertNextImprovements(page) {
     assert.notEqual(afterMove.starts[1], beforeMove.starts[1], 'the dependent task was not pushed');
     assert.ok(afterMove.left[1] > beforeMove.left[1], `dependent bar did not move right: ${beforeMove.left[1]} -> ${afterMove.left[1]}`);
     assert.equal(afterMove.line, true, 'dependency line disappeared after the move');
+    const edgeBefore = await page.evaluate(() => {
+        const project = projects.find((p) => p.id === activeProjectId);
+        const tasks = project.data.groups[0].tasks;
+        return {
+            starts: tasks.map((task) => task.startDate),
+            ends: tasks.map((task) => task.endDate),
+            left: [...document.querySelectorAll('.gantt-bar')].map((bar) => parseFloat(bar.style.left)),
+        };
+    });
+    const startHandle = await page.$('.gantt-bar-handle-left');
+    const handleBox = await startHandle.boundingBox();
+    await page.mouse.move(handleBox.x + handleBox.width / 2, handleBox.y + handleBox.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(handleBox.x + handleBox.width / 2 + 80, handleBox.y + handleBox.height / 2, { steps: 6 });
+    await page.mouse.up();
+    const edgeAfter = await page.evaluate(() => {
+        const project = projects.find((p) => p.id === activeProjectId);
+        const tasks = project.data.groups[0].tasks;
+        return {
+            starts: tasks.map((task) => task.startDate),
+            ends: tasks.map((task) => task.endDate),
+            left: [...document.querySelectorAll('.gantt-bar')].map((bar) => parseFloat(bar.style.left)),
+            line: !!document.querySelector('.gantt-dep-line'),
+        };
+    });
+    assert.notEqual(edgeAfter.starts[0], edgeBefore.starts[0], 'dragging the start edge did not change the predecessor start');
+    assert.equal(edgeAfter.ends[0], edgeBefore.ends[0], 'dragging the start edge changed the predecessor end');
+    assert.notEqual(edgeAfter.starts[1], edgeBefore.starts[1], 'the dependent task was not pushed when the start edge moved');
+    assert.ok(edgeAfter.left[1] > edgeBefore.left[1], `dependent bar did not follow the start edge: ${edgeBefore.left[1]} -> ${edgeAfter.left[1]}`);
+    assert.equal(edgeAfter.line, true, 'dependency line disappeared after the start edge moved');
     if (shotDir) {
         mkdirSync(shotDir, { recursive: true });
         const gantt = await page.$('#gantt-container');
