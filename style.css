@@ -1595,11 +1595,13 @@
         }
 
         #colorseeker-add-swatch:hover,
+        #colorseeker-to-canvas:hover,
         #colorseeker-from-image:hover {
             border-color: var(--switch-bg-checked);
             color: var(--switch-bg-checked);
         }
 
+        #colorseeker-to-canvas,
         #colorseeker-from-image {
             padding: 0.4rem 0.7rem;
             border-radius: 999px;

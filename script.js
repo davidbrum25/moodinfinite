@@ -7153,6 +7153,10 @@ const colorseekerFromImageBtn = document.getElementById('colorseeker-from-image'
 if (colorseekerFromImageBtn) {
     colorseekerFromImageBtn.addEventListener('click', () => colorseekerShowImagePicker());
 }
+const colorseekerToCanvasBtn = document.getElementById('colorseeker-to-canvas');
+if (colorseekerToCanvasBtn) {
+    colorseekerToCanvasBtn.addEventListener('click', () => colorseekerSendToCanvas());
+}
 
 function hexToHsl(hex) {
     let result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
@@ -7228,6 +7232,49 @@ function colorseekerApplyImagePalette(img) {
     saveToBrowser();
     renderColorSeeker(project.id);
     showToast('Palette built from the canvas image.');
+}
+
+function colorseekerSendToCanvas() {
+    const source = projects.find(p => p.id === activeProjectId);
+    if (!source || source.type !== 'colorseeker' || !source.data || !source.data.colors || !source.data.colors.length) {
+        showToast('Build a palette first.', 'error');
+        return;
+    }
+    const board = projects.find(p => p.type === 'moodinfinite');
+    if (!board) {
+        showToast('Add a canvas board first.', 'error');
+        return;
+    }
+    const colors = source.data.colors.slice();
+    switchTab(board.id);
+    saveStateForUndo();
+    const mid = screenToWorld({ x: canvas.width / 2, y: canvas.height / 2 });
+    const size = 80;
+    const gap = 16;
+    const total = colors.length * size + Math.max(0, colors.length - 1) * gap;
+    const y = mid.y - size / 2;
+    const stamp = Date.now();
+    colors.forEach((color, i) => {
+        items.push({
+            id: stamp + '-palette-swatch-' + i,
+            type: 'box',
+            color,
+            x: mid.x - total / 2 + i * (size + gap),
+            y,
+            width: size,
+            height: size,
+            rotation: 0,
+            isPinned: false,
+            opacity: 1,
+            scaleX: 1,
+            scaleY: 1,
+            style: 'fill',
+            fromPalette: true,
+        });
+    });
+    syncActiveMoodboard();
+    requestUpdate();
+    showToast('Palette sent to the canvas.');
 }
 
 function colorseekerShowImagePicker() {

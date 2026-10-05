@@ -742,6 +742,25 @@ async function assertNextImprovements(page) {
         const tone = await page.$('#colorseeker-container');
         await tone.screenshot({ path: path.join(shotDir, 'moodtone-from-image.png') });
     }
+    await page.click('#colorseeker-to-canvas');
+    await page.waitForFunction(() => items.some((item) => item.fromPalette));
+    const sent = await page.evaluate(() => {
+        draw();
+        const boxes = items.filter((item) => item.fromPalette);
+        const canvasEl = document.getElementById('moodboard-canvas');
+        const first = boxes[0];
+        const at = worldToScreen({ x: first.x + first.width / 2, y: first.y + first.height / 2 });
+        const pixel = canvasEl.getContext('2d').getImageData(Math.round(at.x), Math.round(at.y), 1, 1).data;
+        return {
+            colors: boxes.map((box) => String(box.color || '').toLowerCase()),
+            visible: document.getElementById('moodinfinite-container').style.display !== 'none',
+            pixel: [pixel[0], pixel[1], pixel[2], pixel[3]],
+        };
+    });
+    assert.deepEqual(sent.colors, ['#ff0000', '#00ff00', '#0000ff']);
+    assert.equal(sent.visible, true, 'sending the palette did not open the canvas');
+    assert.ok(sent.pixel[0] > 200 && sent.pixel[1] < 40 && sent.pixel[2] < 40, `palette box was not painted: ${JSON.stringify(sent.pixel)}`);
+    if (shotDir) await page.screenshot({ path: path.join(shotDir, 'canvas-palette-boxes.png') });
 }
 
 const server = startServer();
