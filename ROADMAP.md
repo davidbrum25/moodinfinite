@@ -27,7 +27,7 @@ Moodgantt is the timeline cousin of that task list. Asana-style dependency lines
 
 **Moodinfinite canvas.** Milanote starts you from a template or a photo library. This canvas holds images, text, comments, links, drawings, shapes, and connectors, and it saves locally. An empty board names the first tools. The corner shows zoom and a minimap of where the view sits. A selected image takes a caption. While you drag, the board says whether snap is on, including the Shift override. Connectors stay beside the shapes they join. Still missing: a frame tool and a built-in photo library. An empty board can start from a moodboard, a flowchart, or an image grid.
 
-**Moodprompt.** PromptHero is a public search across models, with the picture next to the words. Moodprompt is a private working set: platform, media type, references, tags, variables, and a copy control that says Copied. An empty tab explains how to add the first card. There is no version of a prompt, and no side-by-side of the text and a generated result beyond the two reference slots.
+**Moodprompt.** PromptHero is a public search across models, with the picture next to the words. Moodprompt is a private working set: platform, media type, references, tags, variables, and a copy control that says Copied. An empty tab explains how to add the first card. Previous puts the last text of a card back in one step. There is no side-by-side of the text and a generated result beyond the two reference slots.
 
 **Moodtone.** Coolors and Moodtone both generate with the spacebar and lock a color. A swatch says Copied when you click it. Add swatch grows the row, Remove drops one, and dragging a swatch reorders the row. From canvas image builds the row from a picture on a Moodinfinite board. Send to canvas drops those swatches onto the board as boxes. Space still rebuilds a harmony from the base color.
 
@@ -61,10 +61,11 @@ These six are the finish line for this pass. Each one is in the running app.
 18. **Colors from an image** (Moodtone). From canvas image builds the palette from a picture on a Moodinfinite board, not only from the base hex.
 19. **Send a palette to the canvas** (Moodtone and Moodinfinite canvas). Send to canvas drops the current swatches onto the board as filled boxes. Photo search and the web clipper still need services this app does not have.
 20. **Subtasks** (Moodlist). Indent on a row tucks that row under the one above it. The first row stays flush. Outdent brings it back. Search still matches the row.
+21. **Prompt versions** (Moodprompt). Leaving a changed prompt keeps the text it had before. Previous puts that text back in one step.
 
 ## Next
 
-The next list is clear. What shipped from Later — starter templates, drawing on a frame, the script column, colors from an image, send to canvas, and Moodlist subtasks — is listed above. Prompt versions and shared boards stay below.
+The next list is clear. What shipped from Later — starter templates, drawing on a frame, the script column, colors from an image, send to canvas, Moodlist subtasks, and prompt versions — is listed above. Shared boards stay below.
 
 ## Later
 
@@ -72,5 +73,4 @@ Larger work. Still no new board type.
 
 1. **Photo search on the image tool** (Moodinfinite canvas, image). Needs a stock-library service this app does not have.
 2. **Web clipper for the link tool** (Moodinfinite canvas, link). Needs a browser extension this app does not have.
-3. **Prompt versions** (Moodprompt). Keep the previous text of a card when it changes, and put it back in one step.
-4. **Shared boards.** Realtime editing is out of scope until the single-player finish above is in place. Local save and Drive sync stay the way work moves between machines.
+3. **Shared boards.** Realtime editing is out of scope until the single-player finish above is in place. Local save and Drive sync stay the way work moves between machines.

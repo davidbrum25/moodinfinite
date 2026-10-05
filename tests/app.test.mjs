@@ -838,6 +838,52 @@ async function assertNextImprovements(page) {
         return card.items.map((item) => item.indent || 0);
     });
     assert.deepEqual(outdented, [0, 0]);
+
+    await page.evaluate(() => {
+        (0, eval)('moodpromptFilterPlatform = "all"');
+        (0, eval)('moodpromptSearchQuery = ""');
+        createNewProject('moodprompt');
+    });
+    await page.click('#moodprompt-empty-add');
+    await page.waitForSelector('.prompt-text-area');
+    const promptArea = await page.$('.prompt-text-area');
+    await promptArea.click();
+    await promptArea.type('A red door');
+    await promptArea.evaluate((el) => el.blur());
+    await page.waitForSelector('.prompt-previous-btn');
+    await promptArea.click();
+    await page.evaluate(() => {
+        const el = document.querySelector('.prompt-text-area');
+        el.value = '';
+        el.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    await promptArea.type('A blue door');
+    await promptArea.evaluate((el) => el.blur());
+    await page.waitForFunction(() => {
+        const project = projects.find((p) => p.id === activeProjectId);
+        return project && project.data.prompts[0] && project.data.prompts[0].previous === 'A red door';
+    });
+    await page.click('.prompt-previous-btn');
+    const restored = await page.evaluate(() => {
+        const project = projects.find((p) => p.id === activeProjectId);
+        const prompt = project.data.prompts[0];
+        renderMoodpromptView(project);
+        return {
+            text: prompt.text,
+            previous: prompt.previous,
+            shown: document.querySelector('.prompt-text-area')?.value,
+            button: document.querySelector('.prompt-previous-btn')?.textContent?.trim(),
+        };
+    });
+    assert.equal(restored.text, 'A red door');
+    assert.equal(restored.previous, 'A blue door');
+    assert.equal(restored.shown, 'A red door');
+    assert.equal(restored.button, 'Previous');
+    if (shotDir) {
+        mkdirSync(shotDir, { recursive: true });
+        const pane = await page.$('#moodprompt-container');
+        await pane.screenshot({ path: path.join(shotDir, 'moodprompt-previous.png') });
+    }
 }
 
 const server = startServer();

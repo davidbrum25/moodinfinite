@@ -1060,6 +1060,13 @@ function createPromptCard(project, prompt, index) {
     deleteBtn.innerHTML = `<iconify-icon icon="lucide:trash-2" width="18" height="18"></iconify-icon>`;
     deleteBtn.onclick = () => { project.data.prompts.splice(index, 1); renderMoodpromptView(project); };
     
+    const previousBtn = document.createElement('button');
+    previousBtn.type = 'button';
+    previousBtn.className = 'prompt-previous-btn';
+    previousBtn.textContent = 'Previous';
+    previousBtn.title = 'Put back the previous prompt text';
+    previousBtn.hidden = prompt.previous == null;
+
     const copyBtn = document.createElement('button');
     copyBtn.className = 'tab-add-btn prompt-copy-btn';
     copyBtn.title = 'Copy Prompt';
@@ -1127,12 +1134,35 @@ function createPromptCard(project, prompt, index) {
         }
     };
     
+    let sessionText = prompt.text || '';
+    promptText.addEventListener('focus', () => {
+        sessionText = prompt.text || '';
+    });
     promptText.oninput = (e) => {
         prompt.text = e.target.value;
+        scheduleAutoSave();
         if (isExpanded) {
             promptText.style.height = 'auto';
             promptText.style.height = promptText.scrollHeight + 'px';
         }
+    };
+    promptText.addEventListener('blur', () => {
+        const next = promptText.value;
+        if (next === sessionText) return;
+        prompt.previous = sessionText;
+        sessionText = next;
+        previousBtn.hidden = false;
+        scheduleAutoSave();
+    });
+    previousBtn.onclick = () => {
+        if (prompt.previous == null) return;
+        const current = prompt.text || '';
+        prompt.text = prompt.previous;
+        prompt.previous = current;
+        sessionText = prompt.text || '';
+        promptText.value = prompt.text || '';
+        previousBtn.hidden = false;
+        scheduleAutoSave();
     };
 
     textWrapper.append(promptText, expandBtn);
@@ -1213,7 +1243,7 @@ function createPromptCard(project, prompt, index) {
     
     tagsWrapper.append(tagsList, tagInput);
 
-    controls.append(platformSelectWrapper, mediaToggle, copyBtn, deleteBtn);
+    controls.append(platformSelectWrapper, mediaToggle, previousBtn, copyBtn, deleteBtn);
     header.append(titleContainer, controls);
 
     body.style.flexDirection = 'column';

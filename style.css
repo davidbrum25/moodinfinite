@@ -425,6 +425,18 @@
             color: #44ef9b;
         }
 
+        .prompt-previous-btn {
+            border: 1px solid var(--border-color);
+            background: var(--bg-ui-hover);
+            color: var(--text-color);
+            border-radius: 999px;
+            padding: 0.28rem 0.7rem;
+            font: 600 0.75rem/1 Inter, sans-serif;
+            cursor: pointer;
+        }
+        .prompt-previous-btn[hidden] { display: none !important; }
+        .prompt-previous-btn:hover { border-color: var(--switch-bg-checked); }
+
         .platform-select-wrapper {
             position: relative;
         }
