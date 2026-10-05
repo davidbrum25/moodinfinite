@@ -702,6 +702,46 @@ async function assertNextImprovements(page) {
     const boardText = await page.$$eval('.story-desc-area', (els) => els.map((el) => el.value));
     assert.deepEqual(boardText, ['She opens the door', 'He answers']);
     assert.equal(await page.$eval('#storyflow-script-view', (el) => el.hidden), true);
+
+    await page.evaluate(async () => {
+        const board = projects.find((p) => p.type === 'moodinfinite');
+        switchTab(board.id);
+        const sample = document.createElement('canvas');
+        sample.width = 30;
+        sample.height = 10;
+        const g = sample.getContext('2d');
+        g.fillStyle = '#ff0000';
+        g.fillRect(0, 0, 10, 10);
+        g.fillStyle = '#00ff00';
+        g.fillRect(10, 0, 10, 10);
+        g.fillStyle = '#0000ff';
+        g.fillRect(20, 0, 10, 10);
+        const img = new Image();
+        img.src = sample.toDataURL();
+        await img.decode();
+        (0, eval)('selectedItems.length = 0');
+        items.length = 0;
+        items.push({
+            id: 'pal-src', type: 'image', img, x: 80, y: 80, width: 120, height: 40,
+            rotation: 0, isPinned: false, opacity: 1, scaleX: 1, scaleY: 1,
+        });
+        draw();
+    });
+    await page.evaluate(() => createNewProject('colorseeker'));
+    await page.waitForSelector('#colorseeker-from-image');
+    await page.click('#colorseeker-from-image');
+    await page.waitForSelector('.colorseeker-image-choice');
+    await page.click('.colorseeker-image-choice');
+    await page.waitForFunction(() => {
+        const text = document.getElementById('colorseeker-hex-list').textContent.toLowerCase();
+        return text.includes('ff0000') && text.includes('00ff00') && text.includes('0000ff');
+    });
+    const fromImage = await page.$eval('#colorseeker-hex-list', (el) => el.textContent.toLowerCase());
+    assert.ok(fromImage.includes('ff0000') && fromImage.includes('00ff00') && fromImage.includes('0000ff'), fromImage);
+    if (shotDir) {
+        const tone = await page.$('#colorseeker-container');
+        await tone.screenshot({ path: path.join(shotDir, 'moodtone-from-image.png') });
+    }
 }
 
 const server = startServer();

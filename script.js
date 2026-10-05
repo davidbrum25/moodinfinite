@@ -7149,6 +7149,10 @@ if (colorseekerAddSwatchBtn) {
         colorseekerAddSwatch(project);
     });
 }
+const colorseekerFromImageBtn = document.getElementById('colorseeker-from-image');
+if (colorseekerFromImageBtn) {
+    colorseekerFromImageBtn.addEventListener('click', () => colorseekerShowImagePicker());
+}
 
 function hexToHsl(hex) {
     let result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
@@ -7172,6 +7176,83 @@ function hslToHex(h, s, l) {
     l /= 100; const a = s * Math.min(l, 1 - l) / 100;
     const f = n => { const k = (n + h / 30) % 12; const color = l - a * Math.max(Math.min(k - 3, 9 - k, 1), -1); return Math.round(255 * color).toString(16).padStart(2, '0'); };
     return `#${f(0)}${f(8)}${f(4)}`;
+}
+
+function paletteFromImage(img, count) {
+    const want = count || 5;
+    const size = 24;
+    const sample = document.createElement('canvas');
+    sample.width = size;
+    sample.height = size;
+    const g = sample.getContext('2d');
+    g.drawImage(img, 0, 0, size, size);
+    const data = g.getImageData(0, 0, size, size).data;
+    const buckets = new Map();
+    for (let i = 0; i < data.length; i += 4) {
+        if (data[i + 3] < 128) continue;
+        const quant = (v) => Math.min(255, Math.round(v / 16) * 16);
+        const r = quant(data[i]);
+        const gc = quant(data[i + 1]);
+        const b = quant(data[i + 2]);
+        const key = (r << 16) | (gc << 8) | b;
+        buckets.set(key, (buckets.get(key) || 0) + 1);
+    }
+    return [...buckets.entries()]
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, want)
+        .map(([key]) => '#' + key.toString(16).padStart(6, '0'));
+}
+
+function colorseekerCanvasImages() {
+    const found = [];
+    (projects || []).forEach(project => {
+        if (!project || project.type !== 'moodinfinite' || !project.data) return;
+        const list = project.data.items || [];
+        list.forEach(item => {
+            if (item && item.type === 'image' && item.img && item.img.naturalWidth) found.push(item);
+        });
+    });
+    return found;
+}
+
+function colorseekerApplyImagePalette(img) {
+    const project = projects.find(p => p.id === activeProjectId);
+    const colors = paletteFromImage(img, 5);
+    if (!project || project.type !== 'colorseeker' || !colors.length) return;
+    project.data.colors = colors;
+    project.data.baseColor = colors[0];
+    project.data.lockedColors = colors.map(() => null);
+    if (colorseekerBasePicker) colorseekerBasePicker.value = colors[0];
+    const picker = document.getElementById('colorseeker-image-picker');
+    if (picker) picker.hidden = true;
+    saveToBrowser();
+    renderColorSeeker(project.id);
+    showToast('Palette built from the canvas image.');
+}
+
+function colorseekerShowImagePicker() {
+    const host = document.getElementById('colorseeker-image-picker');
+    const images = colorseekerCanvasImages();
+    if (!host) return;
+    host.innerHTML = '';
+    if (!images.length) {
+        host.hidden = true;
+        showToast('Add an image to a canvas board first.', 'error');
+        return;
+    }
+    host.hidden = false;
+    images.forEach(item => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'colorseeker-image-choice';
+        btn.title = 'Build a palette from this image';
+        const thumb = document.createElement('img');
+        thumb.src = item.img.src;
+        thumb.alt = 'Canvas image';
+        btn.appendChild(thumb);
+        btn.addEventListener('click', () => colorseekerApplyImagePalette(item.img));
+        host.appendChild(btn);
+    });
 }
 
 function hexToRgb(hex) {

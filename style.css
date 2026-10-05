@@ -1594,9 +1594,48 @@
             cursor: pointer;
         }
 
-        #colorseeker-add-swatch:hover {
+        #colorseeker-add-swatch:hover,
+        #colorseeker-from-image:hover {
             border-color: var(--switch-bg-checked);
             color: var(--switch-bg-checked);
+        }
+
+        #colorseeker-from-image {
+            padding: 0.4rem 0.7rem;
+            border-radius: 999px;
+            border: 1px solid var(--border-color);
+            background: rgba(0, 0, 0, 0.2);
+            color: var(--text-color);
+            font: 600 0.8rem/1 Inter, sans-serif;
+            cursor: pointer;
+        }
+
+        #colorseeker-image-picker {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.35rem;
+        }
+
+        #colorseeker-image-picker[hidden] {
+            display: none !important;
+        }
+
+        .colorseeker-image-choice {
+            width: 44px;
+            height: 44px;
+            padding: 0;
+            border-radius: 0.4rem;
+            border: 1px solid var(--border-color);
+            overflow: hidden;
+            cursor: pointer;
+            background: #111;
+        }
+
+        .colorseeker-image-choice img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: block;
         }
 
         .colorseeker-remove {

@@ -29,7 +29,7 @@ Moodgantt is the timeline cousin of that task list. Asana-style dependency lines
 
 **Moodprompt.** PromptHero is a public search across models, with the picture next to the words. Moodprompt is a private working set: platform, media type, references, tags, variables, and a copy control that says Copied. An empty tab explains how to add the first card. There is no version of a prompt, and no side-by-side of the text and a generated result beyond the two reference slots.
 
-**Moodtone.** Coolors and Moodtone both generate with the spacebar and lock a color. A swatch says Copied when you click it. Add swatch grows the row, Remove drops one (two is the shortest row), and dragging a swatch onto another reorders them. Space still rebuilds the harmony from the base color. Coolors can also pull colors out of a photo. Moodtone does not.
+**Moodtone.** Coolors and Moodtone both generate with the spacebar and lock a color. A swatch says Copied when you click it. Add swatch grows the row, Remove drops one, and dragging a swatch reorders the row. From canvas image builds the row from a picture already on a Moodinfinite board. Space still rebuilds a harmony from the base color.
 
 **Moodflow.** Moodflow has the frame, the notes, the duration slider, camera choices, status, reorder, paste, a minimap, an empty-story prompt, Play, drawing on the frame, and a script column. Script edits every frame's action and dialogue, then Board returns to the horizontal frames.
 
@@ -57,7 +57,8 @@ These six are the finish line for this pass. Each one is in the running app.
 14. **Task dependency** (Moodgantt). A task can depend on another. Dragging the predecessor pushes the dependent task by the same number of days, and a line joins the two bars.
 15. **Starter templates** (Moodinfinite canvas). An empty board offers Moodboard, Flowchart, and Image grid. Each one places that layout on the canvas.
 16. **Draw on a story frame** (Moodflow). Draw on the frame stores a stroke and paints it on the frame.
-17. **Script view** (Moodflow). Script lists every frame's action and dialogue in one column. Edits show on the frames after returning to the board. Photo search and the web clipper still need services this app does not have.
+17. **Script view** (Moodflow). Script lists every frame's action and dialogue in one column. Edits show on the frames after returning to the board.
+18. **Colors from an image** (Moodtone). From canvas image builds the palette from a picture on a Moodinfinite board, not only from the base hex. Photo search and the web clipper still need services this app does not have.
 
 ## Next
 
@@ -69,8 +70,7 @@ Larger work. Still no new board type.
 
 1. **Photo search on the image tool** (Moodinfinite canvas, image). Needs a stock-library service this app does not have.
 2. **Web clipper for the link tool** (Moodinfinite canvas, link). Needs a browser extension this app does not have.
-3. **Colors from an image** (Moodtone, eyedropper). Build a palette from a canvas image, not only from a base hex.
-4. **Send a palette to the canvas** (Moodtone and Moodinfinite canvas). Drop the five swatches onto the board as boxes.
-5. **Subtasks** (Moodlist). Indent a row under the one above it.
-6. **Prompt versions** (Moodprompt). Keep the previous text of a card when it changes, and put it back in one step.
-7. **Shared boards.** Realtime editing is out of scope until the single-player finish above is in place. Local save and Drive sync stay the way work moves between machines.
+3. **Send a palette to the canvas** (Moodtone and Moodinfinite canvas). Drop the five swatches onto the board as boxes.
+4. **Subtasks** (Moodlist). Indent a row under the one above it.
+5. **Prompt versions** (Moodprompt). Keep the previous text of a card when it changes, and put it back in one step.
+6. **Shared boards.** Realtime editing is out of scope until the single-player finish above is in place. Local save and Drive sync stay the way work moves between machines.
