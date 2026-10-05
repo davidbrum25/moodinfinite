@@ -1450,6 +1450,41 @@
             width: auto;
         }
 
+        #colorseeker-add-swatch {
+            padding: 0.4rem 0.7rem;
+            border-radius: 999px;
+            border: 1px solid var(--border-color);
+            background: rgba(0, 0, 0, 0.2);
+            color: var(--text-color);
+            font: 600 0.8rem/1 Inter, sans-serif;
+            cursor: pointer;
+        }
+
+        #colorseeker-add-swatch:hover {
+            border-color: var(--switch-bg-checked);
+            color: var(--switch-bg-checked);
+        }
+
+        .colorseeker-remove {
+            position: absolute;
+            top: 0.65rem;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 6;
+            padding: 0.22rem 0.45rem;
+            border-radius: 999px;
+            border: 1px solid rgba(255, 255, 255, 0.4);
+            background: rgba(0, 0, 0, 0.62);
+            color: #fff;
+            font: 700 0.68rem/1 Inter, sans-serif;
+            cursor: pointer;
+        }
+
+        .colorseeker-remove:disabled {
+            opacity: 0.35;
+            cursor: default;
+        }
+
         .colorseeker-copied {
             position: absolute;
             top: 50%;

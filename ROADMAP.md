@@ -29,7 +29,7 @@ Moodgantt is the timeline cousin of that task list. Asana-style dependency lines
 
 **Moodprompt.** PromptHero is a public search across models, with the picture next to the words. Moodprompt is a private working set: platform, media type, references, tags, variables, and a copy control that says Copied. An empty tab explains how to add the first card. There is no version of a prompt, and no side-by-side of the text and a generated result beyond the two reference slots.
 
-**Moodtone.** Coolors and Moodtone both generate with the spacebar and lock a color. A swatch says Copied when you click it, and the hover line shows hex, RGB, HSL, and CMYK. Coolors also reorders columns, changes how many colors there are, and extracts a palette from a photo. Moodtone is still the generated set.
+**Moodtone.** Coolors and Moodtone both generate with the spacebar and lock a color. A swatch says Copied when you click it. Add swatch grows the row, Remove drops one (two is the shortest row), and dragging a swatch onto another reorders them. Space still rebuilds the harmony from the base color. Coolors can also pull colors out of a photo. Moodtone does not.
 
 **Moodflow.** Boords adds drawing on the frame and a script view. Moodflow has the frame, the notes, the duration slider, camera choices, status, reorder, paste, a minimap, an empty-story prompt, and Play, which holds each frame for its duration. Drawing on the frame and a script column are still missing.
 
@@ -52,14 +52,14 @@ These six are the finish line for this pass. Each one is in the running app.
 9. **Image caption** (Moodinfinite canvas, image). Select an image and type in Caption. The words sit on the image.
 10. **Prompt copy stays on the card** (Moodprompt). The copy control on the card shows Copied.
 11. **Animatic playback** (Moodflow). Play walks the frames in order and holds each one for its duration. Stop ends it.
+12. **Palette length and order** (Moodtone). Add swatch appends a color, Remove takes one away while at least two remain, and dropping a swatch on another reorders the row. Space still rebuilds the harmony.
 
 ## Next
 
 Still inside the current boards and tools.
 
-1. **Palette length and order** (Moodtone). Add, remove, and drag swatches. Coolors treats that as basic; Moodtone is still the generated set.
-2. **Due date on a card item** (Moodlist). One date field on a checklist row, surfaced by the search that already exists.
-3. **Task dependency** (Moodgantt). A line from one bar to the next, so moving a task shows what it pushes.
+1. **Due date on a card item** (Moodlist). One date field on a checklist row, surfaced by the search that already exists.
+2. **Task dependency** (Moodgantt). A line from one bar to the next, so moving a task shows what it pushes.
 
 ## Later
 

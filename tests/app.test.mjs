@@ -501,6 +501,32 @@ async function assertNextImprovements(page) {
     }, { timeout: 4000 });
     assert.equal(await page.$eval('#storyflow-play-btn', (el) => el.textContent.trim()), 'Stop');
     await page.evaluate(() => stopStoryflowAnimatic());
+
+    await page.evaluate(() => createNewProject('colorseeker'));
+    await page.waitForSelector('.colorseeker-bar');
+    const paletteBefore = await page.$eval('#colorseeker-hex-list', (el) => el.textContent.trim());
+    const countBefore = paletteBefore.split(',').filter(Boolean).length;
+    await page.click('#colorseeker-add-swatch');
+    await page.waitForFunction((n) => document.querySelectorAll('.colorseeker-bar').length === n + 1, {}, countBefore);
+    const addedList = await page.$eval('#colorseeker-hex-list', (el) => el.textContent.trim());
+    assert.equal(addedList.split(',').filter(Boolean).length, countBefore + 1, 'adding a swatch did not grow the palette');
+    if (shotDir) {
+        mkdirSync(shotDir, { recursive: true });
+        const tone = await page.$('#colorseeker-container');
+        await tone.screenshot({ path: path.join(shotDir, 'moodtone-swatches.png') });
+    }
+    await page.click('.colorseeker-bar:last-child .colorseeker-remove');
+    await page.waitForFunction((n) => document.querySelectorAll('.colorseeker-bar').length === n, {}, countBefore);
+    const orderBefore = (await page.$eval('#colorseeker-hex-list', (el) => el.textContent.trim())).split(',').map((s) => s.trim().toLowerCase());
+    await page.evaluate(() => {
+        const bars = [...document.querySelectorAll('.colorseeker-bar')];
+        const data = new DataTransfer();
+        data.setData('text/color-index', '0');
+        bars[2].dispatchEvent(new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer: data }));
+    });
+    const orderAfter = (await page.$eval('#colorseeker-hex-list', (el) => el.textContent.trim())).split(',').map((s) => s.trim().toLowerCase());
+    assert.equal(orderAfter[2], orderBefore[0], `drag did not move the first swatch: ${orderBefore} -> ${orderAfter}`);
+    assert.notEqual(orderAfter.join(','), orderBefore.join(','));
 }
 
 const server = startServer();

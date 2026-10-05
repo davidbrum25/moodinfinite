@@ -7095,6 +7095,14 @@ const colorseekerModeSelect = document.getElementById('colorseeker-mode-select')
 const colorseekerBasePicker = document.getElementById('colorseeker-base-picker');
 const colorseekerPalette = document.getElementById('colorseeker-palette');
 const colorseekerHexList = document.getElementById('colorseeker-hex-list');
+const colorseekerAddSwatchBtn = document.getElementById('colorseeker-add-swatch');
+if (colorseekerAddSwatchBtn) {
+    colorseekerAddSwatchBtn.addEventListener('click', () => {
+        const project = projects.find(p => p.id === activeProjectId);
+        if (!project || project.type !== 'colorseeker') return;
+        colorseekerAddSwatch(project);
+    });
+}
 
 function hexToHsl(hex) {
     let result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
@@ -7219,6 +7227,45 @@ function generatePalette(baseHex, mode, lockedColors) {
     return colors;
 }
 
+function colorseekerEnsureLocks(project) {
+    if (!project.data.lockedColors) project.data.lockedColors = [];
+    while (project.data.lockedColors.length < project.data.colors.length) project.data.lockedColors.push(null);
+    if (project.data.lockedColors.length > project.data.colors.length) project.data.lockedColors.length = project.data.colors.length;
+}
+
+function colorseekerAddSwatch(project) {
+    if (!project.data.colors || !project.data.colors.length) {
+        project.data.colors = generatePalette(project.data.baseColor, project.data.mode, project.data.lockedColors);
+    }
+    const last = project.data.colors[project.data.colors.length - 1] || project.data.baseColor || '#888888';
+    const hsl = hexToHsl(last);
+    project.data.colors.push(hslToHex((hsl.h + 28) % 360, Math.max(40, hsl.s), hsl.l));
+    colorseekerEnsureLocks(project);
+    saveToBrowser();
+    renderColorSeeker(project.id);
+}
+
+function colorseekerRemoveSwatch(project, index) {
+    if (!project.data.colors || project.data.colors.length <= 2) return;
+    colorseekerEnsureLocks(project);
+    project.data.colors.splice(index, 1);
+    project.data.lockedColors.splice(index, 1);
+    saveToBrowser();
+    renderColorSeeker(project.id);
+}
+
+function colorseekerMoveSwatch(project, from, to) {
+    colorseekerEnsureLocks(project);
+    const colors = project.data.colors;
+    if (!colors || from === to || from < 0 || to < 0 || from >= colors.length || to >= colors.length) return;
+    const [color] = colors.splice(from, 1);
+    const [lock] = project.data.lockedColors.splice(from, 1);
+    colors.splice(to, 0, color);
+    project.data.lockedColors.splice(to, 0, lock || null);
+    saveToBrowser();
+    renderColorSeeker(project.id);
+}
+
 function renderColorSeeker(projectId) {
     const project = projects.find(p => p.id === projectId);
     if (!project || project.type !== 'colorseeker') return;
@@ -7241,6 +7288,8 @@ function renderColorSeeker(projectId) {
         project.data.colors.forEach((cHex, i) => {
             const bar = document.createElement('div');
             bar.className = 'colorseeker-bar';
+            bar.dataset.index = String(i);
+            bar.draggable = true;
             bar.style.backgroundColor = cHex;
             bar.style.flex = '1';
             bar.style.height = '100%';
@@ -7355,8 +7404,37 @@ function renderColorSeeker(projectId) {
             // Expose toggle on the bar element for hotkey access
             bar._toggleLock = toggleLock;
 
+            const removeBtn = document.createElement('button');
+            removeBtn.type = 'button';
+            removeBtn.className = 'colorseeker-remove';
+            removeBtn.title = 'Remove swatch';
+            removeBtn.textContent = 'Remove';
+            removeBtn.disabled = project.data.colors.length <= 2;
+            removeBtn.addEventListener('click', (ev) => {
+                ev.stopPropagation();
+                ev.preventDefault();
+                colorseekerRemoveSwatch(project, i);
+            });
+            bar.appendChild(removeBtn);
+
+            bar.addEventListener('dragstart', (ev) => {
+                if (!ev.dataTransfer) return;
+                ev.dataTransfer.setData('text/color-index', String(i));
+                ev.dataTransfer.effectAllowed = 'move';
+            });
+            bar.addEventListener('dragover', (ev) => {
+                ev.preventDefault();
+                if (ev.dataTransfer) ev.dataTransfer.dropEffect = 'move';
+            });
+            bar.addEventListener('drop', (ev) => {
+                ev.preventDefault();
+                const raw = ev.dataTransfer ? ev.dataTransfer.getData('text/color-index') : '';
+                colorseekerMoveSwatch(project, parseInt(raw, 10), parseInt(bar.dataset.index, 10));
+            });
+
             bar.addEventListener('click', (e) => {
                 if (e.target === lockBtn || lockBtn.contains(e.target)) return;
+                if (e.target === removeBtn || removeBtn.contains(e.target)) return;
                 if (e.shiftKey) {
                     project.data.baseColor = cHex;
                     project.data.colors = generatePalette(cHex, project.data.mode, project.data.lockedColors);
