@@ -4,7 +4,7 @@
  */
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { mkdirSync, readFileSync } from 'node:fs';
 import net from 'node:net';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -252,6 +252,108 @@ async function exerciseBoardInteractions(page) {
     } finally {
         await release();
     }
+}
+
+async function assertNowTierPolish(page) {
+    await page.evaluate(() => {
+        (0, eval)('selectedItems.length = 0');
+        if (typeof updateSelectionToolbar === 'function') updateSelectionToolbar();
+        draw();
+    });
+    const canvas = await page.$('#moodboard-canvas');
+    const box = await canvas.boundingBox();
+    const beforeLabel = await page.$eval('#canvas-zoom-readout', (el) => el.textContent.trim());
+    assert.match(beforeLabel, /^\d+%$/);
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+    await page.mouse.wheel({ deltaY: -800 });
+    await page.waitForFunction((prev) => {
+        const el = document.getElementById('canvas-zoom-readout');
+        return el && el.textContent.trim() !== prev;
+    }, {}, beforeLabel);
+    const zoomed = await page.evaluate(() => {
+        const c = document.getElementById('moodboard-canvas');
+        return {
+            label: document.getElementById('canvas-zoom-readout').textContent.trim(),
+            world: screenToWorld({ x: c.width / 2, y: c.height / 2 }),
+        };
+    });
+    assert.match(zoomed.label, /^\d+%$/);
+    assert.notEqual(zoomed.label, beforeLabel);
+
+    await page.click('#canvas-zoom-readout');
+    await page.waitForFunction(() => document.getElementById('canvas-zoom-readout').textContent.trim() === '100%');
+    const reset = await page.evaluate(() => {
+        const c = document.getElementById('moodboard-canvas');
+        return screenToWorld({ x: c.width / 2, y: c.height / 2 });
+    });
+    assert.ok(Math.hypot(reset.x - zoomed.world.x, reset.y - zoomed.world.y) < 2, `zoom reset moved the view: ${JSON.stringify({ zoomed: zoomed.world, reset })}`);
+
+    const guide = await page.evaluate(() => {
+        (0, eval)('selectedItems.length = 0');
+        items.length = 0;
+        draw();
+        const el = document.getElementById('canvas-empty-guide');
+        return { hidden: el.hidden, text: el.innerText };
+    });
+    assert.equal(guide.hidden, false, 'empty canvas guide stayed hidden');
+    assert.match(guide.text, /This board is empty/);
+    assert.match(guide.text, /Middle-click/);
+
+    const shotDir = process.env.POLISH_SHOT_DIR;
+    if (shotDir) {
+        mkdirSync(shotDir, { recursive: true });
+        await page.screenshot({ path: path.join(shotDir, 'canvas-polish.png') });
+    }
+
+    const hiddenAfter = await page.evaluate(() => {
+        items.push({
+            id: 'polish-box', type: 'box', color: '#429eff', x: 40, y: 40, width: 80, height: 50,
+            rotation: 0, isPinned: false, style: 'fill', opacity: 1, scaleX: 1, scaleY: 1,
+        });
+        draw();
+        return document.getElementById('canvas-empty-guide').hidden;
+    });
+    assert.equal(hiddenAfter, true, 'empty canvas guide stayed up after an item was added');
+
+    await page.evaluate(() => createNewProject('moodprompt'));
+    await page.waitForSelector('#moodprompt-empty-guide');
+    const promptEmpty = await page.$eval('#moodprompt-empty-guide', (el) => el.innerText);
+    assert.match(promptEmpty, /No prompts yet/);
+    if (shotDir) {
+        const promptPane = await page.$('#moodprompt-container');
+        await promptPane.screenshot({ path: path.join(shotDir, 'moodprompt-polish.png') });
+    }
+    await page.click('#moodprompt-empty-add');
+    await page.waitForSelector('.prompt-card');
+    assert.equal(await page.$('#moodprompt-empty-guide'), null);
+    await page.select('.moodprompt-top-bar select.bar-input', 'sora');
+    await page.waitForSelector('#moodprompt-empty-guide');
+    const filtered = await page.$eval('#moodprompt-empty-guide', (el) => el.innerText);
+    assert.match(filtered, /No prompts match/);
+
+    await page.evaluate(() => createNewProject('storyflow'));
+    await page.waitForSelector('#storyflow-empty-guide');
+    assert.match(await page.$eval('#storyflow-empty-guide', (el) => el.innerText), /No frames yet/);
+    await page.click('#storyflow-empty-add');
+    await page.waitForSelector('.story-card');
+    assert.equal(await page.$('#storyflow-empty-guide'), null);
+
+    await page.evaluate(() => createNewProject('moodgantt'));
+    await page.waitForSelector('#gantt-empty-guide');
+    assert.match(await page.$eval('#gantt-empty-guide', (el) => el.innerText), /No groups yet/);
+    await page.click('#gantt-empty-add');
+    await page.waitForFunction(() => {
+        const label = document.querySelector('.gantt-group-label');
+        return label && label.textContent.includes('New Group');
+    });
+    assert.equal(await page.$('#gantt-empty-guide'), null);
+
+    await page.evaluate(() => createNewProject('colorseeker'));
+    await page.waitForSelector('.colorseeker-bar');
+    const bars = await page.$$('.colorseeker-bar');
+    await bars[Math.min(2, bars.length - 1)].click();
+    await page.waitForSelector('.colorseeker-copied');
+    assert.equal(await page.$eval('.colorseeker-copied', (el) => el.textContent.trim()), 'Copied');
 }
 
 const server = startServer();
@@ -579,6 +681,8 @@ try {
         canvas: canvasSize,
         firstPartyErrors: firstParty.length,
     }));
+
+    await assertNowTierPolish(page);
 
     const lateErrors = pageErrors.filter(isFirstParty);
     assert.deepEqual(lateErrors, [], `first-party errors:\n${lateErrors.join('\n')}`);

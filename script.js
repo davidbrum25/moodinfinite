@@ -974,6 +974,35 @@ function renderMoodpromptView(project) {
     filteredPrompts.forEach((prompt, index) => {
         promptList.appendChild(createPromptCard(project, prompt, index));
     });
+
+    if (!filteredPrompts.length) {
+        const empty = document.createElement('div');
+        empty.id = 'moodprompt-empty-guide';
+        empty.className = 'board-empty-guide';
+        const title = document.createElement('p');
+        title.className = 'board-empty-title';
+        const detail = document.createElement('p');
+        if (!project.data.prompts.length) {
+            title.textContent = 'No prompts yet';
+            detail.textContent = 'Add a prompt card to write and organize a generation prompt.';
+            const addBtn = document.createElement('button');
+            addBtn.id = 'moodprompt-empty-add';
+            addBtn.type = 'button';
+            addBtn.textContent = 'Add a prompt';
+            addBtn.onclick = () => {
+                const currentProject = projects.find(p => p.id === activeProjectId) || project;
+                currentProject.data.prompts.push({ id: Date.now(), title: 'New Prompt', platform: 'midjourney', mediaType: 'image', image1: null, image2: null, text: '', tags: [] });
+                renderMoodpromptView(currentProject);
+                saveToBrowser();
+            };
+            empty.append(title, detail, addBtn);
+        } else {
+            title.textContent = 'No prompts match';
+            detail.textContent = 'Nothing matches this provider or tag search.';
+            empty.append(title, detail);
+        }
+        promptList.appendChild(empty);
+    }
 }
 
 function createPromptCard(project, prompt, index) {
@@ -2583,7 +2612,36 @@ function draw() {
     }
 
     ctx.restore();
+    syncCanvasChrome();
 }
+
+function syncCanvasChrome() {
+    const zoomEl = document.getElementById('canvas-zoom-readout');
+    if (zoomEl) {
+        const label = Math.round((cameraZoom || 1) * 100) + '%';
+        if (zoomEl.textContent !== label) zoomEl.textContent = label;
+    }
+    const guide = document.getElementById('canvas-empty-guide');
+    if (guide) {
+        const show = items.length === 0;
+        if (guide.hidden === show) guide.hidden = !show;
+    }
+}
+
+function resetCanvasZoom() {
+    const mid = { x: canvas.width / 2, y: canvas.height / 2 };
+    const before = screenToWorld(mid);
+    cameraZoom = 1;
+    const after = screenToWorld(mid);
+    cameraOffset.x += after.x - before.x;
+    cameraOffset.y += after.y - before.y;
+    syncCanvasChrome();
+    requestUpdate();
+}
+
+const canvasZoomReadout = document.getElementById('canvas-zoom-readout');
+if (canvasZoomReadout) canvasZoomReadout.addEventListener('click', resetCanvasZoom);
+
 function drawSelection(e) { if (e.type === 'reroute') { ctx.save(); ctx.strokeStyle = accentColor; ctx.lineWidth = 2 / cameraZoom; ctx.beginPath(); ctx.arc(e.x, e.y, 12 / cameraZoom, 0, Math.PI * 2); ctx.stroke(); ctx.restore(); return } if (selectedItems.length > 1) { drawSelectionOutline(e); return } if ((e.type === 'arrow' || e.type === 'measure') && !e.isPinned) { const t = 8 / cameraZoom, o = invertColor(canvasBackgroundColor); ctx.save(); ctx.fillStyle = o; ctx.shadowColor = 'rgba(0, 0, 0, 0.4)'; ctx.shadowBlur = 4 / cameraZoom; ctx.beginPath(); ctx.arc(e.startX, e.startY, t, 0, Math.PI * 2); ctx.fill(); if (hoveredArrowHandle === 'start') { ctx.strokeStyle = accentColor; ctx.lineWidth = 2 / cameraZoom; ctx.stroke() } ctx.beginPath(); ctx.arc(e.endX, e.endY, t, 0, Math.PI * 2); ctx.fill(); if (hoveredArrowHandle === 'end') { ctx.strokeStyle = accentColor; ctx.lineWidth = 2 / cameraZoom; ctx.stroke() } ctx.restore(); return } if (e.type === 'stroke') { if (!isDrawing) drawSelectionOutline(e); return } ctx.save(); const t = e.x + e.width / 2, o = e.y + e.height / 2; ctx.translate(t, o); ctx.rotate(e.rotation); ctx.strokeStyle = accentColor; ctx.lineWidth = 2 / cameraZoom; ctx.strokeRect(-e.width / 2, -e.height / 2, e.width, e.height); if (activeGizmo && !e.isPinned) { const t = invertColor(canvasBackgroundColor), o = 8 / cameraZoom; ctx.shadowColor = 'rgba(0, 0, 0, 0.4)'; ctx.shadowBlur = 4 / cameraZoom; ctx.fillStyle = t; ctx.strokeStyle = t; if (activeGizmo === 'scale') { const t = e.width / 2, a = e.height / 2; ctx.beginPath(); ctx.arc(t, a, o, 0, Math.PI * 2); ctx.fill(); if (hoveredGizmo === 'scale') { ctx.strokeStyle = accentColor; ctx.lineWidth = 2 / cameraZoom; ctx.stroke() } } else if (activeGizmo === 'rotate') { const t = e.width / 2, a = -e.height / 2, i = a - 20 / cameraZoom; ctx.beginPath(); ctx.moveTo(t, a); ctx.lineTo(t, i); ctx.stroke(); ctx.beginPath(); ctx.arc(t, i, o, 0, Math.PI * 2); ctx.fill(); if (hoveredGizmo === 'rotate') { ctx.strokeStyle = accentColor; ctx.lineWidth = 2 / cameraZoom; ctx.stroke() } } } ctx.restore() }
 function drawSelectionOutline(e) { ctx.save(); const t = getItemBoundingBox(e); ctx.strokeStyle = accentColor; ctx.lineWidth = 2 / cameraZoom; ctx.setLineDash([6 / cameraZoom, 4 / cameraZoom]); ctx.strokeRect(t.x, t.y, t.width, t.height); ctx.restore() }
 function drawSelectionBox() {
@@ -7203,7 +7261,15 @@ function renderColorSeeker(projectId) {
                     renderColorSeeker(projectId);
                     showToast('Base color set.');
                 } else {
-                    navigator.clipboard.writeText(cHex.toUpperCase());
+                    try {
+                        const pending = navigator.clipboard && navigator.clipboard.writeText(cHex.toUpperCase());
+                        if (pending && typeof pending.catch === 'function') pending.catch(() => {});
+                    } catch (err) { /* clipboard can be blocked; the swatch still confirms the copy */ }
+                    document.querySelectorAll('.colorseeker-copied').forEach((node) => node.remove());
+                    const copied = document.createElement('div');
+                    copied.className = 'colorseeker-copied';
+                    copied.textContent = 'Copied';
+                    bar.appendChild(copied);
                     showToast(`Copied ${cHex.toUpperCase()}`);
                 }
             });
@@ -7345,6 +7411,34 @@ function renderStoryflowView(project) {
     });
 
     scrollArea.appendChild(storyList);
+
+    if (!project.data.frames.length) {
+        const empty = document.createElement('div');
+        empty.id = 'storyflow-empty-guide';
+        empty.className = 'board-empty-guide';
+        const title = document.createElement('p');
+        title.className = 'board-empty-title';
+        title.textContent = 'No frames yet';
+        const detail = document.createElement('p');
+        detail.textContent = 'Add a frame to start the story, then drop or paste a picture into it.';
+        const addBtn = document.createElement('button');
+        addBtn.id = 'storyflow-empty-add';
+        addBtn.type = 'button';
+        addBtn.textContent = 'Add a frame';
+        addBtn.onclick = () => {
+            project.data.frames.push({
+                id: Date.now(),
+                title: '',
+                image: null,
+                description: '',
+                meta: { duration: '3s', camera: '', audio: '' }
+            });
+            renderStoryflowView(project);
+            saveToBrowser();
+        };
+        empty.append(title, detail, addBtn);
+        scrollArea.appendChild(empty);
+    }
 
     const storyflowAddFrameBtn = document.getElementById('storyflow-add-frame-btn');
     if (storyflowAddFrameBtn) {
@@ -8908,6 +9002,24 @@ function renderGanttView(project) {
             });
         }
     });
+
+    if (!groups.length && sidebarBody) {
+        const empty = document.createElement('div');
+        empty.id = 'gantt-empty-guide';
+        empty.className = 'board-empty-guide';
+        const title = document.createElement('p');
+        title.className = 'board-empty-title';
+        title.textContent = 'No groups yet';
+        const detail = document.createElement('p');
+        detail.textContent = 'Add a group to start a plan.';
+        const addBtn = document.createElement('button');
+        addBtn.id = 'gantt-empty-add';
+        addBtn.type = 'button';
+        addBtn.textContent = 'Add a group';
+        addBtn.onclick = () => ganttAddGroup(project);
+        empty.append(title, detail, addBtn);
+        sidebarBody.appendChild(empty);
+    }
 
     // Update stats bar
     const statGroups = document.getElementById('gantt-stat-groups');
