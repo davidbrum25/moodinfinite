@@ -473,6 +473,97 @@ try {
     assert.ok(interactions.color.itemPixel[1] > 180, `item color was not painted: ${JSON.stringify(interactions.color.itemPixel)}`);
     assert.notEqual(interactions.color.barBackdrop, 'none');
 
+    const routes = await page.evaluate(() => {
+        const board = projects.find((p) => p.type === 'moodinfinite');
+        switchTab(board.id);
+        const crosses = (points, box) => {
+            const x0 = box.x + 1, x1 = box.x + box.width - 1;
+            const y0 = box.y + 1, y1 = box.y + box.height - 1;
+            for (let i = 1; i < points.length; i++) {
+                const a = points[i - 1], b = points[i];
+                if (Math.abs(a.y - b.y) < 0.1) {
+                    const y = a.y;
+                    if (y > y0 && y < y1) {
+                        const lo = Math.min(a.x, b.x), hi = Math.max(a.x, b.x);
+                        if (hi > x0 && lo < x1) return true;
+                    }
+                } else if (Math.abs(a.x - b.x) < 0.1) {
+                    const x = a.x;
+                    if (x > x0 && x < x1) {
+                        const lo = Math.min(a.y, b.y), hi = Math.max(a.y, b.y);
+                        if (hi > y0 && lo < y1) return true;
+                    }
+                }
+            }
+            return false;
+        };
+        const within = (points, boxes) => {
+            const minX = Math.min(...boxes.map((b) => b.x)) - 80;
+            const minY = Math.min(...boxes.map((b) => b.y)) - 80;
+            const maxX = Math.max(...boxes.map((b) => b.x + b.width)) + 80;
+            const maxY = Math.max(...boxes.map((b) => b.y + b.height)) + 80;
+            return points.every((p) => p.x >= minX && p.x <= maxX && p.y >= minY && p.y <= maxY);
+        };
+        const shape = (id, x, y) => ({
+            id, type: 'box', color: '#223044', x, y, width: 140, height: 80,
+            rotation: 0, isPinned: false, style: 'fill', opacity: 1, scaleX: 1, scaleY: 1,
+        });
+        const src = shape('src', 420, 180);
+        const dst = shape('dst', 40, 180);
+        const conn = { id: 'c', type: 'connector', sourceId: 'src', sourcePort: 'right', targetId: 'dst', targetPort: 'left', color: '#ff40c0' };
+        items.length = 0;
+        items.push(src, dst, conn);
+        draw();
+        const backward = conn.route;
+        const same = buildConnectorRoute(
+            { x: 200, y: 140 }, { x: 1, y: 0 },
+            { x: 520, y: 150 }, { x: 1, y: 0 },
+            { x: 100, y: 100, width: 100, height: 80 },
+            { x: 400, y: 110, width: 120, height: 80 }
+        );
+        const facing = buildConnectorRoute(
+            { x: 200, y: 140 }, { x: 1, y: 0 },
+            { x: 400, y: 150 }, { x: -1, y: 0 },
+            { x: 100, y: 100, width: 100, height: 80 },
+            { x: 400, y: 110, width: 100, height: 80 }
+        );
+        const behind = buildConnectorRoute(
+            { x: 500, y: 140 }, { x: 1, y: 0 },
+            { x: 220, y: 150 }, { x: 1, y: 0 },
+            { x: 400, y: 100, width: 100, height: 80 },
+            { x: 100, y: 110, width: 120, height: 80 }
+        );
+        const stacked = buildConnectorRoute(
+            { x: 140, y: 100 }, { x: 0, y: -1 },
+            { x: 140, y: 300 }, { x: 0, y: -1 },
+            { x: 100, y: 100, width: 80, height: 60 },
+            { x: 100, y: 300, width: 80, height: 60 }
+        );
+        const upBox = { x: 100, y: 100, width: 80, height: 60 };
+        const downBox = { x: 100, y: 300, width: 80, height: 60 };
+        const boxes = [src, dst];
+        return {
+            backCross: crosses(backward, src) || crosses(backward, dst),
+            backWithin: within(backward, boxes),
+            backTop: Math.min(...backward.map((p) => p.y)),
+            sameCross: crosses(same, { x: 100, y: 100, width: 100, height: 80 }) || crosses(same, { x: 400, y: 110, width: 120, height: 80 }),
+            facingSpan: Math.max(...facing.map((p) => p.x)) - Math.min(...facing.map((p) => p.x)),
+            facingCross: crosses(facing, { x: 100, y: 100, width: 100, height: 80 }) || crosses(facing, { x: 400, y: 110, width: 100, height: 80 }),
+            behindCross: crosses(behind, { x: 400, y: 100, width: 100, height: 80 }) || crosses(behind, { x: 100, y: 110, width: 120, height: 80 }),
+            stackedCross: crosses(stacked, upBox) || crosses(stacked, downBox),
+            stackedTop: Math.min(...stacked.map((p) => p.y)),
+        };
+    });
+    assert.equal(routes.backCross, false, `connector cuts through a moved box: ${JSON.stringify(routes)}`);
+    assert.equal(routes.backWithin, true, `connector leaves the neighborhood of its boxes: ${JSON.stringify(routes)}`);
+    assert.ok(routes.backTop >= 180 - 70, `connector climbs away from the boxes: ${routes.backTop}`);
+    assert.equal(routes.sameCross, false, 'same-side connector cuts through a box');
+    assert.equal(routes.facingCross, false, 'facing connector cuts through a box');
+    assert.ok(routes.facingSpan < 280, `facing connector takes a long detour: ${routes.facingSpan}`);
+    assert.equal(routes.behindCross, false, 'same-side connector behind the source cuts through a box');
+    assert.equal(routes.stackedCross, false, 'vertical same-side connector cuts through a box');
+    assert.ok(routes.stackedTop >= 100 - 70, `vertical connector climbs away from the boxes: ${routes.stackedTop}`);
+
     const hot = [];
     for (let i = 0; i < 2; i++) hot.push(await measureHotPath(page));
     for (const result of hot) {

@@ -3357,6 +3357,213 @@ function getGlobalPortPos(item, side, group = null) {
     };
 }
 
+function connectorPortDirection(side, item, group) {
+    let dx = 0, dy = 0;
+    if (side === 'left') dx = -1;
+    else if (side === 'right') dx = 1;
+    else if (side === 'top') dy = -1;
+    else if (side === 'bottom') dy = 1;
+    else return { x: 1, y: 0 };
+    if (item && item.type !== 'reroute') {
+        const totalRot = (item.rotation || 0) + (group ? (group.rotation || 0) : 0);
+        const s = Math.cos(totalRot);
+        const n = Math.sin(totalRot);
+        return { x: dx * s - dy * n, y: dx * n + dy * s };
+    }
+    return { x: dx, y: dy };
+}
+
+function inferConnectorApproach(from, to) {
+    const dx = from.x - to.x;
+    const dy = from.y - to.y;
+    if (Math.abs(dx) >= Math.abs(dy)) return { x: Math.sign(dx) || 1, y: 0 };
+    return { x: 0, y: Math.sign(dy) || 1 };
+}
+
+function connectorItemBounds(item, group) {
+    if (!item) return { x: 0, y: 0, width: 0, height: 0 };
+    const box = getItemBoundingBox(item);
+    if (!group) return box;
+    const corners = [
+        { x: box.x, y: box.y },
+        { x: box.x + box.width, y: box.y },
+        { x: box.x + box.width, y: box.y + box.height },
+        { x: box.x, y: box.y + box.height }
+    ];
+    const cx = group.x + group.width / 2;
+    const cy = group.y + group.height / 2;
+    const cos = Math.cos(group.rotation || 0);
+    const sin = Math.sin(group.rotation || 0);
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    corners.forEach(v => {
+        const relX = v.x - group.width / 2;
+        const relY = v.y - group.height / 2;
+        const x = cx + relX * cos - relY * sin;
+        const y = cy + relX * sin + relY * cos;
+        minX = Math.min(minX, x);
+        minY = Math.min(minY, y);
+        maxX = Math.max(maxX, x);
+        maxY = Math.max(maxY, y);
+    });
+    return { x: minX, y: minY, width: Math.max(1, maxX - minX), height: Math.max(1, maxY - minY) };
+}
+
+function buildConnectorRoute(start, startDir, end, endDir, startBox, endBox) {
+    const GAP = 30;
+    const norm = (dir) => {
+        const len = Math.hypot(dir.x, dir.y) || 1;
+        return { x: dir.x / len, y: dir.y / len };
+    };
+    const axisOf = (dir) => {
+        if (Math.abs(dir.x) >= Math.abs(dir.y)) return { x: dir.x >= 0 ? 1 : -1, y: 0 };
+        return { x: 0, y: dir.y >= 0 ? 1 : -1 };
+    };
+    const unitA = norm(startDir && (startDir.x || startDir.y) ? startDir : { x: 1, y: 0 });
+    const unitB = norm(endDir && (endDir.x || endDir.y) ? endDir : { x: -1, y: 0 });
+    const axisA = axisOf(unitA);
+    const axisB = axisOf(unitB);
+    const A = { x: start.x, y: start.y };
+    const B = { x: end.x, y: end.y };
+    const sA = { x: A.x + unitA.x * GAP, y: A.y + unitA.y * GAP };
+    const sB = { x: B.x + unitB.x * GAP, y: B.y + unitB.y * GAP };
+    const boxA = startBox || { x: A.x, y: A.y, width: 0, height: 0 };
+    const boxB = endBox || { x: B.x, y: B.y, width: 0, height: 0 };
+
+    let minX = Math.min(boxA.x, boxB.x, A.x, B.x, sA.x, sB.x);
+    let minY = Math.min(boxA.y, boxB.y, A.y, B.y, sA.y, sB.y);
+    let maxX = Math.max(boxA.x + (boxA.width || 0), boxB.x + (boxB.width || 0), A.x, B.x, sA.x, sB.x);
+    let maxY = Math.max(boxA.y + (boxA.height || 0), boxB.y + (boxB.height || 0), A.y, B.y, sA.y, sB.y);
+    minX -= GAP;
+    minY -= GAP;
+    maxX += GAP;
+    maxY += GAP;
+
+    const hitsInterior = (a, b, box) => {
+        if (!box || !(box.width > 2) || !(box.height > 2)) return false;
+        const x0 = box.x + 1, x1 = box.x + box.width - 1;
+        const y0 = box.y + 1, y1 = box.y + box.height - 1;
+        if (Math.abs(a.y - b.y) < 0.1) {
+            const y = a.y;
+            if (y <= y0 || y >= y1) return false;
+            const lo = Math.min(a.x, b.x), hi = Math.max(a.x, b.x);
+            return hi > x0 && lo < x1;
+        }
+        if (Math.abs(a.x - b.x) < 0.1) {
+            const x = a.x;
+            if (x <= x0 || x >= x1) return false;
+            const lo = Math.min(a.y, b.y), hi = Math.max(a.y, b.y);
+            return hi > y0 && lo < y1;
+        }
+        return false;
+    };
+
+    const simplify = (points) => {
+        const out = [{ x: points[0].x, y: points[0].y }];
+        for (let i = 1; i < points.length; i++) {
+            const curr = points[i];
+            const prev = out[out.length - 1];
+            if (Math.hypot(curr.x - prev.x, curr.y - prev.y) <= 0.1) continue;
+            if (out.length >= 2) {
+                const a = out[out.length - 2];
+                const sameX = Math.abs(a.x - prev.x) < 0.1 && Math.abs(prev.x - curr.x) < 0.1;
+                const sameY = Math.abs(a.y - prev.y) < 0.1 && Math.abs(prev.y - curr.y) < 0.1;
+                if (sameX || sameY) {
+                    out[out.length - 1] = { x: curr.x, y: curr.y };
+                    continue;
+                }
+            }
+            out.push({ x: curr.x, y: curr.y });
+        }
+        return out;
+    };
+
+    const scoreOf = (points) => {
+        let length = 0;
+        let penalty = 0;
+        for (let i = 1; i < points.length; i++) {
+            const a = points[i - 1], b = points[i];
+            const dx = b.x - a.x, dy = b.y - a.y;
+            if (Math.abs(dx) > 0.1 && Math.abs(dy) > 0.1) penalty += 50000;
+            length += Math.abs(dx) + Math.abs(dy);
+            const nearStart = Math.hypot(a.x - A.x, a.y - A.y) <= GAP + 1 && Math.hypot(b.x - A.x, b.y - A.y) <= GAP + 1;
+            const nearEnd = Math.hypot(a.x - B.x, a.y - B.y) <= GAP + 1 && Math.hypot(b.x - B.x, b.y - B.y) <= GAP + 1;
+            if (!nearStart && !nearEnd && (hitsInterior(a, b, boxA) || hitsInterior(a, b, boxB))) penalty += 100000;
+            if (b.x < minX - 0.5 || b.x > maxX + 0.5 || b.y < minY - 0.5 || b.y > maxY + 0.5) penalty += 100000;
+        }
+        const first = points[1];
+        if (first) {
+            const dot = (first.x - A.x) * axisA.x + (first.y - A.y) * axisA.y;
+            if (dot < -0.5) penalty += 100000;
+        }
+        const prevEnd = points[points.length - 2];
+        if (prevEnd) {
+            const dot = (B.x - prevEnd.x) * axisB.x + (B.y - prevEnd.y) * axisB.y;
+            if (dot > 0.5) penalty += 100000;
+        }
+        return length + penalty + points.length;
+    };
+
+    const candidates = [];
+    const add = (pts) => candidates.push(simplify(pts));
+    const sameHoriz = axisA.x !== 0 && axisA.x === axisB.x;
+    const sameVert = axisA.y !== 0 && axisA.y === axisB.y;
+    const opposite = (axisA.x && axisA.x === -axisB.x) || (axisA.y && axisA.y === -axisB.y);
+
+    if (opposite && axisA.x) {
+        const portGap = (B.x - A.x) * axisA.x;
+        if (portGap > 1) {
+            const lead = Math.min(GAP, portGap / 2);
+            const a1 = { x: A.x + axisA.x * lead, y: A.y };
+            const b1 = { x: B.x + axisB.x * lead, y: B.y };
+            const midX = (a1.x + b1.x) / 2;
+            add([A, a1, { x: midX, y: a1.y }, { x: midX, y: b1.y }, b1, B]);
+        }
+        [minY, maxY].forEach(yOut => {
+            const xA = axisA.x > 0 ? maxX : minX;
+            const xB = axisB.x > 0 ? maxX : minX;
+            add([A, sA, { x: xA, y: sA.y }, { x: xA, y: yOut }, { x: xB, y: yOut }, { x: xB, y: sB.y }, sB, B]);
+        });
+    } else if (opposite && axisA.y) {
+        const portGap = (B.y - A.y) * axisA.y;
+        if (portGap > 1) {
+            const lead = Math.min(GAP, portGap / 2);
+            const a1 = { x: A.x, y: A.y + axisA.y * lead };
+            const b1 = { x: B.x, y: B.y + axisB.y * lead };
+            const midY = (a1.y + b1.y) / 2;
+            add([A, a1, { x: a1.x, y: midY }, { x: b1.x, y: midY }, b1, B]);
+        }
+        [minX, maxX].forEach(xOut => {
+            const yA = axisA.y > 0 ? maxY : minY;
+            const yB = axisB.y > 0 ? maxY : minY;
+            add([A, sA, { x: sA.x, y: yA }, { x: xOut, y: yA }, { x: xOut, y: yB }, { x: sB.x, y: yB }, sB, B]);
+        });
+    } else if (sameHoriz) {
+        add([A, sA, { x: sB.x, y: sA.y }, sB, B]);
+        [minY, maxY].forEach(yOut => {
+            add([A, sA, { x: sA.x, y: yOut }, { x: sB.x, y: yOut }, sB, B]);
+        });
+    } else if (sameVert) {
+        add([A, sA, { x: sA.x, y: sB.y }, sB, B]);
+        [minX, maxX].forEach(xOut => {
+            add([A, sA, { x: xOut, y: sA.y }, { x: xOut, y: sB.y }, sB, B]);
+        });
+    } else if (axisA.x) {
+        add([A, sA, { x: sA.x, y: sB.y }, sB, B]);
+        const xOut = axisA.x > 0 ? maxX : minX;
+        const yOut = axisB.y > 0 ? maxY : minY;
+        add([A, sA, { x: xOut, y: sA.y }, { x: xOut, y: yOut }, { x: sB.x, y: yOut }, sB, B]);
+    } else {
+        add([A, sA, { x: sB.x, y: sA.y }, sB, B]);
+        const yOut = axisA.y > 0 ? maxY : minY;
+        const xOut = axisB.x > 0 ? maxX : minX;
+        add([A, sA, { x: sA.x, y: yOut }, { x: xOut, y: yOut }, { x: xOut, y: sB.y }, sB, B]);
+    }
+
+    if (!candidates.length) add([A, sA, sB, B]);
+    candidates.sort((a, b) => scoreOf(a) - scoreOf(b));
+    return candidates[0];
+}
+
 function drawConnectorItem(e, renderCtx) {
     const sourceMatch = findItemAndGroupRecursively(e.sourceId, items);
     if (!sourceMatch) return;
@@ -3385,58 +3592,25 @@ function drawConnectorItem(e, renderCtx) {
     e.computedEndX = endX;
     e.computedEndY = endY;
 
-    const margin = 30;
-
-    const getOrthoPoint = (portX, portY, side, item, group) => {
-        let dx = 0, dy = 0;
-        if (side === 'left') dx = -1;
-        if (side === 'right') dx = 1;
-        if (side === 'top') dy = -1;
-        if (side === 'bottom') dy = 1;
-        if (item && item.type !== 'reroute') {
-            const totalRot = (item.rotation || 0) + (group ? (group.rotation || 0) : 0);
-            const s = Math.cos(totalRot);
-            const n = Math.sin(totalRot);
-            const rotDx = dx * s - dy * n;
-            const rotDy = dx * n + dy * s;
-            return { x: portX + rotDx * margin, y: portY + rotDy * margin };
-        }
-        return { x: portX + dx * margin, y: portY + dy * margin };
-    };
-
-    const p0 = { x: sourcePortPos.x, y: sourcePortPos.y };
-    const p1 = getOrthoPoint(p0.x, p0.y, e.sourcePort, sourceMatch.item, sourceMatch.group);
-    const p3 = { x: endX, y: endY };
-    const p2 = targetPortPos && tgtMatch ? getOrthoPoint(p3.x, p3.y, targetSide, tgtMatch.item, tgtMatch.group) : p3;
-
-    const route = [p0, p1];
-    
-    const isHorizontalBreak = Math.abs(p1.x - p2.x) > Math.abs(p1.y - p2.y);
-    
-    if (isHorizontalBreak) {
-        const midX = (p1.x + p2.x) / 2;
-        route.push({ x: midX, y: p1.y });
-        route.push({ x: midX, y: p2.y });
+    const startDir = connectorPortDirection(e.sourcePort, sourceMatch.item, sourceMatch.group);
+    const startBox = connectorItemBounds(sourceMatch.item, sourceMatch.group);
+    let endDir;
+    let endBox;
+    if (targetPortPos && tgtMatch) {
+        endDir = connectorPortDirection(targetSide, tgtMatch.item, tgtMatch.group);
+        endBox = connectorItemBounds(tgtMatch.item, tgtMatch.group);
     } else {
-        const midY = (p1.y + p2.y) / 2;
-        route.push({ x: p1.x, y: midY });
-        route.push({ x: p2.x, y: midY });
+        endDir = inferConnectorApproach({ x: sourcePortPos.x, y: sourcePortPos.y }, { x: endX, y: endY });
+        endBox = { x: endX, y: endY, width: 0, height: 0 };
     }
-    
-    if (targetPortPos) {
-        route.push(p2);
-    }
-    route.push(p3);
+    e.route = buildConnectorRoute(
+        { x: sourcePortPos.x, y: sourcePortPos.y }, startDir,
+        { x: endX, y: endY }, endDir,
+        startBox, endBox
+    );
 
-    const cleanRoute = [route[0]];
-    for (let i = 1; i < route.length; i++) {
-        const prev = cleanRoute[cleanRoute.length - 1];
-        const curr = route[i];
-        if (Math.hypot(curr.x - prev.x, curr.y - prev.y) > 0.1) {
-            cleanRoute.push(curr);
-        }
-    }
-    e.route = cleanRoute;
+    const cleanRoute = e.route;
+    if (!cleanRoute || cleanRoute.length < 2) return;
 
     const _ctx = renderCtx || ctx;
     _ctx.save();
