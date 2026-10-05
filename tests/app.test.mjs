@@ -761,6 +761,83 @@ async function assertNextImprovements(page) {
     assert.equal(sent.visible, true, 'sending the palette did not open the canvas');
     assert.ok(sent.pixel[0] > 200 && sent.pixel[1] < 40 && sent.pixel[2] < 40, `palette box was not painted: ${JSON.stringify(sent.pixel)}`);
     if (shotDir) await page.screenshot({ path: path.join(shotDir, 'canvas-palette-boxes.png') });
+
+    await page.evaluate(() => createNewProject('moodlist'));
+    await page.waitForSelector('.ml-add-title');
+    await (await page.$('.ml-add-title')).type('Trip');
+    await (await page.$('.ml-add-panel .ml-item-text')).type('Book flights');
+    await page.click('.ml-add-item-btn');
+    await page.waitForFunction(() => document.querySelectorAll('.ml-add-panel .ml-item-text').length === 2);
+    const tripRows = await page.$$('.ml-add-panel .ml-item-text');
+    await tripRows[1].type('Pack bags');
+    await page.click('.ml-save-btn');
+    await page.waitForSelector('.ml-card .ml-indent-btn');
+    const indentSetup = await page.evaluate(() => ({
+        rows: document.querySelectorAll('.ml-card .ml-card-item').length,
+        buttons: document.querySelectorAll('.ml-card .ml-indent-btn').length,
+        firstHasButton: !!document.querySelector('.ml-card .ml-card-item')?.querySelector('.ml-indent-btn'),
+    }));
+    assert.equal(indentSetup.rows, 2);
+    assert.equal(indentSetup.buttons, 1, 'only the row under another row can indent');
+    assert.equal(indentSetup.firstHasButton, false);
+    await page.click('.ml-card .ml-indent-btn');
+    await page.waitForSelector('.ml-card-item.ml-subtask');
+    const indented = await page.evaluate(() => {
+        const project = projects.find((p) => (p.data.cards || []).some((card) => card.title === 'Trip'));
+        const card = project.data.cards.find((entry) => entry.title === 'Trip');
+        const rows = [...document.querySelectorAll('.ml-card .ml-card-item')];
+        const textLeft = (row) => row.querySelector('.ml-card-item-text').getBoundingClientRect().left;
+        return {
+            texts: card.items.map((item) => item.text),
+            indents: card.items.map((item) => item.indent || 0),
+            checked: card.items.map((item) => !!item.checked),
+            subText: document.querySelector('.ml-card-item.ml-subtask .ml-card-item-text')?.textContent?.trim(),
+            classes: rows.map((row) => row.classList.contains('ml-subtask')),
+            shift: textLeft(rows[1]) - textLeft(rows[0]),
+            textWidth: rows[1].querySelector('.ml-card-item-text').getBoundingClientRect().width,
+        };
+    });
+    assert.deepEqual(indented.texts, ['Book flights', 'Pack bags']);
+    assert.deepEqual(indented.indents, [0, 1]);
+    assert.deepEqual(indented.checked, [false, false], 'indent toggled the checkbox');
+    assert.equal(indented.subText, 'Pack bags');
+    assert.deepEqual(indented.classes, [false, true]);
+    assert.ok(indented.shift > 8, `subtask did not sit to the right: ${indented.shift}`);
+    assert.ok(indented.textWidth > 48, `subtask text collapsed: ${indented.textWidth}`);
+    if (shotDir) {
+        mkdirSync(shotDir, { recursive: true });
+        const list = await page.$('#moodlist-container');
+        await list.screenshot({ path: path.join(shotDir, 'moodlist-subtask.png') });
+    }
+    await page.$eval('.ml-card-item.ml-subtask .ml-item-due', (el) => {
+        el.value = '2026-12-01';
+        el.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    await page.$eval('.ml-search', (el) => {
+        el.value = '2026-12-01';
+        el.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    await page.waitForFunction(() => document.querySelectorAll('.ml-card').length === 1 && document.querySelector('.ml-card-item.ml-subtask'));
+    const stillIndented = await page.evaluate(() => {
+        const project = projects.find((p) => (p.data.cards || []).some((card) => card.title === 'Trip'));
+        const card = project.data.cards.find((entry) => entry.title === 'Trip');
+        return {
+            indent: card.items[1].indent || 0,
+            due: card.items[1].due,
+            sub: !!document.querySelector('.ml-card-item.ml-subtask'),
+        };
+    });
+    assert.equal(stillIndented.indent, 1);
+    assert.equal(stillIndented.due, '2026-12-01');
+    assert.equal(stillIndented.sub, true);
+    await page.click('.ml-card .ml-indent-btn');
+    await page.waitForFunction(() => !document.querySelector('.ml-card-item.ml-subtask'));
+    const outdented = await page.evaluate(() => {
+        const project = projects.find((p) => (p.data.cards || []).some((card) => card.title === 'Trip'));
+        const card = project.data.cards.find((entry) => entry.title === 'Trip');
+        return card.items.map((item) => item.indent || 0);
+    });
+    assert.deepEqual(outdented, [0, 0]);
 }
 
 const server = startServer();

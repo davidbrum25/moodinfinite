@@ -35,7 +35,7 @@ Moodgantt is the timeline cousin of that task list. Asana-style dependency lines
 
 **Moodgantt.** The timeline can hold groups, tasks, dates, progress, status, workers, and zoom. An empty plan asks for the first group. A task can depend on another. Dragging the first task pushes the dependent bar by the same number of days, and a line joins them.
 
-**Moodlist.** Todoist adds priorities, subtasks, and reminders. Moodlist has the Keep-style card, color, pin, search, images, an empty state ("No cards yet"), and a due date on each row. Search matches that date. Items are one level deep.
+**Moodlist.** Todoist adds priorities, subtasks, and reminders. Moodlist has the Keep-style card, color, pin, search, images, an empty state ("No cards yet"), and a due date on each row. Search matches that date. Indent tucks a row one level under the row above it. The first row stays flush.
 
 ## Now
 
@@ -60,10 +60,11 @@ These six are the finish line for this pass. Each one is in the running app.
 17. **Script view** (Moodflow). Script lists every frame's action and dialogue in one column. Edits show on the frames after returning to the board.
 18. **Colors from an image** (Moodtone). From canvas image builds the palette from a picture on a Moodinfinite board, not only from the base hex.
 19. **Send a palette to the canvas** (Moodtone and Moodinfinite canvas). Send to canvas drops the current swatches onto the board as filled boxes. Photo search and the web clipper still need services this app does not have.
+20. **Subtasks** (Moodlist). Indent on a row tucks that row under the one above it. The first row stays flush. Outdent brings it back. Search still matches the row.
 
 ## Next
 
-The next list is clear. The first later item, starter templates, is now in the app. The rest stay below.
+The next list is clear. What shipped from Later — starter templates, drawing on a frame, the script column, colors from an image, send to canvas, and Moodlist subtasks — is listed above. Prompt versions and shared boards stay below.
 
 ## Later
 
@@ -71,6 +72,5 @@ Larger work. Still no new board type.
 
 1. **Photo search on the image tool** (Moodinfinite canvas, image). Needs a stock-library service this app does not have.
 2. **Web clipper for the link tool** (Moodinfinite canvas, link). Needs a browser extension this app does not have.
-3. **Subtasks** (Moodlist). Indent a row under the one above it.
-4. **Prompt versions** (Moodprompt). Keep the previous text of a card when it changes, and put it back in one step.
-5. **Shared boards.** Realtime editing is out of scope until the single-player finish above is in place. Local save and Drive sync stay the way work moves between machines.
+3. **Prompt versions** (Moodprompt). Keep the previous text of a card when it changes, and put it back in one step.
+4. **Shared boards.** Realtime editing is out of scope until the single-player finish above is in place. Local save and Drive sync stay the way work moves between machines.

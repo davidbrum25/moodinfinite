@@ -2,7 +2,8 @@
  * Moodlist — Google Keep–style note/checklist cards
  * ===================================================
  * Self-contained module. All state lives inside the active project's data.
- * Data shape: { cards: [ { id, title, color, pinned, image, items: [{ id, text, checked }] } ] }
+ * Data shape: { cards: [ { id, title, color, pinned, image, items: [{ id, text, checked, due, indent }] } ] }
+ * indent is 1 when the row sits under the row above it, and only when that row is not first.
  */
 
 /* ─── MOODLIST COLORS ──────────────────────────────────────────────────── */
@@ -324,6 +325,48 @@ function renderMoodlistCards(project, grid) {
     rest.forEach(card => grid.appendChild(_buildCard(card, project, grid)));
 }
 
+function _moodlistIndentOf(item, index) {
+    return index > 0 && item && item.indent ? 1 : 0;
+}
+
+function _normalizeMoodlistIndent(card) {
+    let changed = false;
+    (card.items || []).forEach((item, index) => {
+        const next = _moodlistIndentOf(item, index);
+        if ((item.indent || 0) !== next) {
+            item.indent = next;
+            changed = true;
+        }
+    });
+    if (changed) scheduleAutoSave();
+}
+
+function _moodlistItemClass(item, index) {
+    return `ml-card-item${item.checked ? ' checked' : ''}${_moodlistIndentOf(item, index) ? ' ml-subtask' : ''}`;
+}
+
+function _moodlistItemInner(item, index) {
+    const indented = _moodlistIndentOf(item, index) === 1;
+    const indentBtn = index > 0
+        ? `<button type="button" class="ml-indent-btn" title="${indented ? 'Outdent' : 'Indent'}">
+                <iconify-icon icon="lucide:${indented ? 'indent-decrease' : 'indent-increase'}" width="13" height="13"></iconify-icon>
+           </button>`
+        : '';
+    return `
+            <span class="ml-drag-handle" title="Drag to reorder">
+                <iconify-icon icon="lucide:grip-vertical" width="14" height="14"></iconify-icon>
+            </span>
+            ${indentBtn}
+            <span class="ml-card-checkbox">
+                <iconify-icon icon="${item.checked ? 'lucide:check-square' : 'lucide:square'}" width="15" height="15"></iconify-icon>
+            </span>
+            <span class="ml-card-item-text">${_escapeHtml(item.text)}</span>
+            <input type="date" class="ml-item-due" title="Due date"${item.due ? ` value="${_escapeAttr(item.due)}"` : ''}>
+            <button class="ml-card-item-del" title="Delete item" tabindex="-1">
+                <iconify-icon icon="lucide:x" width="12" height="12"></iconify-icon>
+            </button>`;
+}
+
 /* ─── BUILD SINGLE CARD ─────────────────────────────────────────────────── */
 function _buildCard(card, project, grid) {
     const el = document.createElement('div');
@@ -331,6 +374,7 @@ function _buildCard(card, project, grid) {
     el.dataset.id = card.id;
     if (card.color) el.style.background = card.color;
     if (card.pinned) el.classList.add('pinned');
+    _normalizeMoodlistIndent(card);
 
     // Image section
     const imgHtml = card.image ? `
@@ -340,19 +384,9 @@ function _buildCard(card, project, grid) {
     ` : '';
 
     // Items
-    const itemsHtml = card.items.map(item => `
-        <div class="ml-card-item${item.checked ? ' checked' : ''}" data-item-id="${item.id}" draggable="true">
-            <span class="ml-drag-handle" title="Drag to reorder">
-                <iconify-icon icon="lucide:grip-vertical" width="14" height="14"></iconify-icon>
-            </span>
-            <span class="ml-card-checkbox">
-                <iconify-icon icon="${item.checked ? 'lucide:check-square' : 'lucide:square'}" width="15" height="15"></iconify-icon>
-            </span>
-            <span class="ml-card-item-text">${_escapeHtml(item.text)}</span>
-            <input type="date" class="ml-item-due" title="Due date"${item.due ? ` value="${_escapeAttr(item.due)}"` : ''}>
-            <button class="ml-card-item-del" title="Delete item" tabindex="-1">
-                <iconify-icon icon="lucide:x" width="12" height="12"></iconify-icon>
-            </button>
+    const itemsHtml = card.items.map((item, index) => `
+        <div class="${_moodlistItemClass(item, index)}" data-item-id="${item.id}" draggable="true">
+            ${_moodlistItemInner(item, index)}
         </div>
     `).join('');
 
@@ -400,8 +434,9 @@ function _wireCard(el, card, project, grid) {
     el.querySelectorAll('.ml-card-item').forEach(itemEl => {
         const item = card.items.find(i => i.id === itemEl.dataset.itemId);
         _wireItemDue(itemEl, item);
+        _wireItemIndent(itemEl, item, card, project, grid);
         itemEl.addEventListener('click', (e) => {
-            if (e.target.closest('.ml-card-item-del') || e.target.closest('.ml-item-due')) return;
+            if (e.target.closest('.ml-card-item-del') || e.target.closest('.ml-item-due') || e.target.closest('.ml-indent-btn')) return;
             if (item) {
                 item.checked = !item.checked;
                 scheduleAutoSave();
@@ -451,29 +486,20 @@ function _wireCard(el, card, project, grid) {
             // 1. Push to data
             const newItem = { id: mlId(), text, checked: false };
             card.items.push(newItem);
+            const newIndex = card.items.length - 1;
             scheduleAutoSave();
             anyAdded = true;
 
             // 2. Insert a visible row immediately BEFORE the inline input
             const row = document.createElement('div');
-            row.className = 'ml-card-item';
+            row.className = _moodlistItemClass(newItem, newIndex);
             row.dataset.itemId = newItem.id;
-            row.innerHTML = `
-                <span class="ml-drag-handle" title="Drag to reorder">
-                    <iconify-icon icon="lucide:grip-vertical" width="14" height="14"></iconify-icon>
-                </span>
-                <span class="ml-card-checkbox">
-                    <iconify-icon icon="lucide:square" width="15" height="15"></iconify-icon>
-                </span>
-                <span class="ml-card-item-text">${_escapeHtml(text)}</span>
-                <input type="date" class="ml-item-due" title="Due date">
-                <button class="ml-card-item-del" title="Delete item" tabindex="-1">
-                    <iconify-icon icon="lucide:x" width="12" height="12"></iconify-icon>
-                </button>
-            `;
+            row.draggable = true;
+            row.innerHTML = _moodlistItemInner(newItem, newIndex);
             _wireItemDue(row, newItem);
+            _wireItemIndent(row, newItem, card, project, grid);
             row.addEventListener('click', (e) => {
-                if (e.target.closest('.ml-card-item-del') || e.target.closest('.ml-item-due')) return;
+                if (e.target.closest('.ml-card-item-del') || e.target.closest('.ml-item-due') || e.target.closest('.ml-indent-btn')) return;
                 newItem.checked = !newItem.checked;
                 row.classList.toggle('checked', newItem.checked);
                 row.querySelector('.ml-card-checkbox iconify-icon').setAttribute('icon',
@@ -666,6 +692,23 @@ function _wireItemDue(itemEl, item) {
         e.stopPropagation();
         item.due = due.value || '';
         scheduleAutoSave();
+    });
+}
+
+function _wireItemIndent(itemEl, item, card, project, grid) {
+    const btn = itemEl.querySelector('.ml-indent-btn');
+    if (!btn || !item) return;
+    const stop = (e) => e.stopPropagation();
+    btn.addEventListener('pointerdown', stop);
+    btn.addEventListener('mousedown', stop);
+    btn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const index = card.items.findIndex((entry) => entry.id === item.id);
+        if (index <= 0) return;
+        item.indent = item.indent ? 0 : 1;
+        scheduleAutoSave();
+        renderMoodlistCards(project, grid);
     });
 }
 
