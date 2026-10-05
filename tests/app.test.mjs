@@ -230,12 +230,31 @@ try {
             id: 'g', type: 'group', x: 0, y: 0, width: 10, height: 10, rotation: 0,
             items: [{ id: 'c', type: 'circle', x: 0, y: 0, width: 2, height: 2, rotation: 0 }],
         });
+        const iconImage = new Image();
+        iconImage.src = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==';
+        const offscreen = document.createElement('canvas');
+        offscreen.width = 8;
+        offscreen.height = 8;
+        const liveVideo = document.createElement('video');
+        items.push({ id: 'lk', type: 'link', url: 'https://example.com', title: 'Example', x: 0, y: 0, width: 80, height: 24, rotation: 0, iconImage });
+        items.push({ id: 'vidlive', type: 'video', x: 4, y: 4, width: 16, height: 16, rotation: 0, video: liveVideo, videoId: 'v', isPlaying: false, _offscreenCanvas: offscreen });
         const serialized = serializeItems(items);
         const copy = JSON.parse(JSON.stringify(serialized));
         restoreImages(copy);
-        await saveToBrowser();
+        let saveFulfilled = false;
+        let saveError = '';
+        try {
+            await saveToBrowser();
+            saveFulfilled = true;
+        } catch (err) {
+            saveError = String(err && err.name || err) + ': ' + String(err && err.message || err);
+        }
         const saved = await localforage.getItem('moodinfinite_projects');
         const stored = saved.find(p => p.id === board.id);
+        const storedLink = stored.data.items.find(i => i.type === 'link');
+        const storedVideo = stored.data.items.find(i => i.id === 'vidlive');
+        const liveLink = items.find(i => i.type === 'link');
+        const liveVid = items.find(i => i.id === 'vidlive');
         const video = document.createElement('video');
         items.length = 0;
         items.push({ id: 'vid', type: 'video', x: 0, y: 0, width: 20, height: 20, rotation: 0, video, videoId: 'v', isPlaying: false });
@@ -256,18 +275,31 @@ try {
             imageStripped: serialized[0].img === undefined,
             restoredTypes: copy.map(i => i.type),
             nested: copy[2].items[0].type,
+            saveFulfilled,
+            saveError,
             storedTypes: stored.data.items.map(i => i.type),
             storedNested: stored.data.items[2].items[0].type,
+            storedLinkIcon: storedLink ? storedLink.iconImage : 'missing-link',
+            storedVideoNode: storedVideo ? storedVideo.video : 'missing-video',
+            storedOffscreen: storedVideo ? storedVideo._offscreenCanvas : 'missing-video',
+            liveIconIsImage: liveLink.iconImage instanceof HTMLImageElement,
+            liveOffscreenIsCanvas: liveVid._offscreenCanvas instanceof HTMLCanvasElement,
             afterUndo,
             afterRedo: items.map(i => i.type),
         };
     });
-    assert.deepEqual(roundTrip.serializedTypes, ['image', 'box', 'group']);
+    assert.deepEqual(roundTrip.serializedTypes, ['image', 'box', 'group', 'link', 'video']);
     assert.equal(roundTrip.imageStripped, true);
-    assert.deepEqual(roundTrip.restoredTypes, ['image', 'box', 'group']);
+    assert.deepEqual(roundTrip.restoredTypes, ['image', 'box', 'group', 'link', 'video']);
     assert.equal(roundTrip.nested, 'circle');
-    assert.deepEqual(roundTrip.storedTypes, ['image', 'box', 'group']);
+    assert.equal(roundTrip.saveFulfilled, true, roundTrip.saveError);
+    assert.deepEqual(roundTrip.storedTypes, ['image', 'box', 'group', 'link', 'video']);
     assert.equal(roundTrip.storedNested, 'circle');
+    assert.equal(roundTrip.storedLinkIcon, undefined);
+    assert.equal(roundTrip.storedVideoNode, undefined);
+    assert.equal(roundTrip.storedOffscreen, undefined);
+    assert.equal(roundTrip.liveIconIsImage, true);
+    assert.equal(roundTrip.liveOffscreenIsCanvas, true);
     assert.deepEqual(roundTrip.afterUndo.types, ['video', 'box']);
     assert.equal(roundTrip.afterUndo.videoIsElement, true);
     assert.equal(roundTrip.afterUndo.projectCount, 2);

@@ -55,8 +55,9 @@ function scheduleAutoSave() {
 }
 
 function storageReplacer(key, val) {
-    if (key === 'img' || key === 'video' || key === '_cachedBox' || key === 'iconImage') return undefined;
+    if (key === 'img' || key === 'video' || key === '_cachedBox' || key === 'iconImage' || key === '_offscreenCanvas') return undefined;
     if (typeof Element !== 'undefined' && val instanceof Element) return undefined;
+    if (typeof OffscreenCanvas !== 'undefined' && val instanceof OffscreenCanvas) return undefined;
     return val;
 }
 
@@ -111,7 +112,9 @@ function saveToBrowser() {
         projectsToSave = projects.map(p => {
             const copy = JSON.parse(JSON.stringify(p, storageReplacer));
             if (copy.type === 'moodinfinite' && copy.data && p.data && p.data.items) {
-                copy.data.items = serializeItems(p.data.items);
+                // serializeItems only drops img/video. A link iconImage and a video
+                // frame canvas are still on the copy and make localforage reject the write.
+                copy.data.items = JSON.parse(JSON.stringify(serializeItems(p.data.items), storageReplacer));
             }
             return copy;
         });
