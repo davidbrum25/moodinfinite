@@ -8160,7 +8160,85 @@ function createStoryImageSlot(project, frame) {
         saveToBrowser();
     };
 
-    overlay.append(uploadBtn, zoomBtn, libraryBtn, removeBtn);
+    const sketch = document.createElement('canvas');
+    sketch.className = 'story-sketch';
+    const sketchDone = document.createElement('button');
+    sketchDone.type = 'button';
+    sketchDone.className = 'story-sketch-done';
+    sketchDone.textContent = 'Done';
+    const paintFrameSketch = () => {
+        const w = Math.max(1, Math.round(sketch.clientWidth || slot.clientWidth || 320));
+        const h = Math.max(1, Math.round(sketch.clientHeight || slot.clientHeight || 180));
+        if (sketch.width !== w) sketch.width = w;
+        if (sketch.height !== h) sketch.height = h;
+        const g = sketch.getContext('2d');
+        g.clearRect(0, 0, w, h);
+        g.lineCap = 'round';
+        g.lineJoin = 'round';
+        g.lineWidth = 4;
+        (frame.sketch || []).forEach(stroke => {
+            if (!stroke.points || stroke.points.length < 2) return;
+            g.beginPath();
+            g.strokeStyle = stroke.color || '#ff4d6a';
+            stroke.points.forEach((p, i) => {
+                const x = p.x * w;
+                const y = p.y * h;
+                if (i === 0) g.moveTo(x, y);
+                else g.lineTo(x, y);
+            });
+            g.stroke();
+        });
+    };
+    let activeStroke = null;
+    const sketchPoint = (e) => {
+        const rect = sketch.getBoundingClientRect();
+        return {
+            x: Math.min(1, Math.max(0, (e.clientX - rect.left) / (rect.width || 1))),
+            y: Math.min(1, Math.max(0, (e.clientY - rect.top) / (rect.height || 1))),
+        };
+    };
+    sketch.addEventListener('pointerdown', (e) => {
+        if (!slot.classList.contains('is-sketching')) return;
+        e.preventDefault();
+        e.stopPropagation();
+        sketch.setPointerCapture(e.pointerId);
+        activeStroke = { color: '#ff4d6a', points: [sketchPoint(e)] };
+    });
+    sketch.addEventListener('pointermove', (e) => {
+        if (!activeStroke) return;
+        activeStroke.points.push(sketchPoint(e));
+        frame.sketch = [...(frame.sketch || []).filter(stroke => stroke !== activeStroke), activeStroke];
+        paintFrameSketch();
+    });
+    sketch.addEventListener('pointerup', () => {
+        if (!activeStroke) return;
+        if (activeStroke.points.length >= 2) {
+            if (!frame.sketch) frame.sketch = [];
+            if (!frame.sketch.includes(activeStroke)) frame.sketch.push(activeStroke);
+            saveToBrowser();
+        }
+        activeStroke = null;
+        paintFrameSketch();
+    });
+    sketchDone.addEventListener('click', (e) => {
+        e.stopPropagation();
+        slot.classList.remove('is-sketching');
+    });
+    slot.append(sketch, sketchDone);
+    requestAnimationFrame(paintFrameSketch);
+
+    const drawOnFrameBtn = document.createElement('button');
+    drawOnFrameBtn.type = 'button';
+    drawOnFrameBtn.className = 'story-image-overlay-btn story-sketch-toggle';
+    drawOnFrameBtn.title = 'Draw on frame';
+    drawOnFrameBtn.innerHTML = `<iconify-icon icon="lucide:pencil" width="20" height="20"></iconify-icon>`;
+    drawOnFrameBtn.onclick = (e) => {
+        e.stopPropagation();
+        slot.classList.add('is-sketching');
+        paintFrameSketch();
+    };
+
+    overlay.append(uploadBtn, zoomBtn, libraryBtn, drawOnFrameBtn, removeBtn);
     slot.appendChild(overlay);
 
     // Support paste on slot

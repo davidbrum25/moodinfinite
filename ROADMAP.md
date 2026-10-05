@@ -31,7 +31,7 @@ Moodgantt is the timeline cousin of that task list. Asana-style dependency lines
 
 **Moodtone.** Coolors and Moodtone both generate with the spacebar and lock a color. A swatch says Copied when you click it. Add swatch grows the row, Remove drops one (two is the shortest row), and dragging a swatch onto another reorders them. Space still rebuilds the harmony from the base color. Coolors can also pull colors out of a photo. Moodtone does not.
 
-**Moodflow.** Boords adds drawing on the frame and a script view. Moodflow has the frame, the notes, the duration slider, camera choices, status, reorder, paste, a minimap, an empty-story prompt, and Play, which holds each frame for its duration. Drawing on the frame and a script column are still missing.
+**Moodflow.** Boords still has a script view. Moodflow has the frame, the notes, the duration slider, camera choices, status, reorder, paste, a minimap, an empty-story prompt, Play, and drawing on the frame itself. A script column is still missing.
 
 **Moodgantt.** The timeline can hold groups, tasks, dates, progress, status, workers, and zoom. An empty plan asks for the first group. A task can depend on another. Dragging the first task pushes the dependent bar by the same number of days, and a line joins them.
 
@@ -56,6 +56,7 @@ These six are the finish line for this pass. Each one is in the running app.
 13. **Due date on a card item** (Moodlist). Each checklist row has a date. The existing search matches that date.
 14. **Task dependency** (Moodgantt). A task can depend on another. Dragging the predecessor pushes the dependent task by the same number of days, and a line joins the two bars.
 15. **Starter templates** (Moodinfinite canvas). An empty board offers Moodboard, Flowchart, and Image grid. Each one places that layout on the canvas.
+16. **Draw on a story frame** (Moodflow). Draw on the frame stores a stroke and paints it on the frame. Photo search and the web clipper still need services this app does not have.
 
 ## Next
 
@@ -65,12 +66,11 @@ The next list is clear. The first later item, starter templates, is now in the a
 
 Larger work. Still no new board type.
 
-1. **Photo search on the image tool** (Moodinfinite canvas, image). Search a stock library without leaving the board.
-2. **Web clipper for the link tool** (Moodinfinite canvas, link). Save an image or URL from another tab onto the canvas.
-3. **Draw on a story frame** (Moodflow, and the canvas draw tool's behavior). Sketch on the frame instead of only uploading a picture.
-4. **Script view** (Moodflow). Edit every frame's action and dialogue in one column, then return to the horizontal board.
-5. **Colors from an image** (Moodtone, eyedropper). Build a palette from a canvas image, not only from a base hex.
-6. **Send a palette to the canvas** (Moodtone and Moodinfinite canvas). Drop the five swatches onto the board as boxes.
-7. **Subtasks** (Moodlist). Indent a row under the one above it.
-8. **Prompt versions** (Moodprompt). Keep the previous text of a card when it changes, and put it back in one step.
-9. **Shared boards.** Realtime editing is out of scope until the single-player finish above is in place. Local save and Drive sync stay the way work moves between machines.
+1. **Photo search on the image tool** (Moodinfinite canvas, image). Needs a stock-library service this app does not have.
+2. **Web clipper for the link tool** (Moodinfinite canvas, link). Needs a browser extension this app does not have.
+3. **Script view** (Moodflow). Edit every frame's action and dialogue in one column, then return to the horizontal board.
+4. **Colors from an image** (Moodtone, eyedropper). Build a palette from a canvas image, not only from a base hex.
+5. **Send a palette to the canvas** (Moodtone and Moodinfinite canvas). Drop the five swatches onto the board as boxes.
+6. **Subtasks** (Moodlist). Indent a row under the one above it.
+7. **Prompt versions** (Moodprompt). Keep the previous text of a card when it changes, and put it back in one step.
+8. **Shared boards.** Realtime editing is out of scope until the single-player finish above is in place. Local save and Drive sync stay the way work moves between machines.

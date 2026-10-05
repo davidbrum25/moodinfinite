@@ -1001,6 +1001,44 @@
             opacity: 1;
         }
 
+        .story-sketch {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 2;
+            pointer-events: none;
+        }
+
+        .story-sketch-done {
+            display: none;
+            position: absolute;
+            top: 0.45rem;
+            right: 0.45rem;
+            z-index: 4;
+            padding: 0.25rem 0.6rem;
+            border-radius: 999px;
+            border: 1px solid var(--border-color);
+            background: var(--bg-ui);
+            color: var(--text-color);
+            font: 600 0.75rem/1 Inter, sans-serif;
+            cursor: pointer;
+        }
+
+        .story-image-slot.is-sketching .story-sketch {
+            pointer-events: auto;
+            cursor: crosshair;
+        }
+
+        .story-image-slot.is-sketching .story-sketch-done {
+            display: block;
+        }
+
+        .story-image-slot.is-sketching .story-image-overlay {
+            opacity: 0;
+            pointer-events: none;
+        }
+
         .story-image-overlay-btn {
             background: var(--bg-ui);
             border: 1px solid var(--border-color);

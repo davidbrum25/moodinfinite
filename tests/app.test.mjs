@@ -647,6 +647,37 @@ async function assertNextImprovements(page) {
     await page.evaluate(() => { items.length = 0; draw(); });
     await page.click('#canvas-template-picker button[data-template="image-grid"]');
     await page.waitForFunction(() => items.some((item) => item.type === 'grid' && item.rows === 2 && item.cols === 3));
+
+    await page.evaluate(() => createNewProject('storyflow'));
+    await page.click('#storyflow-empty-add');
+    await page.waitForSelector('.story-sketch-toggle');
+    await page.click('.story-sketch-toggle');
+    await page.waitForSelector('.story-image-slot.is-sketching .story-sketch');
+    const sketchBox = await (await page.$('.story-sketch')).boundingBox();
+    await page.mouse.move(sketchBox.x + 24, sketchBox.y + 36);
+    await page.mouse.down();
+    await page.mouse.move(sketchBox.x + sketchBox.width - 24, sketchBox.y + sketchBox.height - 30, { steps: 8 });
+    await page.mouse.up();
+    const sketch = await page.evaluate(() => {
+        const project = projects.find((p) => p.id === activeProjectId);
+        const frame = project.data.frames[0];
+        const canvas = document.querySelector('.story-sketch');
+        const pixels = canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height).data;
+        let painted = 0;
+        for (let i = 3; i < pixels.length; i += 16) if (pixels[i] > 20) painted += 1;
+        return {
+            strokes: frame.sketch ? frame.sketch.length : 0,
+            points: frame.sketch && frame.sketch[0] ? frame.sketch[0].points.length : 0,
+            painted,
+        };
+    });
+    assert.ok(sketch.strokes >= 1, 'drawing on the frame did not save a stroke');
+    assert.ok(sketch.points >= 2, 'the frame stroke has too few points');
+    assert.ok(sketch.painted > 0, 'the frame sketch was not painted');
+    if (shotDir) {
+        const story = await page.$('#storyflow-container');
+        await story.screenshot({ path: path.join(shotDir, 'moodflow-sketch.png') });
+    }
 }
 
 const server = startServer();
