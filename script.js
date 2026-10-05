@@ -7645,6 +7645,14 @@ function renderStoryflowView(project) {
     if (!storyflowContainer) return;
     const scrollArea = document.getElementById('storyflow-scroll-area');
     if (!scrollArea) return;
+    const scriptView = document.getElementById('storyflow-script-view');
+    const scriptBtn = document.getElementById('storyflow-script-btn');
+    if (scriptView) scriptView.hidden = true;
+    scrollArea.hidden = false;
+    if (scriptBtn) {
+        scriptBtn.textContent = 'Script';
+        scriptBtn.classList.remove('is-open');
+    }
     
     scrollArea.innerHTML = '';
     const storyList = document.createElement('div');
@@ -7782,6 +7790,83 @@ function renderStoryflowView(project) {
             }
         }, 50);
     }
+}
+
+function renderStoryflowScript(project) {
+    const view = document.getElementById('storyflow-script-view');
+    if (!view || !project || !project.data) return;
+    view.innerHTML = '';
+    const frames = project.data.frames || [];
+    if (!frames.length) {
+        const empty = document.createElement('p');
+        empty.className = 'story-script-empty';
+        empty.textContent = 'No frames to script yet.';
+        view.appendChild(empty);
+        return;
+    }
+    const list = document.createElement('div');
+    list.className = 'story-script-list';
+    frames.forEach((frame, index) => {
+        const row = document.createElement('div');
+        row.className = 'story-script-row';
+        const num = document.createElement('span');
+        num.className = 'story-script-index';
+        num.textContent = String(index + 1);
+        const title = document.createElement('input');
+        title.className = 'story-script-title';
+        title.type = 'text';
+        title.placeholder = 'Frame title';
+        title.value = frame.title || '';
+        title.addEventListener('input', () => {
+            frame.title = title.value;
+            scheduleAutoSave();
+        });
+        const action = document.createElement('textarea');
+        action.className = 'story-script-action';
+        action.placeholder = 'Action / dialogue';
+        action.value = frame.description || '';
+        action.addEventListener('input', () => {
+            frame.description = action.value;
+            scheduleAutoSave();
+        });
+        row.append(num, title, action);
+        list.appendChild(row);
+    });
+    view.appendChild(list);
+}
+
+function toggleStoryflowScript(project) {
+    const view = document.getElementById('storyflow-script-view');
+    const scroll = document.getElementById('storyflow-scroll-area');
+    const btn = document.getElementById('storyflow-script-btn');
+    if (!view || !scroll || !project) return;
+    const opening = view.hidden;
+    if (opening) {
+        renderStoryflowScript(project);
+        view.hidden = false;
+        scroll.hidden = true;
+        if (btn) {
+            btn.textContent = 'Board';
+            btn.classList.add('is-open');
+        }
+        return;
+    }
+    view.hidden = true;
+    scroll.hidden = false;
+    if (btn) {
+        btn.textContent = 'Script';
+        btn.classList.remove('is-open');
+    }
+    renderStoryflowView(project);
+}
+
+const storyflowScriptBtn = document.getElementById('storyflow-script-btn');
+if (storyflowScriptBtn) {
+    storyflowScriptBtn.addEventListener('click', () => {
+        const project = projects.find((p) => p.id === activeProjectId);
+        if (!project || project.type !== 'storyflow') return;
+        toggleStoryflowScript(project);
+    });
 }
 
 function createStoryCard(project, frame, index) {

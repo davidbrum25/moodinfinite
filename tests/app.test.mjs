@@ -678,6 +678,30 @@ async function assertNextImprovements(page) {
         const story = await page.$('#storyflow-container');
         await story.screenshot({ path: path.join(shotDir, 'moodflow-sketch.png') });
     }
+
+    await page.evaluate(() => createNewProject('storyflow'));
+    await page.click('#storyflow-empty-add');
+    await page.waitForSelector('.story-card');
+    await page.click('#storyflow-add-frame-btn');
+    await page.waitForFunction(() => document.querySelectorAll('.story-card').length === 2);
+    await page.click('#storyflow-script-btn');
+    await page.waitForSelector('.story-script-action');
+    assert.equal(await page.$eval('#storyflow-script-btn', (el) => el.textContent.trim()), 'Board');
+    const scriptAreas = await page.$$('.story-script-action');
+    assert.equal(scriptAreas.length, 2);
+    await scriptAreas[0].type('She opens the door');
+    await scriptAreas[1].type('He answers');
+    const scriptText = await page.$$eval('.story-script-action', (els) => els.map((el) => el.value));
+    assert.deepEqual(scriptText, ['She opens the door', 'He answers']);
+    if (shotDir) {
+        const story = await page.$('#storyflow-container');
+        await story.screenshot({ path: path.join(shotDir, 'moodflow-script.png') });
+    }
+    await page.click('#storyflow-script-btn');
+    await page.waitForSelector('.story-desc-area');
+    const boardText = await page.$$eval('.story-desc-area', (els) => els.map((el) => el.value));
+    assert.deepEqual(boardText, ['She opens the door', 'He answers']);
+    assert.equal(await page.$eval('#storyflow-script-view', (el) => el.hidden), true);
 }
 
 const server = startServer();
