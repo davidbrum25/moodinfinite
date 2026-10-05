@@ -433,12 +433,14 @@ async function assertNextImprovements(page) {
         const img = new Image();
         img.src = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
         await img.decode();
+        globalImageCache['cap-img-id'] = img.src;
         items.length = 0;
         items.push({
-            id: 'cap-img', type: 'image', img, caption: '', x: 260, y: 180, width: 220, height: 160,
+            id: 'cap-img', type: 'image', img, imageId: 'cap-img-id', caption: '', x: 260, y: 180, width: 220, height: 160,
             rotation: 0, isPinned: false, opacity: 1, scaleX: 1, scaleY: 1,
         });
         (0, eval)('selectedItems.length = 0');
+        saveStateForUndo();
         draw();
         return worldToScreen({ x: 370, y: 260 });
     });
@@ -460,6 +462,49 @@ async function assertNextImprovements(page) {
         return [data[0], data[1], data[2], data[3]];
     });
     assert.ok(pixel[1] > 80 && pixel[1] > pixel[0], `caption badge was not painted on the image: ${JSON.stringify(pixel)}`);
+    await page.$eval('#image-caption-input', (el) => el.blur());
+    await page.waitForFunction(async () => {
+        const saved = await window.localforage.getItem('moodinfinite_projects');
+        return JSON.stringify(saved || []).includes('"caption":"Hello"');
+    }, { timeout: 8000 });
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await page.waitForFunction(() => {
+        return window.projects && window.projects.length > 0
+            && items.some((item) => item.id === 'cap-img' && item.caption === 'Hello');
+    }, { timeout: 15000 });
+    const reloaded = await page.evaluate(() => {
+        draw();
+        const item = items.find((entry) => entry.id === 'cap-img');
+        return { caption: item && item.caption, at: worldToScreen({ x: 370, y: 260 }) };
+    });
+    assert.equal(reloaded.caption, 'Hello');
+    const reloadedCanvas = await page.$('#moodboard-canvas');
+    const reloadedBox = await reloadedCanvas.boundingBox();
+    await page.mouse.click(reloadedBox.x + reloaded.at.x, reloadedBox.y + reloaded.at.y);
+    await page.waitForFunction(() => document.getElementById('image-caption-input').value === 'Hello');
+    await page.evaluate(() => { if (document.activeElement) document.activeElement.blur(); });
+    await page.keyboard.down('Control');
+    await page.keyboard.press('z');
+    await page.keyboard.up('Control');
+    await page.waitForFunction(() => {
+        const item = items.find((entry) => entry.id === 'cap-img');
+        return item && item.caption !== 'Hello';
+    });
+    const undone = await page.evaluate(() => {
+        const item = items.find((entry) => entry.id === 'cap-img');
+        return item ? (item.caption || '') : null;
+    });
+    assert.notEqual(undone, null, 'undo removed the captioned image');
+    assert.equal(undone, '');
+    await page.keyboard.down('Control');
+    await page.keyboard.down('Shift');
+    await page.keyboard.press('z');
+    await page.keyboard.up('Shift');
+    await page.keyboard.up('Control');
+    await page.waitForFunction(() => {
+        const item = items.find((entry) => entry.id === 'cap-img');
+        return item && item.caption === 'Hello';
+    });
 
     await page.evaluate(() => {
         (0, eval)('moodpromptFilterPlatform = "all"');

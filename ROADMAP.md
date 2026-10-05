@@ -49,7 +49,7 @@ These six are the finish line for this pass. Each one is in the running app.
 6. **Swatch copy confirmation** (Moodtone). Clicking a palette swatch marks that swatch with the word Copied.
 7. **Canvas minimap** (Moodinfinite canvas, view). When the board is larger than the window, the corner map shows the items and a frame for the current view. Panning moves that frame.
 8. **Snap state while dragging** (Moodinfinite canvas, select). While a selection moves, the board says Snap on or Snap off. Holding Shift flips the saved snap setting and the label says so.
-9. **Image caption** (Moodinfinite canvas, image). Select an image and type in Caption. The words sit on the image.
+9. **Image caption** (Moodinfinite canvas, image). Select an image and type in Caption. The words sit on the image, stay after reload, and undo returns the previous text.
 10. **Prompt copy stays on the card** (Moodprompt). The copy control on the card shows Copied.
 11. **Animatic playback** (Moodflow). Play walks the frames in order and holds each one for its duration. Stop ends it.
 12. **Palette length and order** (Moodtone). Add swatch appends a color, Remove takes one away while at least two remain, and dropping a swatch on another reorders the row. Space still rebuilds the harmony.

@@ -1413,12 +1413,25 @@ const videoMuteBtn = document.getElementById('video-mute-btn');
 const imageCaptionContainer = document.getElementById('image-caption-container');
 const imageCaptionInput = document.getElementById('image-caption-input');
 if (imageCaptionInput) {
+    let captionEditOpen = false;
+    imageCaptionInput.addEventListener('focus', () => {
+        captionEditOpen = false;
+    });
     imageCaptionInput.addEventListener('input', () => {
-        if (selectedItems.length === 1 && selectedItems[0].type === 'image') {
-            selectedItems[0].caption = imageCaptionInput.value;
-            selectedItems[0]._isDirty = true;
-            requestUpdate();
+        if (selectedItems.length !== 1 || selectedItems[0].type !== 'image') return;
+        if (!captionEditOpen) {
+            saveStateForUndo();
+            captionEditOpen = true;
         }
+        selectedItems[0].caption = imageCaptionInput.value;
+        selectedItems[0]._isDirty = true;
+        scheduleAutoSave();
+        requestUpdate();
+    });
+    imageCaptionInput.addEventListener('change', () => {
+        if (selectedItems.length !== 1 || selectedItems[0].type !== 'image') return;
+        saveStateForUndo();
+        captionEditOpen = false;
     });
 }
 const addTextBtn = document.getElementById('add-text-btn');
