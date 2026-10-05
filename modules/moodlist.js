@@ -24,10 +24,18 @@ const MOODLIST_COLORS = [
 function mlId() { return Date.now() + '_' + Math.random().toString(36).slice(2, 9); }
 
 /* ─── MAIN RENDER ───────────────────────────────────────────────────────── */
+function _activeMoodlistProject() {
+    const container = document.getElementById('moodlist-container');
+    const id = container?.dataset.mlProjectId;
+    if (!id) return null;
+    return projects.find(p => String(p.id) === id) || null;
+}
+
 function renderMoodlistView(project) {
     const container = document.getElementById('moodlist-container');
     if (!container) return;
 
+    if (!project.data) project.data = {};
     if (!project.data.cards) project.data.cards = [];
 
     // Build or reuse layout
@@ -102,7 +110,11 @@ function renderMoodlistView(project) {
             </div>
         `;
         container.appendChild(addPanel);
-        _wireAddPanel(addPanel, project, () => renderMoodlistCards(project, grid));
+        _wireAddPanel(addPanel, project, () => {
+            const current = _activeMoodlistProject() || project;
+            const g = container.querySelector('.ml-grid');
+            if (g) renderMoodlistCards(current, g);
+        });
 
         /* ── Card grid ───────────────────────────────────────────────────── */
         grid = document.createElement('div');
@@ -111,12 +123,22 @@ function renderMoodlistView(project) {
 
         /* ── Search + filter ─────────────────────────────────────────────── */
         topBar.querySelector('.ml-search').addEventListener('input', () => {
-            renderMoodlistCards(project, grid);
+            const current = _activeMoodlistProject();
+            const g = container.querySelector('.ml-grid');
+            if (current && g) renderMoodlistCards(current, g);
         });
         topBar.querySelector('.ml-show-pinned').addEventListener('change', () => {
-            renderMoodlistCards(project, grid);
+            const current = _activeMoodlistProject();
+            const g = container.querySelector('.ml-grid');
+            if (current && g) renderMoodlistCards(current, g);
         });
     }
+
+    if (container.dataset.mlProjectId && container.dataset.mlProjectId !== String(project.id)) {
+        const search = container.querySelector('.ml-search');
+        if (search) search.value = '';
+    }
+    container.dataset.mlProjectId = String(project.id);
 
     renderMoodlistCards(project, grid);
 }
@@ -220,7 +242,9 @@ function _wireAddPanel(panel, project, onSave) {
             image: pendingImgDataUrl || null,
             items,
         };
-        project.data.cards.unshift(card);
+        const target = _activeMoodlistProject() || project;
+        if (!target.data.cards) target.data.cards = [];
+        target.data.cards.unshift(card);
 
         // reset
         titleInput.value = '';
@@ -250,15 +274,18 @@ function renderMoodlistCards(project, grid) {
     const showPinnedToggle = container?.querySelector('.ml-show-pinned');
 
     const query = (searchInput?.value || '').toLowerCase().trim();
-    const showOnlyPinned = showPinnedToggle && !showPinnedToggle.checked ? false : null;
+    const showPinned = !showPinnedToggle || showPinnedToggle.checked;
 
     let cards = project.data.cards || [];
+    cards.forEach(c => { if (!c.items) c.items = []; });
+
+    if (!showPinned) cards = cards.filter(c => !c.pinned);
 
     // Filter
     if (query) {
         cards = cards.filter(c =>
-            c.title.toLowerCase().includes(query) ||
-            c.items.some(i => i.text.toLowerCase().includes(query))
+            (c.title || '').toLowerCase().includes(query) ||
+            c.items.some(i => (i.text || '').toLowerCase().includes(query))
         );
     }
 

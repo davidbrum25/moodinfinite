@@ -54,6 +54,12 @@ function scheduleAutoSave() {
     autoSaveTimeout = setTimeout(saveToBrowser, 1500);
 }
 
+function storageReplacer(key, val) {
+    if (key === 'img' || key === 'video' || key === '_cachedBox' || key === 'iconImage') return undefined;
+    if (typeof Element !== 'undefined' && val instanceof Element) return undefined;
+    return val;
+}
+
 function serializeItems(itemArray) {
     return itemArray.map(t => {
         const e = { ...t };
@@ -100,17 +106,25 @@ function saveToBrowser() {
             }
         }
     }
-    const projectsToSave = projects.map(p => {
-        const copy = JSON.parse(JSON.stringify(p));
-        if (copy.type === 'moodinfinite' && copy.data && copy.data.items) {
-            copy.data.items = serializeItems(p.data.items);
-        }
-        return copy;
-    });
-    window.localforage.setItem('moodinfinite_projects', projectsToSave);
-    window.localforage.setItem('moodinfinite_cache', globalImageCache);
-    window.localforage.setItem('moodinfinite_video_cache', globalVideoCache);
-    window.localforage.setItem('moodinfinite_active_tab', activeProjectId);
+    let projectsToSave;
+    try {
+        projectsToSave = projects.map(p => {
+            const copy = JSON.parse(JSON.stringify(p, storageReplacer));
+            if (copy.type === 'moodinfinite' && copy.data && p.data && p.data.items) {
+                copy.data.items = serializeItems(p.data.items);
+            }
+            return copy;
+        });
+    } catch (err) {
+        console.error('saveToBrowser failed', err);
+        return;
+    }
+    return Promise.all([
+        window.localforage.setItem('moodinfinite_projects', projectsToSave),
+        window.localforage.setItem('moodinfinite_cache', globalImageCache),
+        window.localforage.setItem('moodinfinite_video_cache', globalVideoCache),
+        window.localforage.setItem('moodinfinite_active_tab', activeProjectId),
+    ]);
 }
 
 
@@ -262,8 +276,14 @@ function closeTabSwitcher() {
     if (overlay) overlay.style.display = 'none';
 }
 
+function nextProjectId() {
+    let id = Date.now();
+    while (projects.some(p => p.id === id)) id += 1;
+    return id;
+}
+
 function createNewProject(type) {
-    const newId = Date.now();
+    const newId = nextProjectId();
     let newProject;
     if (type === 'moodinfinite') {
         const projectCount = projects.filter(p => p.type === 'moodinfinite').length;
@@ -2267,7 +2287,21 @@ function setupEventListeners() {
         }
     });
 }
-function resizeCanvas() { if (!activeProjectId || projects.find(e => e.id === activeProjectId)?.type !== 'moodinfinite') return; const t = document.getElementById('content-area'), o = canvas.width, a = canvas.height, i = t.clientWidth, r = t.clientHeight; if (o === i && a === r) return; cameraOffset.x -= (i - o) / (2 * cameraZoom); cameraOffset.y -= (r - a) / (2 * cameraZoom); canvas.width = i; canvas.height = r; requestUpdate(); }
+function resizeCanvas() {
+    if (!activeProjectId || projects.find(e => e.id === activeProjectId)?.type !== 'moodinfinite') return;
+    const t = document.getElementById('content-area');
+    if (!t || !canvas) return;
+    const o = canvas.width, a = canvas.height, i = t.clientWidth, r = t.clientHeight;
+    // A hidden board reports 0×0. Writing that into the canvas leaves a blank board after the next show.
+    if (i < 1 || r < 1) return;
+    if (o === i && a === r) return;
+    if (!cameraZoom || isNaN(cameraZoom)) cameraZoom = 1;
+    cameraOffset.x -= (i - o) / (2 * cameraZoom);
+    cameraOffset.y -= (r - a) / (2 * cameraZoom);
+    canvas.width = i;
+    canvas.height = r;
+    requestUpdate();
+}
 function registerVideoFrameCallback(video) {
     if (video._hasFrameCallback) return;
     if (video.requestVideoFrameCallback) {
@@ -2345,12 +2379,15 @@ function draw() {
     ctx.translate(-canvas.width / 2 + cameraOffset.x, -canvas.height / 2 + cameraOffset.y);
     if (showGrid) drawGrid();
 
+    const selectedSet = new Set(selectedItems);
     const drawItem = (e) => {
         if (!e || e.isHidden) return;
         try {
-            // Culling Check
+            // Culling Check. Reuse the box cached on the item when geometry has not changed
+            // so a steady camera frame does not recompute trigonometry for every item.
+            // Reroute bounds depend on cameraZoom, so those always go through getItemBoundingBox.
             if (e.type !== 'connector') {
-                const box = getItemBoundingBox(e);
+                const box = (e.type !== 'reroute' && e._cachedBox && !e._isDirty) ? e._cachedBox : getItemBoundingBox(e);
                 if (box.x + box.width < viewport.minX || box.x > viewport.maxX ||
                     box.y + box.height < viewport.minY || box.y > viewport.maxY) {
                     if (e.type === 'video' && e.video) {
@@ -2392,7 +2429,7 @@ function draw() {
             ctx.save();
             ctx.globalAlpha = e.opacity ?? 1;
 
-            if (showDropShadow && selectedItems.includes(e)) {
+            if (showDropShadow && selectedSet.has(e)) {
                 ctx.shadowColor = 'rgba(0, 0, 0, 0.4)';
                 ctx.shadowBlur = 15 / cameraZoom;
                 ctx.shadowOffsetX = 4 / cameraZoom;
@@ -2423,11 +2460,21 @@ function draw() {
         }
     };
 
-    // Rendering order
-    items.forEach(e => { if (e.type !== 'comment' && e.type !== 'link' && e.type !== 'connector') drawItem(e); });
-    items.forEach(e => { if (e.type === 'connector') drawItem(e); });
-    items.forEach(e => { if (e.type === 'link') drawItem(e); });
-    items.forEach(e => { if (e.type === 'comment') drawItem(e); });
+    // One walk, then the overlay layers, instead of four full scans.
+    const laterConnectors = [];
+    const laterLinks = [];
+    const laterComments = [];
+    for (let i = 0; i < items.length; i++) {
+        const e = items[i];
+        if (!e) continue;
+        if (e.type === 'connector') laterConnectors.push(e);
+        else if (e.type === 'link') laterLinks.push(e);
+        else if (e.type === 'comment') laterComments.push(e);
+        else drawItem(e);
+    }
+    for (let i = 0; i < laterConnectors.length; i++) drawItem(laterConnectors[i]);
+    for (let i = 0; i < laterLinks.length; i++) drawItem(laterLinks[i]);
+    for (let i = 0; i < laterComments.length; i++) drawItem(laterComments[i]);
 
     selectedItems.forEach(e => { drawSelection(e) });
 
@@ -2615,8 +2662,16 @@ function drawTextItem(ctx, item) {
     });
 
     const necessaryHeight = (currY - y) + 15;
-    if (item.height < necessaryHeight) item.height = necessaryHeight;
-    if (item.width < 120) item.width = 120; // Enforce minimum width for readability
+    if (item.height < necessaryHeight) {
+        item.height = necessaryHeight;
+        item._isDirty = true;
+        item._cachedBox = null;
+    }
+    if (item.width < 120) {
+        item.width = 120;
+        item._isDirty = true;
+        item._cachedBox = null;
+    }
 
     ctx.restore();
 }
@@ -4614,7 +4669,7 @@ function loadFileAsNewTab(fileContent, fileName) {
         const data = JSON.parse(fileContent);
         const name = fileName.split('.').slice(0, -1).join('.') || 'Loaded Project';
         if (data.prompts && Array.isArray(data.prompts)) {
-            const newId = Date.now();
+            const newId = nextProjectId();
             const newProject = { id: newId, type: 'moodprompt', name: name, data: { prompts: data.prompts, canvasBackgroundColor: data.canvasBackgroundColor || '#0d0d0d' } };
             projects.push(newProject);
             renderTabs();
@@ -4623,7 +4678,7 @@ function loadFileAsNewTab(fileContent, fileName) {
             return;
         }
         if (data.frames && Array.isArray(data.frames)) {
-            const newId = Date.now();
+            const newId = nextProjectId();
             const newProject = { id: newId, type: 'storyflow', name: name, data: { frames: data.frames, canvasBackgroundColor: data.canvasBackgroundColor || '#0d0d0d' } };
             projects.push(newProject);
             renderTabs();
@@ -4632,7 +4687,7 @@ function loadFileAsNewTab(fileContent, fileName) {
             return;
         }
         if (data.items && Array.isArray(data.items)) {
-            const newId = Date.now();
+            const newId = nextProjectId();
             const newProject = { id: newId, type: 'moodinfinite', name: name, data: { items: [], cameraOffset: {}, cameraZoom: 1, historyStack: [], historyIndex: -1 } };
             projects.push(newProject);
             activeProjectId = newId;
@@ -4641,7 +4696,7 @@ function loadFileAsNewTab(fileContent, fileName) {
             return;
         }
         if (data.cards && Array.isArray(data.cards)) {
-            const newId = Date.now();
+            const newId = nextProjectId();
             const newProject = { id: newId, type: 'moodlist', name: name, data: { cards: data.cards } };
             projects.push(newProject);
             renderTabs();
@@ -5757,7 +5812,26 @@ function finishEditingText() { if (currentlyEditingText) { if (currentlyEditingT
         updateTextListDimensions(currentlyEditingText);
     } else { const t = e.fontStyle || 'normal', o = e.fontWeight || 'bold', a = e.fontFamily || 'Nunito'; ctx.font = `${t} ${o} ${e.fontSize}px '${a}', sans-serif`; const i = textEditor.value.split('\n'); let r = 0; i.forEach(e => { const t = ctx.measureText(e); if (t.width > r) r = t.width }); e.width = r + 20; e.height = textEditor.scrollHeight / cameraZoom; } currentlyEditingText.isHidden = !1; selectedItems = [currentlyEditingText]; saveStateForUndo(); currentlyEditingText = null } textEditor.style.display = 'none'; textEditor.style.padding = '0'; textEditor.style.lineHeight = 'normal'; }
 function autoResizeTextEditor() { textEditor.style.height = 'auto'; textEditor.style.height = textEditor.scrollHeight + 'px' }
-function saveStateForUndo() { items.forEach(i => i._isDirty = true); const e = JSON.stringify(items, (e, t) => { if (e === 'img') { return undefined } return t }); if (historyIndex < historyStack.length - 1) { historyStack = historyStack.slice(0, historyIndex + 1) } if (historyStack.length > 0 && historyStack[historyStack.length - 1] === e) return; historyStack.push(e); historyIndex++; if (historyStack.length > HISTORY_LIMIT) { historyStack.shift(); historyIndex-- } scheduleAutoSave(); requestUpdate(); }
+function syncActiveMoodboard() {
+    const currentProject = projects.find(p => p.id === activeProjectId);
+    if (!currentProject || currentProject.type !== 'moodinfinite' || !currentProject.data) return;
+    currentProject.data.items = items;
+    currentProject.data.historyStack = historyStack;
+    currentProject.data.historyIndex = historyIndex;
+}
+
+function saveStateForUndo() {
+    items.forEach(i => { i._isDirty = true; });
+    const e = JSON.stringify(items, storageReplacer);
+    if (historyIndex < historyStack.length - 1) { historyStack = historyStack.slice(0, historyIndex + 1); }
+    if (historyStack.length > 0 && historyStack[historyStack.length - 1] === e) return;
+    historyStack.push(e);
+    historyIndex++;
+    if (historyStack.length > HISTORY_LIMIT) { historyStack.shift(); historyIndex--; }
+    syncActiveMoodboard();
+    scheduleAutoSave();
+    requestUpdate();
+}
 function loadStateFromHistory(e) {
     const t = JSON.parse(e);
     selectedItems = [];
@@ -5766,6 +5840,8 @@ function loadStateFromHistory(e) {
     const o = e => {
         return e.map(e => {
             const t = { ...(e.scaleX !== void 0 ? {} : { scaleX: 1, scaleY: 1 }), ...e };
+            delete t._cachedBox;
+            t._isDirty = true;
             if (t.type === 'image') {
                 const img = new Image;
                 if (t.imageId && globalImageCache[t.imageId]) {
@@ -5774,16 +5850,26 @@ function loadStateFromHistory(e) {
                     img.src = t.imgSrc;
                 }
                 t.img = img
+            } else if (t.type === 'video') {
+                const video = document.createElement('video');
+                video.loop = true;
+                video.muted = true;
+                video.playsInline = true;
+                video.addEventListener('play', () => { registerVideoFrameCallback(video); });
+                t.isPlaying = t.isPlaying !== false;
+                t.video = video;
             } else if (t.type === 'link') {
                 delete t.iconImage;
                 delete t.iconLoading;
             } else if (t.type === 'group') {
-                t.items = o(t.items);
+                t.items = o(t.items || []);
             }
             return t
         })
     };
-    items = o(t)
+    items = o(t);
+    syncActiveMoodboard();
+    requestUpdate();
 }
 
 function undoLastAction() { if (historyIndex > 0) { historyIndex--; const e = historyStack[historyIndex]; loadStateFromHistory(e) } }

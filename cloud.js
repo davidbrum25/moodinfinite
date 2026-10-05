@@ -1173,7 +1173,12 @@ const CloudSync = (() => {
         const intervalSelect = document.getElementById('cloud-autosave-interval');
         if (!toggle || !intervalSelect) return;
 
-        const settings = JSON.parse(localStorage.getItem('moodinfinite_cloud_autosave') || '{"enabled":false, "interval":5}');
+        let settings = { enabled: false, interval: 5 };
+        try {
+            settings = JSON.parse(localStorage.getItem('moodinfinite_cloud_autosave') || '{"enabled":false, "interval":5}');
+        } catch (err) {
+            console.warn('[CloudSync] Ignoring unreadable autosave settings.');
+        }
         _autosaveEnabled = settings.enabled;
         _autosaveInterval = settings.interval;
 

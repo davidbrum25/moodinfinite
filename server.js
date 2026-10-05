@@ -49,10 +49,11 @@ const server = http.createServer((req, res) => {
     // Default to index.html
     if (pathname === '/' || pathname === '') pathname = '/index.html';
 
-    const filePath = path.join(ROOT, pathname);
-
-    // Prevent directory traversal outside ROOT
-    if (!filePath.startsWith(ROOT)) {
+    // pathname is absolute ("/index.html"). Join against ROOT, then reject anything that escapes it.
+    // startsWith(ROOT) is not enough: "/app-evil" starts with "/app".
+    const filePath = path.resolve(ROOT, pathname.replace(/^\/+/, ''));
+    const rel = path.relative(ROOT, filePath);
+    if (rel.startsWith('..') || path.isAbsolute(rel)) {
         res.writeHead(403);
         return res.end('Forbidden');
     }
