@@ -1,4 +1,4 @@
-# Moodinfinite v1.1.0
+# Moodinfinite v1.2.0
 
 ![Moodinfinite Logo](https://github.com/davidbrum25/moodinfinite/blob/main/_branding/_png/moodinfinite__Logotipo_alpha.png?raw=true)
 
@@ -47,7 +47,8 @@ Try it live: <https://davidbrum25.github.io/moodinfinite/index.html>
 
 * **Center View (Home):** Instantly reset the camera to the canvas origin at 1:1 zoom.
 * **Focus on Selection (.):** Automatically zoom and pan to perfectly frame all selected items. If nothing is selected, fits the entire board into view.
-* **Zoom:** Mouse wheel or pinch gesture.
+* **Zoom:** Mouse wheel or pinch gesture. The corner shows the zoom percent. Click it to return to 100% and keep the same point in the center of the view.
+* **Minimap:** When the board is larger than the window, the corner map shows the items and a frame for the current view. Panning moves that frame.
 * **Pan:** Middle-click drag, Space + left-click drag, or two-finger drag on touch.
 
 ### Item Manipulation
@@ -58,12 +59,15 @@ Try it live: <https://davidbrum25.github.io/moodinfinite/index.html>
 * **Transform:** `S` for Scale, `R` for Rotate. Hold `Shift` to maintain aspect ratio or snap rotation.
 * **Flip:** `H` (Horizontal), `V` (Vertical).
 * **Pin (P):** Lock an item to prevent accidental movement.
+* **Snap:** While a selection moves, the board says whether snap is on. Hold `Shift` to flip the saved snap setting for that drag.
+* **Image caption:** Select an image and type in Caption. The words sit on the image, stay after a reload, and undo returns the previous caption.
+* **Empty board:** With nothing on the canvas, the board names Text (`T`), Image (`I`), Box (`B`), and middle-click pan, and offers Moodboard, Flowchart, and Image grid starters.
 * **Auto Align (`Ctrl+Shift+A`):** Neatly arrange multiple selected items into a grid.
 * **Delete:** `Del` or `Backspace`.
 
 ### Node Connectors
 
-* Hover over any element to reveal **4 edge connection ports**. Drag from a port to another element to draw a dynamic bezier curve connector.
+* Hover over any element to reveal **4 edge connection ports**. Drag from a port to another element to draw a connector. The route leaves the port you chose, stays beside the two shapes, and does not shoot off the board when those shapes move.
 * **Reroute Nodes:** Double-click a connector line to add a reroute node and reshape the path.
 * **Smart Deletion:** Hold `Ctrl` / `Cmd` while hovering over a wire or reroute node — your cursor changes to a red scissor icon. Click to cut the connection.
 
@@ -78,15 +82,36 @@ Each Moodprompt file consists of **Prompt Cards**, which feature:
 * **Media Type Toggle:** Switch between `Image` and `Video` prompt types.
 * **Reference Image Slots:** Upload one or two reference images.
 * **Dedicated Text Area:** Monospace text area for writing and refining complex prompts.
+* **Copy confirmation:** The copy control on the card says Copied.
+* **Previous text:** Leaving a changed prompt keeps the wording it had before. Previous puts that text back in one step.
 
-### StoryFlow Tabs
+### Moodflow Tabs
 
-**StoryFlow** is a sequential storytelling tool. It organizes your project into a linear timeline of frames, perfect for storyboarding, video planning, or mapping user journeys.
+**Moodflow** is a sequential storytelling tool. It organizes your project into a linear timeline of frames, perfect for storyboarding, video planning, or mapping user journeys.
 
 * **Horizontal Sequencing:** Frames are laid out in a side-by-side gallery for narrative flow.
 * **Visual Beats:** Each frame features a large image slot (upload or paste support).
 * **Production Notes:** Dedicated fields for Title, Action/Dialogue, Duration, and Camera notes.
 * **Drag & Drop:** Easily reorder your story beats to refine the narrative.
+* **Play:** Walks the frames in order and holds each one for its duration.
+* **Draw:** Draw a stroke directly on a frame.
+* **Script:** Lists every frame's action and dialogue in one column. Edits show on the frames after you return to the board.
+
+### Moodtone Tabs
+
+**Moodtone** builds a color palette from a base color.
+
+* **Generate and lock:** Spacebar rebuilds the harmony. Lock a swatch to keep it. Click a swatch and it says Copied.
+* **Length and order:** Add swatch grows the row, Remove drops one while at least two remain, and dragging a swatch reorders the row.
+* **From a canvas image:** Build the palette from a picture on a Moodinfinite board.
+* **Send to canvas:** Drop the current swatches onto the board as filled boxes.
+
+### Moodgantt Tabs
+
+**Moodgantt** is a timeline for groups and tasks.
+
+* **Plan:** Groups, tasks, dates, progress, status, workers, and zoom. An empty plan asks for the first group.
+* **Dependencies:** A task can depend on another. Dragging that task, or dragging its start edge, pushes the dependent bar by the same number of days, and a line joins them.
 
 ### Moodlist Tabs
 
@@ -96,7 +121,9 @@ Each Moodprompt file consists of **Prompt Cards**, which feature:
 * **Visual Attachments:** Attach images directly to your cards for visual reference or inspiration.
 * **Smart Pinning:** Pin important lists to the top of your board for instant access.
 * **Rapid Entry:** Use `Enter` to quickly add multiple items in a row without losing focus.
-* **Live Filter:** Instantly search through your cards by title or item content via the top search bar.
+* **Live Filter:** Instantly search through your cards by title, item content, or a row's due date via the top search bar.
+* **Due dates:** Each checklist row can carry a date.
+* **Subtasks:** Indent tucks a row one level under the row above it. The first row stays flush. Outdent brings it back.
 * **Drag-to-Reorder:** Use the dedicated grip handles to intuitively rearrange items within a list.
 
 ### Persistence & Storage
@@ -147,6 +174,24 @@ If you find this tool useful and want to help me build more, consider supporting
 ---
 
 ## Update Log
+
+### ✨ v1.2.0 — Faster boards and a tighter toolset
+
+* **⚡ Faster canvas drawing:** A steady board skips repeated layout work, so large canvases stay responsive.
+* **💾 Safer autosave:** Saves no longer store live link icons or video frames, so a reload keeps the project.
+* **🖱️ Middle-click pan, live drags, and color pickers:** Pan with the middle button, see a selection or a connector while you drag (including in Firefox), and open the color picker again.
+* **🔌 Connectors stay beside the shapes:** A route leaves the port you chose and stays near the two shapes when they move.
+* **🗺️ Minimap and zoom chip:** The corner map shows where the view sits. The zoom percent is in the corner, and clicking it returns to 100%.
+* **🧲 Snap while you drag:** The board says whether snap is on. Hold Shift to flip it for that move.
+* **🏷️ Image captions:** Select an image and type a caption. It is saved with the board, and undo puts the previous caption back.
+* **🧩 Empty-board templates:** An empty canvas can start as a Moodboard, a Flowchart, or an Image grid.
+* **📋 Prompt copy and previous text:** The copy control on a Moodprompt card says Copied. Previous puts the last wording back in one step.
+* **🎬 Moodflow play, draw, and script:** Play holds each frame for its duration. Draw stores a stroke on the frame. Script edits every frame from one column.
+* **🎨 Moodtone palettes:** Add, remove, and reorder swatches. Build a palette from a canvas image, or send those swatches onto the canvas as boxes.
+* **📅 Moodgantt dependencies:** Dragging a task, or its start edge, pushes the task that depends on it by the same number of days.
+* **✅ Moodlist due dates and subtasks:** Search can find a row by its date. Indent tucks a row under the one above it.
+
+---
 
 ### ✨ v1.1.0 — Moodlist & Rapid Organization
 
