@@ -127,6 +127,7 @@ function saveToBrowser() {
         window.localforage.setItem('moodinfinite_cache', globalImageCache),
         window.localforage.setItem('moodinfinite_video_cache', globalVideoCache),
         window.localforage.setItem('moodinfinite_active_tab', activeProjectId),
+        window.localforage.setItem('moodinfinite_workers', getSharedWorkers()),
     ]);
 }
 
@@ -334,7 +335,7 @@ function createNewProject(type) {
         const gToday = ganttFormatDate(ganttToday());
         const gEnd   = ganttFormatDate(ganttAddMonths(ganttToday(), 6));
         newProject = { id: newId, type: 'moodgantt', name: `Plan ${gcnt + 1}`,
-            data: { zoomLevel: 'week', viewStartDate: gToday, viewEndDate: gEnd, groups: [], canvasBackgroundColor: defaultCanvasBg, accentColor: defaultAccent, gridColor: defaultGridColor } };
+            data: { zoomLevel: 'week', viewStartDate: gToday, viewEndDate: gEnd, groups: [], workers: getSharedWorkers().slice(), canvasBackgroundColor: defaultCanvasBg, accentColor: defaultAccent, gridColor: defaultGridColor } };
     } else if (type === 'moodlist') {
         const lcnt = projects.filter(p => p.type === 'moodlist').length;
         newProject = {
@@ -6000,7 +6001,32 @@ function syncColorInput(input, value) {
     if (!input || document.activeElement === input) return;
     input.value = value;
 }
-function updateUIColors() { const e = document.documentElement.style, t = getContrastColor(canvasBackgroundColor); e.setProperty('--bg-page', canvasBackgroundColor); e.setProperty('--text-color-active-tab', t); e.setProperty('--contrast-color-light', hexToRgba(t, 0.6)); e.setProperty('--bg-ui', 'rgba(35, 38, 51, 0.4)'); e.setProperty('--bg-ui-hover', 'rgba(55, 58, 71, 0.5)'); e.setProperty('--text-color', '#e2e8f0'); e.setProperty('--text-color-light', '#94a3b8'); e.setProperty('--text-color-strong', '#ffffff'); e.setProperty('--border-color', 'rgba(255, 255, 255, 0.1)'); e.setProperty('--switch-bg-checked', accentColor); canvas.style.backgroundColor = canvasBackgroundColor; syncColorInput(bgColorPicker, canvasBackgroundColor); syncColorInput(accentColorPicker, accentColor); syncColorInput(toolbarAccentColorPicker, accentColor); syncColorInput(gridColorPicker, gridColor); renderTabs(); requestUpdate(); }
+function updateUIColors() {
+    const e = document.documentElement.style, t = getContrastColor(canvasBackgroundColor);
+    e.setProperty('--bg-page', canvasBackgroundColor);
+    e.setProperty('--text-color-active-tab', t);
+    e.setProperty('--contrast-color-light', hexToRgba(t, 0.6));
+    e.setProperty('--bg-ui', 'rgba(35, 38, 51, 0.4)');
+    e.setProperty('--bg-ui-hover', 'rgba(55, 58, 71, 0.5)');
+    e.setProperty('--text-color', '#e2e8f0');
+    e.setProperty('--text-color-light', '#94a3b8');
+    e.setProperty('--text-color-strong', '#ffffff');
+    e.setProperty('--border-color', 'rgba(255, 255, 255, 0.1)');
+    e.setProperty('--switch-bg-checked', accentColor);
+    const lightPage = t === '#262626';
+    e.setProperty('--ml-text', lightPage ? '#1c1917' : '#e2e8f0');
+    e.setProperty('--ml-muted', lightPage ? '#44403c' : '#94a3b8');
+    e.setProperty('--ml-border', lightPage ? 'rgba(0,0,0,0.16)' : 'rgba(255,255,255,0.12)');
+    e.setProperty('--ml-surface', lightPage ? '#ffffff' : 'rgba(35, 38, 51, 0.72)');
+    e.setProperty('--ml-hover', lightPage ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.06)');
+    canvas.style.backgroundColor = canvasBackgroundColor;
+    syncColorInput(bgColorPicker, canvasBackgroundColor);
+    syncColorInput(accentColorPicker, accentColor);
+    syncColorInput(toolbarAccentColorPicker, accentColor);
+    syncColorInput(gridColorPicker, gridColor);
+    renderTabs();
+    requestUpdate();
+}
 function setCurrentTool(e) {
     console.log('setCurrentTool called with:', e);
     if (currentTool === e && e !== null) { return }
@@ -6569,7 +6595,7 @@ function buildPaletteMenu() {
         option.innerHTML = `<div class="palette-color" style="background-color: ${palette.bg}"></div><div class="palette-color" style="background-color: ${palette.accent}"></div><div class="palette-color" style="background-color: ${palette.grid}"></div>`;
         option.addEventListener('mouseenter', () => {
             const activeProject = projects.find(p => p.id === activeProjectId);
-            if (activeProject && (activeProject.type === 'moodinfinite' || activeProject.type === 'moodprompt' || activeProject.type === 'storyflow')) {
+            if (activeProject && (activeProject.type === 'moodinfinite' || activeProject.type === 'moodprompt' || activeProject.type === 'storyflow' || activeProject.type === 'moodlist')) {
                 canvasBackgroundColor = palette.bg;
                 accentColor = palette.accent;
                 gridColor = palette.grid;
@@ -6579,7 +6605,7 @@ function buildPaletteMenu() {
 
         option.addEventListener('mouseleave', () => {
             const activeProject = projects.find(p => p.id === activeProjectId);
-            if (activeProject && (activeProject.type === 'moodinfinite' || activeProject.type === 'moodprompt' || activeProject.type === 'storyflow')) {
+            if (activeProject && (activeProject.type === 'moodinfinite' || activeProject.type === 'moodprompt' || activeProject.type === 'storyflow' || activeProject.type === 'moodlist')) {
                 canvasBackgroundColor = activeProject.data.canvasBackgroundColor || '#0d0d0d';
                 accentColor = activeProject.data.accentColor || '#429eff';
                 gridColor = activeProject.data.gridColor || '#f9f8f6';
@@ -6589,14 +6615,14 @@ function buildPaletteMenu() {
 
         option.addEventListener('click', () => {
             const activeProject = projects.find(p => p.id === activeProjectId);
-            if (activeProject && (activeProject.type === 'moodinfinite' || activeProject.type === 'moodprompt' || activeProject.type === 'storyflow')) {
+            if (activeProject && (activeProject.type === 'moodinfinite' || activeProject.type === 'moodprompt' || activeProject.type === 'storyflow' || activeProject.type === 'moodlist')) {
                 activeProject.data.canvasBackgroundColor = palette.bg;
                 activeProject.data.accentColor = palette.accent;
                 activeProject.data.gridColor = palette.grid;
                 canvasBackgroundColor = palette.bg;
                 accentColor = palette.accent;
                 gridColor = palette.grid;
-                saveProjects();
+                scheduleAutoSave();
                 updateUIColors();
             }
             palettePanel.classList.remove('open');
@@ -6931,11 +6957,18 @@ setupEventListeners();
 setupGanttListeners();
 buildPaletteMenu();
 
+let sharedWorkers = [];
+
 window.localforage.getItem('moodinfinite_video_cache').then(vCache => {
     if (vCache) globalVideoCache = vCache;
     return window.localforage.getItem('moodinfinite_cache');
 }).then(cache => {
     if (cache) globalImageCache = cache;
+    return window.localforage.getItem('moodinfinite_workers');
+}).then(savedWorkers => {
+    if (Array.isArray(savedWorkers)) {
+        sharedWorkers = savedWorkers.filter(name => typeof name === 'string' && name.trim());
+    }
     return window.localforage.getItem('moodinfinite_projects');
 }).then(savedProjects => {
     if (savedProjects && savedProjects.length > 0) {
@@ -6945,6 +6978,7 @@ window.localforage.getItem('moodinfinite_video_cache').then(vCache => {
             }
         });
         projects = savedProjects;
+        sharedWorkers = getSharedWorkers();
         renderTabs();
         window.localforage.getItem('moodinfinite_active_tab').then(actId => {
             if (actId && projects.find(p => p.id === actId)) switchTab(actId);
@@ -7973,6 +8007,48 @@ const storyflowFullscreenClose = document.getElementById('storyflow-fullscreen-c
 if (storyflowFullscreenClose) {
     storyflowFullscreenClose.addEventListener('click', () => stopStoryflowFullscreen());
 }
+document.addEventListener('fullscreenchange', () => {
+    const root = document.getElementById('storyflow-fullscreen');
+    if (!root || root.hidden || document.fullscreenElement) return;
+    stopStoryflowFullscreen();
+});
+document.addEventListener('keydown', (e) => {
+    if (e.key !== 'Escape' && e.key !== 'Esc') return;
+    const root = document.getElementById('storyflow-fullscreen');
+    if (!root || root.hidden) return;
+    stopStoryflowFullscreen();
+}, true);
+
+function addStoryflowFrames(project, count) {
+    if (!project || !project.data) return 0;
+    if (!project.data.frames) project.data.frames = [];
+    let n = Math.floor(Number(count));
+    if (!Number.isFinite(n) || n < 1) {
+        showToast('Enter how many frames to add.', 'error');
+        return 0;
+    }
+    if (n > 200) {
+        n = 200;
+        showToast('Added 200 frames. That is the most at once.');
+    }
+    const stamp = Date.now();
+    const start = project.data.frames.length;
+    for (let i = 0; i < n; i++) {
+        project.data.frames.push({
+            id: stamp + '-' + (start + i),
+            title: '',
+            image: null,
+            description: '',
+            meta: { duration: '3s', camera: '', audio: '', artist: '' }
+        });
+    }
+    renderStoryflowView(project);
+    saveToBrowser();
+    setTimeout(() => {
+        if (storyflowContainer) storyflowContainer.scrollTo({ left: storyflowContainer.scrollWidth, behavior: 'smooth' });
+    }, 50);
+    return n;
+}
 
 function renderStoryflowView(project) {
     if (!storyflowContainer) return;
@@ -8065,20 +8141,15 @@ function renderStoryflowView(project) {
 
     const storyflowAddFrameBtn = document.getElementById('storyflow-add-frame-btn');
     if (storyflowAddFrameBtn) {
-        storyflowAddFrameBtn.onclick = () => {
-            project.data.frames.push({
-                id: Date.now(),
-                title: '',
-                image: null,
-                description: '',
-                meta: { duration: '3s', camera: '', audio: '' }
-            });
-            renderStoryflowView(project);
-            saveToBrowser();
-            setTimeout(() => {
-                storyflowContainer.scrollTo({ left: storyflowContainer.scrollWidth, behavior: 'smooth' });
-            }, 50);
-        };
+        storyflowAddFrameBtn.onclick = () => addStoryflowFrames(project, 1);
+    }
+    document.querySelectorAll('.storyflow-add-many-preset').forEach((btn) => {
+        btn.onclick = () => addStoryflowFrames(project, btn.dataset.count);
+    });
+    const storyflowAddCountBtn = document.getElementById('storyflow-add-count-btn');
+    const storyflowAddCount = document.getElementById('storyflow-add-count');
+    if (storyflowAddCountBtn && storyflowAddCount) {
+        storyflowAddCountBtn.onclick = () => addStoryflowFrames(project, storyflowAddCount.value);
     }
 
     const storyflowScrollStartBtn = document.getElementById('storyflow-scroll-start-btn');
@@ -8394,7 +8465,38 @@ function createStoryCard(project, frame, index) {
     
     cameraItem.append(cameraLbl, cameraSelect);
 
-    metaGrid.append(durationItem, cameraItem);
+    if (!frame.meta) frame.meta = {};
+    const artistItem = document.createElement('div');
+    artistItem.className = 'story-meta-item';
+    const artistLbl = document.createElement('div');
+    artistLbl.className = 'story-meta-label';
+    artistLbl.textContent = 'Artist';
+    const artistRow = document.createElement('div');
+    artistRow.className = 'story-artist-row';
+    const artistSelect = document.createElement('select');
+    artistSelect.className = 'story-meta-input story-artist';
+    fillWorkerSelect(artistSelect, frame.meta.artist || '');
+    artistSelect.addEventListener('pointerdown', (e) => e.stopPropagation());
+    artistSelect.addEventListener('mousedown', (e) => e.stopPropagation());
+    artistSelect.addEventListener('change', () => {
+        frame.meta.artist = artistSelect.value;
+        scheduleAutoSave();
+    });
+    const artistManage = document.createElement('button');
+    artistManage.type = 'button';
+    artistManage.className = 'story-manage-artists';
+    artistManage.title = 'Manage workers';
+    artistManage.innerHTML = '<iconify-icon icon="lucide:users" width="14" height="14"></iconify-icon>';
+    artistManage.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const overlay = document.getElementById('gantt-workers-modal-overlay');
+        if (overlay) overlay.style.display = 'flex';
+        if (typeof renderSharedWorkersList === 'function') renderSharedWorkersList();
+    });
+    artistRow.append(artistSelect, artistManage);
+    artistItem.append(artistLbl, artistRow);
+
+    metaGrid.append(durationItem, cameraItem, artistItem);
 
     const actions = document.createElement('div');
     actions.className = 'story-card-actions';
@@ -9936,6 +10038,82 @@ function ganttStartGroupRename(labelEl, group, project) {
     input.addEventListener('keydown', e => { if (e.key === 'Enter') input.blur(); if (e.key === 'Escape') { input.value = group.name; input.blur(); } });
 }
 
+function getSharedWorkers() {
+    const seen = new Set();
+    const list = [];
+    const add = (raw) => {
+        const name = String(raw || '').trim();
+        const key = name.toLowerCase();
+        if (!name || seen.has(key)) return;
+        seen.add(key);
+        list.push(name);
+    };
+    sharedWorkers.forEach(add);
+    (projects || []).forEach(project => {
+        ((project.data && project.data.workers) || []).forEach(add);
+    });
+    return list;
+}
+
+function rememberSharedWorker(name) {
+    const clean = String(name || '').trim();
+    if (!clean) return false;
+    if (getSharedWorkers().some(worker => worker.toLowerCase() === clean.toLowerCase())) return false;
+    sharedWorkers.push(clean);
+    (projects || []).forEach(project => {
+        if (!project.data || project.type !== 'moodgantt') return;
+        project.data.workers = project.data.workers || [];
+        if (!project.data.workers.some(worker => worker.toLowerCase() === clean.toLowerCase())) {
+            project.data.workers.push(clean);
+        }
+    });
+    scheduleAutoSave();
+    return true;
+}
+
+function forgetSharedWorker(name) {
+    const key = String(name || '').trim().toLowerCase();
+    if (!key) return;
+    sharedWorkers = sharedWorkers.filter(worker => worker.toLowerCase() !== key);
+    (projects || []).forEach(project => {
+        if (!project.data || !project.data.workers) return;
+        project.data.workers = project.data.workers.filter(worker => worker.toLowerCase() !== key);
+    });
+    scheduleAutoSave();
+}
+
+function fillWorkerSelect(select, current) {
+    if (!select) return;
+    const value = current || '';
+    select.innerHTML = '';
+    const empty = document.createElement('option');
+    empty.value = '';
+    empty.textContent = 'Unassigned';
+    select.appendChild(empty);
+    let found = !value;
+    getSharedWorkers().forEach(name => {
+        const opt = document.createElement('option');
+        opt.value = name;
+        opt.textContent = name;
+        if (name === value) found = true;
+        select.appendChild(opt);
+    });
+    if (value && !found) {
+        const custom = document.createElement('option');
+        custom.value = value;
+        custom.textContent = value;
+        select.appendChild(custom);
+    }
+    select.value = value;
+}
+
+function refreshWorkerSelects() {
+    document.querySelectorAll('select.story-artist').forEach(select => fillWorkerSelect(select, select.value));
+    const assignee = document.getElementById('gantt-detail-assignee');
+    const panel = document.getElementById('gantt-detail-panel');
+    if (assignee && panel && panel.classList.contains('open')) fillWorkerSelect(assignee, assignee.value);
+}
+
 function ganttOpenDetail(project, groupId, taskId) {
     const group = project.data.groups.find(g => g.id === groupId);
     const task  = group && group.tasks.find(t => t.id === taskId);
@@ -9951,17 +10129,7 @@ function ganttOpenDetail(project, groupId, taskId) {
     document.getElementById('gantt-detail-progress-val').textContent = (task.progress || 0) + '%';
     document.getElementById('gantt-detail-status').value    = task.status || '';
     
-    // Populate assignees
-    const assigneeSelect = document.getElementById('gantt-detail-assignee');
-    assigneeSelect.innerHTML = '<option value="">Unassigned</option>';
-    const workers = project.data.workers || [];
-    workers.forEach(w => {
-        const opt = document.createElement('option');
-        opt.value = w;
-        opt.textContent = w;
-        assigneeSelect.appendChild(opt);
-    });
-    assigneeSelect.value = task.assignee || '';
+    fillWorkerSelect(document.getElementById('gantt-detail-assignee'), task.assignee || '');
     
     document.getElementById('gantt-detail-notes').value     = task.notes || '';
     ganttFillDepends(project, task);
@@ -10303,11 +10471,9 @@ function setupGanttListeners() {
     const workersList = document.getElementById('gantt-workers-list');
 
     const renderWorkersList = () => {
-        const proj = projects.find(p => p.id === activeProjectId);
-        if (!proj || proj.type !== 'moodgantt') return;
+        if (!workersList) return;
         workersList.innerHTML = '';
-        const workers = proj.data.workers || [];
-        workers.forEach((worker, idx) => {
+        getSharedWorkers().forEach((worker) => {
             const div = document.createElement('div');
             div.style.display = 'flex';
             div.style.justifyContent = 'space-between';
@@ -10315,11 +10481,11 @@ function setupGanttListeners() {
             div.style.padding = '0.5rem';
             div.style.background = 'rgba(0,0,0,0.1)';
             div.style.borderRadius = '0.5rem';
-            
+
             const span = document.createElement('span');
             span.textContent = worker;
             span.style.color = 'var(--text-color)';
-            
+
             const delBtn = document.createElement('button');
             delBtn.innerHTML = '<iconify-icon icon="lucide:trash-2" width="14" height="14"></iconify-icon>';
             delBtn.style.background = 'none';
@@ -10327,18 +10493,16 @@ function setupGanttListeners() {
             delBtn.style.color = 'var(--text-red-500, #ef4444)';
             delBtn.style.cursor = 'pointer';
             delBtn.onclick = () => {
-                proj.data.workers.splice(idx, 1);
+                forgetSharedWorker(worker);
                 renderWorkersList();
-                if (ganttDetailTarget && ganttDetailTarget.project === proj) {
-                    ganttOpenDetail(proj, ganttDetailTarget.groupId, ganttDetailTarget.taskId); // refresh select options
-                }
-                scheduleAutoSave();
+                refreshWorkerSelects();
             };
-            
+
             div.append(span, delBtn);
             workersList.appendChild(div);
         });
     };
+    window.renderSharedWorkersList = renderWorkersList;
 
     if (manageWorkersBtn) {
         manageWorkersBtn.addEventListener('click', () => {
@@ -10356,22 +10520,14 @@ function setupGanttListeners() {
 
     if (addWorkerBtn) {
         addWorkerBtn.addEventListener('click', () => {
-            const proj = projects.find(p => p.id === activeProjectId);
-            if (!proj || proj.type !== 'moodgantt') return;
             const name = newWorkerInput.value.trim();
-            if (name) {
-                proj.data.workers = proj.data.workers || [];
-                if (!proj.data.workers.includes(name)) {
-                    proj.data.workers.push(name);
-                    newWorkerInput.value = '';
-                    renderWorkersList();
-                    if (ganttDetailTarget && ganttDetailTarget.project === proj) {
-                        ganttOpenDetail(proj, ganttDetailTarget.groupId, ganttDetailTarget.taskId); // refresh select options
-                    }
-                    scheduleAutoSave();
-                } else {
-                    showToast('Worker already exists');
-                }
+            if (!name) return;
+            if (rememberSharedWorker(name)) {
+                newWorkerInput.value = '';
+                renderWorkersList();
+                refreshWorkerSelects();
+            } else {
+                showToast('Worker already exists');
             }
         });
     }

@@ -872,8 +872,14 @@ async function assertNextImprovements(page) {
     assert.equal(fullscreen.title, 'Dawn');
     assert.equal(fullscreen.text, 'She opens the door');
     assert.equal(fullscreen.textUnder, true, 'the still text is not under the picture');
+    const exitBtn = await page.$eval('#storyflow-fullscreen-close', (el) => {
+        const box = el.getBoundingClientRect();
+        return { text: el.textContent.replace(/\s+/g, ' ').trim(), w: box.width, h: box.height, top: box.top, right: box.right };
+    });
+    assert.ok(exitBtn.text.includes('Exit'), `fullscreen has no exit control: ${exitBtn.text}`);
+    assert.ok(exitBtn.w > 48 && exitBtn.h > 20 && exitBtn.top >= 0 && exitBtn.right <= 1300, `exit control is not on screen: ${JSON.stringify(exitBtn)}`);
     if (shotDir) await page.screenshot({ path: path.join(shotDir, 'moodflow-fullscreen.png') });
-    await page.click('#storyflow-fullscreen-close');
+    await page.keyboard.press('Escape');
     await page.waitForFunction(() => document.getElementById('storyflow-fullscreen').hidden);
 
     await page.evaluate(async () => {
@@ -1059,11 +1065,45 @@ async function assertNextImprovements(page) {
     }
 
     await page.evaluate(() => createNewProject('moodlist'));
+    await page.click('#palette-btn');
+    await page.waitForSelector('#palette-panel.open .palette-option');
+    const paletteOptions = await page.$$('#palette-panel .palette-option');
+    await paletteOptions[3].click();
+    const listTheme = await page.evaluate(() => {
+        const project = projects.find((p) => p.id === activeProjectId);
+        const style = getComputedStyle(document.documentElement);
+        return {
+            storedBg: project.data.canvasBackgroundColor,
+            storedAccent: project.data.accentColor,
+            bg: style.getPropertyValue('--bg-page').trim(),
+            accent: style.getPropertyValue('--switch-bg-checked').trim(),
+            board: getComputedStyle(document.getElementById('moodlist-container')).backgroundColor,
+        };
+    });
+    assert.equal(listTheme.storedBg, '#002b36');
+    assert.equal(listTheme.storedAccent, '#268bd2');
+    assert.equal(listTheme.bg, '#002b36');
+    assert.equal(listTheme.accent, '#268bd2');
+    assert.equal(listTheme.board, 'rgb(0, 43, 54)');
     await page.waitForSelector('.ml-add-title');
     await (await page.$('.ml-add-title')).type('Groceries');
     await (await page.$('.ml-item-text')).type('Milk');
     await page.click('.ml-save-btn');
     await page.waitForSelector('.ml-card-item-text');
+    const itemInk = await page.$eval('.ml-card-item-text', (el) => getComputedStyle(el).color);
+    assert.equal(itemInk, 'rgb(226, 232, 240)', `list item text is not readable: ${itemInk}`);
+    await page.click('#palette-btn');
+    await page.waitForSelector('#palette-panel.open .palette-option');
+    await (await page.$$('#palette-panel .palette-option'))[1].click();
+    const lightList = await page.evaluate(() => {
+        const text = getComputedStyle(document.querySelector('.ml-card-item-text')).color;
+        const card = getComputedStyle(document.querySelector('.ml-card')).backgroundColor;
+        const check = getComputedStyle(document.querySelector('.ml-card-checkbox')).color;
+        return { text, card, check };
+    });
+    assert.equal(lightList.text, 'rgb(28, 25, 23)', `light preset left the list text pale: ${lightList.text}`);
+    assert.equal(lightList.check, 'rgb(68, 64, 60)', `light preset left the checkbox pale: ${lightList.check}`);
+    assert.equal(lightList.card, 'rgb(255, 255, 255)', `light preset left the card muddy: ${lightList.card}`);
     const cardsBeforePaste = await page.$$eval('.ml-card', (els) => els.length);
     await page.click('.ml-card-item-text');
     const pastedInto = await page.evaluate(() => {
@@ -1088,6 +1128,65 @@ async function assertNextImprovements(page) {
         document.body.dispatchEvent(new ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData: data }));
     });
     await page.waitForFunction((n) => document.querySelectorAll('.ml-card').length === n + 1, {}, cardsBeforePaste);
+
+    await page.evaluate(() => createNewProject('moodgantt'));
+    await page.click('#gantt-empty-add');
+    await page.waitForSelector('.gantt-group-add-task-btn');
+    await page.click('.gantt-group-add-task-btn');
+    await page.waitForSelector('.gantt-task-label');
+    await page.click('.gantt-task-label');
+    await page.waitForFunction(() => {
+        const box = document.getElementById('gantt-detail-close').getBoundingClientRect();
+        return box.left >= 0 && box.width > 0;
+    });
+    await page.$eval('#gantt-manage-workers-btn', (btn) => btn.click());
+    await page.waitForSelector('#new-worker-input');
+    await page.type('#new-worker-input', 'Ada Lovelace');
+    await page.click('#add-worker-btn');
+    await page.waitForFunction(() => getSharedWorkers().includes('Ada Lovelace'));
+    await page.$eval('#close-gantt-workers-btn', (btn) => btn.click());
+    await page.evaluate(() => createNewProject('storyflow'));
+    await page.click('#storyflow-empty-add');
+    await page.waitForSelector('select.story-artist');
+    const artistOptions = await page.$$eval('select.story-artist option', (els) => els.map((el) => el.value));
+    assert.ok(artistOptions.includes('Ada Lovelace'), `artist list missed the shared worker: ${artistOptions.join(', ')}`);
+    await page.select('select.story-artist', 'Ada Lovelace');
+    const assigned = await page.evaluate(() => {
+        const project = projects.find((p) => p.id === activeProjectId);
+        return project.data.frames[0].meta.artist;
+    });
+    assert.equal(assigned, 'Ada Lovelace');
+    await page.evaluate(() => createNewProject('moodgantt'));
+    await page.click('#gantt-empty-add');
+    await page.waitForSelector('.gantt-group-add-task-btn');
+    await page.click('.gantt-group-add-task-btn');
+    await page.waitForSelector('.gantt-task-label');
+    await page.click('.gantt-task-label');
+    await page.waitForFunction(() => {
+        const box = document.getElementById('gantt-detail-close').getBoundingClientRect();
+        return box.left >= 0 && box.width > 0;
+    });
+    const ganttWorkers = await page.$$eval('#gantt-detail-assignee option', (els) => els.map((el) => el.value));
+    assert.ok(ganttWorkers.includes('Ada Lovelace'), `gantt missed the shared worker: ${ganttWorkers.join(', ')}`);
+
+    await page.evaluate(() => createNewProject('storyflow'));
+    await page.$eval('.storyflow-add-many-preset[data-count="5"]', (btn) => btn.click());
+    await page.waitForFunction(() => document.querySelectorAll('.story-card').length === 5);
+    await page.$eval('.storyflow-add-many-preset[data-count="10"]', (btn) => btn.click());
+    await page.waitForFunction(() => document.querySelectorAll('.story-card').length === 15);
+    const afterCustom = await page.evaluate(() => {
+        const input = document.getElementById('storyflow-add-count');
+        input.value = '3';
+        document.getElementById('storyflow-add-count-btn').click();
+        const project = projects.find((p) => p.id === activeProjectId);
+        return {
+            value: input.value,
+            frames: project.data.frames.length,
+            cards: document.querySelectorAll('.story-card').length,
+        };
+    });
+    assert.equal(afterCustom.frames, 18, JSON.stringify(afterCustom));
+    assert.equal(afterCustom.cards, 18, JSON.stringify(afterCustom));
 }
 
 const server = startServer();

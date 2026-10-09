@@ -503,7 +503,7 @@
             </div>
         </div>
         <div id="storyflow-fullscreen" hidden>
-            <button id="storyflow-fullscreen-close" type="button" title="Stop fullscreen playback"><iconify-icon icon="lucide:x" width="20" height="20"></iconify-icon></button>
+            <button id="storyflow-fullscreen-close" type="button" title="Exit fullscreen (Escape)"><iconify-icon icon="lucide:x" width="18" height="18"></iconify-icon><span>Exit</span></button>
             <div class="storyflow-fullscreen-still">
                 <img id="storyflow-fullscreen-image" alt="" hidden>
                 <div id="storyflow-fullscreen-empty">No still</div>
@@ -528,6 +528,14 @@
             <button id="storyflow-add-frame-btn" class="minimap-control-btn" title="Add Frame">
                 <iconify-icon icon="lucide:plus" width="24" height="24"></iconify-icon>
             </button>
+            <div id="storyflow-add-many">
+                <button type="button" class="storyflow-add-many-preset" data-count="5" title="Add 5 frames">5</button>
+                <button type="button" class="storyflow-add-many-preset" data-count="10" title="Add 10 frames">10</button>
+                <input id="storyflow-add-count" type="number" min="1" max="200" value="5" aria-label="Number of frames to add">
+                <button id="storyflow-add-count-btn" type="button" title="Add this many frames">
+                    <iconify-icon icon="lucide:list-plus" width="18" height="18"></iconify-icon>
+                </button>
+            </div>
         </div>
 
         <!-- Storyflow image lightbox -->

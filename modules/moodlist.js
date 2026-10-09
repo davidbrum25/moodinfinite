@@ -177,9 +177,9 @@ function _wireAddPanel(panel, project, onSave) {
         const swatch = e.target.closest('.ml-swatch');
         if (!swatch) return;
         pendingColor = swatch.dataset.color;
-        panel.querySelector('.ml-add-panel').style.background = pendingColor
-            ? pendingColor
-            : '';
+        const addPanel = panel.querySelector('.ml-add-panel');
+        addPanel.style.background = pendingColor ? pendingColor : '';
+        addPanel.classList.toggle('ml-tinted', !!pendingColor);
         colorPicker.style.display = 'none';
     });
     document.addEventListener('click', () => { colorPicker.style.display = 'none'; });
@@ -257,6 +257,7 @@ function _wireAddPanel(panel, project, onSave) {
         previewWrap.style.display = 'none';
         previewImg.src = '';
         panel.querySelector('.ml-add-panel').style.background = '';
+        panel.querySelector('.ml-add-panel').classList.remove('ml-tinted');
         pinBtn.classList.remove('active');
 
         scheduleAutoSave();
@@ -377,7 +378,10 @@ function _buildCard(card, project, grid) {
     const el = document.createElement('div');
     el.className = 'ml-card';
     el.dataset.id = card.id;
-    if (card.color) el.style.background = card.color;
+    if (card.color) {
+        el.style.background = card.color;
+        el.classList.add('ml-tinted');
+    }
     if (card.pinned) el.classList.add('pinned');
     _normalizeMoodlistIndent(card);
 

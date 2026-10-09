@@ -800,6 +800,50 @@
             background-color: rgba(66, 158, 255, 0.1);
         }
 
+        #storyflow-add-many {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            height: 100%;
+            flex-shrink: 0;
+        }
+
+        .storyflow-add-many-preset,
+        #storyflow-add-count-btn {
+            height: 100%;
+            min-width: 2.4rem;
+            padding: 0 0.55rem;
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+            background: rgba(255, 255, 255, 0.05);
+            color: var(--text-color);
+            font: 700 0.8rem/1 Inter, sans-serif;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .storyflow-add-many-preset:hover,
+        #storyflow-add-count-btn:hover {
+            background: var(--switch-bg-checked);
+            border-color: var(--switch-bg-checked);
+            color: #fff;
+        }
+
+        #storyflow-add-count {
+            width: 3.4rem;
+            height: 100%;
+            box-sizing: border-box;
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+            background: rgba(0, 0, 0, 0.25);
+            color: var(--text-color);
+            font: 600 0.85rem/1 Inter, sans-serif;
+            text-align: center;
+            padding: 0 0.2rem;
+        }
+
         #storyflow-minimap-track-container {
             position: relative;
             flex-grow: 1;
@@ -1215,6 +1259,29 @@
             color: var(--text-color);
         }
 
+        .story-artist-row {
+            display: flex;
+            align-items: center;
+            gap: 0.35rem;
+        }
+
+        .story-artist-row select { flex: 1; min-width: 0; }
+
+        .story-manage-artists {
+            flex: 0 0 auto;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 1.8rem;
+            height: 1.8rem;
+            padding: 0;
+            border-radius: 0.35rem;
+            border: 1px solid var(--border-color);
+            background: var(--bg-ui-hover);
+            color: var(--text-color);
+            cursor: pointer;
+        }
+
         .story-card-actions {
             display: flex;
             justify-content: flex-end;
@@ -1452,16 +1519,18 @@
             position: absolute;
             top: 1rem;
             right: 1rem;
-            z-index: 2;
+            z-index: 6;
             display: inline-flex;
             align-items: center;
             justify-content: center;
-            width: 2.25rem;
-            height: 2.25rem;
+            gap: 0.4rem;
+            height: 2.4rem;
+            padding: 0 0.95rem;
             border-radius: 999px;
-            border: 1px solid var(--border-color);
-            background: rgba(0, 0, 0, 0.45);
-            color: var(--text-color);
+            border: 1px solid rgba(255, 255, 255, 0.45);
+            background: rgba(0, 0, 0, 0.78);
+            color: #fff;
+            font: 600 0.9rem/1 Inter, sans-serif;
             cursor: pointer;
         }
 
@@ -4663,6 +4732,7 @@
     flex-direction: column;
     overflow: hidden;
     background: var(--bg-page);
+    color: var(--ml-text, var(--text-color));
     padding-top: var(--tabs-bar-height);
 }
 
@@ -4759,8 +4829,8 @@
 .ml-add-panel {
     width: 100%;
     max-width: 560px;
-    background: var(--bg-ui);
-    border: 1px solid var(--border-color);
+    background: var(--ml-surface);
+    border: 1px solid var(--ml-border);
     border-radius: 1rem;
     backdrop-filter: blur(16px);
     -webkit-backdrop-filter: blur(16px);
@@ -4783,16 +4853,16 @@
     background: transparent;
     border: none;
     outline: none;
-    color: var(--text-color);
+    color: var(--ml-text);
     font-family: inherit;
     font-size: 1rem;
     font-weight: 600;
     padding: 0 0 0.5rem;
-    border-bottom: 1px solid var(--border-color);
+    border-bottom: 1px solid var(--ml-border);
     margin-bottom: 0.6rem;
 }
 
-.ml-add-title::placeholder { color: var(--text-color-light); font-weight: 400; }
+.ml-add-title::placeholder { color: var(--ml-muted); font-weight: 400; }
 
 .ml-add-items {
     display: flex;
@@ -4811,7 +4881,7 @@
 }
 
 .ml-check-placeholder {
-    color: var(--text-color-light);
+    color: var(--ml-muted);
     flex-shrink: 0;
     display: flex;
     align-items: center;
@@ -4822,7 +4892,7 @@
     background: transparent;
     border: none;
     outline: none;
-    color: var(--text-color);
+    color: var(--ml-text);
     font-family: inherit;
     font-size: 0.9rem;
     padding: 0.25rem 0;
@@ -4835,7 +4905,7 @@
 .ml-item-del {
     background: transparent;
     border: none;
-    color: var(--text-color-light);
+    color: var(--ml-muted);
     cursor: pointer;
     padding: 0.2rem;
     border-radius: 0.25rem;
@@ -4849,7 +4919,7 @@
 .ml-add-item-btn {
     background: transparent;
     border: none;
-    color: var(--text-color-light);
+    color: var(--ml-muted);
     cursor: pointer;
     padding: 0.3rem 0;
     font-size: 0.8rem;
@@ -4859,14 +4929,14 @@
     gap: 0.35rem;
     transition: color 0.15s;
 }
-.ml-add-item-btn:hover { color: var(--text-color); }
+.ml-add-item-btn:hover { color: var(--ml-text); }
 
 .ml-add-footer {
     display: flex;
     align-items: center;
     justify-content: space-between;
     padding: 0.6rem 1rem;
-    border-top: 1px solid var(--border-color);
+    border-top: 1px solid var(--ml-border);
 }
 
 .ml-add-actions-left,
@@ -4879,7 +4949,7 @@
 .ml-icon-btn {
     background: transparent;
     border: none;
-    color: var(--text-color-light);
+    color: var(--ml-muted);
     cursor: pointer;
     padding: 0.4rem;
     border-radius: 0.5rem;
@@ -4888,7 +4958,7 @@
     justify-content: center;
     transition: background 0.15s, color 0.15s;
 }
-.ml-icon-btn:hover { background: var(--bg-ui-hover); color: var(--text-color); }
+.ml-icon-btn:hover { background: var(--ml-hover); color: var(--ml-text); }
 .ml-icon-btn.active { color: var(--switch-bg-checked); }
 
 .ml-save-btn {
@@ -4990,7 +5060,7 @@
     font-weight: 800;
     letter-spacing: 0.1em;
     text-transform: uppercase;
-    color: var(--text-color-light);
+    color: var(--ml-muted);
     padding: 0.25rem 0 0.5rem;
     break-inside: avoid;
     column-span: all;
@@ -5005,8 +5075,8 @@
     justify-content: center;
     gap: 1rem;
     padding: 4rem 2rem;
-    color: var(--text-color-light);
-    opacity: 0.4;
+    color: var(--ml-muted);
+    opacity: 0.7;
     text-align: center;
     user-select: none;
 }
@@ -5015,8 +5085,9 @@
 
 /* ── Individual cards ────────────────────────────────── */
 .ml-card {
-    background: var(--bg-ui);
-    border: 1px solid var(--border-color);
+    background: var(--ml-surface);
+    color: var(--ml-text);
+    border: 1px solid var(--ml-border);
     border-radius: 0.85rem;
     margin-bottom: 1rem;
     break-inside: avoid;
@@ -5056,7 +5127,7 @@
 .ml-card-title {
     font-size: 0.95rem;
     font-weight: 700;
-    color: var(--text-color);
+    color: var(--ml-text);
     outline: none;
     border-bottom: 1px solid transparent;
     margin-bottom: 0.5rem;
@@ -5064,10 +5135,10 @@
     word-break: break-word;
     min-height: 1.3em;
 }
-.ml-card-title:focus { border-bottom-color: var(--border-color); }
+.ml-card-title:focus { border-bottom-color: var(--ml-border); }
 .ml-card-title.empty:empty::before {
     content: attr(data-placeholder);
-    color: var(--text-color-light);
+    color: var(--ml-muted);
     font-weight: 400;
     pointer-events: none;
 }
@@ -5088,13 +5159,12 @@
     border-radius: 0.35rem;
     transition: background 0.1s;
 }
-.ml-card-item:hover { background: rgba(255,255,255,0.04); }
+.ml-card-item:hover { background: var(--ml-hover); }
 
 .ml-card-checkbox {
-    color: var(--text-color-light);
+    color: var(--ml-muted);
     flex-shrink: 0;
     margin-top: 1px;
-    transition: color 0.15s;
 }
 .ml-card-item.checked .ml-card-checkbox { color: var(--switch-bg-checked); }
 
@@ -5102,7 +5172,7 @@
     flex: 1 1 6.5rem;
     min-width: 6.5rem;
     font-size: 0.88rem;
-    color: var(--text-color);
+    color: var(--ml-text);
     line-height: 1.4;
     transition: opacity 0.15s, text-decoration 0.15s;
     overflow-wrap: break-word;
@@ -5114,7 +5184,8 @@ input.ml-card-item-text {
     padding: 0;
     font: inherit;
     font-size: 0.88rem;
-    color: inherit;
+    color: var(--ml-text);
+    caret-color: var(--ml-text);
     cursor: text;
 }
 
@@ -5136,7 +5207,7 @@ input.ml-card-item-text {
     padding: 0;
     border: none;
     background: transparent;
-    color: var(--text-color-light);
+    color: var(--ml-muted);
     pointer-events: none;
 }
 .ml-due-wrap.has-date .ml-due-btn { color: var(--switch-bg-checked); }
@@ -5155,7 +5226,7 @@ input.ml-card-item-text {
 .ml-indent-btn {
     background: transparent;
     border: none;
-    color: var(--text-color-light);
+    color: var(--ml-muted);
     cursor: pointer;
     padding: 0.15rem;
     border-radius: 0.25rem;
@@ -5169,7 +5240,7 @@ input.ml-card-item-text {
 }
 .ml-card-item:hover .ml-indent-btn,
 .ml-card-item.ml-subtask .ml-indent-btn { opacity: 1; }
-.ml-indent-btn:hover { color: var(--text-color); }
+.ml-indent-btn:hover { color: var(--ml-text); }
 .ml-card-item.ml-subtask {
     margin-left: 1.15rem;
     padding-left: 0.45rem;
@@ -5184,7 +5255,7 @@ input.ml-card-item-text {
     display: flex;
     align-items: center;
     gap: 0.35rem;
-    color: var(--text-color-light);
+    color: var(--ml-muted);
     font-size: 0.8rem;
     cursor: pointer;
     padding: 0.4rem 0.2rem;
@@ -5199,7 +5270,7 @@ input.ml-card-item-text {
 .ml-card-item-del {
     background: transparent;
     border: none;
-    color: var(--text-color-light);
+    color: var(--ml-muted);
     cursor: pointer;
     padding: 0.15rem;
     border-radius: 0.25rem;
@@ -5217,7 +5288,7 @@ input.ml-card-item-text {
 /* Drag handle */
 .ml-drag-handle {
     cursor: grab;
-    color: var(--text-color-light);
+    color: var(--ml-muted);
     opacity: 0;
     transition: opacity 0.15s;
     display: flex;
@@ -5247,7 +5318,7 @@ input.ml-card-item-text {
     border: none;
     border-bottom: 1px solid var(--switch-bg-checked);
     outline: none;
-    color: var(--text-color);
+    color: var(--ml-text);
     font-family: inherit;
     font-size: 0.88rem;
     padding: 0.15rem 0;
@@ -5265,7 +5336,7 @@ input.ml-card-item-text {
 }
 .ml-card:hover .ml-card-footer {
     opacity: 1;
-    border-top-color: var(--border-color);
+    border-top-color: var(--ml-border);
 }
 
 .ml-card-actions {
@@ -5277,7 +5348,7 @@ input.ml-card-item-text {
 .ml-card-btn {
     background: transparent;
     border: none;
-    color: var(--text-color-light);
+    color: var(--ml-muted);
     cursor: pointer;
     padding: 0.35rem;
     border-radius: 0.4rem;
@@ -5287,7 +5358,14 @@ input.ml-card-item-text {
     transition: background 0.15s, color 0.15s;
     font-family: inherit;
 }
-.ml-card-btn:hover { background: rgba(255,255,255,0.08); color: var(--text-color); }
+.ml-card-btn:hover { background: var(--ml-hover); color: var(--ml-text); }
+.ml-card.ml-tinted,
+.ml-add-panel.ml-tinted {
+    --ml-text: #f5f5f4;
+    --ml-muted: #d6d3d1;
+    --ml-border: rgba(255,255,255,0.18);
+    --ml-hover: rgba(255,255,255,0.08);
+}
 .ml-card-delete-btn:hover { color: #ef4444; }
 
 /* Card color picker positions below footer */
