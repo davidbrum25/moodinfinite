@@ -387,6 +387,25 @@ async function assertNextImprovements(page) {
     });
     const afterLeft = await page.$eval('#canvas-minimap-viewport', (el) => parseFloat(el.style.left));
     assert.ok(afterLeft > mini.left + 8, `minimap viewport did not track the pan (${mini.left} -> ${afterLeft})`);
+    const beforeDrag = await page.evaluate(() => ({
+        ox: (0, eval)('cameraOffset.x'),
+        left: parseFloat(document.getElementById('canvas-minimap-viewport').style.left),
+    }));
+    const mapBox = await (await page.$('#canvas-minimap-map')).boundingBox();
+    await page.mouse.move(mapBox.x + 12, mapBox.y + mapBox.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(mapBox.x + mapBox.width - 12, mapBox.y + mapBox.height / 2, { steps: 6 });
+    await page.mouse.up();
+    await page.waitForFunction((ox) => (0, eval)('cameraOffset.x') < ox - 8, {}, beforeDrag.ox);
+    const afterDrag = await page.evaluate(() => {
+        draw();
+        return {
+            ox: (0, eval)('cameraOffset.x'),
+            left: parseFloat(document.getElementById('canvas-minimap-viewport').style.left),
+        };
+    });
+    assert.ok(afterDrag.ox < beforeDrag.ox - 8, `minimap drag did not move the camera (${beforeDrag.ox} -> ${afterDrag.ox})`);
+    assert.ok(afterDrag.left > beforeDrag.left + 4, `minimap frame did not follow the drag (${beforeDrag.left} -> ${afterDrag.left})`);
     if (shotDir) {
         mkdirSync(shotDir, { recursive: true });
         await page.screenshot({ path: path.join(shotDir, 'canvas-minimap.png') });
@@ -544,7 +563,12 @@ async function assertNextImprovements(page) {
         const cur = document.querySelector('.story-card.animatic-current .story-card-index');
         return cur && cur.textContent.trim() === '2';
     }, { timeout: 4000 });
-    assert.equal(await page.$eval('#storyflow-play-btn', (el) => el.textContent.trim()), 'Stop');
+    const playingIcon = await page.$eval('#storyflow-play-btn', (el) => ({
+        playing: el.classList.contains('is-playing'),
+        icon: el.querySelector('iconify-icon')?.getAttribute('icon'),
+    }));
+    assert.equal(playingIcon.playing, true);
+    assert.equal(playingIcon.icon, 'lucide:square');
     await page.evaluate(() => stopStoryflowAnimatic());
 
     await page.evaluate(() => createNewProject('colorseeker'));
@@ -579,6 +603,24 @@ async function assertNextImprovements(page) {
     await page.type('.ml-item-text', 'Tickets');
     await page.click('.ml-save-btn');
     await page.waitForSelector('.ml-card .ml-item-due');
+    const dateUi = await page.evaluate(() => {
+        const row = document.querySelector('.ml-card-item');
+        const icon = row.querySelector('.ml-due-btn');
+        const check = row.querySelector('.ml-card-checkbox');
+        const text = row.querySelector('.ml-card-item-text');
+        const due = row.querySelector('.ml-item-due');
+        return {
+            icon: icon.querySelector('iconify-icon')?.getAttribute('icon'),
+            iconLeft: icon.getBoundingClientRect().left,
+            checkLeft: check.getBoundingClientRect().left,
+            textWidth: text.getBoundingClientRect().width,
+            dueWidth: due.getBoundingClientRect().width,
+        };
+    });
+    assert.equal(dateUi.icon, 'lucide:calendar');
+    assert.ok(dateUi.iconLeft < dateUi.checkLeft, 'the due date is not left of the checkbox');
+    assert.ok(dateUi.dueWidth < 40, `date control still sits on the text line: ${dateUi.dueWidth}`);
+    assert.ok(dateUi.textWidth > 48, `item text was squeezed: ${dateUi.textWidth}`);
     await page.$eval('.ml-card .ml-item-due', (el) => {
         el.value = '2026-11-02';
         el.dispatchEvent(new Event('change', { bubbles: true }));
@@ -759,9 +801,32 @@ async function assertNextImprovements(page) {
     await page.waitForSelector('.story-card');
     await page.click('#storyflow-add-frame-btn');
     await page.waitForFunction(() => document.querySelectorAll('.story-card').length === 2);
+    const scriptIcon = await page.$eval('#storyflow-script-btn iconify-icon', (el) => el.getAttribute('icon'));
+    const playIcon = await page.$eval('#storyflow-play-btn iconify-icon', (el) => el.getAttribute('icon'));
+    assert.equal(playIcon, 'lucide:play');
+    assert.equal(scriptIcon, 'lucide:scroll-text');
     await page.click('#storyflow-script-btn');
     await page.waitForSelector('.story-script-action');
-    assert.equal(await page.$eval('#storyflow-script-btn', (el) => el.textContent.trim()), 'Board');
+    assert.equal(await page.$eval('#storyflow-script-btn', (el) => el.classList.contains('is-open')), true);
+    const scriptLayout = await page.evaluate(() => {
+        const cards = document.getElementById('storyflow-scroll-area').getBoundingClientRect();
+        const script = document.getElementById('storyflow-script-view').getBoundingClientRect();
+        return {
+            cardsW: cards.width,
+            scriptW: script.width,
+            scriptLeft: script.left,
+            cardsRight: cards.right,
+            scrollHidden: document.getElementById('storyflow-scroll-area').hidden,
+            scriptHidden: document.getElementById('storyflow-script-view').hidden,
+            cards: document.querySelectorAll('.story-card').length,
+        };
+    });
+    assert.equal(scriptLayout.scrollHidden, false, 'opening the script hid the frames');
+    assert.equal(scriptLayout.scriptHidden, false);
+    assert.equal(scriptLayout.cards, 2);
+    assert.ok(scriptLayout.cardsW > 80, `frames have no width: ${scriptLayout.cardsW}`);
+    assert.ok(scriptLayout.scriptW > 80, `script sidebar has no width: ${scriptLayout.scriptW}`);
+    assert.ok(scriptLayout.scriptLeft >= scriptLayout.cardsRight - 2, 'script is not beside the frames');
     const scriptAreas = await page.$$('.story-script-action');
     assert.equal(scriptAreas.length, 2);
     await scriptAreas[0].type('She opens the door');
@@ -777,6 +842,39 @@ async function assertNextImprovements(page) {
     const boardText = await page.$$eval('.story-desc-area', (els) => els.map((el) => el.value));
     assert.deepEqual(boardText, ['She opens the door', 'He answers']);
     assert.equal(await page.$eval('#storyflow-script-view', (el) => el.hidden), true);
+
+    await page.evaluate(() => {
+        const project = projects.find((p) => p.id === activeProjectId);
+        project.data.frames[0].title = 'Dawn';
+        project.data.frames[0].description = 'She opens the door';
+        project.data.frames[0].meta.duration = '30s';
+        renderStoryflowView(project);
+    });
+    await page.click('#storyflow-fullscreen-btn');
+    await page.waitForSelector('#storyflow-fullscreen:not([hidden])');
+    const fullscreen = await page.evaluate(() => {
+        const root = document.getElementById('storyflow-fullscreen');
+        const still = root.querySelector('.storyflow-fullscreen-still').getBoundingClientRect();
+        const copy = root.querySelector('.storyflow-fullscreen-copy').getBoundingClientRect();
+        const box = root.getBoundingClientRect();
+        return {
+            coverW: box.width >= window.innerWidth - 2 && box.left <= 1,
+            coverH: box.height >= window.innerHeight - 2 && box.top <= 1,
+            title: document.getElementById('storyflow-fullscreen-title').textContent,
+            text: document.getElementById('storyflow-fullscreen-text').textContent,
+            textUnder: copy.top >= still.bottom - 2,
+            refused: root.dataset.fullscreenRefused || '',
+        };
+    });
+    if (fullscreen.refused) console.log('fullscreen-api-refused');
+    assert.equal(fullscreen.coverW, true, 'fullscreen playback does not cover the width');
+    assert.equal(fullscreen.coverH, true, 'fullscreen playback does not cover the height');
+    assert.equal(fullscreen.title, 'Dawn');
+    assert.equal(fullscreen.text, 'She opens the door');
+    assert.equal(fullscreen.textUnder, true, 'the still text is not under the picture');
+    if (shotDir) await page.screenshot({ path: path.join(shotDir, 'moodflow-fullscreen.png') });
+    await page.click('#storyflow-fullscreen-close');
+    await page.waitForFunction(() => document.getElementById('storyflow-fullscreen').hidden);
 
     await page.evaluate(async () => {
         const board = projects.find((p) => p.type === 'moodinfinite');
@@ -866,7 +964,7 @@ async function assertNextImprovements(page) {
             texts: card.items.map((item) => item.text),
             indents: card.items.map((item) => item.indent || 0),
             checked: card.items.map((item) => !!item.checked),
-            subText: document.querySelector('.ml-card-item.ml-subtask .ml-card-item-text')?.textContent?.trim(),
+            subText: document.querySelector('.ml-card-item.ml-subtask .ml-card-item-text')?.value?.trim(),
             classes: rows.map((row) => row.classList.contains('ml-subtask')),
             shift: textLeft(rows[1]) - textLeft(rows[0]),
             textWidth: rows[1].querySelector('.ml-card-item-text').getBoundingClientRect().width,
@@ -959,6 +1057,37 @@ async function assertNextImprovements(page) {
         const pane = await page.$('#moodprompt-container');
         await pane.screenshot({ path: path.join(shotDir, 'moodprompt-previous.png') });
     }
+
+    await page.evaluate(() => createNewProject('moodlist'));
+    await page.waitForSelector('.ml-add-title');
+    await (await page.$('.ml-add-title')).type('Groceries');
+    await (await page.$('.ml-item-text')).type('Milk');
+    await page.click('.ml-save-btn');
+    await page.waitForSelector('.ml-card-item-text');
+    const cardsBeforePaste = await page.$$eval('.ml-card', (els) => els.length);
+    await page.click('.ml-card-item-text');
+    const pastedInto = await page.evaluate(() => {
+        const el = document.querySelector('.ml-card-item-text');
+        el.focus();
+        const data = new DataTransfer();
+        data.setData('text/plain', ' and bread');
+        el.dispatchEvent(new ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData: data }));
+        return {
+            value: el.value,
+            cards: document.querySelectorAll('.ml-card').length,
+            stored: projects.find((p) => p.id === activeProjectId).data.cards[0].items[0].text,
+        };
+    });
+    assert.ok(pastedInto.value.includes('and bread'), `paste missed the list field: ${pastedInto.value}`);
+    assert.equal(pastedInto.cards, cardsBeforePaste, 'pasting into a list field created a card');
+    assert.ok(pastedInto.stored.includes('and bread'), 'the list item did not keep the pasted text');
+    await page.evaluate(() => { if (document.activeElement) document.activeElement.blur(); });
+    await page.evaluate(() => {
+        const data = new DataTransfer();
+        data.setData('text/plain', 'Buy tape');
+        document.body.dispatchEvent(new ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData: data }));
+    });
+    await page.waitForFunction((n) => document.querySelectorAll('.ml-card').length === n + 1, {}, cardsBeforePaste);
 }
 
 const server = startServer();

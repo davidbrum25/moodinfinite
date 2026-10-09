@@ -429,7 +429,7 @@ function switchTab(projectId) {
         moodinfiniteContainer.style.display = 'none';
         moodpromptContainer.style.display = 'none';
         if (colorseekerContainer) colorseekerContainer.style.display = 'none';
-        if (storyflowContainer) storyflowContainer.style.display = 'block';
+        if (storyflowContainer) storyflowContainer.style.display = 'flex';
         const storyflowMinimap = document.getElementById('storyflow-minimap');
         if (storyflowMinimap) storyflowMinimap.style.display = 'flex';
         const ganttCont = document.getElementById('gantt-container');
@@ -2695,12 +2695,15 @@ function syncCanvasChrome() {
     syncCanvasMinimap();
 }
 
+let minimapFrame = null;
+
 function syncCanvasMinimap() {
     const root = document.getElementById('canvas-minimap');
     const map = document.getElementById('canvas-minimap-map');
     const view = document.getElementById('canvas-minimap-viewport');
     if (!root || !map || !view || !canvas) return;
     if (!items.length) {
+        minimapFrame = null;
         if (!root.hidden) root.hidden = true;
         return;
     }
@@ -2724,6 +2727,7 @@ function syncCanvasMinimap() {
     }
     const worldW = Math.max(1, maxX - minX);
     const worldH = Math.max(1, maxY - minY);
+    minimapFrame = { minX, minY, worldW, worldH };
     const mw = map.width;
     const mh = map.height;
     const mctx = map.getContext('2d');
@@ -2747,6 +2751,43 @@ function syncCanvasMinimap() {
     view.style.top = (pad + vy) + 'px';
     view.style.width = Math.max(6, vw) + 'px';
     view.style.height = Math.max(6, vh) + 'px';
+}
+
+function panCanvasToWorldPoint(world) {
+    if (!world || !canvas) return;
+    cameraOffset.x = canvas.width / 2 - world.x;
+    cameraOffset.y = canvas.height / 2 - world.y;
+    requestUpdate();
+}
+
+function worldPointOnMinimap(clientX, clientY, frame) {
+    const map = document.getElementById('canvas-minimap-map');
+    if (!map || !frame) return null;
+    const rect = map.getBoundingClientRect();
+    if (!rect.width || !rect.height) return null;
+    const u = Math.min(1, Math.max(0, (clientX - rect.left) / rect.width));
+    const v = Math.min(1, Math.max(0, (clientY - rect.top) / rect.height));
+    return { x: frame.minX + u * frame.worldW, y: frame.minY + v * frame.worldH };
+}
+
+const canvasMinimap = document.getElementById('canvas-minimap');
+if (canvasMinimap) {
+    let dragFrame = null;
+    canvasMinimap.addEventListener('pointerdown', (e) => {
+        if (e.button !== 0 || !minimapFrame) return;
+        e.preventDefault();
+        e.stopPropagation();
+        dragFrame = minimapFrame;
+        canvasMinimap.setPointerCapture(e.pointerId);
+        panCanvasToWorldPoint(worldPointOnMinimap(e.clientX, e.clientY, dragFrame));
+    });
+    canvasMinimap.addEventListener('pointermove', (e) => {
+        if (!dragFrame) return;
+        panCanvasToWorldPoint(worldPointOnMinimap(e.clientX, e.clientY, dragFrame));
+    });
+    const endMinimapDrag = () => { dragFrame = null; };
+    canvasMinimap.addEventListener('pointerup', endMinimapDrag);
+    canvasMinimap.addEventListener('pointercancel', endMinimapDrag);
 }
 
 function syncSnapIndicator(active, shiftKey) {
@@ -5422,6 +5463,21 @@ function handlePaste(e) {
 
     const activeProject = projects.find(p => p.id === activeProjectId);
     if (activeProject && activeProject.type === 'moodlist') {
+        const focus = document.activeElement;
+        const inList = focus && focus.closest && focus.closest('#moodlist-container');
+        if (inList && (focus.matches('input, textarea') || focus.isContentEditable)) {
+            if (focus.matches('input, textarea')) {
+                e.preventDefault();
+                const clip = e.clipboardData ? e.clipboardData.getData('text') : '';
+                const start = focus.selectionStart == null ? focus.value.length : focus.selectionStart;
+                const end = focus.selectionEnd == null ? start : focus.selectionEnd;
+                focus.value = focus.value.slice(0, start) + clip + focus.value.slice(end);
+                const caret = start + clip.length;
+                if (focus.setSelectionRange) focus.setSelectionRange(caret, caret);
+                focus.dispatchEvent(new Event('input', { bubbles: true }));
+            }
+            return;
+        }
         const text = e.clipboardData.getData('text');
         if (text) {
             try {
@@ -7759,6 +7815,19 @@ if (colorseekerHexList) {
 
 let storyflowAnimaticTimer = 0;
 
+function setStoryflowIcon(btn, name) {
+    if (!btn) return;
+    let icon = btn.querySelector('iconify-icon');
+    if (!icon) {
+        btn.textContent = '';
+        icon = document.createElement('iconify-icon');
+        icon.setAttribute('width', '16');
+        icon.setAttribute('height', '16');
+        btn.appendChild(icon);
+    }
+    icon.setAttribute('icon', 'lucide:' + name);
+}
+
 function stopStoryflowAnimatic() {
     if (storyflowAnimaticTimer) {
         clearTimeout(storyflowAnimaticTimer);
@@ -7767,7 +7836,7 @@ function stopStoryflowAnimatic() {
     document.querySelectorAll('.story-card.animatic-current').forEach((card) => card.classList.remove('animatic-current'));
     const btn = document.getElementById('storyflow-play-btn');
     if (btn) {
-        btn.textContent = 'Play';
+        setStoryflowIcon(btn, 'play');
         btn.classList.remove('is-playing');
     }
 }
@@ -7783,8 +7852,9 @@ function playStoryflowAnimatic(project) {
         return;
     }
     stopStoryflowAnimatic();
+    stopStoryflowFullscreen();
     if (btn) {
-        btn.textContent = 'Stop';
+        setStoryflowIcon(btn, 'square');
         btn.classList.add('is-playing');
     }
     const showFrame = (index) => {
@@ -7812,17 +7882,109 @@ if (storyflowPlayBtn) {
     });
 }
 
+let storyflowFullscreenTimer = 0;
+
+function stopStoryflowFullscreen() {
+    if (storyflowFullscreenTimer) {
+        clearTimeout(storyflowFullscreenTimer);
+        storyflowFullscreenTimer = 0;
+    }
+    const root = document.getElementById('storyflow-fullscreen');
+    if (root) root.hidden = true;
+    const btn = document.getElementById('storyflow-fullscreen-btn');
+    if (btn) btn.classList.remove('is-playing');
+    if (document.fullscreenElement && document.exitFullscreen) {
+        document.exitFullscreen().catch(() => {});
+    }
+}
+
+function showStoryflowFullscreenFrame(project, index) {
+    const root = document.getElementById('storyflow-fullscreen');
+    const frame = project && project.data && project.data.frames ? project.data.frames[index] : null;
+    if (!root || !frame) return;
+    root.hidden = false;
+    root.dataset.frameIndex = String(index);
+    const img = document.getElementById('storyflow-fullscreen-image');
+    const empty = document.getElementById('storyflow-fullscreen-empty');
+    const title = document.getElementById('storyflow-fullscreen-title');
+    const text = document.getElementById('storyflow-fullscreen-text');
+    if (img) {
+        if (frame.image) {
+            img.src = frame.image;
+            img.hidden = false;
+            if (empty) empty.hidden = true;
+        } else {
+            img.removeAttribute('src');
+            img.hidden = true;
+            if (empty) empty.hidden = false;
+        }
+    }
+    if (title) title.textContent = frame.title || '';
+    if (text) text.textContent = frame.description || '';
+}
+
+function playStoryflowFullscreen(project) {
+    const btn = document.getElementById('storyflow-fullscreen-btn');
+    if (btn && btn.classList.contains('is-playing')) {
+        stopStoryflowFullscreen();
+        return;
+    }
+    if (!project || project.type !== 'storyflow' || !project.data || !project.data.frames || !project.data.frames.length) {
+        showToast('Add a frame before playing.', 'error');
+        return;
+    }
+    stopStoryflowAnimatic();
+    stopStoryflowFullscreen();
+    if (btn) btn.classList.add('is-playing');
+    const root = document.getElementById('storyflow-fullscreen');
+    if (root && root.requestFullscreen) {
+        try {
+            const pending = root.requestFullscreen();
+            if (pending && typeof pending.catch === 'function') {
+                pending.catch(() => { root.dataset.fullscreenRefused = '1'; });
+            }
+        } catch (err) {
+            root.dataset.fullscreenRefused = '1';
+        }
+    }
+    const show = (index) => {
+        const playing = document.getElementById('storyflow-fullscreen-btn');
+        if (!playing || !playing.classList.contains('is-playing')) return;
+        showStoryflowFullscreenFrame(project, index);
+        const frame = project.data.frames[index];
+        const seconds = Math.max(1, parseFloat(frame && frame.meta && frame.meta.duration) || 3);
+        if (index + 1 < project.data.frames.length) {
+            storyflowFullscreenTimer = setTimeout(() => show(index + 1), seconds * 1000);
+        } else {
+            storyflowFullscreenTimer = setTimeout(() => stopStoryflowFullscreen(), seconds * 1000);
+        }
+    };
+    show(0);
+}
+
+const storyflowFullscreenBtn = document.getElementById('storyflow-fullscreen-btn');
+if (storyflowFullscreenBtn) {
+    storyflowFullscreenBtn.addEventListener('click', () => {
+        const project = projects.find((p) => p.id === activeProjectId);
+        playStoryflowFullscreen(project);
+    });
+}
+const storyflowFullscreenClose = document.getElementById('storyflow-fullscreen-close');
+if (storyflowFullscreenClose) {
+    storyflowFullscreenClose.addEventListener('click', () => stopStoryflowFullscreen());
+}
+
 function renderStoryflowView(project) {
     if (!storyflowContainer) return;
     const scrollArea = document.getElementById('storyflow-scroll-area');
     if (!scrollArea) return;
     const scriptView = document.getElementById('storyflow-script-view');
     const scriptBtn = document.getElementById('storyflow-script-btn');
-    if (scriptView) scriptView.hidden = true;
+    const keepScript = !!(scriptView && !scriptView.hidden);
     scrollArea.hidden = false;
-    if (scriptBtn) {
-        scriptBtn.textContent = 'Script';
-        scriptBtn.classList.remove('is-open');
+    if (!keepScript) {
+        if (scriptView) scriptView.hidden = true;
+        if (scriptBtn) scriptBtn.classList.remove('is-open');
     }
     
     scrollArea.innerHTML = '';
@@ -7961,6 +8123,7 @@ function renderStoryflowView(project) {
             }
         }, 50);
     }
+    if (keepScript) renderStoryflowScript(project);
 }
 
 function renderStoryflowScript(project) {
@@ -7990,6 +8153,8 @@ function renderStoryflowScript(project) {
         title.value = frame.title || '';
         title.addEventListener('input', () => {
             frame.title = title.value;
+            const cardTitle = document.querySelectorAll('#storyflow-scroll-area .story-title-input')[index];
+            if (cardTitle && document.activeElement !== cardTitle) cardTitle.value = title.value;
             scheduleAutoSave();
         });
         const action = document.createElement('textarea');
@@ -7998,6 +8163,8 @@ function renderStoryflowScript(project) {
         action.value = frame.description || '';
         action.addEventListener('input', () => {
             frame.description = action.value;
+            const cardAction = document.querySelectorAll('#storyflow-scroll-area .story-desc-area')[index];
+            if (cardAction && document.activeElement !== cardAction) cardAction.value = action.value;
             scheduleAutoSave();
         });
         row.append(num, title, action);
@@ -8015,19 +8182,13 @@ function toggleStoryflowScript(project) {
     if (opening) {
         renderStoryflowScript(project);
         view.hidden = false;
-        scroll.hidden = true;
-        if (btn) {
-            btn.textContent = 'Board';
-            btn.classList.add('is-open');
-        }
+        scroll.hidden = false;
+        if (btn) btn.classList.add('is-open');
         return;
     }
     view.hidden = true;
     scroll.hidden = false;
-    if (btn) {
-        btn.textContent = 'Script';
-        btn.classList.remove('is-open');
-    }
+    if (btn) btn.classList.remove('is-open');
     renderStoryflowView(project);
 }
 

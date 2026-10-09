@@ -469,8 +469,9 @@
                     <iconify-icon icon="lucide:film" width="16" height="16"></iconify-icon>
                     <span id="stats-frames-count">0 Frames</span>
                 </div>
-                <button id="storyflow-play-btn" type="button" title="Play frames for their durations">Play</button>
-                <button id="storyflow-script-btn" type="button" title="Edit every frame in one column">Script</button>
+                <button id="storyflow-play-btn" type="button" class="storyflow-icon-btn" title="Play frames for their durations"><iconify-icon icon="lucide:play" width="16" height="16"></iconify-icon></button>
+                <button id="storyflow-fullscreen-btn" type="button" class="storyflow-icon-btn" title="Play the story fullscreen"><iconify-icon icon="lucide:maximize-2" width="16" height="16"></iconify-icon></button>
+                <button id="storyflow-script-btn" type="button" class="storyflow-icon-btn" title="Show the script beside the frames"><iconify-icon icon="lucide:scroll-text" width="16" height="16"></iconify-icon></button>
                 <div class="stats-item">
                     <iconify-icon icon="lucide:clock" width="16" height="16"></iconify-icon>
                     <span id="stats-total-duration">0s Total</span>
@@ -496,8 +497,21 @@
                     <span id="stats-not-started">0% Not Started</span>
                 </div>
             </div>
-            <div id="storyflow-scroll-area"></div>
-            <div id="storyflow-script-view" hidden></div>
+            <div id="storyflow-stage">
+                <div id="storyflow-scroll-area"></div>
+                <div id="storyflow-script-view" hidden></div>
+            </div>
+        </div>
+        <div id="storyflow-fullscreen" hidden>
+            <button id="storyflow-fullscreen-close" type="button" title="Stop fullscreen playback"><iconify-icon icon="lucide:x" width="20" height="20"></iconify-icon></button>
+            <div class="storyflow-fullscreen-still">
+                <img id="storyflow-fullscreen-image" alt="" hidden>
+                <div id="storyflow-fullscreen-empty">No still</div>
+            </div>
+            <div class="storyflow-fullscreen-copy">
+                <h2 id="storyflow-fullscreen-title"></h2>
+                <p id="storyflow-fullscreen-text"></p>
+            </div>
         </div>
 
         <div id="storyflow-minimap" style="display: none;">

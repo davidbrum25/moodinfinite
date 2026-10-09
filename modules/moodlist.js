@@ -357,11 +357,16 @@ function _moodlistItemInner(item, index) {
                 <iconify-icon icon="lucide:grip-vertical" width="14" height="14"></iconify-icon>
             </span>
             ${indentBtn}
+            <span class="ml-due-wrap${item.due ? ' has-date' : ''}">
+                <button type="button" class="ml-due-btn" title="Due date" tabindex="-1">
+                    <iconify-icon icon="lucide:calendar" width="14" height="14"></iconify-icon>
+                </button>
+                <input type="date" class="ml-item-due" title="Due date" tabindex="-1"${item.due ? ` value="${_escapeAttr(item.due)}"` : ''}>
+            </span>
             <span class="ml-card-checkbox">
                 <iconify-icon icon="${item.checked ? 'lucide:check-square' : 'lucide:square'}" width="15" height="15"></iconify-icon>
             </span>
-            <span class="ml-card-item-text">${_escapeHtml(item.text)}</span>
-            <input type="date" class="ml-item-due" title="Due date"${item.due ? ` value="${_escapeAttr(item.due)}"` : ''}>
+            <input type="text" class="ml-card-item-text" value="${_escapeAttr(item.text || '')}">
             <button class="ml-card-item-del" title="Delete item" tabindex="-1">
                 <iconify-icon icon="lucide:x" width="12" height="12"></iconify-icon>
             </button>`;
@@ -433,10 +438,11 @@ function _wireCard(el, card, project, grid) {
     // Toggle checkboxes + delete item buttons
     el.querySelectorAll('.ml-card-item').forEach(itemEl => {
         const item = card.items.find(i => i.id === itemEl.dataset.itemId);
+        _wireItemText(itemEl, item);
         _wireItemDue(itemEl, item);
         _wireItemIndent(itemEl, item, card, project, grid);
         itemEl.addEventListener('click', (e) => {
-            if (e.target.closest('.ml-card-item-del') || e.target.closest('.ml-item-due') || e.target.closest('.ml-indent-btn')) return;
+            if (e.target.closest('.ml-card-item-del') || e.target.closest('.ml-item-due') || e.target.closest('.ml-due-wrap') || e.target.closest('.ml-indent-btn') || e.target.closest('.ml-card-item-text')) return;
             if (item) {
                 item.checked = !item.checked;
                 scheduleAutoSave();
@@ -496,10 +502,11 @@ function _wireCard(el, card, project, grid) {
             row.dataset.itemId = newItem.id;
             row.draggable = true;
             row.innerHTML = _moodlistItemInner(newItem, newIndex);
+            _wireItemText(row, newItem);
             _wireItemDue(row, newItem);
             _wireItemIndent(row, newItem, card, project, grid);
             row.addEventListener('click', (e) => {
-                if (e.target.closest('.ml-card-item-del') || e.target.closest('.ml-item-due') || e.target.closest('.ml-indent-btn')) return;
+                if (e.target.closest('.ml-card-item-del') || e.target.closest('.ml-item-due') || e.target.closest('.ml-due-wrap') || e.target.closest('.ml-indent-btn') || e.target.closest('.ml-card-item-text')) return;
                 newItem.checked = !newItem.checked;
                 row.classList.toggle('checked', newItem.checked);
                 row.querySelector('.ml-card-checkbox iconify-icon').setAttribute('icon',
@@ -681,9 +688,25 @@ function _escapeHtml(str) {
         .replace(/>/g,'&gt;')
         .replace(/"/g,'&quot;');
 }
+function _wireItemText(itemEl, item) {
+    const field = itemEl.querySelector('.ml-card-item-text');
+    if (!field || !item || field.tagName !== 'INPUT') return;
+    const stop = (e) => e.stopPropagation();
+    field.addEventListener('pointerdown', stop);
+    field.addEventListener('mousedown', stop);
+    field.addEventListener('click', stop);
+    field.addEventListener('input', () => {
+        item.text = field.value;
+        scheduleAutoSave();
+    });
+}
+
 function _wireItemDue(itemEl, item) {
     const due = itemEl.querySelector('.ml-item-due');
     if (!due || !item) return;
+    const wrap = due.closest('.ml-due-wrap');
+    const paint = () => { if (wrap) wrap.classList.toggle('has-date', !!due.value); };
+    paint();
     const stop = (e) => e.stopPropagation();
     due.addEventListener('click', stop);
     due.addEventListener('pointerdown', stop);
@@ -691,6 +714,7 @@ function _wireItemDue(itemEl, item) {
     due.addEventListener('change', (e) => {
         e.stopPropagation();
         item.due = due.value || '';
+        paint();
         scheduleAutoSave();
     });
 }

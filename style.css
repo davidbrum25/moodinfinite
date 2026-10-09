@@ -731,11 +731,12 @@
         }
 
         #storyflow-scroll-area {
-            flex: 1;
+            flex: 1 1 auto;
+            min-width: 0;
             overflow-x: auto;
             overflow-y: hidden;
             padding: 1rem 2rem;
-            margin-bottom: 0; /* Margin moved to container padding */
+            margin-bottom: 0;
             box-sizing: border-box;
             display: flex;
             align-items: stretch;
@@ -1316,6 +1317,8 @@
             border: 1px solid var(--border-color);
             background: rgba(16, 18, 24, 0.92);
             box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+            cursor: grab;
+            touch-action: none;
         }
 
         #canvas-minimap[hidden] {
@@ -1380,43 +1383,46 @@
             border-color: var(--switch-bg-checked);
         }
 
-        #storyflow-play-btn {
-            margin-left: 0.35rem;
-            padding: 0.3rem 0.75rem;
+        .storyflow-icon-btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 2rem;
+            height: 2rem;
+            padding: 0;
             border-radius: 999px;
             border: 1px solid var(--border-color);
             background: transparent;
             color: var(--text-color);
-            font: 600 0.75rem/1 Inter, sans-serif;
             cursor: pointer;
         }
 
-        #storyflow-play-btn.is-playing {
+        #storyflow-play-btn { margin-left: 0.35rem; }
+
+        #storyflow-play-btn.is-playing,
+        #storyflow-fullscreen-btn.is-playing,
+        #storyflow-script-btn.is-open,
+        .storyflow-icon-btn:hover {
             border-color: var(--switch-bg-checked);
             color: var(--switch-bg-checked);
         }
 
-        #storyflow-script-btn {
-            padding: 0.3rem 0.75rem;
-            border-radius: 999px;
-            border: 1px solid var(--border-color);
-            background: transparent;
-            color: var(--text-color);
-            font: 600 0.75rem/1 Inter, sans-serif;
-            cursor: pointer;
-        }
-
-        #storyflow-script-btn:hover,
-        #storyflow-script-btn.is-open {
-            border-color: var(--switch-bg-checked);
-            color: var(--switch-bg-checked);
+        #storyflow-stage {
+            flex: 1;
+            min-height: 0;
+            display: flex;
+            flex-direction: row;
+            overflow: hidden;
         }
 
         #storyflow-script-view {
+            flex: 0 0 22rem;
+            width: 22rem;
             overflow: auto;
-            padding: 1.25rem 2rem 2rem;
-            height: calc(100% - 3.5rem);
+            padding: 1rem;
             box-sizing: border-box;
+            border-left: 1px solid var(--border-color);
+            background: rgba(12, 14, 20, 0.96);
         }
 
         #storyflow-script-view[hidden] {
@@ -1427,7 +1433,73 @@
             display: flex;
             flex-direction: column;
             gap: 0.85rem;
-            max-width: 46rem;
+            width: 100%;
+        }
+
+        #storyflow-fullscreen {
+            position: fixed;
+            inset: 0;
+            z-index: 80;
+            display: flex;
+            flex-direction: column;
+            background: #05060a;
+            color: var(--text-color);
+        }
+
+        #storyflow-fullscreen[hidden] { display: none !important; }
+
+        #storyflow-fullscreen-close {
+            position: absolute;
+            top: 1rem;
+            right: 1rem;
+            z-index: 2;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 2.25rem;
+            height: 2.25rem;
+            border-radius: 999px;
+            border: 1px solid var(--border-color);
+            background: rgba(0, 0, 0, 0.45);
+            color: var(--text-color);
+            cursor: pointer;
+        }
+
+        .storyflow-fullscreen-still {
+            flex: 1 1 auto;
+            min-height: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: #10131c;
+        }
+
+        #storyflow-fullscreen-image {
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
+        }
+
+        #storyflow-fullscreen-empty {
+            color: var(--text-color-light);
+            font: 600 1rem/1.4 Inter, sans-serif;
+        }
+
+        .storyflow-fullscreen-copy {
+            flex: 0 0 auto;
+            padding: 1rem 2.5rem 1.6rem;
+        }
+
+        #storyflow-fullscreen-title {
+            margin: 0 0 0.35rem;
+            font-size: 1.35rem;
+        }
+
+        #storyflow-fullscreen-text {
+            margin: 0;
+            color: var(--text-color-light);
+            font-size: 1rem;
+            line-height: 1.45;
         }
 
         .story-script-row {
@@ -5035,19 +5107,50 @@
     transition: opacity 0.15s, text-decoration 0.15s;
     overflow-wrap: break-word;
 }
-
-.ml-item-due {
-    flex: 0 1 7.2rem;
-    width: 7.2rem;
-    min-width: 0;
-    max-width: 7.6rem;
-    padding: 0.12rem 0.3rem;
-    border-radius: 0.4rem;
-    border: 1px solid var(--border-color);
+input.ml-card-item-text {
     background: transparent;
-    color: var(--text-color);
+    border: none;
+    outline: none;
+    padding: 0;
+    font: inherit;
+    font-size: 0.88rem;
+    color: inherit;
+    cursor: text;
+}
+
+.ml-due-wrap {
+    position: relative;
+    flex: 0 0 auto;
+    width: 1.35rem;
+    height: 1.35rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.ml-due-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.35rem;
+    height: 1.35rem;
+    padding: 0;
+    border: none;
+    background: transparent;
+    color: var(--text-color-light);
+    pointer-events: none;
+}
+.ml-due-wrap.has-date .ml-due-btn { color: var(--switch-bg-checked); }
+.ml-item-due {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    opacity: 0;
+    cursor: pointer;
     color-scheme: dark;
-    font: 500 0.72rem/1 Inter, sans-serif;
 }
 .ml-indent-btn {
     background: transparent;
