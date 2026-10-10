@@ -403,10 +403,19 @@ function _buildCard(card, project, grid) {
         ? `<iconify-icon icon="lucide:pin" width="14" height="14" style="color:var(--switch-bg-checked)"></iconify-icon>`
         : `<iconify-icon icon="lucide:pin" width="14" height="14"></iconify-icon>`;
 
+    const totalItems = (card.items || []).length;
+    const doneItems = (card.items || []).filter(i => i.checked).length;
+    const progressBadge = totalItems > 0
+        ? `<span class="ml-card-progress-badge${doneItems === totalItems ? ' is-complete' : ''}" title="${doneItems} of ${totalItems} completed">${doneItems}/${totalItems}</span>`
+        : '';
+
     el.innerHTML = `
         ${imgHtml}
         <div class="ml-card-body">
-            ${card.title ? `<div class="ml-card-title" contenteditable="true" spellcheck="false">${_escapeHtml(card.title)}</div>` : `<div class="ml-card-title empty" contenteditable="true" spellcheck="false" data-placeholder="Title…"></div>`}
+            <div class="ml-card-header-row">
+                ${card.title ? `<div class="ml-card-title" contenteditable="true" spellcheck="false">${_escapeHtml(card.title)}</div>` : `<div class="ml-card-title empty" contenteditable="true" spellcheck="false" data-placeholder="Title…"></div>`}
+                ${progressBadge}
+            </div>
             <div class="ml-card-items">${itemsHtml}</div>
             <div class="ml-card-add-item">
                 <iconify-icon icon="lucide:plus" width="13" height="13"></iconify-icon>
@@ -426,6 +435,9 @@ function _buildCard(card, project, grid) {
                     </button>
                     <div class="ml-color-picker" style="display:none"></div>
                 </div>
+                <button class="ml-card-btn ml-card-duplicate-btn" title="Duplicate card">
+                    <iconify-icon icon="lucide:copy-plus" width="14" height="14"></iconify-icon>
+                </button>
             </div>
             <button class="ml-card-btn ml-card-delete-btn" title="Delete card">
                 <iconify-icon icon="lucide:trash-2" width="14" height="14"></iconify-icon>
@@ -557,6 +569,20 @@ function _wireCard(el, card, project, grid) {
         card.pinned = !card.pinned;
         scheduleAutoSave();
         renderMoodlistCards(project, grid);
+    });
+
+    // Duplicate card
+    el.querySelector('.ml-card-duplicate-btn')?.addEventListener('click', () => {
+        const target = _activeMoodlistProject() || project;
+        if (!target.data.cards) target.data.cards = [];
+        const idx = target.data.cards.findIndex(c => c.id === card.id);
+        const clone = JSON.parse(JSON.stringify(card));
+        clone.id = mlId();
+        clone.title = card.title ? `${card.title} (Copy)` : 'Copy';
+        (clone.items || []).forEach(it => { it.id = mlId(); });
+        target.data.cards.splice(idx >= 0 ? idx + 1 : 0, 0, clone);
+        scheduleAutoSave();
+        renderMoodlistCards(target, grid);
     });
 
     // Delete card

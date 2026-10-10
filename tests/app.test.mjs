@@ -1189,6 +1189,146 @@ async function assertNextImprovements(page) {
     assert.equal(afterCustom.cards, 18, JSON.stringify(afterCustom));
 }
 
+async function assertQoLUpgrades(page) {
+    const shotDir = process.env.POLISH_SHOT_DIR;
+
+    // 1. Moodinfinite Canvas: Selection toolbar duplicate & count badge
+    await page.evaluate(() => {
+        const board = projects.find((p) => p.type === 'moodinfinite');
+        switchTab(board.id);
+        (0, eval)('selectedItems.length = 0');
+        items.length = 0;
+        const box = (id, x, y) => ({
+            id, type: 'box', color: '#ff40c0', x, y, width: 80, height: 60,
+            rotation: 0, isPinned: false, style: 'fill', opacity: 1, scaleX: 1, scaleY: 1,
+        });
+        items.push(box('b1', 100, 100), box('b2', 250, 100));
+        (0, eval)('selectedItems = [items[0], items[1]]');
+        if (typeof updateSelectionToolbar === 'function') updateSelectionToolbar();
+        draw();
+    });
+    const selCount = await page.$eval('#selection-count-badge', (el) => ({
+        text: el.textContent.trim(),
+        visible: getComputedStyle(el).display !== 'none',
+    }));
+    assert.equal(selCount.visible, true, 'selection count badge hidden with 2 items selected');
+    assert.equal(selCount.text, '2');
+    const dupSelBtn = await page.$('#duplicate-selection-btn');
+    assert.notEqual(dupSelBtn, null, 'duplicate selection button missing from toolbar');
+    await dupSelBtn.click();
+    const countAfterDup = await page.evaluate(() => items.length);
+    assert.equal(countAfterDup, 4, `expected 4 items after duplicate selection, got ${countAfterDup}`);
+
+    // 2. Moodprompt: live character/word counter badge + quick duplicate prompt card
+    await page.evaluate(() => {
+        (0, eval)('moodpromptFilterPlatform = "all"');
+        (0, eval)('moodpromptSearchQuery = ""');
+        createNewProject('moodprompt');
+    });
+    await page.click('#moodprompt-empty-add');
+    await page.waitForSelector('.prompt-card');
+    await page.waitForSelector('.prompt-counter-badge');
+    const initialBadge = await page.$eval('.prompt-counter-badge', (el) => el.textContent.trim());
+    assert.match(initialBadge, /0 chars · 0 words/);
+    const pArea = await page.$('.prompt-text-area');
+    await pArea.type('A glowing neon sunset in Tokyo');
+    await pArea.evaluate((el) => el.blur());
+    const updatedBadge = await page.$eval('.prompt-counter-badge', (el) => el.textContent.trim());
+    assert.match(updatedBadge, /30 chars · 6 words/);
+    const promptCardsBefore = await page.$$eval('.prompt-card', (els) => els.length);
+    assert.equal(promptCardsBefore, 1);
+    await page.click('.prompt-duplicate-btn');
+    await page.waitForFunction(() => document.querySelectorAll('.prompt-card').length === 2);
+    const clonedPromptText = await page.$$eval('.prompt-text-area', (els) => els[1].value);
+    assert.equal(clonedPromptText, 'A glowing neon sunset in Tokyo');
+
+    // 3. Moodtone (Colorseeker): Reverse palette & Copy CSS variables
+    await page.evaluate(() => createNewProject('colorseeker'));
+    await page.waitForSelector('.colorseeker-bar');
+    const paletteOriginal = await page.$eval('#colorseeker-hex-list', (el) => el.textContent.trim());
+    const colorsList = paletteOriginal.split(',').map((s) => s.trim().toUpperCase());
+    await page.click('#colorseeker-reverse-palette');
+    await page.waitForFunction((firstHex) => {
+        const cur = document.getElementById('colorseeker-hex-list').textContent.trim();
+        return !cur.startsWith(firstHex);
+    }, {}, colorsList[0]);
+    const paletteReversed = (await page.$eval('#colorseeker-hex-list', (el) => el.textContent.trim())).split(',').map((s) => s.trim().toUpperCase());
+    assert.deepEqual(paletteReversed, [...colorsList].reverse(), 'palette was not reversed');
+    await page.click('#colorseeker-copy-css');
+    await page.waitForSelector('.colorseeker-copied');
+    assert.equal(await page.$eval('.colorseeker-copied', (el) => el.textContent.trim()), 'CSS Copied');
+
+    // 4. Moodflow (Storyflow): Card header duplicate frame
+    await page.evaluate(() => createNewProject('storyflow'));
+    await page.click('#storyflow-empty-add');
+    await page.waitForSelector('.story-card');
+    await page.type('.story-title-input', 'Scene Intro');
+    await page.click('.story-card-duplicate-btn');
+    await page.waitForFunction(() => document.querySelectorAll('.story-card').length === 2);
+    const storyTitles = await page.$$eval('.story-title-input', (els) => els.map((el) => el.value));
+    assert.deepEqual(storyTitles, ['Scene Intro', 'Scene Intro']);
+
+    // 5. Moodgantt: Expand / Collapse All Groups & Duplicate Task
+    await page.evaluate(() => createNewProject('moodgantt'));
+    await page.click('#gantt-empty-add');
+    await page.waitForSelector('.gantt-group-add-task-btn');
+    await page.click('#gantt-add-group-btn');
+    await page.waitForFunction(() => document.querySelectorAll('.gantt-group-sidebar-row').length === 2);
+    await page.click('#gantt-toggle-collapse-btn');
+    await page.waitForFunction(() => {
+        const btns = [...document.querySelectorAll('.gantt-group-collapse-btn')];
+        return btns.length === 2 && btns.every((b) => b.classList.contains('collapsed'));
+    });
+    await page.click('#gantt-toggle-collapse-btn');
+    await page.waitForFunction(() => {
+        const btns = [...document.querySelectorAll('.gantt-group-collapse-btn')];
+        return btns.length === 2 && btns.every((b) => !b.classList.contains('collapsed'));
+    });
+    await page.click('.gantt-group-add-task-btn');
+    await page.waitForSelector('.gantt-task-label');
+    await page.click('.gantt-task-label');
+    await page.waitForSelector('#gantt-detail-duplicate');
+    await page.click('#gantt-detail-duplicate');
+    await page.waitForFunction(() => document.querySelectorAll('.gantt-bar').length >= 2);
+
+    // 6. Moodlist: Progress completion badge & Duplicate Card
+    await page.evaluate(() => createNewProject('moodlist'));
+    await page.waitForSelector('.ml-add-title');
+    await page.type('.ml-add-title', 'Sprint Tasks');
+    await page.type('.ml-item-text', 'Design specs');
+    await page.click('.ml-add-item-btn');
+    await page.waitForFunction(() => document.querySelectorAll('.ml-add-panel .ml-item-text').length === 2);
+    const listItems = await page.$$('.ml-add-panel .ml-item-text');
+    await listItems[1].type('Write tests');
+    await page.click('.ml-save-btn');
+    await page.waitForSelector('.ml-card-progress-badge');
+    const badgeInitial = await page.$eval('.ml-card-progress-badge', (el) => ({
+        text: el.textContent.trim(),
+        complete: el.classList.contains('is-complete'),
+    }));
+    assert.equal(badgeInitial.text, '0/2');
+    assert.equal(badgeInitial.complete, false);
+    const checks = await page.$$('.ml-card-checkbox');
+    await checks[0].click();
+    await page.waitForFunction(() => document.querySelector('.ml-card-progress-badge')?.textContent?.trim() === '1/2');
+    const checksAfter = await page.$$('.ml-card-checkbox');
+    await checksAfter[1].click();
+    await page.waitForFunction(() => {
+        const el = document.querySelector('.ml-card-progress-badge');
+        return el && el.textContent.trim() === '2/2' && el.classList.contains('is-complete');
+    });
+    await page.hover('.ml-card');
+    await page.click('.ml-card-duplicate-btn');
+    await page.waitForFunction(() => document.querySelectorAll('.ml-card').length === 2);
+    const duplicatedTitle = await page.$$eval('.ml-card-title', (els) => els[1]?.textContent?.trim());
+    assert.match(duplicatedTitle, /Sprint Tasks/);
+
+    if (shotDir) {
+        mkdirSync(shotDir, { recursive: true });
+        await page.screenshot({ path: path.join(shotDir, 'qol-upgrades.png') });
+    }
+}
+
 const server = startServer();
 const pageErrors = [];
 try {
@@ -1517,6 +1657,7 @@ try {
 
     await assertNowTierPolish(page);
     await assertNextImprovements(page);
+    await assertQoLUpgrades(page);
 
     const lateErrors = pageErrors.filter(isFirstParty);
     assert.deepEqual(lateErrors, [], `first-party errors:\n${lateErrors.join('\n')}`);
@@ -1548,6 +1689,7 @@ try {
     assert.deepEqual(ffErrors.filter(isFirstParty), []);
     await firefox.close();
 } catch (err) {
+    console.error('pageErrors:', pageErrors);
     console.error(server.getLog());
     throw err;
 } finally {

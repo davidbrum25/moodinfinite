@@ -1068,6 +1068,26 @@ function createPromptCard(project, prompt, index) {
     previousBtn.title = 'Put back the previous prompt text';
     previousBtn.hidden = prompt.previous == null;
 
+    const duplicateBtn = document.createElement('button');
+    duplicateBtn.type = 'button';
+    duplicateBtn.className = 'tab-add-btn prompt-duplicate-btn';
+    duplicateBtn.title = 'Duplicate Prompt';
+    duplicateBtn.innerHTML = `<iconify-icon icon="lucide:copy-plus" width="18" height="18"></iconify-icon>`;
+    duplicateBtn.onclick = () => {
+        const currentProject = projects.find(p => p.id === activeProjectId) || project;
+        const cloned = JSON.parse(JSON.stringify(prompt));
+        cloned.id = Date.now();
+        cloned.title = prompt.title ? `${prompt.title} (Copy)` : 'Copy';
+        const targetIdx = currentProject.data.prompts.indexOf(prompt);
+        if (targetIdx !== -1) {
+            currentProject.data.prompts.splice(targetIdx + 1, 0, cloned);
+        } else {
+            currentProject.data.prompts.push(cloned);
+        }
+        renderMoodpromptView(currentProject);
+        scheduleAutoSave();
+    };
+
     const copyBtn = document.createElement('button');
     copyBtn.className = 'tab-add-btn prompt-copy-btn';
     copyBtn.title = 'Copy Prompt';
@@ -1166,7 +1186,18 @@ function createPromptCard(project, prompt, index) {
         scheduleAutoSave();
     };
 
-    textWrapper.append(promptText, expandBtn);
+    const counterBadge = document.createElement('div');
+    counterBadge.className = 'prompt-counter-badge';
+    const updateCounter = () => {
+        const text = promptText.value || '';
+        const chars = text.length;
+        const words = text.trim() ? text.trim().split(/\s+/).length : 0;
+        counterBadge.textContent = `${chars} chars · ${words} words`;
+    };
+    updateCounter();
+    promptText.addEventListener('input', updateCounter);
+
+    textWrapper.append(promptText, counterBadge, expandBtn);
     const setMediaType = (type) => {
         prompt.mediaType = type;
         imgBtn.classList.toggle('active', type === 'image');
@@ -1244,7 +1275,7 @@ function createPromptCard(project, prompt, index) {
     
     tagsWrapper.append(tagsList, tagInput);
 
-    controls.append(platformSelectWrapper, mediaToggle, previousBtn, copyBtn, deleteBtn);
+    controls.append(platformSelectWrapper, mediaToggle, previousBtn, duplicateBtn, copyBtn, deleteBtn);
     header.append(titleContainer, controls);
 
     body.style.flexDirection = 'column';
@@ -1479,6 +1510,7 @@ const resetTransformBtn = document.getElementById('reset-transform-btn');
 const flipHorizontalBtn = document.getElementById('flip-horizontal-btn');
 const flipVerticalBtn = document.getElementById('flip-vertical-btn');
 const pinBtn = document.getElementById('pin-btn');
+const duplicateSelectionBtn = document.getElementById('duplicate-selection-btn');
 const deleteSelectionBtn = document.getElementById('delete-selection-btn');
 const bringFrontBtn = document.getElementById('bring-front-btn');
 const sendBackBtn = document.getElementById('send-back-btn');
@@ -2278,6 +2310,7 @@ function setupEventListeners() {
     if (flipHorizontalBtn) flipHorizontalBtn.addEventListener('click', flipHorizontal);
     if (flipVerticalBtn) flipVerticalBtn.addEventListener('click', flipVertical);
     if (pinBtn) pinBtn.addEventListener('click', togglePin);
+    if (duplicateSelectionBtn) duplicateSelectionBtn.addEventListener('click', duplicateItems);
     if (deleteSelectionBtn) deleteSelectionBtn.addEventListener('click', deleteSelectedItems);
     if (bringFrontBtn) bringFrontBtn.addEventListener('click', bringSelectedToFront);
     if (sendBackBtn) sendBackBtn.addEventListener('click', sendSelectedToBack);
@@ -6263,10 +6296,20 @@ function updateSelectionToolbar() {
         rotateBtn.classList.toggle('active', activeGizmo === 'rotate');
         pinBtn.classList.toggle('pinned', selectedItems.every(e => e.isPinned));
 
+        const countBadge = document.getElementById('selection-count-badge');
+        if (countBadge) {
+            countBadge.style.display = selectedItems.length > 1 ? 'inline-flex' : 'none';
+            countBadge.textContent = String(selectedItems.length);
+        }
+        if (duplicateSelectionBtn) duplicateSelectionBtn.style.display = selectedItems.length > 0 ? 'flex' : 'none';
+
         // Ensure position is updated when toolbar is shown
         updateToolbarPosition();
     } else {
         selectionToolbar.style.display = 'none';
+        const countBadge = document.getElementById('selection-count-badge');
+        if (countBadge) countBadge.style.display = 'none';
+        if (duplicateSelectionBtn) duplicateSelectionBtn.style.display = 'none';
         itemColorToolContainer.style.display = 'none';
         textToolsContainer.style.display = 'none';
         gridToolsContainer.style.display = 'none';
@@ -7289,6 +7332,52 @@ if (colorseekerFromImageBtn) {
 const colorseekerToCanvasBtn = document.getElementById('colorseeker-to-canvas');
 if (colorseekerToCanvasBtn) {
     colorseekerToCanvasBtn.addEventListener('click', () => colorseekerSendToCanvas());
+}
+
+function colorseekerReversePalette(project) {
+    if (!project || !project.data || !project.data.colors || project.data.colors.length <= 1) return;
+    colorseekerEnsureLocks(project);
+    project.data.colors.reverse();
+    if (project.data.lockedColors) project.data.lockedColors.reverse();
+    saveToBrowser();
+    renderColorSeeker(project.id);
+    showToast('Palette reversed.');
+}
+
+function colorseekerCopyCss(project) {
+    if (!project || !project.data || !project.data.colors || !project.data.colors.length) return;
+    const cssLines = project.data.colors.map((c, i) => `  --color-${i + 1}: ${c.toUpperCase()};`).join('\n');
+    const css = `:root {\n${cssLines}\n}`;
+    try {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(css).catch(() => {});
+        }
+    } catch (_) {}
+    document.querySelectorAll('.colorseeker-copied').forEach((node) => node.remove());
+    const copied = document.createElement('span');
+    copied.className = 'colorseeker-copied';
+    copied.textContent = 'CSS Copied';
+    const btn = document.getElementById('colorseeker-copy-css');
+    if (btn) btn.appendChild(copied);
+    showToast('Copied CSS variables to clipboard!');
+}
+
+const colorseekerReversePaletteBtn = document.getElementById('colorseeker-reverse-palette');
+if (colorseekerReversePaletteBtn) {
+    colorseekerReversePaletteBtn.addEventListener('click', () => {
+        const project = projects.find(p => p.id === activeProjectId);
+        if (!project || project.type !== 'colorseeker') return;
+        colorseekerReversePalette(project);
+    });
+}
+
+const colorseekerCopyCssBtn = document.getElementById('colorseeker-copy-css');
+if (colorseekerCopyCssBtn) {
+    colorseekerCopyCssBtn.addEventListener('click', () => {
+        const project = projects.find(p => p.id === activeProjectId);
+        if (!project || project.type !== 'colorseeker') return;
+        colorseekerCopyCss(project);
+    });
 }
 
 function hexToHsl(hex) {
@@ -8316,8 +8405,22 @@ function createStoryCard(project, frame, index) {
     
     dragHandle.addEventListener('mouseenter', () => card.draggable = true);
     dragHandle.addEventListener('mouseleave', () => card.draggable = false);
+    const dupBtn = document.createElement('button');
+    dupBtn.type = 'button';
+    dupBtn.className = 'story-card-duplicate-btn';
+    dupBtn.title = 'Duplicate Frame';
+    dupBtn.innerHTML = '<iconify-icon icon="lucide:copy-plus" width="14" height="14"></iconify-icon>';
+    dupBtn.onclick = (e) => {
+        e.stopPropagation();
+        const cloned = JSON.parse(JSON.stringify(frame));
+        cloned.id = Date.now();
+        project.data.frames.splice(index + 1, 0, cloned);
+        renderStoryflowView(project);
+        saveToBrowser();
+        showToast('Frame duplicated.');
+    };
 
-    header.append(indexSpan, dragHandle);
+    header.append(indexSpan, dupBtn, dragHandle);
 
     const imageSlot = createStoryImageSlot(project, frame);
 
@@ -10221,6 +10324,25 @@ function ganttDeleteTask(e) {
     };
 }
 
+function ganttDuplicateTask() {
+    if (!ganttDetailTarget) return;
+    const { project, groupId, taskId } = ganttDetailTarget;
+    const group = project.data.groups.find(g => g.id === groupId);
+    if (!group || !group.tasks) return;
+    const taskIdx = group.tasks.findIndex(t => t.id === taskId);
+    if (taskIdx === -1) return;
+    const original = group.tasks[taskIdx];
+    const clone = JSON.parse(JSON.stringify(original));
+    clone.id = 'task_' + Date.now();
+    clone.name = original.name ? `${original.name} (Copy)` : 'New Task (Copy)';
+    delete clone.dependsOn;
+    group.tasks.splice(taskIdx + 1, 0, clone);
+    renderGanttView(project);
+    scheduleAutoSave();
+    ganttOpenDetail(project, groupId, clone.id);
+    showToast('Task duplicated.');
+}
+
 function ganttShiftView(project, direction) {
     const zoom = project.data.zoomLevel || 'week';
     const steps = { day: 7, week: 4, month: 3, quarter: 2 };
@@ -10270,6 +10392,16 @@ function setupGanttListeners() {
     const addMoodlistBtn = document.getElementById('add-moodlist-tab-btn');
     if (addMoodlistBtn) addMoodlistBtn.addEventListener('click', () => createNewProject('moodlist'));
 
+    document.getElementById('gantt-toggle-collapse-btn')?.addEventListener('click', () => {
+        const proj = projects.find(p => p.id === activeProjectId);
+        if (!proj || proj.type !== 'moodgantt') return;
+        const groups = proj.data.groups || [];
+        const anyExpanded = groups.some(g => !g.collapsed);
+        groups.forEach(g => { g.collapsed = anyExpanded; });
+        renderGanttView(proj);
+        scheduleAutoSave();
+    });
+
     document.getElementById('gantt-add-group-btn')?.addEventListener('click', () => {
         const proj = projects.find(p => p.id === activeProjectId);
         if (proj && proj.type === 'moodgantt') ganttAddGroup(proj);
@@ -10314,6 +10446,7 @@ function setupGanttListeners() {
         ganttSyncDetailToTask();
     });
 
+    document.getElementById('gantt-detail-duplicate')?.addEventListener('click', ganttDuplicateTask);
     document.getElementById('gantt-detail-delete')?.addEventListener('click', ganttDeleteTask);
 
     document.getElementById('gantt-attach-img-btn')?.addEventListener('click', () => {

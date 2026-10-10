@@ -425,6 +425,27 @@
             color: #44ef9b;
         }
 
+        .prompt-duplicate-btn:hover {
+            color: var(--switch-bg-checked);
+        }
+
+        .prompt-counter-badge {
+            position: absolute;
+            bottom: 8px;
+            left: 12px;
+            font-size: 0.72rem;
+            color: var(--text-color-light);
+            background: rgba(0, 0, 0, 0.4);
+            backdrop-filter: blur(4px);
+            -webkit-backdrop-filter: blur(4px);
+            padding: 3px 8px;
+            border-radius: 4px;
+            pointer-events: none;
+            border: 1px solid var(--border-color);
+            font-family: inherit;
+            line-height: 1;
+        }
+
         .prompt-previous-btn {
             border: 1px solid var(--border-color);
             background: var(--bg-ui-hover);
@@ -995,6 +1016,25 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
+        }
+
+        .story-card-duplicate-btn {
+            background: transparent;
+            border: none;
+            color: var(--text-color-light);
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 2px 6px;
+            margin-left: 0.5rem;
+            border-radius: 4px;
+            transition: all 0.2s;
+        }
+
+        .story-card-duplicate-btn:hover {
+            color: var(--text-color-strong);
+            background: var(--bg-ui-hover);
         }
 
         .story-drag-handle {
@@ -1737,7 +1777,11 @@
             width: auto;
         }
 
-        #colorseeker-add-swatch {
+        #colorseeker-add-swatch,
+        #colorseeker-to-canvas,
+        #colorseeker-from-image,
+        #colorseeker-reverse-palette,
+        #colorseeker-copy-css {
             padding: 0.4rem 0.7rem;
             border-radius: 999px;
             border: 1px solid var(--border-color);
@@ -1745,24 +1789,17 @@
             color: var(--text-color);
             font: 600 0.8rem/1 Inter, sans-serif;
             cursor: pointer;
+            position: relative;
+            transition: all 0.2s;
         }
 
         #colorseeker-add-swatch:hover,
         #colorseeker-to-canvas:hover,
-        #colorseeker-from-image:hover {
+        #colorseeker-from-image:hover,
+        #colorseeker-reverse-palette:hover,
+        #colorseeker-copy-css:hover {
             border-color: var(--switch-bg-checked);
             color: var(--switch-bg-checked);
-        }
-
-        #colorseeker-to-canvas,
-        #colorseeker-from-image {
-            padding: 0.4rem 0.7rem;
-            border-radius: 999px;
-            border: 1px solid var(--border-color);
-            background: rgba(0, 0, 0, 0.2);
-            color: var(--text-color);
-            font: 600 0.8rem/1 Inter, sans-serif;
-            cursor: pointer;
         }
 
         #colorseeker-image-picker {
@@ -2199,7 +2236,23 @@
             border: 1px solid var(--border-color);
             transform: translate(-50%, 10px);
             backdrop-filter: blur(16px);
-            -webkit-backdrop-filter: blur(16px)
+            -webkit-backdrop-filter: blur(16px);
+        }
+
+        .selection-count-badge {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 20px;
+            height: 20px;
+            padding: 0 6px;
+            border-radius: 999px;
+            background: var(--switch-bg-checked);
+            color: #ffffff;
+            font: 700 0.72rem/1 Inter, sans-serif;
+            align-self: center;
+            user-select: none;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.25);
         }
 
         .selection-tool-btn {
@@ -4107,7 +4160,8 @@
             color: var(--text-color-light);
             border-bottom: 1px solid var(--border-color);
         }
-        #gantt-add-group-btn {
+        #gantt-add-group-btn,
+        #gantt-toggle-collapse-btn {
             background: rgba(255,255,255,0.06);
             border: 1px solid var(--border-color);
             border-radius: 6px;
@@ -4117,7 +4171,8 @@
             cursor: pointer;
             transition: background 0.2s;
         }
-        #gantt-add-group-btn:hover { background: var(--bg-ui-hover); }
+        #gantt-add-group-btn:hover,
+        #gantt-toggle-collapse-btn:hover { background: var(--bg-ui-hover); }
 
         #gantt-sidebar-body {
             flex: 1;
@@ -4581,6 +4636,20 @@
             display: flex; align-items: center; gap: 0.4rem;
             transition: background 0.15s;
         }
+        .gantt-detail-dup-btn {
+            background: rgba(66, 158, 255, 0.1);
+            border: 1px solid rgba(66, 158, 255, 0.3);
+            border-radius: 7px;
+            color: var(--switch-bg-checked);
+            font-family: inherit;
+            font-size: 0.78rem;
+            padding: 0.4rem 0.75rem;
+            cursor: pointer;
+            display: flex; align-items: center; gap: 0.4rem;
+            transition: background 0.15s;
+        }
+        .gantt-detail-dup-btn:hover { background: rgba(66, 158, 255, 0.2); }
+
         .gantt-detail-delete-btn:hover { background: rgba(239,68,68,0.2); }
 
         /* Group rename input in sidebar */
@@ -5124,6 +5193,33 @@
     flex: 1;
 }
 
+.ml-card-header-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    margin-bottom: 0.5rem;
+}
+
+.ml-card-progress-badge {
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 7px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.08);
+    color: var(--ml-muted);
+    border: 1px solid var(--ml-border);
+    flex-shrink: 0;
+    user-select: none;
+    line-height: 1;
+}
+
+.ml-card-progress-badge.is-complete {
+    background: rgba(34, 197, 94, 0.18);
+    color: #22c55e;
+    border-color: rgba(34, 197, 94, 0.35);
+}
+
 .ml-card-title {
     font-size: 0.95rem;
     font-weight: 700;
@@ -5366,6 +5462,7 @@ input.ml-card-item-text {
     --ml-border: rgba(255,255,255,0.18);
     --ml-hover: rgba(255,255,255,0.08);
 }
+.ml-card-duplicate-btn:hover { color: var(--switch-bg-checked); }
 .ml-card-delete-btn:hover { color: #ef4444; }
 
 /* Card color picker positions below footer */

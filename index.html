@@ -346,6 +346,7 @@
                 </button>
             </div>
             <div id="selection-toolbar">
+                <span id="selection-count-badge" class="selection-count-badge" style="display: none;"></span>
                 <div id="image-caption-container" style="display: none;">
                     <input id="image-caption-input" type="text" maxlength="80" placeholder="Caption" title="Caption on this image" autocomplete="off">
                 </div>
@@ -454,6 +455,8 @@
                     title="Flip Vertical (V)"><iconify-icon icon="lucide:flip-vertical-2" width="18"
                         height="18"></iconify-icon></button><button id="pin-btn" class="selection-tool-btn"
                     title="Pin (P)"><iconify-icon icon="lucide:pin" width="18"
+                        height="18"></iconify-icon></button><button id="duplicate-selection-btn" class="selection-tool-btn"
+                    title="Duplicate (Ctrl+D)"><iconify-icon icon="lucide:copy" width="18"
                         height="18"></iconify-icon></button><button id="delete-selection-btn" class="selection-tool-btn"
                     title="Delete (Del)"><iconify-icon icon="lucide:trash-2" width="18" height="18"
                         class="text-red-500"></iconify-icon></button>
@@ -582,6 +585,8 @@
                         #ffffff,#ffffff,#ffffff,#ffffff,#ffffff
                     </div>
                     <button id="colorseeker-add-swatch" type="button">Add swatch</button>
+                    <button id="colorseeker-reverse-palette" type="button">Reverse palette</button>
+                    <button id="colorseeker-copy-css" type="button">Copy CSS variables</button>
                     <button id="colorseeker-from-image" type="button">From canvas image</button>
                     <button id="colorseeker-to-canvas" type="button">Send to canvas</button>
                     <div id="colorseeker-image-picker" hidden></div>
@@ -624,9 +629,14 @@
             <div id="gantt-sidebar">
                 <div id="gantt-sidebar-header">
                     <span>Task</span>
-                    <button id="gantt-add-group-btn" title="Add Group">
-                        <iconify-icon icon="lucide:plus" width="16" height="16"></iconify-icon>
-                    </button>
+                    <div style="display:flex; align-items:center; gap:4px;">
+                        <button id="gantt-toggle-collapse-btn" title="Expand / Collapse all groups">
+                            <iconify-icon icon="lucide:chevrons-up-down" width="16" height="16"></iconify-icon>
+                        </button>
+                        <button id="gantt-add-group-btn" title="Add Group">
+                            <iconify-icon icon="lucide:plus" width="16" height="16"></iconify-icon>
+                        </button>
+                    </div>
                 </div>
                 <div id="gantt-sidebar-body"></div>
             </div>
@@ -743,7 +753,10 @@
                 </div>
             </div>
         </div>
-        <div id="gantt-detail-footer">
+        <div id="gantt-detail-footer" style="display: flex; align-items: center; justify-content: space-between; gap: 0.5rem;">
+            <button id="gantt-detail-duplicate" class="gantt-detail-dup-btn" title="Duplicate Task">
+                <iconify-icon icon="lucide:copy-plus" width="14" height="14"></iconify-icon> Duplicate Task
+            </button>
             <button id="gantt-detail-delete" class="gantt-detail-delete-btn">
                 <iconify-icon icon="lucide:trash-2" width="14" height="14"></iconify-icon> Delete Task
             </button>
