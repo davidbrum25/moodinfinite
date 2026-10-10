@@ -47,39 +47,39 @@
         </div>
         <div style="width: 1px; background-color: var(--border-color); margin: 8px 4px; align-self: stretch;"></div>
 
-        <button id="load-project-btn" title="Open Project (Ctrl+O)" class="tab-add-btn">
+        <button id="load-project-btn" title="Open Project (Ctrl+O)" aria-label="Open Project (Ctrl+O)" class="tab-add-btn">
             <iconify-icon icon="lucide:folder-open" width="20" height="20"></iconify-icon>
         </button>
-        <button id="save-project-btn" title="Save Project (Ctrl+S)" class="tab-add-btn">
+        <button id="save-project-btn" title="Save Project (Ctrl+S)" aria-label="Save Project (Ctrl+S)" class="tab-add-btn">
             <iconify-icon icon="lucide:save" width="20" height="20"></iconify-icon>
         </button>
         <div style="width: 1px; background-color: var(--border-color); margin: 8px 4px; align-self: stretch;"></div>
 
-        <button id="add-moodinfinite-tab-btn" class="tab-add-btn" title="New Moodinfinite Board">
+        <button id="add-moodinfinite-tab-btn" class="tab-add-btn" title="New Moodinfinite Board" aria-label="New Moodinfinite Board">
             <iconify-icon icon="lucide:image" width="22" height="22"></iconify-icon>
         </button>
-        <button id="add-moodprompt-tab-btn" class="tab-add-btn" title="New Moodprompt Board">
+        <button id="add-moodprompt-tab-btn" class="tab-add-btn" title="New Moodprompt Board" aria-label="New Moodprompt Board">
             <iconify-icon icon="lucide:pen-tool" width="20" height="20"></iconify-icon>
         </button>
-        <button id="add-colorseeker-tab-btn" class="tab-add-btn" title="New Moodtone Board">
+        <button id="add-colorseeker-tab-btn" class="tab-add-btn" title="New Moodtone Board" aria-label="New Moodtone Board">
             <iconify-icon icon="lucide:swatch-book" width="20" height="20"></iconify-icon>
         </button>
-        <button id="add-storyflow-tab-btn" class="tab-add-btn" title="New Moodflow Board">
+        <button id="add-storyflow-tab-btn" class="tab-add-btn" title="New Moodflow Board" aria-label="New Moodflow Board">
             <iconify-icon icon="lucide:clapperboard" width="20" height="20"></iconify-icon>
         </button>
-        <button id="add-moodgantt-tab-btn" class="tab-add-btn" title="New Moodgantt Board">
+        <button id="add-moodgantt-tab-btn" class="tab-add-btn" title="New Moodgantt Board" aria-label="New Moodgantt Board">
             <iconify-icon icon="lucide:gantt-chart" width="20" height="20"></iconify-icon>
         </button>
-        <button id="add-moodlist-tab-btn" class="tab-add-btn" title="New Moodlist Board">
+        <button id="add-moodlist-tab-btn" class="tab-add-btn" title="New Moodlist Board" aria-label="New Moodlist Board">
             <iconify-icon icon="lucide:list-check" width="20" height="20"></iconify-icon>
         </button>
 
         <div style="width: 1px; background-color: var(--border-color); margin: 8px 4px; align-self: stretch;"></div>
 
-        <button id="undo-btn" class="tab-add-btn" title="Undo (Ctrl+Z)" onclick="undoLastAction()">
+        <button id="undo-btn" class="tab-add-btn" title="Undo (Ctrl+Z)" aria-label="Undo (Ctrl+Z)" onclick="undoLastAction()">
             <iconify-icon icon="lucide:undo-2" width="20" height="20"></iconify-icon>
         </button>
-        <button id="redo-btn" class="tab-add-btn" title="Redo (Ctrl+Shift+Z)" onclick="redoLastAction()">
+        <button id="redo-btn" class="tab-add-btn" title="Redo (Ctrl+Shift+Z)" aria-label="Redo (Ctrl+Shift+Z)" onclick="redoLastAction()">
             <iconify-icon icon="lucide:redo-2" width="20" height="20"></iconify-icon>
         </button>
 
@@ -91,28 +91,28 @@
             <div class="scroll-indicator right"></div>
         </div>
 
-        <button id="mobile-tabs-btn" class="tab-add-btn" title="Open Boards">
+        <button id="mobile-tabs-btn" class="tab-add-btn" title="Open Boards" aria-label="Open Boards">
             <iconify-icon icon="lucide:menu" width="20" height="20"></iconify-icon>
         </button>
 
-        <button id="mobile-context-btn" class="tab-add-btn" title="Actions">
+        <button id="mobile-context-btn" class="tab-add-btn" title="Actions" aria-label="Actions">
             <iconify-icon icon="lucide:more-vertical" width="20" height="20"></iconify-icon>
         </button>
 
         <div style="margin-left: auto; display: flex; align-items: center; gap: 4px;">
-            <button id="save-png-btn" title="Export as PNG (Shift+S)" class="tab-add-btn">
+            <button id="save-png-btn" title="Export as PNG (Shift+S)" aria-label="Export as PNG (Shift+S)" class="tab-add-btn">
                 <iconify-icon icon="lucide:download" width="20" height="20"></iconify-icon>
             </button>
-            <button id="export-sheet-btn" title="Export as Sheet" class="tab-add-btn" style="display:none;">
+            <button id="export-sheet-btn" title="Export as Sheet" aria-label="Export as Sheet" class="tab-add-btn" style="display:none;">
                 <iconify-icon icon="lucide:table" width="20" height="20"></iconify-icon>
             </button>
-            <button id="print-btn" title="Print Tab" class="tab-add-btn">
+            <button id="print-btn" title="Print Tab" aria-label="Print Tab" class="tab-add-btn">
                 <iconify-icon icon="lucide:printer" width="20" height="20"></iconify-icon>
             </button>
-            <button id="copy-to-clipboard-btn" title="Copy to Clipboard (Shift+C)" class="tab-add-btn">
+            <button id="copy-to-clipboard-btn" title="Copy to Clipboard (Shift+C)" aria-label="Copy to Clipboard (Shift+C)" class="tab-add-btn">
                 <iconify-icon icon="lucide:copy" width="20" height="20"></iconify-icon>
             </button>
-            <button id="palette-btn" title="Color Palettes" class="tab-add-btn">
+            <button id="palette-btn" title="Color Palettes" aria-label="Color Palettes" class="tab-add-btn">
                 <iconify-icon icon="lucide:palette" width="20" height="20"></iconify-icon>
             </button>
 
@@ -121,7 +121,7 @@
 
             <!-- Cloud Login / Avatar button -->
             <div id="cloud-btn-wrapper" style="position: relative;">
-                <button id="cloud-login-btn" class="tab-add-btn cloud-login-btn" title="Sign in to Google Drive">
+                <button id="cloud-login-btn" class="tab-add-btn cloud-login-btn" title="Sign in to Google Drive" aria-label="Sign in to Google Drive">
                     <!-- Avatar image (shown when logged in) -->
                     <img id="cloud-avatar-img" src="" alt="Account" referrerpolicy="no-referrer"
                         onerror="this.style.display='none'; document.getElementById('cloud-avatar-icon').style.display='flex';"
@@ -153,10 +153,10 @@
                     <button type="button" data-template="image-grid">Image grid</button>
                 </div>
             </div>
-            <button id="canvas-fit-view-btn" type="button" title="Fit items into view">
+            <button id="canvas-fit-view-btn" type="button" title="Fit items into view" aria-label="Fit items into view">
                 <iconify-icon icon="lucide:maximize" width="14" height="14"></iconify-icon>
             </button>
-            <button id="canvas-zoom-readout" type="button" title="Reset zoom to 100%">100%</button>
+            <button id="canvas-zoom-readout" type="button" title="Reset zoom to 100%" aria-label="Reset zoom to 100%">100%</button>
             <div id="canvas-minimap" hidden title="Board overview">
                 <canvas id="canvas-minimap-map" width="160" height="96"></canvas>
                 <div id="canvas-minimap-viewport"></div>
@@ -167,55 +167,55 @@
             <div id="left-bar">
                 <div id="toolbar-color-picker-container"><input type="color" id="toolbar-accent-color-picker"
                         class="color-picker-input" title="Accent Color"></div>
-                <button id="eyedropper-btn" title="Eyedropper (E)" class="tool-button">
+                <button id="eyedropper-btn" title="Eyedropper (E)" aria-label="Eyedropper (E)" class="tool-button">
                     <iconify-icon icon="lucide:pipette" width="18" height="18"></iconify-icon>
                 </button>
-                <button id="select-tool-btn" title="Select (A)" class="tool-button active">
+                <button id="select-tool-btn" title="Select (A)" aria-label="Select (A)" class="tool-button active">
                     <iconify-icon icon="lucide:mouse-pointer-2" width="20" height="20"></iconify-icon>
                 </button>
 
                 <div class="separator"></div>
-                <button id="add-image-btn" title="Add Image (I)" class="tool-button">
+                <button id="add-image-btn" title="Add Image (I)" aria-label="Add Image (I)" class="tool-button">
                     <iconify-icon icon="lucide:image" width="20" height="20"></iconify-icon>
                 </button>
                 <!-- Video Tools Group -->
                 <div class="tool-group">
-                    <button id="add-video-btn" title="Add Video" class="tool-button">
+                    <button id="add-video-btn" title="Add Video" aria-label="Add Video" class="tool-button">
                         <iconify-icon icon="lucide:video" width="20" height="20"></iconify-icon>
                         <div class="group-indicator"></div>
                     </button>
                     <div class="tool-group-flyout">
-                        <button id="video-play-all-btn" title="Play All" class="tool-button">
+                        <button id="video-play-all-btn" title="Play All" aria-label="Play All" class="tool-button">
                             <iconify-icon icon="lucide:play" width="20" height="20"></iconify-icon>
                         </button>
-                        <button id="video-pause-all-btn" title="Pause All" class="tool-button">
+                        <button id="video-pause-all-btn" title="Pause All" aria-label="Pause All" class="tool-button">
                             <iconify-icon icon="lucide:pause" width="20" height="20"></iconify-icon>
                         </button>
                     </div>
                 </div>
                 <div class="separator"></div>
 
-                <button id="draw-btn" title="Draw (D)" class="tool-button">
+                <button id="draw-btn" title="Draw (D)" aria-label="Draw (D)" class="tool-button">
                     <iconify-icon icon="lucide:pencil" width="20" height="20"></iconify-icon>
                 </button>
 
                 <!-- Text Tools Group -->
                 <div class="tool-group">
-                    <button class="tool-button" title="Text Tools (T, N, K, L)">
+                    <button class="tool-button" title="Text Tools (T, N, K, L)" aria-label="Text Tools (T, N, K, L)">
                         <iconify-icon icon="lucide:type" width="20" height="20"></iconify-icon>
                         <div class="group-indicator"></div>
                     </button>
                     <div class="tool-group-flyout">
-                        <button id="add-text-btn" title="Add Text (T)" class="tool-button">
+                        <button id="add-text-btn" title="Add Text (T)" aria-label="Add Text (T)" class="tool-button">
                             <iconify-icon icon="lucide:type" width="20" height="20"></iconify-icon>
                         </button>
-                        <button id="add-comment-btn" title="Add Comment (N)" class="tool-button">
+                        <button id="add-comment-btn" title="Add Comment (N)" aria-label="Add Comment (N)" class="tool-button">
                             <iconify-icon icon="lucide:message-square" width="20" height="20"></iconify-icon>
                         </button>
-                        <button id="add-link-btn" title="Add Link (K)" class="tool-button">
+                        <button id="add-link-btn" title="Add Link (K)" aria-label="Add Link (K)" class="tool-button">
                             <iconify-icon icon="lucide:link" width="20" height="20"></iconify-icon>
                         </button>
-                        <button id="add-text-list-btn" title="Add Text List (L)" class="tool-button">
+                        <button id="add-text-list-btn" title="Add Text List (L)" aria-label="Add Text List (L)" class="tool-button">
                             <iconify-icon icon="lucide:list-todo" width="20" height="20"></iconify-icon>
                         </button>
                     </div>
@@ -223,21 +223,21 @@
 
                 <!-- Shapes Group -->
                 <div class="tool-group">
-                    <button class="tool-button" title="Shape Tools (Shift+A, B, C, Alt+G)">
+                    <button class="tool-button" title="Shape Tools (Shift+A, B, C, Alt+G)" aria-label="Shape Tools (Shift+A, B, C, Alt+G)">
                         <iconify-icon icon="lucide:shapes" width="20" height="20"></iconify-icon>
                         <div class="group-indicator"></div>
                     </button>
                     <div class="tool-group-flyout">
-                        <button id="add-arrow-btn" title="Add Arrow (Shift+A)" class="tool-button">
+                        <button id="add-arrow-btn" title="Add Arrow (Shift+A)" aria-label="Add Arrow (Shift+A)" class="tool-button">
                             <iconify-icon icon="lucide:arrow-up-right" width="20" height="20"></iconify-icon>
                         </button>
-                        <button id="add-box-btn" title="Add Box (B)" class="tool-button">
+                        <button id="add-box-btn" title="Add Box (B)" aria-label="Add Box (B)" class="tool-button">
                             <iconify-icon icon="lucide:square" width="20" height="20"></iconify-icon>
                         </button>
-                        <button id="add-circle-btn" title="Add Circle (C)" class="tool-button">
+                        <button id="add-circle-btn" title="Add Circle (C)" aria-label="Add Circle (C)" class="tool-button">
                             <iconify-icon icon="lucide:circle" width="20" height="20"></iconify-icon>
                         </button>
-                        <button id="add-grid-btn" title="Add Grid (Alt+G)" class="tool-button">
+                        <button id="add-grid-btn" title="Add Grid (Alt+G)" aria-label="Add Grid (Alt+G)" class="tool-button">
                             <iconify-icon icon="lucide:grid-3x3" width="20" height="20"></iconify-icon>
                         </button>
                     </div>
@@ -245,15 +245,15 @@
 
                 <!-- Measurement & Counter Group -->
                 <div class="tool-group">
-                    <button class="tool-button" title="Measurement & Counter Tools (M, #)">
+                    <button class="tool-button" title="Measurement & Counter Tools (M, #)" aria-label="Measurement & Counter Tools (M, #)">
                         <iconify-icon icon="lucide:ruler" width="20" height="20"></iconify-icon>
                         <div class="group-indicator"></div>
                     </button>
                     <div class="tool-group-flyout">
-                        <button id="add-counter-btn" title="Add Counter" class="tool-button">
+                        <button id="add-counter-btn" title="Add Counter" aria-label="Add Counter" class="tool-button">
                             <iconify-icon icon="lucide:hash" width="20" height="20"></iconify-icon>
                         </button>
-                        <button id="add-measure-btn" title="Measure (M)" class="tool-button">
+                        <button id="add-measure-btn" title="Measure (M)" aria-label="Measure (M)" class="tool-button">
                             <iconify-icon icon="lucide:ruler" width="20" height="20"></iconify-icon>
                         </button>
                     </div>
@@ -263,7 +263,7 @@
 
                 <!-- Arrange Tools Group -->
                 <div class="tool-group">
-                    <button id="align-btn" class="tool-button" title="Auto Arrange (Ctrl+Shift+A)" disabled>
+                    <button id="align-btn" class="tool-button" title="Auto Arrange (Ctrl+Shift+A)" aria-label="Auto Arrange (Ctrl+Shift+A)" disabled>
                         <iconify-icon icon="lucide:layout-grid" width="22" height="22"></iconify-icon>
                         <div class="group-indicator"></div>
                     </button>
@@ -271,14 +271,14 @@
                         <div class="arrange-flyout-section">
                             <span class="arrange-flyout-label">Layout</span>
                             <div class="arrange-flyout-grid">
-                                <button id="align-grid-btn" class="tool-button" title="Grid (Ctrl+Shift+A)">
+                                <button id="align-grid-btn" class="tool-button" title="Grid (Ctrl+Shift+A)" aria-label="Grid (Ctrl+Shift+A)">
                                     <iconify-icon icon="lucide:layout-grid" width="20" height="20"></iconify-icon>
                                 </button>
-                                <button id="align-row-btn" class="tool-button" title="Horizontal Row">
+                                <button id="align-row-btn" class="tool-button" title="Horizontal Row" aria-label="Horizontal Row">
                                     <iconify-icon icon="lucide:align-horizontal-distribute-center" width="20"
                                         height="20"></iconify-icon>
                                 </button>
-                                <button id="align-col-btn" class="tool-button" title="Vertical Column">
+                                <button id="align-col-btn" class="tool-button" title="Vertical Column" aria-label="Vertical Column">
                                     <iconify-icon icon="lucide:align-vertical-distribute-center" width="20"
                                         height="20"></iconify-icon>
                                 </button>
@@ -288,24 +288,24 @@
                         <div class="arrange-flyout-section">
                             <span class="arrange-flyout-label">Align</span>
                             <div class="arrange-flyout-grid">
-                                <button id="align-left-btn" class="tool-button" title="Align Left">
+                                <button id="align-left-btn" class="tool-button" title="Align Left" aria-label="Align Left">
                                     <iconify-icon icon="lucide:align-left" width="20" height="20"></iconify-icon>
                                 </button>
-                                <button id="align-center-h-btn" class="tool-button" title="Align Center (Horizontal)">
+                                <button id="align-center-h-btn" class="tool-button" title="Align Center (Horizontal)" aria-label="Align Center (Horizontal)">
                                     <iconify-icon icon="lucide:align-center" width="20" height="20"></iconify-icon>
                                 </button>
-                                <button id="align-right-btn" class="tool-button" title="Align Right">
+                                <button id="align-right-btn" class="tool-button" title="Align Right" aria-label="Align Right">
                                     <iconify-icon icon="lucide:align-right" width="20" height="20"></iconify-icon>
                                 </button>
-                                <button id="align-top-btn" class="tool-button" title="Align Top">
+                                <button id="align-top-btn" class="tool-button" title="Align Top" aria-label="Align Top">
                                     <iconify-icon icon="lucide:align-start-vertical" width="20"
                                         height="20"></iconify-icon>
                                 </button>
-                                <button id="align-middle-v-btn" class="tool-button" title="Align Middle (Vertical)">
+                                <button id="align-middle-v-btn" class="tool-button" title="Align Middle (Vertical)" aria-label="Align Middle (Vertical)">
                                     <iconify-icon icon="lucide:align-center-vertical" width="20"
                                         height="20"></iconify-icon>
                                 </button>
-                                <button id="align-bottom-btn" class="tool-button" title="Align Bottom">
+                                <button id="align-bottom-btn" class="tool-button" title="Align Bottom" aria-label="Align Bottom">
                                     <iconify-icon icon="lucide:align-end-vertical" width="20"
                                         height="20"></iconify-icon>
                                 </button>
@@ -315,10 +315,10 @@
                         <div class="arrange-flyout-section">
                             <span class="arrange-flyout-label">Distribute</span>
                             <div class="arrange-flyout-grid">
-                                <button id="distribute-h-btn" class="tool-button" title="Distribute Horizontally">
+                                <button id="distribute-h-btn" class="tool-button" title="Distribute Horizontally" aria-label="Distribute Horizontally">
                                     <iconify-icon icon="lucide:move-horizontal" width="20" height="20"></iconify-icon>
                                 </button>
-                                <button id="distribute-v-btn" class="tool-button" title="Distribute Vertically">
+                                <button id="distribute-v-btn" class="tool-button" title="Distribute Vertically" aria-label="Distribute Vertically">
                                     <iconify-icon icon="lucide:move-vertical" width="20" height="20"></iconify-icon>
                                 </button>
                             </div>
@@ -328,15 +328,15 @@
 
                 <!-- View Group -->
                 <div class="tool-group">
-                    <button class="tool-button" title="View Tools (Home, .)">
+                    <button class="tool-button" title="View Tools (Home, .)" aria-label="View Tools (Home, .)">
                         <iconify-icon icon="lucide:eye" width="20" height="20"></iconify-icon>
                         <div class="group-indicator"></div>
                     </button>
                     <div class="tool-group-flyout">
-                        <button id="center-view-btn" title="Center View (Home)" class="tool-button">
+                        <button id="center-view-btn" title="Center View (Home)" aria-label="Center View (Home)" class="tool-button">
                             <iconify-icon icon="lucide:crosshair" width="20" height="20"></iconify-icon>
                         </button>
-                        <button id="center-selected-btn" title="Center Selected (.)" class="tool-button">
+                        <button id="center-selected-btn" title="Center Selected (.)" aria-label="Center Selected (.)" class="tool-button">
                             <iconify-icon icon="lucide:focus" width="20" height="20"></iconify-icon>
                         </button>
                     </div>
@@ -344,7 +344,7 @@
 
                 <div class="separator"></div>
 
-                <button id="open-help-btn" title="Help" class="tool-button">
+                <button id="open-help-btn" title="Help" aria-label="Help" class="tool-button">
                     <iconify-icon icon="lucide:info" width="20" height="20"></iconify-icon>
                 </button>
             </div>
@@ -358,7 +358,7 @@
                     <div class="color-picker-wrapper" style="display: flex; align-items: center; gap: 0.2rem;">
                         <input type="color" id="item-color-picker" class="color-picker-input" title="Item / Accent Color"
                             style="width: 28px; height: 28px;">
-                        <button id="item-color-eyedropper" class="selection-tool-btn" title="Pick Item Color from Canvas"
+                        <button id="item-color-eyedropper" class="selection-tool-btn" title="Pick Item Color from Canvas" aria-label="Pick Item Color from Canvas"
                             style="width: 24px; height: 24px; padding: 0; display: flex; align-items: center; justify-content: center;">
                             <iconify-icon icon="lucide:pipette" width="14" height="14"></iconify-icon>
                         </button>
@@ -366,7 +366,7 @@
                     <div class="color-picker-wrapper" id="note-bg-color-wrapper" style="display: none; align-items: center; gap: 0.2rem;">
                         <input type="color" id="note-bg-color-input" class="color-picker-input" title="Background Color"
                             style="width: 28px; height: 28px;">
-                        <button id="note-bg-eyedropper" class="selection-tool-btn" title="Pick Background Color from Canvas"
+                        <button id="note-bg-eyedropper" class="selection-tool-btn" title="Pick Background Color from Canvas" aria-label="Pick Background Color from Canvas"
                             style="width: 24px; height: 24px; padding: 0; display: flex; align-items: center; justify-content: center;">
                             <iconify-icon icon="lucide:pipette" width="14" height="14"></iconify-icon>
                         </button>
@@ -374,10 +374,10 @@
                 </div>
                 <div id="video-tools-container"
                     style="display: none; align-items: center; gap: 0.35rem; border-right: 1px solid var(--border-color); padding-right: 0.35rem; margin-right: 0.35rem;">
-                    <button id="video-play-pause-btn" class="selection-tool-btn" title="Play / Pause">
+                    <button id="video-play-pause-btn" class="selection-tool-btn" title="Play / Pause" aria-label="Play / Pause">
                         <iconify-icon icon="lucide:play" width="18" height="18"></iconify-icon>
                     </button>
-                    <button id="video-mute-btn" class="selection-tool-btn" title="Mute / Unmute">
+                    <button id="video-mute-btn" class="selection-tool-btn" title="Mute / Unmute" aria-label="Mute / Unmute">
                         <iconify-icon icon="lucide:volume-x" width="18" height="18"></iconify-icon>
                     </button>
                 </div>
@@ -391,16 +391,16 @@
                 </div>
                 <div id="icon-tools-container"
                     style="display: none; align-items: center; gap: 0.35rem; border-right: 1px solid var(--border-color); padding-right: 0.35rem; margin-right: 0.35rem;">
-                    <button id="comment-icon-btn" class="selection-tool-btn" title="Choose Icon">
+                    <button id="comment-icon-btn" class="selection-tool-btn" title="Choose Icon" aria-label="Choose Icon">
                         <iconify-icon icon="lucide:star" width="18" height="18"></iconify-icon>
                     </button>
                 </div>
                 <div id="link-tools-container"
                     style="display: none; align-items: center; gap: 0.35rem; border-right: 1px solid var(--border-color); padding-right: 0.35rem; margin-right: 0.35rem;">
-                    <button id="edit-link-btn" class="selection-tool-btn" title="Edit Link">
+                    <button id="edit-link-btn" class="selection-tool-btn" title="Edit Link" aria-label="Edit Link">
                         <iconify-icon icon="lucide:pencil" width="18" height="18"></iconify-icon>
                     </button>
-                    <button id="open-link-btn" class="selection-tool-btn" title="Open Link">
+                    <button id="open-link-btn" class="selection-tool-btn" title="Open Link" aria-label="Open Link">
                         <iconify-icon icon="lucide:external-link" width="18" height="18"></iconify-icon>
                     </button>
                 </div>
@@ -416,15 +416,15 @@
                         <option value="Playfair Display">Playfair</option>
                         <option value="Source Code Pro">Code</option>
                     </select><button id="text-align-left-btn" class="selection-tool-btn"
-                        title="Align Left"><iconify-icon icon="lucide:align-left" width="18"
+                        title="Align Left" aria-label="Align Left"><iconify-icon icon="lucide:align-left" width="18"
                             height="18"></iconify-icon></button><button id="text-align-center-btn"
-                        class="selection-tool-btn" title="Align Center"><iconify-icon icon="lucide:align-center"
+                        class="selection-tool-btn" title="Align Center" aria-label="Align Center"><iconify-icon icon="lucide:align-center"
                             width="18" height="18"></iconify-icon></button><button id="text-align-right-btn"
-                        class="selection-tool-btn" title="Align Right"><iconify-icon icon="lucide:align-right"
+                        class="selection-tool-btn" title="Align Right" aria-label="Align Right"><iconify-icon icon="lucide:align-right"
                             width="18" height="18"></iconify-icon></button><button id="text-style-bold-btn"
-                        class="selection-tool-btn" title="Bold"><iconify-icon icon="lucide:bold" width="18"
+                        class="selection-tool-btn" title="Bold" aria-label="Bold"><iconify-icon icon="lucide:bold" width="18"
                             height="18"></iconify-icon></button><button id="text-style-italic-btn"
-                        class="selection-tool-btn" title="Italic"><iconify-icon icon="lucide:italic" width="18"
+                        class="selection-tool-btn" title="Italic" aria-label="Italic"><iconify-icon icon="lucide:italic" width="18"
                             height="18"></iconify-icon></button></div>
                 <div id="grid-tools-container"><label for="grid-rows-input" class="selection-tool-btn"
                         title="Rows"><iconify-icon icon="lucide:rows-3" width="18"
@@ -433,35 +433,35 @@
                         title="Columns"><iconify-icon icon="lucide:columns-3" width="18"
                             height="18"></iconify-icon></label><input type="number" id="grid-cols-input"
                         class="grid-input" min="1"></div><button id="toggle-box-style-btn" class="selection-tool-btn"
-                    title="Toggle Box Style"><iconify-icon icon="lucide:square" width="18"
+                    title="Toggle Box Style" aria-label="Toggle Box Style"><iconify-icon icon="lucide:square" width="18"
                         height="18"></iconify-icon></button><button id="group-btn" class="selection-tool-btn"
-                    title="Group (Ctrl+G)"><iconify-icon icon="lucide:layers" width="18"
+                    title="Group (Ctrl+G)" aria-label="Group (Ctrl+G)"><iconify-icon icon="lucide:layers" width="18"
                         height="18"></iconify-icon></button><button id="group-ordered-btn" class="selection-tool-btn"
-                    title="Group Ordered (Ctrl+Shift+O)"><iconify-icon icon="lucide:list-ordered" width="18"
+                    title="Group Ordered (Ctrl+Shift+O)" aria-label="Group Ordered (Ctrl+Shift+O)"><iconify-icon icon="lucide:list-ordered" width="18"
                         height="18"></iconify-icon></button><button id="connect-btn" class="selection-tool-btn"
-                    title="Connect (Mobile helper)"><iconify-icon icon="lucide:share-2" width="18"
+                    title="Connect (Mobile helper)" aria-label="Connect (Mobile helper)"><iconify-icon icon="lucide:share-2" width="18"
                         height="18"></iconify-icon></button><button id="ungroup-btn" class="selection-tool-btn"
-                    title="Ungroup (Ctrl+Shift+G)"><iconify-icon icon="lucide:copy-minus" width="18"
+                    title="Ungroup (Ctrl+Shift+G)" aria-label="Ungroup (Ctrl+Shift+G)"><iconify-icon icon="lucide:copy-minus" width="18"
                         height="18"></iconify-icon></button><button id="bring-front-btn" class="selection-tool-btn"
-                    title="Bring to Front (Home)"><iconify-icon icon="lucide:move-up" width="18"
+                    title="Bring to Front (Home)" aria-label="Bring to Front (Home)"><iconify-icon icon="lucide:move-up" width="18"
                         height="18"></iconify-icon></button><button id="send-back-btn" class="selection-tool-btn"
-                    title="Send to Back (End)"><iconify-icon icon="lucide:move-down" width="18"
+                    title="Send to Back (End)" aria-label="Send to Back (End)"><iconify-icon icon="lucide:move-down" width="18"
                         height="18"></iconify-icon></button><button id="scale-btn" class="selection-tool-btn"
-                    title="Scale (S)"><iconify-icon icon="lucide:maximize-2" width="18"
+                    title="Scale (S)" aria-label="Scale (S)"><iconify-icon icon="lucide:maximize-2" width="18"
                         height="18"></iconify-icon></button><button id="rotate-btn" class="selection-tool-btn"
-                    title="Rotate (R)"><iconify-icon icon="lucide:rotate-cw" width="18"
+                    title="Rotate (R)" aria-label="Rotate (R)"><iconify-icon icon="lucide:rotate-cw" width="18"
                         height="18"></iconify-icon></button><button id="reset-transform-btn" class="selection-tool-btn"
-                    title="Reset State (scale and rotation)"><iconify-icon icon="lucide:refresh-cw" width="18"
+                    title="Reset State (scale and rotation)" aria-label="Reset State (scale and rotation)"><iconify-icon icon="lucide:refresh-cw" width="18"
                         height="18"></iconify-icon></button><button id="flip-horizontal-btn" class="selection-tool-btn"
-                    title="Flip Horizontal (H)"><iconify-icon icon="lucide:flip-horizontal-2" width="18"
+                    title="Flip Horizontal (H)" aria-label="Flip Horizontal (H)"><iconify-icon icon="lucide:flip-horizontal-2" width="18"
                         height="18"></iconify-icon></button><button id="flip-vertical-btn" class="selection-tool-btn"
-                    title="Flip Vertical (V)"><iconify-icon icon="lucide:flip-vertical-2" width="18"
+                    title="Flip Vertical (V)" aria-label="Flip Vertical (V)"><iconify-icon icon="lucide:flip-vertical-2" width="18"
                         height="18"></iconify-icon></button><button id="pin-btn" class="selection-tool-btn"
-                    title="Pin (P)"><iconify-icon icon="lucide:pin" width="18"
+                    title="Pin (P)" aria-label="Pin (P)"><iconify-icon icon="lucide:pin" width="18"
                         height="18"></iconify-icon></button><button id="duplicate-selection-btn" class="selection-tool-btn"
-                    title="Duplicate (Ctrl+D)"><iconify-icon icon="lucide:copy" width="18"
+                    title="Duplicate (Ctrl+D)" aria-label="Duplicate (Ctrl+D)"><iconify-icon icon="lucide:copy" width="18"
                         height="18"></iconify-icon></button><button id="delete-selection-btn" class="selection-tool-btn"
-                    title="Delete (Del)"><iconify-icon icon="lucide:trash-2" width="18" height="18"
+                    title="Delete (Del)" aria-label="Delete (Del)"><iconify-icon icon="lucide:trash-2" width="18" height="18"
                         class="text-red-500"></iconify-icon></button>
             </div>
         </div>
@@ -475,9 +475,9 @@
                     <iconify-icon icon="lucide:film" width="16" height="16"></iconify-icon>
                     <span id="stats-frames-count">0 Frames</span>
                 </div>
-                <button id="storyflow-play-btn" type="button" class="storyflow-icon-btn" title="Play frames for their durations"><iconify-icon icon="lucide:play" width="16" height="16"></iconify-icon></button>
-                <button id="storyflow-fullscreen-btn" type="button" class="storyflow-icon-btn" title="Play the story fullscreen"><iconify-icon icon="lucide:maximize-2" width="16" height="16"></iconify-icon></button>
-                <button id="storyflow-script-btn" type="button" class="storyflow-icon-btn" title="Show the script beside the frames"><iconify-icon icon="lucide:scroll-text" width="16" height="16"></iconify-icon></button>
+                <button id="storyflow-play-btn" type="button" class="storyflow-icon-btn" title="Play frames for their durations" aria-label="Play frames for their durations"><iconify-icon icon="lucide:play" width="16" height="16"></iconify-icon></button>
+                <button id="storyflow-fullscreen-btn" type="button" class="storyflow-icon-btn" title="Play the story fullscreen" aria-label="Play the story fullscreen"><iconify-icon icon="lucide:maximize-2" width="16" height="16"></iconify-icon></button>
+                <button id="storyflow-script-btn" type="button" class="storyflow-icon-btn" title="Show the script beside the frames" aria-label="Show the script beside the frames"><iconify-icon icon="lucide:scroll-text" width="16" height="16"></iconify-icon></button>
                 <div class="stats-item">
                     <iconify-icon icon="lucide:clock" width="16" height="16"></iconify-icon>
                     <span id="stats-total-duration">0s Total</span>
@@ -509,7 +509,7 @@
             </div>
         </div>
         <div id="storyflow-fullscreen" hidden>
-            <button id="storyflow-fullscreen-close" type="button" title="Exit fullscreen (Escape)"><iconify-icon icon="lucide:x" width="18" height="18"></iconify-icon><span>Exit</span></button>
+            <button id="storyflow-fullscreen-close" type="button" title="Exit fullscreen (Escape)" aria-label="Exit fullscreen (Escape)"><iconify-icon icon="lucide:x" width="18" height="18"></iconify-icon><span>Exit</span></button>
             <div class="storyflow-fullscreen-still">
                 <img id="storyflow-fullscreen-image" alt="" hidden>
                 <div id="storyflow-fullscreen-empty">No still</div>
@@ -521,24 +521,24 @@
         </div>
 
         <div id="storyflow-minimap" style="display: none;">
-            <button id="storyflow-scroll-start-btn" class="minimap-control-btn" title="Go to Beginning">
+            <button id="storyflow-scroll-start-btn" class="minimap-control-btn" title="Go to Beginning" aria-label="Go to Beginning">
                 <iconify-icon icon="lucide:skip-back" width="24" height="24"></iconify-icon>
             </button>
-            <button id="storyflow-toggle-tint-btn" class="minimap-control-btn active" title="Toggle Status Tint">
+            <button id="storyflow-toggle-tint-btn" class="minimap-control-btn active" title="Toggle Status Tint" aria-label="Toggle Status Tint">
                 <iconify-icon icon="lucide:gallery-horizontal" width="24" height="24"></iconify-icon>
             </button>
             <div id="storyflow-minimap-track-container">
                 <div id="storyflow-minimap-track"></div>
                 <div id="storyflow-minimap-viewport"></div>
             </div>
-            <button id="storyflow-add-frame-btn" class="minimap-control-btn" title="Add Frame">
+            <button id="storyflow-add-frame-btn" class="minimap-control-btn" title="Add Frame" aria-label="Add Frame">
                 <iconify-icon icon="lucide:plus" width="24" height="24"></iconify-icon>
             </button>
             <div id="storyflow-add-many">
-                <button type="button" class="storyflow-add-many-preset" data-count="5" title="Add 5 frames">5</button>
-                <button type="button" class="storyflow-add-many-preset" data-count="10" title="Add 10 frames">10</button>
+                <button type="button" class="storyflow-add-many-preset" data-count="5" title="Add 5 frames" aria-label="Add 5 frames">5</button>
+                <button type="button" class="storyflow-add-many-preset" data-count="10" title="Add 10 frames" aria-label="Add 10 frames">10</button>
                 <input id="storyflow-add-count" type="number" min="1" max="200" value="5" aria-label="Number of frames to add">
-                <button id="storyflow-add-count-btn" type="button" title="Add this many frames">
+                <button id="storyflow-add-count-btn" type="button" title="Add this many frames" aria-label="Add this many frames">
                     <iconify-icon icon="lucide:list-plus" width="18" height="18"></iconify-icon>
                 </button>
             </div>
@@ -546,7 +546,7 @@
 
         <!-- Storyflow image lightbox -->
         <div id="storyflow-lightbox">
-            <button id="storyflow-lightbox-close" title="Close (Esc)">
+            <button id="storyflow-lightbox-close" title="Close (Esc)" aria-label="Close (Esc)">
                 <iconify-icon icon="lucide:x" width="20" height="20"></iconify-icon>
             </button>
             <img id="storyflow-lightbox-img" src="" alt="Frame preview" />
@@ -637,10 +637,10 @@
                 <div id="gantt-sidebar-header">
                     <span>Task</span>
                     <div style="display:flex; align-items:center; gap:4px;">
-                        <button id="gantt-toggle-collapse-btn" title="Expand / Collapse all groups">
+                        <button id="gantt-toggle-collapse-btn" title="Expand / Collapse all groups" aria-label="Expand / Collapse all groups">
                             <iconify-icon icon="lucide:chevrons-up-down" width="16" height="16"></iconify-icon>
                         </button>
-                        <button id="gantt-add-group-btn" title="Add Group">
+                        <button id="gantt-add-group-btn" title="Add Group" aria-label="Add Group">
                             <iconify-icon icon="lucide:plus" width="16" height="16"></iconify-icon>
                         </button>
                     </div>
@@ -675,13 +675,13 @@
                 <iconify-icon icon="lucide:zoom-in" width="14" height="14"
                     style="color:var(--text-color-light)"></iconify-icon>
             </div>
-            <button id="gantt-today-btn" class="gantt-nav-btn" title="Jump to Today">
+            <button id="gantt-today-btn" class="gantt-nav-btn" title="Jump to Today" aria-label="Jump to Today">
                 <iconify-icon icon="lucide:calendar-check" width="16" height="16"></iconify-icon> Today
             </button>
-            <button id="gantt-prev-btn" class="gantt-nav-btn" title="Previous Period">
+            <button id="gantt-prev-btn" class="gantt-nav-btn" title="Previous Period" aria-label="Previous Period">
                 <iconify-icon icon="lucide:chevron-left" width="16" height="16"></iconify-icon>
             </button>
-            <button id="gantt-next-btn" class="gantt-nav-btn" title="Next Period">
+            <button id="gantt-next-btn" class="gantt-nav-btn" title="Next Period" aria-label="Next Period">
                 <iconify-icon icon="lucide:chevron-right" width="16" height="16"></iconify-icon>
             </button>
         </div>
@@ -731,7 +731,7 @@
                     <select id="gantt-detail-assignee" style="flex-grow: 1;">
                         <option value="">Unassigned</option>
                     </select>
-                    <button id="gantt-manage-workers-btn" title="Manage Workers"
+                    <button id="gantt-manage-workers-btn" title="Manage Workers" aria-label="Manage Workers"
                         style="background: var(--bg-ui-hover); border: 1px solid var(--border-color); color: var(--text-color); border-radius: 0.5rem; padding: 0.25rem 0.5rem; cursor: pointer; display: flex; align-items: center; justify-content: center;">
                         <iconify-icon icon="lucide:users" width="14" height="14"></iconify-icon>
                     </button>
@@ -761,7 +761,7 @@
             </div>
         </div>
         <div id="gantt-detail-footer" style="display: flex; align-items: center; justify-content: space-between; gap: 0.5rem;">
-            <button id="gantt-detail-duplicate" class="gantt-detail-dup-btn" title="Duplicate Task">
+            <button id="gantt-detail-duplicate" class="gantt-detail-dup-btn" title="Duplicate Task" aria-label="Duplicate Task">
                 <iconify-icon icon="lucide:copy-plus" width="14" height="14"></iconify-icon> Duplicate Task
             </button>
             <button id="gantt-detail-delete" class="gantt-detail-delete-btn">
@@ -811,11 +811,11 @@
         </div>
         <div class="cloud-menu-divider"></div>
 
-        <button id="cloud-menu-save" class="cloud-menu-item" title="Ctrl+Alt+S">
+        <button id="cloud-menu-save" class="cloud-menu-item" title="Ctrl+Alt+S" aria-label="Ctrl+Alt+S">
             <iconify-icon icon="lucide:cloud-upload" width="16" height="16"></iconify-icon>
             Save to Drive
         </button>
-        <button id="cloud-menu-open" class="cloud-menu-item" title="Ctrl+Alt+O">
+        <button id="cloud-menu-open" class="cloud-menu-item" title="Ctrl+Alt+O" aria-label="Ctrl+Alt+O">
             <iconify-icon icon="lucide:cloud-download" width="16" height="16"></iconify-icon>
             Open from Drive
         </button>
@@ -1031,17 +1031,17 @@
                 <input type="text" id="note-title-input" placeholder="Title (optional)" spellcheck="true"
                     autocomplete="off">
                 <div id="note-editor-toolbar">
-                    <button class="note-fmt-btn" data-fmt="bold" title="Bold (**text**)" tabindex="-1"><iconify-icon
+                    <button class="note-fmt-btn" data-fmt="bold" title="Bold (**text**)" aria-label="Bold (**text**)" tabindex="-1"><iconify-icon
                             icon="lucide:bold" width="16" height="16"></iconify-icon></button>
-                    <button class="note-fmt-btn" data-fmt="italic" title="Italic (*text*)" tabindex="-1"><iconify-icon
+                    <button class="note-fmt-btn" data-fmt="italic" title="Italic (*text*)" aria-label="Italic (*text*)" tabindex="-1"><iconify-icon
                             icon="lucide:italic" width="16" height="16"></iconify-icon></button>
-                    <button class="note-fmt-btn" data-fmt="h1" title="Heading 1" tabindex="-1"><iconify-icon
+                    <button class="note-fmt-btn" data-fmt="h1" title="Heading 1" aria-label="Heading 1" tabindex="-1"><iconify-icon
                             icon="lucide:heading-1" width="16" height="16"></iconify-icon></button>
-                    <button class="note-fmt-btn" data-fmt="h2" title="Heading 2" tabindex="-1"><iconify-icon
+                    <button class="note-fmt-btn" data-fmt="h2" title="Heading 2" aria-label="Heading 2" tabindex="-1"><iconify-icon
                             icon="lucide:heading-2" width="16" height="16"></iconify-icon></button>
-                    <button class="note-fmt-btn" data-fmt="bullet" title="Bullet List" tabindex="-1"><iconify-icon
+                    <button class="note-fmt-btn" data-fmt="bullet" title="Bullet List" aria-label="Bullet List" tabindex="-1"><iconify-icon
                             icon="lucide:list" width="16" height="16"></iconify-icon></button>
-                    <button class="note-fmt-btn" data-fmt="code" title="Inline Code" tabindex="-1"><iconify-icon
+                    <button class="note-fmt-btn" data-fmt="code" title="Inline Code" aria-label="Inline Code" tabindex="-1"><iconify-icon
                             icon="lucide:code" width="16" height="16"></iconify-icon></button>
                 </div>
             </div>
@@ -1160,10 +1160,10 @@
                         style="color:var(--switch-bg-checked);text-decoration:none">linktr.ee/davidbrum</a></p>
                 <div style="display:flex;gap:1.5rem;justify-content:center;margin-top:2rem;">
                     <a href="https://linktr.ee/davidbrum" target="_blank" class="footer-btn"
-                        title="H. David Brum Links"><iconify-icon icon="lucide:external-link" width="16"
+                        title="H. David Brum Links" aria-label="H. David Brum Links"><iconify-icon icon="lucide:external-link" width="16"
                             height="16"></iconify-icon></a>
                     <a href="https://github.com/davidbrum25/moodinfinite" target="_blank" class="footer-btn"
-                        title="View on GitHub"><iconify-icon icon="lucide:github" width="16"
+                        title="View on GitHub" aria-label="View on GitHub"><iconify-icon icon="lucide:github" width="16"
                             height="16"></iconify-icon></a>
                 </div>
             </div>
@@ -1256,7 +1256,7 @@
                         style="color:var(--switch-bg-checked);"></iconify-icon>
                     <h2 class="cloud-modal-title" style="margin:0;">Open from Drive</h2>
                 </div>
-                <button id="cloud-picker-cancel" class="tab-add-btn" title="Cancel">
+                <button id="cloud-picker-cancel" class="tab-add-btn" title="Cancel" aria-label="Cancel">
                     <iconify-icon icon="lucide:x" width="18" height="18"></iconify-icon>
                 </button>
             </div>
