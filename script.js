@@ -503,11 +503,7 @@ function switchTab(projectId) {
     activeGizmo = null;
     isTransforming = false;
     isTransformingArrow = false;
-    hoveredItem = null;
-    hoveredGizmo = null;
-    hoveredArrowHandle = null;
-    hoveredPort = null;
-    hoveredConnector = null;
+    clearHoverStates();
     isDrawing = false;
     isConnectionMode = false;
     connectionSourceItem = null;
@@ -2021,6 +2017,7 @@ function setupEventListeners() {
 
     canvas.addEventListener('mousedown', onMouseDown);
     canvas.addEventListener('mouseup', onMouseUp);
+canvas.addEventListener('mouseleave', clearHoverStates);
     canvas.addEventListener('auxclick', e => { if (e.button === 1) e.preventDefault(); });
     canvas.addEventListener('mousemove', onMouseMove);
     // Middle-button pan. Capture runs before Firefox/Linux autoscroll, and
@@ -4334,11 +4331,12 @@ function handleKeyDown(e) {
 
     if (key === 'escape') {
         e.preventDefault();
+        clearHoverStates();
         if (helpModalOverlay && helpModalOverlay.style.display === 'flex') { helpModalOverlay.style.display = 'none'; return; }
         const sfLightbox = document.getElementById('storyflow-lightbox');
         if (sfLightbox && sfLightbox.classList.contains('open')) { return; }
-        if (currentTool) { setCurrentTool(null); }
-        else if (selectedItems.length > 0) { selectedItems = []; updateSelectionToolbar(); updateLeftBarState(); }
+        if (currentTool) { setCurrentTool(null); clearHoverStates(); }
+        else if (selectedItems.length > 0) { selectedItems = []; updateSelectionToolbar(); updateLeftBarState(); clearHoverStates(); }
         return;
     }
     if (e.shiftKey && key === 'n') { e.preventDefault(); confirmNewBoard(); return; }
@@ -4754,6 +4752,7 @@ function onMouseDown(e) {
                     });
                 } else {
                     selectedItems = [];
+                    clearHoverStates();
                     isSelectingBox = true;
                     selectionBox.startX = o.x;
                     selectionBox.startY = o.y;
@@ -4829,6 +4828,15 @@ function onMouseUp(e) {
         originalItemState = null;
     }
     requestUpdate();
+}
+function clearHoverStates() {
+    let changed = false;
+    if (hoveredItem !== null) { hoveredItem = null; changed = true; }
+    if (hoveredPort !== null) { hoveredPort = null; changed = true; }
+    if (hoveredConnector !== null) { hoveredConnector = null; changed = true; }
+    if (typeof hoveredGizmo !== 'undefined' && hoveredGizmo !== null) { hoveredGizmo = null; changed = true; }
+    if (typeof hoveredArrowHandle !== 'undefined' && hoveredArrowHandle !== null) { hoveredArrowHandle = null; changed = true; }
+    if (changed) requestUpdate();
 }
 function onMouseMove(e) {
     const worldPos = screenToWorld(getEventLocation(e));
@@ -6887,7 +6895,9 @@ function onTouchStart(e) {
         if (tapLength < 300 && tapLength > 0) { onDoubleClick(normalizeTouchEvent(e)); lastTap = 0; return; }
         lastTap = currentTime;
         longPressTimer = setTimeout(() => { const contextEvent = { preventDefault: () => { }, ...normalizeTouchEvent(e) }; onContextMenu(contextEvent); if (navigator.vibrate) { navigator.vibrate(50); } }, 750);
-        onMouseDown(normalizeTouchEvent(e));
+        const ne = normalizeTouchEvent(e);
+        onMouseMove(ne);
+        onMouseDown(ne);
     } else if (e.touches.length === 2) {
         isDrawing = false; isMovingItems = false; isTransforming = false; isTransformingArrow = false; isSelectingBox = false; isPinching = true;
         initialPinchDistance = getPinchDistance(e); lastPinchCenter = getPinchCenter(e); initialCameraZoomOnPinch = cameraZoom;
@@ -8085,7 +8095,7 @@ function renderColorSeeker(projectId) {
             moveRightBtn.addEventListener('click', (ev) => {
                 ev.stopPropagation();
                 ev.preventDefault();
-                colorseekerMoveSwatch(project, i, i + 1);
+                console.log('Moving swatch', i, i + 1); colorseekerMoveSwatch(project, i, i + 1);
             });
             bottomActions.appendChild(moveRightBtn);
 
@@ -11000,3 +11010,5 @@ function setupGanttListeners() {
         });
     }
 }
+
+window.__getHoveredItem = () => hoveredItem;

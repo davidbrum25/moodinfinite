@@ -1408,6 +1408,7 @@ async function assertRound2Upgrades(page) {
 
     // 3e. Move left & right buttons on swatch (replaces mouse drag-and-drop for mobile)
     const firstSwatchHex = (await page.$eval('#colorseeker-hex-list', (el) => el.textContent.trim())).split(',')[0];
+    await page.hover('.colorseeker-bar:first-child');
     await page.click('.colorseeker-bar:first-child .colorseeker-move-right');
     await page.waitForFunction((origFirst) => {
         const curFirst = document.getElementById('colorseeker-hex-list').textContent.trim().split(',')[0];
@@ -1805,6 +1806,7 @@ try {
     await assertNextImprovements(page);
     await assertQoLUpgrades(page);
     await assertRound2Upgrades(page);
+    await assertConnectorHoverClearBug(page);
 
     const lateErrors = pageErrors.filter(isFirstParty);
     assert.deepEqual(lateErrors, [], `first-party errors:\n${lateErrors.join('\n')}`);
@@ -1868,4 +1870,113 @@ async function assertGroupVisibilityBug(page) {
         throw new Error(`Group bounding box is offset! Expected X=${result.groupX} but got ${result.boxX}`);
     }
     console.log('Group Visibility Bug fixed.');
+}
+
+async function assertConnectorHoverClearBug(page) {
+    console.log('Testing Connector Hover Clear Bug...');
+    
+    // We must expose hoveredItem and selectedItems for the test
+    await page.evaluate(() => {
+        if (!Object.getOwnPropertyDescriptor(window, 'selectedItems')) {
+            Object.defineProperty(window, 'selectedItems', { get: () => { try { return eval('selectedItems'); } catch(e){return [];} } });
+        }
+        // Force close all modals and ensure we can click the canvas
+        if (typeof helpModalOverlay !== 'undefined' && helpModalOverlay) helpModalOverlay.style.display = 'none';
+        const sfLightbox = document.getElementById('storyflow-lightbox');
+        if (sfLightbox) sfLightbox.classList.remove('open');
+        const overlay = document.getElementById('modal-overlay');
+        if (overlay) overlay.style.display = 'none';
+        const prompt = document.getElementById('moodprompt-overlay');
+        if (prompt) prompt.style.display = 'none';
+        if (typeof setCurrentTool === 'function') setCurrentTool(null);
+        
+        // Hide ALL other tabs and forcefully show canvas
+        document.querySelectorAll('.tab-content').forEach(el => {
+            if (el.id !== 'moodinfinite-container') el.style.display = 'none';
+            else el.style.display = 'flex';
+        });
+    });
+
+    // Place item at world 640, 400 (center of screen)
+    const types = ['group', 'image', 'video', 'box', 'circle', 'textList', 'comment', 'text', 'reroute'];
+    
+    for (const type of types) {
+        await page.evaluate((type) => {
+            cameraOffset = { x: 0, y: 0 };
+            cameraZoom = 1;
+            items.length = 0;
+            if (typeof selectedItems !== 'undefined') {
+                selectedItems.length = 0; // Clear selectedItems!
+            }
+            if (typeof window.__getHoveredItem === 'function') {
+                // we can't set it to null easily without a setter, but we clear it via mousemove below
+            }
+            const item = { id: 'testItem', type: type, x: 590, y: 350, width: 100, height: 100, color: '#ff0000', isPinned: false, rotation: 0, scaleX: 1, scaleY: 1, opacity: 1, style: 'fill' };
+            if (type === 'group') { item.items = [{ id: 'child', type: 'box', x: 0, y: 0, width: 100, height: 100 }]; }
+            else if (type === 'textList') { item.items = [{ text: 'a', completed: false }]; }
+            else if (type === 'reroute') { item.width = 0; item.height = 0; }
+            items.push(item);
+            draw();
+        }, type);
+
+        const boxCenterScreen = await page.evaluate(() => {
+            const item = items.find(i => i.id === 'testItem');
+            const cx = item.type === 'reroute' ? item.x : item.x + item.width / 2;
+            const cy = item.type === 'reroute' ? item.y : item.y + item.height / 2;
+            return worldToScreen({ x: cx, y: cy });
+        });
+
+        // 1. Move to box
+        await page.mouse.move(0, 0); // ensure move event fires
+        await new Promise(r => setTimeout(r, 10));
+        await page.mouse.move(boxCenterScreen.x, boxCenterScreen.y);
+        await new Promise(r => setTimeout(r, 50));
+        let hovered = await page.evaluate(() => window.__getHoveredItem && window.__getHoveredItem() && window.__getHoveredItem().id);
+        let hobj = await page.evaluate(() => window.__getHoveredItem && window.__getHoveredItem());
+        if (hovered !== 'testItem') {
+            const getAtPos = await page.evaluate((pos) => getItemAtPosition(screenToWorld(pos))?.id, boxCenterScreen);
+            const elAtPos = await page.evaluate((pos) => document.elementFromPoint(pos.x, pos.y)?.id || document.elementFromPoint(pos.x, pos.y)?.className, boxCenterScreen);
+            console.log("FAILED ON TYPE:", type, "boxCenterScreen:", boxCenterScreen, "getAtPos:", getAtPos, "hobj:", hobj, "elAtPos:", elAtPos);
+            throw new Error(`Expected testItem (${type}) to be hovered when mouse is over it, got ` + hovered);
+        }
+
+        // 2. Move out
+        await page.mouse.move(300, 300);
+        await new Promise(r => setTimeout(r, 50));
+        hovered = await page.evaluate(() => window.__getHoveredItem && window.__getHoveredItem() && window.__getHoveredItem().id);
+        if (hovered !== null && hovered !== undefined && hovered !== false) throw new Error(`Expected hoveredItem to be null after mouse leaves object (${type}), got ` + hovered);
+
+        // 3. Select box
+        await page.mouse.click(boxCenterScreen.x, boxCenterScreen.y);
+        await new Promise(r => setTimeout(r, 50));
+        
+        // 4. Press Escape
+        await page.keyboard.press('Escape');
+        await new Promise(r => setTimeout(r, 50));
+        hovered = await page.evaluate(() => window.__getHoveredItem && window.__getHoveredItem() && window.__getHoveredItem().id);
+        if (hovered !== null && hovered !== undefined && hovered !== false) throw new Error(`Expected hoveredItem to be null after Escape (${type}), got ` + hovered);
+
+        // 5. Select box again and click empty canvas
+        await page.mouse.click(boxCenterScreen.x, boxCenterScreen.y);
+        await new Promise(r => setTimeout(r, 50));
+        await page.mouse.click(300, 300);
+        await new Promise(r => setTimeout(r, 50));
+        hovered = await page.evaluate(() => window.__getHoveredItem && window.__getHoveredItem() && window.__getHoveredItem().id);
+        if (hovered !== null && hovered !== undefined && hovered !== false) throw new Error(`Expected hoveredItem to be null after clicking empty canvas (${type}), got ` + hovered);
+
+        // 6. Emulate touch tap on box
+        await page.touchscreen.tap(boxCenterScreen.x, boxCenterScreen.y);
+        await new Promise(r => setTimeout(r, 400));
+        hovered = await page.evaluate(() => window.__getHoveredItem && window.__getHoveredItem() && window.__getHoveredItem().id);
+        if (hovered !== 'testItem') throw new Error(`Expected testItem (${type}) to be hovered after touch tap, got ` + hovered);
+
+        // 7. Touch tap empty canvas
+        await page.touchscreen.tap(300, 300);
+        await new Promise(r => setTimeout(r, 400));
+        hovered = await page.evaluate(() => window.__getHoveredItem && window.__getHoveredItem() && window.__getHoveredItem().id);
+        if (hovered !== null && hovered !== undefined && hovered !== false) {
+            throw new Error(`Expected hoveredItem to be null after touch tap on empty canvas (${type}), got ${hovered}.`);
+        }
+    }
+    console.log('Connector Hover Clear Bug fixed.');
 }
