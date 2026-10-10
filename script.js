@@ -2113,6 +2113,7 @@ function setupEventListeners() {
 
         // Modals & overlays
         const imageLightbox = document.getElementById('image-lightbox-overlay');
+        const storyflowLightbox = document.getElementById('storyflow-lightbox');
         const deleteGroupModal = document.getElementById('delete-group-modal-overlay');
         const ganttWorkersModal = document.getElementById('gantt-workers-modal-overlay');
         const cloudPickerOverlay = document.getElementById('cloud-picker-overlay');
@@ -2122,6 +2123,10 @@ function setupEventListeners() {
 
         if (imageLightbox && imageLightbox.style.display === 'flex') {
             imageLightbox.style.display = 'none';
+            closed = true;
+        }
+        if (storyflowLightbox && storyflowLightbox.classList.contains('open')) {
+            storyflowLightbox.classList.remove('open');
             closed = true;
         }
         if (helpModalOverlay && helpModalOverlay.style.display === 'flex') {
@@ -2465,6 +2470,7 @@ function setupEventListeners() {
 
     if (scaleBtn) scaleBtn.addEventListener('click', () => setActiveGizmo('scale'));
     if (rotateBtn) rotateBtn.addEventListener('click', () => setActiveGizmo('rotate'));
+    if (resetTransformBtn) resetTransformBtn.addEventListener('click', resetItemTransform);
     if (flipHorizontalBtn) flipHorizontalBtn.addEventListener('click', flipHorizontal);
     if (flipVerticalBtn) flipVerticalBtn.addEventListener('click', flipVertical);
     if (pinBtn) pinBtn.addEventListener('click', togglePin);
@@ -8977,13 +8983,7 @@ function createStoryCard(project, frame, index) {
         if (e.target === lightbox || e.target === lightboxImg) closeLightbox();
     });
 
-    // Escape key closes
-    document.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape' && lightbox && lightbox.classList.contains('open')) {
-            e.stopPropagation();
-            closeLightbox();
-        }
-    }, true);
+    // Escape key handled centrally in main document.addEventListener('keydown')
 })();
 
 function createStoryImageSlot(project, frame) {
