@@ -299,8 +299,8 @@ function createNewProject(type) {
                 items: [],
                 cameraOffset: { x: window.innerWidth / 2, y: (window.innerHeight - 48) / 2 },
                 cameraZoom: 1,
-                historyStack: [],
-                historyIndex: -1,
+                historyStack: ["[]"],
+                historyIndex: 0,
                 canvasBackgroundColor: defaultCanvasBg,
                 accentColor: defaultAccent,
                 gridColor: defaultGridColor
