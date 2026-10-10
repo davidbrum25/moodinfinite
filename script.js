@@ -1728,7 +1728,12 @@ function showAndPositionMenu(menu, event) { menu.style.display = 'block'; const 
 
 function saveSettings() {
     try {
-        const settings = { showGrid, snapToGrid, showDropShadow, showNotifications, showUiBlur, gridSize, gridOpacity };
+        const savedSettings = localStorage.getItem('moodinfinite-settings');
+        let settings = {};
+        try {
+            if (savedSettings) settings = JSON.parse(savedSettings);
+        } catch (e) {}
+        Object.assign(settings, { showGrid, snapToGrid, showDropShadow, showNotifications, showUiBlur, gridSize, gridOpacity });
         localStorage.setItem('moodinfinite-settings', JSON.stringify(settings));
     } catch (error) { console.error("Could not save settings to localStorage:", error); }
 }
