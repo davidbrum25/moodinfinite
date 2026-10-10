@@ -3021,7 +3021,7 @@
                 flex-wrap: wrap;
                 /* Allow wrapping */
                 justify-content: center;
-                transform: translate(-50%, 15px);
+                position: fixed !important; top: auto !important; bottom: 80px !important; left: 50% !important; transform: translateX(-50%) !important; z-index: 1001 !important;
                 /* Add more space from item */
             }
 
