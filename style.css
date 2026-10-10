@@ -65,7 +65,6 @@
             display: flex;
             align-items: center;
             padding: 0 8px;
-            flex-shrink: 0;
             gap: 4px;
             position: absolute;
             top: 0;
@@ -73,6 +72,12 @@
             right: 0;
             z-index: 100;
             box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+            overflow-x: auto;
+            scrollbar-width: none;
+            -ms-overflow-style: none;
+        }
+        #tabs-bar::-webkit-scrollbar {
+            display: none;
         }
 
         .tab-add-btn {

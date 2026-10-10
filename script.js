@@ -6945,6 +6945,9 @@ function reattachImages(e, t) {
     } else if (e.type === 'link') {
         delete t.iconImage;
         delete t.iconLoading;
+    } else if (e.type === 'video' && e.video instanceof HTMLVideoElement) {
+        t.video = e.video;
+        t.isPlaying = e.isPlaying;
     } else if (e.type === 'group') {
         if (e.items && t.items) {
             e.items.forEach((e, o) => { reattachImages(e, t.items[o]) });
