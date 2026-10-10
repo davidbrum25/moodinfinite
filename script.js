@@ -2126,7 +2126,13 @@ function setupEventListeners() {
             closed = true;
         }
         if (storyflowLightbox && storyflowLightbox.classList.contains('open')) {
-            storyflowLightbox.classList.remove('open');
+            if (typeof window.closeStoryLightbox === 'function') {
+                window.closeStoryLightbox();
+            } else if (typeof window.closeLightbox === 'function') {
+                window.closeLightbox();
+            } else {
+                storyflowLightbox.classList.remove('open');
+            }
             closed = true;
         }
         if (helpModalOverlay && helpModalOverlay.style.display === 'flex') {
@@ -2181,6 +2187,7 @@ function setupEventListeners() {
         if (closed) {
             e.preventDefault();
             e.stopPropagation();
+            e.stopImmediatePropagation();
         }
     }, true);
 
@@ -4215,6 +4222,7 @@ function drawGroupItem(e, t) {
 }
 
 function handleKeyDown(e) {
+    if (e.defaultPrevented) return;
     const activeEl = document.activeElement;
     if (currentlyEditingText || (activeEl && (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA' || activeEl.tagName === 'SELECT' || activeEl.isContentEditable))) { return; }
 
@@ -4324,7 +4332,15 @@ function handleKeyDown(e) {
         }
     }
 
-    if (key === 'escape') { e.preventDefault(); if (helpModalOverlay.style.display === 'flex') { helpModalOverlay.style.display = 'none'; return; } if (currentTool) { setCurrentTool(null); } else if (selectedItems.length > 0) { selectedItems = []; updateSelectionToolbar(); updateLeftBarState(); } return; }
+    if (key === 'escape') {
+        e.preventDefault();
+        if (helpModalOverlay && helpModalOverlay.style.display === 'flex') { helpModalOverlay.style.display = 'none'; return; }
+        const sfLightbox = document.getElementById('storyflow-lightbox');
+        if (sfLightbox && sfLightbox.classList.contains('open')) { return; }
+        if (currentTool) { setCurrentTool(null); }
+        else if (selectedItems.length > 0) { selectedItems = []; updateSelectionToolbar(); updateLeftBarState(); }
+        return;
+    }
     if (e.shiftKey && key === 'n') { e.preventDefault(); confirmNewBoard(); return; }
     if (e.shiftKey && key === 'c') { e.preventDefault(); copyToClipboard(); return; }
     if (e.altKey && key === 'g') { e.preventDefault(); setCurrentTool('grid'); return; }
@@ -8975,6 +8991,7 @@ function createStoryCard(project, frame, index) {
         lightbox.classList.add('open');
     };
     window.closeStoryLightbox = closeLightbox;
+    window.closeLightbox = closeLightbox;
 
     if (lightboxClose) lightboxClose.addEventListener('click', (e) => { e.stopPropagation(); closeLightbox(); });
 
