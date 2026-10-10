@@ -5522,7 +5522,7 @@ function loadFileFromObject(t) {
             const rootKey = Object.keys(zip.files).find(k => k.endsWith('data.json'));
             if (!rootKey) { showToast("Invalid project format", "error"); return; }
             const rootDirName = rootKey.split('data.json')[0];
-            zip.file(rootKey).async("string").then(jsonStr => {
+            return zip.file(rootKey).async("string").then(jsonStr => {
                 const data = JSON.parse(jsonStr);
                 const promises = Object.keys(data.globalImageCache || {}).map(id => {
                     const relativePath = data.globalImageCache[id];
@@ -5552,7 +5552,7 @@ function loadFileFromObject(t) {
                     }
                     return Promise.resolve();
                 });
-                Promise.all([...promises, ...videoPromises]).then(() => {
+                return Promise.all([...promises, ...videoPromises]).then(() => {
                     data.globalImageCache = globalImageCache;
                     data.globalVideoCache = globalVideoCache;
                     loadFileAsNewTab(JSON.stringify(data), t.name);
