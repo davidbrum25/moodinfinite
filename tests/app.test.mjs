@@ -4,7 +4,7 @@
  */
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
-import { mkdirSync, readFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, existsSync } from 'node:fs';
 import net from 'node:net';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -1488,7 +1488,7 @@ try {
     }
 
     const browser = await puppeteer.launch({
-        executablePath: '/usr/bin/google-chrome-stable',
+        executablePath: process.env.CHROME_PATH || '/usr/bin/google-chrome-stable',
         headless: true,
         args: ['--no-sandbox', '--disable-dev-shm-usage'],
     });
@@ -1809,31 +1809,36 @@ try {
     assert.deepEqual(lateErrors, [], `first-party errors:\n${lateErrors.join('\n')}`);
     await browser.close();
 
-    const firefox = await puppeteer.launch({
-        browser: 'firefox',
-        executablePath: '/usr/bin/firefox',
-        headless: true,
-    });
-    const ffPage = await firefox.newPage();
-    const ffErrors = [];
-    ffPage.on('pageerror', (err) => ffErrors.push(String(err && err.stack || err)));
-    await ffPage.setViewport({ width: 1280, height: 800 });
-    await ffPage.goto(`http://127.0.0.1:${PORT}/`, { waitUntil: 'domcontentloaded', timeout: 30000 });
-    await ffPage.waitForFunction(() => window.projects && window.projects.length > 0 && typeof draw === 'function', { timeout: 15000 });
-    const ff = await exerciseBoardInteractions(ffPage);
-    assert.ok(Math.hypot(ff.pan.during.x - ff.pan.before.x, ff.pan.during.y - ff.pan.before.y) > 20, `firefox pan: ${JSON.stringify(ff.pan)}`);
-    assert.equal(ff.pan.stillDown, true);
-    assert.ok(ff.drag.moved, `firefox drag: ${JSON.stringify(ff.drag)}`);
-    assert.ok(ff.drag.pixel[0] > 200 && ff.drag.pixel[2] > 120, `firefox drag paint: ${JSON.stringify(ff.drag.pixel)}`);
-    assert.equal(ff.boxSelect.painted, true, `firefox selection paint: ${JSON.stringify(ff.boxSelect)}`);
-    assert.equal(ff.connector.painted, true, `firefox connector paint: ${JSON.stringify(ff.connector)}`);
-    assert.ok(ff.color.css.includes('12ab34'), ff.color.css);
-    assert.equal(ff.color.inputKept, '#12ab34');
-    assert.ok(ff.color.itemPixel[1] > 180, `firefox item color: ${JSON.stringify(ff.color)}`);
-    assert.equal(ff.color.barBackdrop, 'none', `firefox left bar still blurs over the color input: ${ff.color.barBackdrop}`);
-    assert.notEqual(ff.color.appearance, 'none');
-    assert.deepEqual(ffErrors.filter(isFirstParty), []);
-    await firefox.close();
+    const firefoxPath = process.env.FIREFOX_PATH || '/usr/bin/firefox';
+    if (!existsSync(firefoxPath)) {
+        console.log(`\nSkipping Firefox tests: executable not found at ${firefoxPath}`);
+    } else {
+        const firefox = await puppeteer.launch({
+            browser: 'firefox',
+            executablePath: firefoxPath,
+            headless: true,
+        });
+        const ffPage = await firefox.newPage();
+        const ffErrors = [];
+        ffPage.on('pageerror', (err) => ffErrors.push(String(err && err.stack || err)));
+        await ffPage.setViewport({ width: 1280, height: 800 });
+        await ffPage.goto(`http://127.0.0.1:${PORT}/`, { waitUntil: 'domcontentloaded', timeout: 30000 });
+        await ffPage.waitForFunction(() => window.projects && window.projects.length > 0 && typeof draw === 'function', { timeout: 15000 });
+        const ff = await exerciseBoardInteractions(ffPage);
+        assert.ok(Math.hypot(ff.pan.during.x - ff.pan.before.x, ff.pan.during.y - ff.pan.before.y) > 20, `firefox pan: ${JSON.stringify(ff.pan)}`);
+        assert.equal(ff.pan.stillDown, true);
+        assert.ok(ff.drag.moved, `firefox drag: ${JSON.stringify(ff.drag)}`);
+        assert.ok(ff.drag.pixel[0] > 200 && ff.drag.pixel[2] > 120, `firefox drag paint: ${JSON.stringify(ff.drag.pixel)}`);
+        assert.equal(ff.boxSelect.painted, true, `firefox selection paint: ${JSON.stringify(ff.boxSelect)}`);
+        assert.equal(ff.connector.painted, true, `firefox connector paint: ${JSON.stringify(ff.connector)}`);
+        assert.ok(ff.color.css.includes('12ab34'), ff.color.css);
+        assert.equal(ff.color.inputKept, '#12ab34');
+        assert.ok(ff.color.itemPixel[1] > 180, `firefox item color: ${JSON.stringify(ff.color)}`);
+        assert.equal(ff.color.barBackdrop, 'none', `firefox left bar still blurs over the color input: ${ff.color.barBackdrop}`);
+        assert.notEqual(ff.color.appearance, 'none');
+        assert.deepEqual(ffErrors.filter(isFirstParty), []);
+        await firefox.close();
+    }
 } catch (err) {
     console.error('pageErrors:', pageErrors);
     console.error(server.getLog());
