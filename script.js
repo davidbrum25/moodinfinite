@@ -5294,7 +5294,8 @@ function saveAsPng() {
             ctx.rotate(e.rotation);
             ctx.scale(e.scaleX || 1, e.scaleY || 1);
             ctx.drawImage(e.img, -e.width / 2, -e.height / 2, e.width, e.height)
-        } else if (e.type === 'arrow') { drawArrow(ctx, e) }
+        } else if (e.type === 'video') { drawVideoItem(ctx, e) }
+        else if (e.type === 'arrow') { drawArrow(ctx, e) }
         else if (e.type === 'text') { drawTextItem(ctx, e) }
         else if (e.type === 'box') { drawBoxItem(ctx, e) }
         else if (e.type === 'circle') { drawCircleItem(ctx, e) }
