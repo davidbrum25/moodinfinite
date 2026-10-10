@@ -724,7 +724,7 @@ function openLightbox(src) {
         overlay.innerHTML = `
             <div id="image-lightbox-modal" class="glass-modal" style="width: auto; max-width: 90vw; height: auto; max-height: 90vh; padding: 1rem; position: relative; background: rgba(20,20,20,0.8);">
                 <button id="close-lightbox-btn" class="modal-button cancel" style="position: absolute; top: -10px; right: -10px; width: 30px; height: 30px; padding: 0; border-radius: 50%; display: flex; align-items: center; justify-content: center; z-index: 10;">&times;</button>
-                <img id="lightbox-img" src="" style="max-width: 100%; max-height: calc(90vh - 2rem); object-fit: contain; border-radius: 0.5rem; display: block;">
+                <img id="lightbox-img" src="" alt="Enlarged image preview" style="max-width: 100%; max-height: calc(90vh - 2rem); object-fit: contain; border-radius: 0.5rem; display: block;">
             </div>
         `;
         document.body.appendChild(overlay);
@@ -1329,6 +1329,7 @@ function createImageSlot(project, prompt, slotNumber) {
     const prop = `image${slotNumber}`;
     if (prompt[prop]) {
         const img = document.createElement('img');
+        img.alt = prompt.title ? `Image for ${prompt.title}` : `Slot ${slotNumber} image`;
         img.dataset.src = prompt[prop];
         img.className = 'lazy-load';
         imageLazyObserver.observe(img);
@@ -8877,6 +8878,7 @@ function createStoryImageSlot(project, frame) {
 
     if (frame.image) {
         const img = document.createElement('img');
+        img.alt = frame.description || (frame.title ? `Frame: ${frame.title}` : 'Story frame image');
         img.dataset.src = frame.image;
         img.className = 'lazy-load';
         imageLazyObserver.observe(img);
@@ -9155,6 +9157,7 @@ function renderAssetGrid(imagesSet, callback) {
             
             const img = document.createElement('img');
             img.src = imgData;
+            img.alt = 'Asset library thumbnail';
             img.loading = 'lazy';
             
             item.appendChild(img);
@@ -9261,7 +9264,7 @@ function exportMoodflowAsSheet(project) {
         const duration = frame.meta?.duration || '—';
         const camera = (frame.meta?.camera || '—').replace(/</g, '&lt;').replace(/>/g, '&gt;');
         const imgCell = frame.image
-            ? `<img src="${frame.image}" style="width:180px;height:120px;object-fit:cover;border-radius:4px;display:block;" />`
+            ? `<img src="${frame.image}" alt="Frame ${frameNum}" style="width:180px;height:120px;object-fit:cover;border-radius:4px;display:block;" />`
             : `<div style="width:180px;height:120px;background:#1a1a2e;border-radius:4px;display:flex;align-items:center;justify-content:center;color:#555;font-size:11px;">No Image</div>`;
 
         const rowBg = i % 2 === 0 ? '#0f0f1a' : '#12121f';
@@ -10441,7 +10444,7 @@ function ganttOpenDetail(project, groupId, taskId) {
     }
     
     if (imgSrc) {
-        preview.innerHTML = `<img src="${imgSrc}" style="width: 100%; height: 100%; object-fit: cover;">`;
+        preview.innerHTML = `<img src="${imgSrc}" alt="Task attachment preview" style="width: 100%; height: 100%; object-fit: cover;">`;
         clearBtn.style.display = 'block';
     } else {
         preview.innerHTML = '<iconify-icon icon="lucide:image" width="16" height="16" style="color: var(--text-color-light);"></iconify-icon>';

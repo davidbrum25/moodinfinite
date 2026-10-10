@@ -104,7 +104,7 @@ function renderMoodlistView(project) {
                     </div>
                 </div>
                 <div class="ml-add-preview-img" style="display:none">
-                    <img class="ml-add-img" src="" alt="">
+                    <img class="ml-add-img" src="" alt="Card image preview">
                     <button class="ml-remove-img-btn" title="Remove image">
                         <iconify-icon icon="lucide:x" width="14" height="14"></iconify-icon>
                     </button>
@@ -395,7 +395,7 @@ function _buildCard(card, project, grid) {
     // Image section
     const imgHtml = card.image ? `
         <div class="ml-card-img-wrap">
-            <img src="${card.image}" class="ml-card-img" alt="">
+            <img src="${card.image}" class="ml-card-img" alt="${_escapeAttr(card.title || 'Card image')}">
         </div>
     ` : '';
 
