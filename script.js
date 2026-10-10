@@ -2899,6 +2899,17 @@ function syncCanvasChrome() {
 
 let minimapFrame = null;
 
+function updateMobileBottomToolbarHeight() {
+    if (window.innerWidth > 768) return;
+    const bar = document.getElementById('left-bar');
+    if (bar) {
+        const h = Math.ceil(bar.getBoundingClientRect().height);
+        if (h > 0) {
+            document.documentElement.style.setProperty('--bottom-toolbar-height', `${h}px`);
+        }
+    }
+}
+
 function syncCanvasMinimap() {
     const root = document.getElementById('canvas-minimap');
     const map = document.getElementById('canvas-minimap-map');
@@ -2910,6 +2921,7 @@ function syncCanvasMinimap() {
         return;
     }
     if (root.hidden) root.hidden = false;
+    updateMobileBottomToolbarHeight();
 
     const tl = screenToWorld({ x: 0, y: 0 });
     const br = screenToWorld({ x: canvas.width, y: canvas.height });
@@ -2990,6 +3002,14 @@ if (canvasMinimap) {
     const endMinimapDrag = () => { dragFrame = null; };
     canvasMinimap.addEventListener('pointerup', endMinimapDrag);
     canvasMinimap.addEventListener('pointercancel', endMinimapDrag);
+    window.addEventListener('resize', updateMobileBottomToolbarHeight);
+    if (typeof ResizeObserver !== 'undefined') {
+        const leftBar = document.getElementById('left-bar');
+        if (leftBar) {
+            new ResizeObserver(updateMobileBottomToolbarHeight).observe(leftBar);
+        }
+    }
+    updateMobileBottomToolbarHeight();
 }
 
 function syncSnapIndicator(active, shiftKey) {

@@ -1,5 +1,7 @@
         :root {
             --tabs-bar-height: 48px;
+            --bottom-toolbar-height: 60px;
+            --safe-area-inset-bottom: env(safe-area-inset-bottom, 0px);
         }
 
         html,
@@ -3014,6 +3016,13 @@
             #left-bar svg {
                 width: 20px;
                 height: 20px;
+            }
+
+            #canvas-minimap {
+                bottom: calc(var(--bottom-toolbar-height, 66px) + 1.75rem + var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px)));
+                right: 1rem;
+                transform: scale(0.8);
+                transform-origin: bottom right;
             }
 
             .separator {
