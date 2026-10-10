@@ -4968,6 +4968,8 @@ function onMouseMove(e) {
                         } else if (subItem.type === 'stroke') {
                             subItem.points = origItem.points.map(p => ({ x: p.x * scaleX, y: p.y * scaleY }));
                         }
+                        delete subItem._cachedBox;
+                        subItem._isDirty = true;
                     });
                 }
             }
@@ -5974,7 +5976,7 @@ function pasteItems() {
     const e = [], t = 20 / cameraZoom;
     const o = a => {
         const i = JSON.parse(JSON.stringify(a));
-        i.id = Date.now() + Math.random();
+        delete i._cachedBox; i._isDirty = true; i.id = Date.now() + Math.random();
         i.isPinned = !1;
         function r(e) {
             if (e.type === 'image') {
@@ -6048,7 +6050,7 @@ function duplicateItems() {
         }
         reattach(e, a);
 
-        a.id = Date.now() + Math.random();
+        delete a._cachedBox; a._isDirty = true; a.id = Date.now() + Math.random();
         a.isPinned = !1;
         a.x += o;
         a.y += o;
@@ -6698,7 +6700,7 @@ function loadStateFromHistory(e) {
 function undoLastAction() { if (historyIndex > 0) { historyIndex--; const e = historyStack[historyIndex]; loadStateFromHistory(e) } }
 function redoLastAction() { if (historyIndex < historyStack.length - 1) { historyIndex++; const e = historyStack[historyIndex]; loadStateFromHistory(e) } }
 function groupSelectedItems() {
-    if (selectedItems.length <= 1) return; saveStateForUndo(); const e = []; selectedItems.forEach(t => { if (t.type === 'group') { const o = t.x + t.width / 2, a = t.y + t.height / 2, i = Math.cos(t.rotation), r = Math.sin(t.rotation); t.items.forEach(s => { const n = JSON.parse(JSON.stringify(s)); reattachImages(s, n); if (n.type === 'arrow' || n.type === 'stroke' || n.type === 'measure') { const transformPt = (px, py) => { const dx = px - t.width / 2, dy = py - t.height / 2, rx = dx * i - dy * r, ry = dx * r + dy * i; return { x: o + rx, y: a + ry } }; if (n.type === 'arrow' || n.type === 'measure') { const p1 = transformPt(s.startX, s.startY), p2 = transformPt(s.endX, s.endY); n.startX = p1.x; n.startY = p1.y; n.endX = p2.x; n.endY = p2.y } else { n.points = s.points.map(pt => transformPt(pt.x, pt.y)) } } else { const l = s.x + s.width / 2, c = s.y + s.height / 2, d = l - t.width / 2, h = c - t.height / 2, p = d * i - h * r, m = d * r + h * i, u = o + p, g = a + m; n.x = u - s.width / 2; n.y = g - s.height / 2; n.rotation = (s.rotation || 0) + t.rotation; } e.push(n) }) } else { e.push(t) } }); const t = getCollectiveBoundingBox(e), o = { id: Date.now(), type: 'group', x: t.x, y: t.y, width: t.width, height: t.height, rotation: 0, isPinned: !1, opacity: 1, scaleX: 1, scaleY: 1, items: [] }; e.forEach(e => { const t = JSON.parse(JSON.stringify(e)); reattachImages(e, t); t.x -= o.x; t.y -= o.y; if (t.type === 'arrow' || t.type === 'measure') { t.startX -= o.x; t.startY -= o.y; t.endX -= o.x; t.endY -= o.y } else if (t.type === 'stroke') { t.points.forEach(e => { e.x -= o.x; e.y -= o.y }) } o.items.push(t) }); const a = new Set(selectedItems.map(e => e.id));
+    if (selectedItems.length <= 1) return; saveStateForUndo(); const e = []; selectedItems.forEach(t => { if (t.type === 'group') { const o = t.x + t.width / 2, a = t.y + t.height / 2, i = Math.cos(t.rotation), r = Math.sin(t.rotation); t.items.forEach(s => { const n = JSON.parse(JSON.stringify(s)); reattachImages(s, n); if (n.type === 'arrow' || n.type === 'stroke' || n.type === 'measure') { const transformPt = (px, py) => { const dx = px - t.width / 2, dy = py - t.height / 2, rx = dx * i - dy * r, ry = dx * r + dy * i; return { x: o + rx, y: a + ry } }; if (n.type === 'arrow' || n.type === 'measure') { const p1 = transformPt(s.startX, s.startY), p2 = transformPt(s.endX, s.endY); n.startX = p1.x; n.startY = p1.y; n.endX = p2.x; n.endY = p2.y } else { n.points = s.points.map(pt => transformPt(pt.x, pt.y)) } } else { const l = s.x + s.width / 2, c = s.y + s.height / 2, d = l - t.width / 2, h = c - t.height / 2, p = d * i - h * r, m = d * r + h * i, u = o + p, g = a + m; n.x = u - s.width / 2; n.y = g - s.height / 2; n.rotation = (s.rotation || 0) + t.rotation; } e.push(n) }) } else { e.push(t) } }); const t = getCollectiveBoundingBox(e), o = { id: Date.now(), type: 'group', x: t.x, y: t.y, width: t.width, height: t.height, rotation: 0, isPinned: !1, opacity: 1, scaleX: 1, scaleY: 1, items: [] }; e.forEach(e => { const t = JSON.parse(JSON.stringify(e)); reattachImages(e, t); t.x -= o.x; t.y -= o.y; if (t.type === 'arrow' || t.type === 'measure') { t.startX -= o.x; t.startY -= o.y; t.endX -= o.x; t.endY -= o.y } else if (t.type === 'stroke') { t.points.forEach(e => { e.x -= o.x; e.y -= o.y }) } delete t._cachedBox; t._isDirty = true; o.items.push(t) }); const a = new Set(selectedItems.map(e => e.id));
     items = items.filter(e => !a.has(e.id));
     addItemToLayeredItems(o);
     selectedItems = [o];
@@ -6782,6 +6784,8 @@ function ungroupSelectedItems() {
             n.x = globalCenter.x - child.width / 2;
             n.y = globalCenter.y - child.height / 2;
             n.rotation = (child.rotation || 0) + (group.rotation || 0);
+            delete n._cachedBox;
+            n._isDirty = true;
 
             items.push(n);
             newItems.push(n);

@@ -1800,6 +1800,7 @@ try {
         firstPartyErrors: firstParty.length,
     }));
 
+    await assertGroupVisibilityBug(page);
     await assertNowTierPolish(page);
     await assertNextImprovements(page);
     await assertQoLUpgrades(page);
@@ -1845,4 +1846,26 @@ try {
     throw err;
 } finally {
     server.child.kill('SIGTERM');
+}
+async function assertGroupVisibilityBug(page) {
+    console.log('Testing Group Visibility Bug...');
+    const result = await page.evaluate(() => {
+        items.length = 0;
+        items.push({ id: 't1', type: 'box', x: 100, y: 100, width: 100, height: 100, color: '#ff0000', isPinned: false, rotation: 0, scaleX: 1, scaleY: 1, opacity: 1, style: 'fill' });
+        items.push({ id: 't2', type: 'box', x: 250, y: 100, width: 100, height: 100, color: '#00ff00', isPinned: false, rotation: 0, scaleX: 1, scaleY: 1, opacity: 1, style: 'fill' });
+        
+        selectedItems = [items[0], items[1]];
+        groupSelectedItems();
+        
+        const group = items.find(i => i.type === 'group');
+        const box = getItemBoundingBox(group);
+        return { 
+            groupX: group.x, groupW: group.width,
+            boxX: box.x, boxW: box.width
+        };
+    });
+    if (result.boxX !== result.groupX) {
+        throw new Error(`Group bounding box is offset! Expected X=${result.groupX} but got ${result.boxX}`);
+    }
+    console.log('Group Visibility Bug fixed.');
 }
