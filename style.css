@@ -1411,6 +1411,34 @@
             color: var(--switch-bg-checked);
         }
 
+        #canvas-fit-view-btn {
+            position: absolute;
+            right: 5.75rem;
+            bottom: 1rem;
+            z-index: 40;
+            width: 2rem;
+            height: 2rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 999px;
+            border: 1px solid var(--border-color);
+            background: var(--bg-ui);
+            color: var(--text-color);
+            cursor: pointer;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+            transition: all 0.2s ease;
+        }
+
+        #canvas-fit-view-btn:hover {
+            border-color: var(--switch-bg-checked);
+            color: var(--switch-bg-checked);
+        }
+
+        #canvas-fit-view-btn iconify-icon {
+            pointer-events: none;
+        }
+
         #canvas-minimap {
             position: absolute;
             right: 1rem;
@@ -1781,7 +1809,11 @@
         #colorseeker-to-canvas,
         #colorseeker-from-image,
         #colorseeker-reverse-palette,
-        #colorseeker-copy-css {
+        #colorseeker-copy-css,
+        #colorseeker-copy-hex,
+        #colorseeker-randomize,
+        #colorseeker-download-png,
+        #colorseeker-toggle-locks {
             padding: 0.4rem 0.7rem;
             border-radius: 999px;
             border: 1px solid var(--border-color);
@@ -1797,7 +1829,11 @@
         #colorseeker-to-canvas:hover,
         #colorseeker-from-image:hover,
         #colorseeker-reverse-palette:hover,
-        #colorseeker-copy-css:hover {
+        #colorseeker-copy-css:hover,
+        #colorseeker-copy-hex:hover,
+        #colorseeker-randomize:hover,
+        #colorseeker-download-png:hover,
+        #colorseeker-toggle-locks:hover {
             border-color: var(--switch-bg-checked);
             color: var(--switch-bg-checked);
         }
@@ -1850,6 +1886,91 @@
             cursor: default;
         }
 
+        .colorseeker-set-base {
+            position: absolute;
+            top: 2.15rem;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 6;
+            padding: 0.22rem 0.5rem;
+            border-radius: 999px;
+            border: 1px solid rgba(255, 255, 255, 0.35);
+            background: rgba(0, 0, 0, 0.55);
+            color: #fff;
+            font: 700 0.68rem/1 Inter, sans-serif;
+            cursor: pointer;
+            white-space: nowrap;
+            transition: all 0.2s;
+            opacity: 0.45;
+        }
+
+        .colorseeker-set-base:hover,
+        .colorseeker-set-base.is-base {
+            opacity: 1;
+            background: rgba(0, 0, 0, 0.85);
+            border-color: var(--switch-bg-checked, #4cdc92);
+            color: var(--switch-bg-checked, #4cdc92);
+        }
+
+        .colorseeker-bar-bottom-actions {
+            position: absolute;
+            bottom: 0.85rem;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 4px;
+            z-index: 5;
+            opacity: 0.45;
+            transition: opacity 0.2s;
+        }
+
+        .colorseeker-bar:hover .colorseeker-set-base,
+        .colorseeker-bar:hover .colorseeker-bar-bottom-actions {
+            opacity: 1;
+        }
+
+        .colorseeker-move-btn,
+        .colorseeker-lock-btn {
+            width: 28px;
+            height: 28px;
+            border-radius: 6px;
+            border: 1px solid rgba(255, 255, 255, 0.25);
+            background: rgba(0, 0, 0, 0.45);
+            color: #fff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            padding: 0;
+            transition: all 0.2s;
+        }
+
+        .colorseeker-move-btn:hover:not(:disabled),
+        .colorseeker-lock-btn:hover {
+            border-color: rgba(255, 255, 255, 0.6);
+            background: rgba(0, 0, 0, 0.75);
+        }
+
+        .colorseeker-move-btn:disabled {
+            opacity: 0.2;
+            cursor: default;
+        }
+
+        .colorseeker-lock-btn.is-locked {
+            background: rgba(255, 255, 255, 0.25);
+            border-color: rgba(255, 255, 255, 0.6);
+            opacity: 1;
+        }
+
+        @media (hover: none), (max-width: 768px) {
+            .colorseeker-set-base,
+            .colorseeker-bar-bottom-actions {
+                opacity: 0.9 !important;
+            }
+        }
+
         .colorseeker-copied {
             position: absolute;
             top: 50%;
@@ -1864,6 +1985,14 @@
             font-weight: 700;
             letter-spacing: 0.04em;
             pointer-events: none;
+        }
+
+        button .colorseeker-copied {
+            font-size: 0.75rem;
+            padding: 0.25rem 0.55rem;
+            background: rgba(0, 0, 0, 0.88);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+            white-space: nowrap;
         }
 
         canvas {
@@ -5470,6 +5599,63 @@ input.ml-card-item-text {
     bottom: calc(100% + 6px);
     left: 0;
     transform: none;
+}
+
+.moodprompt-count-badge {
+    color: var(--text-color-light);
+    font-size: 0.8rem;
+    font-weight: 500;
+}
+
+.story-card-move-left-btn,
+.story-card-move-right-btn {
+    background: transparent;
+    border: none;
+    color: var(--text-color-light);
+    cursor: pointer;
+    padding: 2px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 4px;
+    transition: all 0.15s ease;
+}
+
+.story-card-move-left-btn:hover:not(:disabled),
+.story-card-move-right-btn:hover:not(:disabled) {
+    color: var(--switch-bg-checked);
+    background: rgba(255, 255, 255, 0.08);
+}
+
+.story-card-move-left-btn:disabled,
+.story-card-move-right-btn:disabled {
+    opacity: 0.3;
+    cursor: default;
+}
+
+.gantt-group-count-badge {
+    font-size: 0.7rem;
+    color: var(--text-color-light);
+    background: rgba(255, 255, 255, 0.06);
+    padding: 1px 6px;
+    border-radius: 9999px;
+    margin-left: auto;
+    margin-right: 4px;
+    white-space: nowrap;
+}
+
+.ml-cards-count-badge {
+    font-size: 0.75rem;
+    color: var(--text-color-light);
+    background: rgba(255, 255, 255, 0.08);
+    padding: 2px 8px;
+    border-radius: 9999px;
+    margin-left: 0.5rem;
+    font-weight: 500;
+}
+
+.ml-card-check-all-btn:hover {
+    color: var(--switch-bg-checked);
 }
 
 /* ── Responsive: mobile single column ────────────────── */

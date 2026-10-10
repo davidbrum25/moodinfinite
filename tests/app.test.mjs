@@ -1287,7 +1287,8 @@ async function assertQoLUpgrades(page) {
     await page.click('.gantt-group-add-task-btn');
     await page.waitForSelector('.gantt-task-label');
     await page.click('.gantt-task-label');
-    await page.waitForSelector('#gantt-detail-duplicate');
+    await page.waitForSelector('#gantt-detail-panel.open');
+    await new Promise((r) => setTimeout(r, 300));
     await page.click('#gantt-detail-duplicate');
     await page.waitForFunction(() => document.querySelectorAll('.gantt-bar').length >= 2);
 
@@ -1327,6 +1328,150 @@ async function assertQoLUpgrades(page) {
         mkdirSync(shotDir, { recursive: true });
         await page.screenshot({ path: path.join(shotDir, 'qol-upgrades.png') });
     }
+}
+
+async function assertRound2Upgrades(page) {
+    // 1. Moodinfinite Canvas: Fit-to-View button (#canvas-fit-view-btn)
+    await page.evaluate(() => {
+        const board = projects.find((p) => p.type === 'moodinfinite');
+        switchTab(board.id);
+        (0, eval)('selectedItems.length = 0');
+        items.length = 0;
+        const box = (id, x, y) => ({
+            id, type: 'box', color: '#429eff', x, y, width: 200, height: 150,
+            rotation: 0, isPinned: false, style: 'fill', opacity: 1, scaleX: 1, scaleY: 1,
+        });
+        items.push(box('f1', 50, 50), box('f2', 800, 600));
+        (0, eval)('cameraZoom = 2.5');
+        draw();
+    });
+    const fitBtn = await page.$('#canvas-fit-view-btn');
+    assert.notEqual(fitBtn, null, 'missing #canvas-fit-view-btn on canvas');
+    await page.evaluate(() => document.getElementById('canvas-fit-view-btn').click());
+    const zoomAfterFit = await page.evaluate(() => cameraZoom);
+    assert.ok(zoomAfterFit < 2.5, `expected cameraZoom to adjust for fit, got ${zoomAfterFit}`);
+
+    // 2. Moodprompt: Board count badge & Copy All button
+    await page.evaluate(() => {
+        (0, eval)('moodpromptFilterPlatform = "all"');
+        (0, eval)('moodpromptSearchQuery = ""');
+        createNewProject('moodprompt');
+    });
+    await page.click('#moodprompt-empty-add');
+    await page.waitForSelector('.prompt-card');
+    await page.waitForSelector('.prompt-duplicate-btn');
+    await page.click('.prompt-duplicate-btn');
+    await page.waitForFunction(() => document.querySelectorAll('.prompt-card').length === 2);
+    const pCountText = await page.$eval('#moodprompt-count-badge', (el) => el.textContent.trim());
+    assert.equal(pCountText, '2 prompts');
+    const copyAllBtn = await page.$('#moodprompt-copy-all-btn');
+    assert.notEqual(copyAllBtn, null, 'missing #moodprompt-copy-all-btn');
+    await copyAllBtn.click();
+
+    // 3. Moodtone (Colorseeker): Copy hex codes & mobile buttons for hotkey functions
+    await page.evaluate(() => createNewProject('colorseeker'));
+    await page.waitForSelector('#colorseeker-copy-hex');
+    const hexBtnStyle = await page.$eval('#colorseeker-copy-hex', (btn) => {
+        const s = window.getComputedStyle(btn);
+        return { borderRadius: s.borderRadius, cursor: s.cursor, position: s.position };
+    });
+    assert.equal(hexBtnStyle.borderRadius, '999px');
+    assert.equal(hexBtnStyle.cursor, 'pointer');
+    assert.equal(hexBtnStyle.position, 'relative');
+    await page.click('#colorseeker-copy-hex');
+    await page.waitForSelector('.colorseeker-hex-copied');
+    assert.equal(await page.$eval('.colorseeker-hex-copied', (el) => el.textContent.trim()), 'Hex Copied');
+    await page.waitForFunction(() => !document.querySelector('.colorseeker-hex-copied'), { timeout: 3000 });
+
+    // 3a. Randomize palette button (replaces Space hotkey for mobile)
+    const paletteBeforeRandomize = await page.$eval('#colorseeker-hex-list', (el) => el.textContent.trim());
+    await page.click('#colorseeker-randomize');
+    await page.waitForFunction((prev) => document.getElementById('colorseeker-hex-list').textContent.trim() !== prev, {}, paletteBeforeRandomize);
+    const paletteAfterRandomize = await page.$eval('#colorseeker-hex-list', (el) => el.textContent.trim());
+    assert.notEqual(paletteAfterRandomize, paletteBeforeRandomize);
+
+    // 3b. Download PNG button (replaces Shift+S hotkey for mobile)
+    const dlBtn = await page.$('#colorseeker-download-png');
+    assert.notEqual(dlBtn, null, 'missing #colorseeker-download-png button');
+
+    // 3c. Toggle locks button (replaces L hotkey for mobile)
+    await page.click('#colorseeker-toggle-locks');
+    await page.waitForFunction(() => document.querySelectorAll('.colorseeker-lock-btn.is-locked').length > 0);
+    const lockedCount = await page.$$eval('.colorseeker-lock-btn.is-locked', (els) => els.length);
+    assert.ok(lockedCount >= 2, 'expected locked swatches after toggle locks');
+    await page.click('#colorseeker-toggle-locks');
+    await page.waitForFunction(() => document.querySelectorAll('.colorseeker-lock-btn.is-locked').length === 0);
+
+    // 3d. Set base color button on swatch (replaces Shift+Click for mobile)
+    await page.click('.colorseeker-bar:nth-child(2) .colorseeker-set-base');
+    await page.waitForFunction(() => document.querySelector('.colorseeker-bar:nth-child(2) .colorseeker-set-base')?.classList.contains('is-base') || document.querySelector('.colorseeker-set-base.is-base'));
+
+    // 3e. Move left & right buttons on swatch (replaces mouse drag-and-drop for mobile)
+    const firstSwatchHex = (await page.$eval('#colorseeker-hex-list', (el) => el.textContent.trim())).split(',')[0];
+    await page.click('.colorseeker-bar:first-child .colorseeker-move-right');
+    await page.waitForFunction((origFirst) => {
+        const curFirst = document.getElementById('colorseeker-hex-list').textContent.trim().split(',')[0];
+        return curFirst !== origFirst;
+    }, {}, firstSwatchHex);
+    const newSecondSwatchHex = (await page.$eval('#colorseeker-hex-list', (el) => el.textContent.trim())).split(',')[1];
+    assert.equal(newSecondSwatchHex.toLowerCase(), firstSwatchHex.toLowerCase());
+
+    // 4. Moodflow (Storyflow): 1-click Frame Reorder (Move Left / Move Right)
+    await page.evaluate(() => createNewProject('storyflow'));
+    await page.click('#storyflow-empty-add');
+    await page.waitForSelector('.story-card');
+    const firstTitleInput = await page.$('.story-title-input');
+    await firstTitleInput.type('Frame Alpha');
+    await page.click('.story-card-duplicate-btn');
+    await page.waitForFunction(() => document.querySelectorAll('.story-card').length === 2);
+    const titleInputs = await page.$$('.story-title-input');
+    await titleInputs[1].evaluate((el) => { el.value = ''; });
+    await titleInputs[1].type('Frame Beta');
+    const firstLeftDisabled = await page.$eval('.story-card-move-left-btn', (el) => el.disabled);
+    assert.equal(firstLeftDisabled, true, 'first frame move left should be disabled');
+    await page.click('.story-card-move-right-btn');
+    await page.waitForFunction(() => {
+        const titles = [...document.querySelectorAll('.story-title-input')].map((el) => el.value);
+        return titles[0] === 'Frame Beta' && titles[1] === 'Frame Alpha';
+    });
+
+    // 5. Moodgantt: Group Task Count Badge (.gantt-group-count-badge)
+    await page.evaluate(() => createNewProject('moodgantt'));
+    await page.click('#gantt-empty-add');
+    await page.waitForSelector('.gantt-group-add-task-btn');
+    const badgeInitialGantt = await page.$eval('.gantt-group-count-badge', (el) => el.textContent.trim());
+    assert.equal(badgeInitialGantt, '0 tasks');
+    await page.click('.gantt-group-add-task-btn');
+    await page.waitForFunction(() => document.querySelector('.gantt-group-count-badge')?.textContent?.trim() === '1 task');
+    await page.click('.gantt-group-add-task-btn');
+    await page.waitForFunction(() => document.querySelector('.gantt-group-count-badge')?.textContent?.trim() === '2 tasks');
+
+    // 6. Moodlist: Cards count badge & Check-all toggle
+    await page.evaluate(() => createNewProject('moodlist'));
+    await page.waitForSelector('.ml-add-title');
+    await page.type('.ml-add-title', 'Feature Launch');
+    await page.type('.ml-item-text', 'Spec doc');
+    await page.click('.ml-add-item-btn');
+    await page.waitForFunction(() => document.querySelectorAll('.ml-add-panel .ml-item-text').length === 2);
+    const mlItems = await page.$$('.ml-add-panel .ml-item-text');
+    await mlItems[1].type('Code review');
+    await page.click('.ml-save-btn');
+    await page.waitForSelector('.ml-card-progress-badge');
+    const cardCountBadge = await page.$eval('#ml-cards-count', (el) => el.textContent.trim());
+    assert.equal(cardCountBadge, '1 card');
+    assert.equal(await page.$eval('.ml-card-progress-badge', (el) => el.textContent.trim()), '0/2');
+    await page.hover('.ml-card');
+    await page.click('.ml-card-check-all-btn');
+    await page.waitForFunction(() => {
+        const b = document.querySelector('.ml-card-progress-badge');
+        return b && b.textContent.trim() === '2/2' && b.classList.contains('is-complete');
+    });
+    await page.hover('.ml-card');
+    await page.click('.ml-card-check-all-btn');
+    await page.waitForFunction(() => {
+        const b = document.querySelector('.ml-card-progress-badge');
+        return b && b.textContent.trim() === '0/2' && !b.classList.contains('is-complete');
+    });
 }
 
 const server = startServer();
@@ -1658,6 +1803,7 @@ try {
     await assertNowTierPolish(page);
     await assertNextImprovements(page);
     await assertQoLUpgrades(page);
+    await assertRound2Upgrades(page);
 
     const lateErrors = pageErrors.filter(isFirstParty);
     assert.deepEqual(lateErrors, [], `first-party errors:\n${lateErrors.join('\n')}`);

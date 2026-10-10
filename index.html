@@ -153,6 +153,9 @@
                     <button type="button" data-template="image-grid">Image grid</button>
                 </div>
             </div>
+            <button id="canvas-fit-view-btn" type="button" title="Fit items into view">
+                <iconify-icon icon="lucide:maximize" width="14" height="14"></iconify-icon>
+            </button>
             <button id="canvas-zoom-readout" type="button" title="Reset zoom to 100%">100%</button>
             <div id="canvas-minimap" hidden title="Board overview">
                 <canvas id="canvas-minimap-map" width="160" height="96"></canvas>
@@ -584,11 +587,15 @@
                         style="background: rgba(0,0,0,0.2); border: 1px solid var(--border-color); color: var(--text-color); padding: 0.6rem; border-radius: 0.5rem; font-family: monospace; font-size: 0.75rem; cursor: pointer; word-break: break-all; transition: all 0.2s; user-select: all; text-align: center; line-height: 1.4;">
                         #ffffff,#ffffff,#ffffff,#ffffff,#ffffff
                     </div>
+                    <button id="colorseeker-randomize" type="button">Randomize palette</button>
                     <button id="colorseeker-add-swatch" type="button">Add swatch</button>
                     <button id="colorseeker-reverse-palette" type="button">Reverse palette</button>
+                    <button id="colorseeker-toggle-locks" type="button">Lock / Unlock all</button>
                     <button id="colorseeker-copy-css" type="button">Copy CSS variables</button>
+                    <button id="colorseeker-copy-hex" type="button">Copy hex codes</button>
                     <button id="colorseeker-from-image" type="button">From canvas image</button>
                     <button id="colorseeker-to-canvas" type="button">Send to canvas</button>
+                    <button id="colorseeker-download-png" type="button">Download PNG</button>
                     <div id="colorseeker-image-picker" hidden></div>
                 </div>
                 <div style="color: var(--text-color-light); font-size: 0.8rem; line-height: 1.6; margin-top: 0.5rem;">

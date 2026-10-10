@@ -55,6 +55,7 @@ function renderMoodlistView(project) {
                 <iconify-icon icon="lucide:list-check" width="20" height="20"
                     style="color:var(--switch-bg-checked);"></iconify-icon>
                 <span class="ml-top-title">Moodlist</span>
+                <span class="ml-cards-count-badge" id="ml-cards-count">0 cards</span>
             </div>
             <div class="ml-top-bar-right">
                 <div class="ml-search-wrap">
@@ -272,6 +273,12 @@ function _wireAddPanel(panel, project, onSave) {
 /* ─── RENDER CARDS ──────────────────────────────────────────────────────── */
 function renderMoodlistCards(project, grid) {
     const container = document.getElementById('moodlist-container');
+    const countBadge = container?.querySelector('#ml-cards-count');
+    if (countBadge) {
+        const total = (project.data.cards || []).length;
+        countBadge.textContent = `${total} card${total === 1 ? '' : 's'}`;
+    }
+
     const searchInput = container?.querySelector('.ml-search');
     const showPinnedToggle = container?.querySelector('.ml-show-pinned');
 
@@ -435,6 +442,9 @@ function _buildCard(card, project, grid) {
                     </button>
                     <div class="ml-color-picker" style="display:none"></div>
                 </div>
+                <button class="ml-card-btn ml-card-check-all-btn" title="Toggle all items">
+                    <iconify-icon icon="lucide:check-check" width="14" height="14"></iconify-icon>
+                </button>
                 <button class="ml-card-btn ml-card-duplicate-btn" title="Duplicate card">
                     <iconify-icon icon="lucide:copy-plus" width="14" height="14"></iconify-icon>
                 </button>
@@ -562,6 +572,16 @@ function _wireCard(el, card, project, grid) {
                 input.remove();
             }
         });
+    });
+
+    // Toggle all items
+    el.querySelector('.ml-card-check-all-btn')?.addEventListener('click', () => {
+        const items = card.items || [];
+        if (!items.length) return;
+        const allChecked = items.every(i => i.checked);
+        items.forEach(i => i.checked = !allChecked);
+        scheduleAutoSave();
+        renderMoodlistCards(project, grid);
     });
 
     // Pin toggle

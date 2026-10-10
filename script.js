@@ -920,7 +920,34 @@ function renderMoodpromptView(project) {
         };
         searchItem.appendChild(searchInput);
 
-        // 4. Variables Item
+        // 4. Prompt Count Badge
+        const countItem = document.createElement('div');
+        countItem.className = 'moodprompt-count-badge stats-item';
+        countItem.id = 'moodprompt-count-badge';
+
+        // 5. Copy All Prompts
+        const copyAllBtnItem = document.createElement('div');
+        copyAllBtnItem.id = 'moodprompt-copy-all-btn';
+        copyAllBtnItem.className = 'stats-item';
+        copyAllBtnItem.style.cursor = 'pointer';
+        copyAllBtnItem.innerHTML = `<iconify-icon icon="lucide:copy" width="16" height="16"></iconify-icon> <span>Copy All</span>`;
+        copyAllBtnItem.onclick = () => {
+            const currentProject = projects.find(p => p.id === activeProjectId) || project;
+            const prompts = currentProject.data.prompts || [];
+            if (!prompts.length) {
+                showToast('No prompts to copy.');
+                return;
+            }
+            const textToCopy = prompts.map((p, i) => `${i + 1}. ${p.title || 'Untitled'}\n${resolveVariables(p.text, currentProject)}`).join('\n\n');
+            try {
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                    navigator.clipboard.writeText(textToCopy);
+                }
+            } catch (_) {}
+            showToast('All prompts copied to clipboard!');
+        };
+
+        // 6. Variables Item
         const varBtnItem = document.createElement('div');
         varBtnItem.className = 'stats-item';
         varBtnItem.style.cursor = 'pointer';
@@ -931,7 +958,7 @@ function renderMoodpromptView(project) {
             openVariableManager(currentProject);
         };
 
-        topBar.append(addBtnItem, filterItem, searchItem, varBtnItem);
+        topBar.append(addBtnItem, filterItem, searchItem, countItem, copyAllBtnItem, varBtnItem);
         moodpromptContainer.appendChild(topBar);
 
         scrollArea = document.createElement('div');
@@ -971,6 +998,11 @@ function renderMoodpromptView(project) {
         const matchesSearch = !moodpromptSearchQuery || (p.tags && p.tags.some(t => t.toLowerCase().includes(moodpromptSearchQuery)));
         return matchesPlatform && matchesSearch;
     });
+
+    const countBadgeEl = document.getElementById('moodprompt-count-badge');
+    if (countBadgeEl) {
+        countBadgeEl.textContent = `${filteredPrompts.length} prompt${filteredPrompts.length === 1 ? '' : 's'}`;
+    }
 
     filteredPrompts.forEach((prompt, index) => {
         promptList.appendChild(createPromptCard(project, prompt, index));
@@ -1580,6 +1612,13 @@ let _webpBlobCache = {};   // In-memory cache for WebP compressed blobs: imageId
 window.globalImageCache = globalImageCache;
 window.globalVideoCache = globalVideoCache;
 window._webpBlobCache = _webpBlobCache;
+try {
+    Object.defineProperty(window, 'cameraZoom', {
+        get() { return cameraZoom; },
+        set(v) { cameraZoom = v; if (typeof syncCanvasChrome === 'function') syncCanvasChrome(); },
+        configurable: true,
+    });
+} catch (_) {}
 let historyStack, historyIndex;
 
 const MAX_ZOOM = 5, MIN_ZOOM = 0.1, SCROLL_SENSITIVITY = 0.0005;
@@ -2853,6 +2892,14 @@ function resetCanvasZoom() {
 const canvasZoomReadout = document.getElementById('canvas-zoom-readout');
 if (canvasZoomReadout) canvasZoomReadout.addEventListener('click', resetCanvasZoom);
 
+const canvasFitViewBtn = document.getElementById('canvas-fit-view-btn');
+if (canvasFitViewBtn) {
+    canvasFitViewBtn.addEventListener('click', () => {
+        focusOnSelection();
+        syncCanvasChrome();
+    });
+}
+
 function applyCanvasTemplate(kind) {
     const project = projects.find(p => p.id === activeProjectId);
     if (!project || project.type !== 'moodinfinite' || items.length) return;
@@ -4090,10 +4137,7 @@ function handleKeyDown(e) {
     if (activeProject && activeProject.type === 'colorseeker') {
         if (e.code === 'Space') {
             e.preventDefault();
-            activeProject.data.baseColor = '#' + Math.floor(Math.random() * 16777215).toString(16).padStart(6, '0');
-            activeProject.data.colors = generatePalette(activeProject.data.baseColor, activeProject.data.mode, activeProject.data.lockedColors);
-            saveToBrowser();
-            renderColorSeeker(activeProjectId);
+            colorseekerRandomize(activeProject);
             return;
         }
         if (e.shiftKey && key === 's') {
@@ -7359,6 +7403,9 @@ function colorseekerCopyCss(project) {
     copied.textContent = 'CSS Copied';
     const btn = document.getElementById('colorseeker-copy-css');
     if (btn) btn.appendChild(copied);
+    setTimeout(() => {
+        if (copied.isConnected) copied.remove();
+    }, 1500);
     showToast('Copied CSS variables to clipboard!');
 }
 
@@ -7377,6 +7424,87 @@ if (colorseekerCopyCssBtn) {
         const project = projects.find(p => p.id === activeProjectId);
         if (!project || project.type !== 'colorseeker') return;
         colorseekerCopyCss(project);
+    });
+}
+
+function colorseekerCopyHex(project) {
+    if (!project || !project.data || !project.data.colors || !project.data.colors.length) return;
+    const hexString = project.data.colors.map(c => c.toUpperCase()).join(', ');
+    try {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(hexString).catch(() => {});
+        }
+    } catch (_) {}
+    document.querySelectorAll('.colorseeker-copied').forEach((node) => node.remove());
+    const copied = document.createElement('span');
+    copied.className = 'colorseeker-hex-copied colorseeker-copied';
+    copied.textContent = 'Hex Copied';
+    const btn = document.getElementById('colorseeker-copy-hex');
+    if (btn) btn.appendChild(copied);
+    setTimeout(() => {
+        if (copied.isConnected) copied.remove();
+    }, 1500);
+    showToast('Hex codes copied to clipboard!');
+}
+
+const colorseekerCopyHexBtn = document.getElementById('colorseeker-copy-hex');
+if (colorseekerCopyHexBtn) {
+    colorseekerCopyHexBtn.addEventListener('click', () => {
+        const project = projects.find(p => p.id === activeProjectId);
+        if (!project || project.type !== 'colorseeker') return;
+        colorseekerCopyHex(project);
+    });
+}
+
+function colorseekerRandomize(project) {
+    if (!project || project.type !== 'colorseeker' || !project.data) return;
+    colorseekerEnsureLocks(project);
+    project.data.baseColor = '#' + Math.floor(Math.random() * 16777215).toString(16).padStart(6, '0');
+    project.data.colors = generatePalette(project.data.baseColor, project.data.mode, project.data.lockedColors);
+    saveToBrowser();
+    renderColorSeeker(project.id);
+    showToast('Palette randomized.');
+}
+
+const colorseekerRandomizeBtn = document.getElementById('colorseeker-randomize');
+if (colorseekerRandomizeBtn) {
+    colorseekerRandomizeBtn.addEventListener('click', () => {
+        const project = projects.find(p => p.id === activeProjectId);
+        if (!project || project.type !== 'colorseeker') return;
+        colorseekerRandomize(project);
+    });
+}
+
+function colorseekerToggleAllLocks(project) {
+    if (!project || project.type !== 'colorseeker' || !project.data || !project.data.colors) return;
+    colorseekerEnsureLocks(project);
+    const anyLocked = project.data.lockedColors.some(Boolean);
+    if (anyLocked) {
+        project.data.lockedColors = project.data.colors.map(() => null);
+        showToast('All colors unlocked.');
+    } else {
+        project.data.lockedColors = [...project.data.colors];
+        showToast('All colors locked.');
+    }
+    saveToBrowser();
+    renderColorSeeker(project.id);
+}
+
+const colorseekerToggleLocksBtn = document.getElementById('colorseeker-toggle-locks');
+if (colorseekerToggleLocksBtn) {
+    colorseekerToggleLocksBtn.addEventListener('click', () => {
+        const project = projects.find(p => p.id === activeProjectId);
+        if (!project || project.type !== 'colorseeker') return;
+        colorseekerToggleAllLocks(project);
+    });
+}
+
+const colorseekerDownloadPngBtn = document.getElementById('colorseeker-download-png');
+if (colorseekerDownloadPngBtn) {
+    colorseekerDownloadPngBtn.addEventListener('click', () => {
+        const project = projects.find(p => p.id === activeProjectId);
+        if (!project || project.type !== 'colorseeker') return;
+        downloadColorSeekerPalette();
     });
 }
 
@@ -7700,42 +7828,37 @@ function renderColorSeeker(projectId) {
                          : (project.data.mode === 'harmonies' || project.data.mode === 'split-complementary' || project.data.mode === 'triadic') ? i === 2
                          : (project.data.mode === 'complementary' || project.data.mode === 'tetradic') ? i === 0
                          : false;
-            if (isBase && !isLocked) {
-                const baseIndicator = document.createElement('div');
-                baseIndicator.innerHTML = '<iconify-icon icon="lucide:target" width="24" height="24"></iconify-icon>';
-                baseIndicator.style.cssText = 'position:absolute;top:1.5rem;left:50%;transform:translateX(-50%);opacity:0.5;pointer-events:none;';
-                const hsl = hexToHsl(cHex);
-                baseIndicator.style.color = hsl.l > 50 ? '#000' : '#fff';
-                bar.appendChild(baseIndicator);
-            }
 
-            // Lock icon button (visible on hover or when locked)
-            const lockBtn = document.createElement('button');
-            lockBtn.title = isLocked ? 'Unlock color (L)' : 'Lock color (L)';
-            lockBtn.style.cssText = `
-                position: absolute;
-                bottom: 1rem;
-                left: 50%;
-                transform: translateX(-50%);
-                background: ${isLocked ? 'rgba(255,255,255,0.25)' : 'rgba(0,0,0,0.3)'};
-                border: 1px solid ${isLocked ? 'rgba(255,255,255,0.6)' : 'rgba(255,255,255,0.2)'};
-                border-radius: 6px;
-                width: 32px;
-                height: 32px;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                cursor: pointer;
-                opacity: ${isLocked ? '1' : '0'};
-                transition: opacity 0.2s, background 0.2s;
-                z-index: 5;
-                padding: 0;
-                color: ${hexToHsl(cHex).l > 50 ? '#222' : '#fff'};
-            `;
-            lockBtn.innerHTML = isLocked
-                ? '<iconify-icon icon="lucide:lock" width="14" height="14"></iconify-icon>'
-                : '<iconify-icon icon="lucide:lock-open" width="14" height="14"></iconify-icon>';
-            bar.appendChild(lockBtn);
+            // Remove button
+            const removeBtn = document.createElement('button');
+            removeBtn.type = 'button';
+            removeBtn.className = 'colorseeker-remove';
+            removeBtn.title = 'Remove swatch';
+            removeBtn.textContent = 'Remove';
+            removeBtn.disabled = project.data.colors.length <= 2;
+            removeBtn.addEventListener('click', (ev) => {
+                ev.stopPropagation();
+                ev.preventDefault();
+                colorseekerRemoveSwatch(project, i);
+            });
+            bar.appendChild(removeBtn);
+
+            // Set as base button (accessible for mobile / 1-click)
+            const setBaseBtn = document.createElement('button');
+            setBaseBtn.type = 'button';
+            setBaseBtn.className = 'colorseeker-set-base' + (isBase ? ' is-base' : '');
+            setBaseBtn.title = isBase ? 'Current base color' : 'Set as base color';
+            setBaseBtn.textContent = isBase ? '★ Base' : 'Set base';
+            setBaseBtn.addEventListener('click', (ev) => {
+                ev.stopPropagation();
+                ev.preventDefault();
+                project.data.baseColor = cHex;
+                project.data.colors = generatePalette(cHex, project.data.mode, project.data.lockedColors);
+                saveToBrowser();
+                renderColorSeeker(projectId);
+                showToast('Base color set.');
+            });
+            bar.appendChild(setBaseBtn);
 
             // Locked overlay stripe
             if (isLocked) {
@@ -7769,21 +7892,30 @@ function renderColorSeeker(projectId) {
             `;
             bar.appendChild(info);
 
-            // Hover effects
-            bar.addEventListener('mouseenter', () => {
-                bar.style.flex = '1.5';
-                info.style.opacity = '1';
-                lockBtn.style.opacity = '1';
-                window._colorseekerFocusedIndex = i;
-            });
-            bar.addEventListener('mouseleave', () => {
-                bar.style.flex = '1';
-                info.style.opacity = '0';
-                if (!isLocked) lockBtn.style.opacity = '0';
-                if (window._colorseekerFocusedIndex === i) window._colorseekerFocusedIndex = null;
-            });
+            // Bottom actions cluster (Move left, Lock, Move right)
+            const bottomActions = document.createElement('div');
+            bottomActions.className = 'colorseeker-bar-bottom-actions';
 
-            // Lock toggle function
+            const moveLeftBtn = document.createElement('button');
+            moveLeftBtn.type = 'button';
+            moveLeftBtn.className = 'colorseeker-move-btn colorseeker-move-left';
+            moveLeftBtn.title = 'Move left';
+            moveLeftBtn.disabled = i === 0;
+            moveLeftBtn.innerHTML = '<iconify-icon icon="lucide:chevron-left" width="14" height="14"></iconify-icon>';
+            moveLeftBtn.addEventListener('click', (ev) => {
+                ev.stopPropagation();
+                ev.preventDefault();
+                colorseekerMoveSwatch(project, i, i - 1);
+            });
+            bottomActions.appendChild(moveLeftBtn);
+
+            const lockBtn = document.createElement('button');
+            lockBtn.type = 'button';
+            lockBtn.className = 'colorseeker-lock-btn' + (isLocked ? ' is-locked' : '');
+            lockBtn.title = isLocked ? 'Unlock color (L)' : 'Lock color (L)';
+            lockBtn.innerHTML = isLocked
+                ? '<iconify-icon icon="lucide:lock" width="14" height="14"></iconify-icon>'
+                : '<iconify-icon icon="lucide:lock-open" width="14" height="14"></iconify-icon>';
             const toggleLock = (ev) => {
                 if (ev) ev.stopPropagation();
                 if (project.data.lockedColors[i]) {
@@ -7795,23 +7927,36 @@ function renderColorSeeker(projectId) {
                 renderColorSeeker(projectId);
                 showToast(project.data.lockedColors[i] ? `Color ${cHex.toUpperCase()} locked.` : 'Color unlocked.');
             };
-
             lockBtn.addEventListener('click', toggleLock);
-            // Expose toggle on the bar element for hotkey access
             bar._toggleLock = toggleLock;
+            bottomActions.appendChild(lockBtn);
 
-            const removeBtn = document.createElement('button');
-            removeBtn.type = 'button';
-            removeBtn.className = 'colorseeker-remove';
-            removeBtn.title = 'Remove swatch';
-            removeBtn.textContent = 'Remove';
-            removeBtn.disabled = project.data.colors.length <= 2;
-            removeBtn.addEventListener('click', (ev) => {
+            const moveRightBtn = document.createElement('button');
+            moveRightBtn.type = 'button';
+            moveRightBtn.className = 'colorseeker-move-btn colorseeker-move-right';
+            moveRightBtn.title = 'Move right';
+            moveRightBtn.disabled = i === project.data.colors.length - 1;
+            moveRightBtn.innerHTML = '<iconify-icon icon="lucide:chevron-right" width="14" height="14"></iconify-icon>';
+            moveRightBtn.addEventListener('click', (ev) => {
                 ev.stopPropagation();
                 ev.preventDefault();
-                colorseekerRemoveSwatch(project, i);
+                colorseekerMoveSwatch(project, i, i + 1);
             });
-            bar.appendChild(removeBtn);
+            bottomActions.appendChild(moveRightBtn);
+
+            bar.appendChild(bottomActions);
+
+            // Hover effects
+            bar.addEventListener('mouseenter', () => {
+                bar.style.flex = '1.5';
+                info.style.opacity = '1';
+                window._colorseekerFocusedIndex = i;
+            });
+            bar.addEventListener('mouseleave', () => {
+                bar.style.flex = '1';
+                info.style.opacity = '0';
+                if (window._colorseekerFocusedIndex === i) window._colorseekerFocusedIndex = null;
+            });
 
             bar.addEventListener('dragstart', (ev) => {
                 if (!ev.dataTransfer) return;
@@ -7829,8 +7974,7 @@ function renderColorSeeker(projectId) {
             });
 
             bar.addEventListener('click', (e) => {
-                if (e.target === lockBtn || lockBtn.contains(e.target)) return;
-                if (e.target === removeBtn || removeBtn.contains(e.target)) return;
+                if (e.target.closest('button')) return;
                 if (e.shiftKey) {
                     project.data.baseColor = cHex;
                     project.data.colors = generatePalette(cHex, project.data.mode, project.data.lockedColors);
@@ -7847,6 +7991,9 @@ function renderColorSeeker(projectId) {
                     copied.className = 'colorseeker-copied';
                     copied.textContent = 'Copied';
                     bar.appendChild(copied);
+                    setTimeout(() => {
+                        if (copied.isConnected) copied.remove();
+                    }, 1500);
                     showToast(`Copied ${cHex.toUpperCase()}`);
                 }
             });
@@ -7866,7 +8013,7 @@ function downloadColorSeekerPalette() {
     c.width = w; c.height = h;
     const ctx = c.getContext('2d');
 
-    const barWidth = w / 5;
+    const barWidth = w / (project.data.colors.length || 5);
     project.data.colors.forEach((color, i) => {
         ctx.fillStyle = color;
         ctx.fillRect(i * barWidth, 0, barWidth, h);
@@ -8420,7 +8567,43 @@ function createStoryCard(project, frame, index) {
         showToast('Frame duplicated.');
     };
 
-    header.append(indexSpan, dupBtn, dragHandle);
+    const moveLeftBtn = document.createElement('button');
+    moveLeftBtn.type = 'button';
+    moveLeftBtn.className = 'story-card-move-left-btn';
+    moveLeftBtn.title = 'Move frame left';
+    moveLeftBtn.innerHTML = '<iconify-icon icon="lucide:chevron-left" width="14" height="14"></iconify-icon>';
+    if (index === 0) {
+        moveLeftBtn.disabled = true;
+        moveLeftBtn.classList.add('disabled');
+    } else {
+        moveLeftBtn.onclick = (e) => {
+            e.stopPropagation();
+            const [moved] = project.data.frames.splice(index, 1);
+            project.data.frames.splice(index - 1, 0, moved);
+            renderStoryflowView(project);
+            scheduleAutoSave();
+        };
+    }
+
+    const moveRightBtn = document.createElement('button');
+    moveRightBtn.type = 'button';
+    moveRightBtn.className = 'story-card-move-right-btn';
+    moveRightBtn.title = 'Move frame right';
+    moveRightBtn.innerHTML = '<iconify-icon icon="lucide:chevron-right" width="14" height="14"></iconify-icon>';
+    if (index === project.data.frames.length - 1) {
+        moveRightBtn.disabled = true;
+        moveRightBtn.classList.add('disabled');
+    } else {
+        moveRightBtn.onclick = (e) => {
+            e.stopPropagation();
+            const [moved] = project.data.frames.splice(index, 1);
+            project.data.frames.splice(index + 1, 0, moved);
+            renderStoryflowView(project);
+            scheduleAutoSave();
+        };
+    }
+
+    header.append(indexSpan, moveLeftBtn, moveRightBtn, dupBtn, dragHandle);
 
     const imageSlot = createStoryImageSlot(project, frame);
 
@@ -9624,7 +9807,11 @@ function renderGanttView(project) {
         addTaskBtn.title = 'Add Task';
         addTaskBtn.innerHTML = '<iconify-icon icon="lucide:plus" width="13" height="13"></iconify-icon>';
         addTaskBtn.onclick = (e) => { e.stopPropagation(); ganttAddTask(project, group.id); };
-        sRow.append(collapseBtn, dot, lbl, delGroupBtn, addTaskBtn);
+        const taskCount = (group.tasks || []).length;
+        const countBadge = document.createElement('span');
+        countBadge.className = 'gantt-group-count-badge';
+        countBadge.textContent = `${taskCount} task${taskCount === 1 ? '' : 's'}`;
+        sRow.append(collapseBtn, dot, lbl, countBadge, delGroupBtn, addTaskBtn);
         
         sRow.draggable = true;
         sRow.ondragstart = (e) => {
