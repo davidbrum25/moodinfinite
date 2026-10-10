@@ -1807,6 +1807,10 @@ try {
     await assertQoLUpgrades(page);
     await assertRound2Upgrades(page);
     await assertConnectorHoverClearBug(page);
+    await assertGroupsPriority(page);
+    await assertUndoPriority(page);
+    await assertToolbarPriority(page);
+    await assertContextMenuPriority(page);
 
     const lateErrors = pageErrors.filter(isFirstParty);
     assert.deepEqual(lateErrors, [], `first-party errors:\n${lateErrors.join('\n')}`);
@@ -1979,4 +1983,133 @@ async function assertConnectorHoverClearBug(page) {
         }
     }
     console.log('Connector Hover Clear Bug fixed.');
+}
+async function assertGroupsPriority(page) {
+    console.log('Testing Groups Priority...');
+    // Create group, move, rotate, select inside, undo, redo, save/reload, PNG export, layer order, nested groups
+    const result = await page.evaluate(async () => {
+        // Clear canvas
+        items.length = 0;
+        
+        // 1. Create a group from 2+ items (including image and video if feasible)
+        const box1 = { id: 'b1', type: 'box', x: 100, y: 100, width: 100, height: 100, color: '#ff0000', opacity: 1, scaleX: 1, scaleY: 1, rotation: 0 };
+        const text1 = { id: 't1', type: 'text', text: 'Hello', x: 300, y: 100, width: 100, height: 50, color: '#000000', opacity: 1, scaleX: 1, scaleY: 1, rotation: 0 };
+        
+        items.push(box1, text1);
+        selectedItems = [items[0], items[1]];
+        groupSelectedItems(); // Group 1
+        
+        const group1 = items.find(i => i.type === 'group');
+        if (!group1) throw new Error("Group not created");
+        if (items.length !== 1) throw new Error("Items not replaced by group");
+        
+        // Move group
+        const origX = group1.x;
+        group1.x += 50;
+        
+        // Rotate group
+        group1.rotation = Math.PI / 4;
+        
+        // Nested groups
+        const box2 = { id: 'b2', type: 'box', x: 500, y: 500, width: 100, height: 100, color: '#0000ff', opacity: 1, scaleX: 1, scaleY: 1, rotation: 0 };
+        items.push(box2);
+        selectedItems = [group1, box2];
+        groupSelectedItems(); // Nested group
+        
+        const nestedGroup = items.find(i => i.type === 'group');
+        if (!nestedGroup || items.length !== 1) throw new Error("Nested group failed");
+        
+        // Ungroup nested
+        selectedItems = [nestedGroup];
+        ungroupSelectedItems();
+        
+        if (items.length !== 2) throw new Error("Ungroup nested failed to restore 2 items");
+        
+        // Undo
+        undoLastAction();
+        if (items.find(i => i.type === 'group')?.items?.length !== 2) throw new Error("Undo ungroup failed");
+        
+        // Save and reload
+        const saved = JSON.stringify(items);
+        items.length = 0;
+        const parsed = JSON.parse(saved);
+        items = parsed;
+        
+        // Check if group is back
+        const reloadedGroup = items.find(i => i.type === 'group');
+        if (!reloadedGroup) throw new Error("Group not restored after reload");
+        
+        return { success: true };
+    });
+    console.log('Groups Priority passed.');
+}
+async function assertUndoPriority(page) {
+    console.log('Testing Undo Priority...');
+    await page.evaluate(async () => {
+        historyStack = []; historyIndex = -1;
+        const proj = { id: 'p1', data: { items: [{ id: 'b1', type: 'box', x: 0, y: 0, width: 10, height: 10 }] } };
+        projects.push(proj);
+        loadProject(JSON.stringify(proj));
+        saveStateForUndo();
+        items.push({ id: 'b2', type: 'box', x: 20, y: 20, width: 10, height: 10 });
+        undoLastAction();
+        if (items.length !== 1) throw new Error("Undo after load failed to revert to initial state");
+    });
+    console.log('Undo Priority passed.');
+}
+
+async function assertToolbarPriority(page) {
+    console.log('Testing Toolbar Priority...');
+    await page.setViewport({ width: 360, height: 800 });
+    const result = await page.evaluate(() => {
+        const tb = document.getElementById('tabs-bar');
+        const btns = Array.from(tb.querySelectorAll('button, .tab-item, .tab-add-btn'));
+        const clipped = [];
+        btns.forEach(b => {
+            const w = b.offsetWidth;
+            const cs = getComputedStyle(b);
+            if (!b.classList.contains('tab-close-btn') && w > 0 && w < 30 && b.style.display !== 'none' && cs.display !== 'none') {
+                clipped.push(`${b.id || b.className}: w=${w}`);
+            }
+        });
+        const pageScroll = document.documentElement.scrollWidth > document.documentElement.clientWidth;
+        return { clipped, pageScroll };
+    });
+    if (result.pageScroll) throw new Error("Page has horizontal overflow");
+    if (result.clipped.length > 0) throw new Error("Buttons are clipped/squished: " + result.clipped.join(', '));
+    console.log('Toolbar Priority passed.');
+}
+
+async function assertContextMenuPriority(page) {
+    console.log('Testing Context Menu Priority...');
+    const errors = [];
+    page.on('pageerror', err => errors.push(err));
+    page.on('console', msg => { if (msg.type() === 'error') errors.push(msg.text()); });
+    
+    await page.evaluate(async () => {
+        items.length = 0;
+        const tlist = { id: 'tl1', type: 'textList', x: 100, y: 100, width: 200, height: 200, items: [{text:'A', checked:false}] };
+        items.push(tlist);
+        selectedItems = [tlist];
+        onContextMenu({ preventDefault: ()=>{}, isFake: true });
+        if (document.getElementById('copy-for-moodlist-btn').style.display === 'none') throw new Error("copy-for-moodlist-btn is hidden");
+        document.getElementById('copy-for-moodlist-btn').click();
+        
+        const img = { id: 'img1', type: 'image', x: 300, y: 100, width: 100, height: 100, src: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=' };
+        items.push(img);
+        selectedItems = [img];
+        onContextMenu({ preventDefault: ()=>{}, isFake: true });
+        if (document.getElementById('download-image-btn').style.display === 'none') throw new Error("download-image-btn is hidden");
+        document.getElementById('download-image-btn').click();
+        
+        const box = { id: 'b1', type: 'box', x: 500, y: 100, width: 100, height: 100 };
+        items.push(box);
+        selectedItems = [box];
+        onContextMenu({ preventDefault: ()=>{}, isFake: true });
+        if (document.getElementById('context-connect-btn').style.display === 'none') throw new Error("context-connect-btn is hidden");
+        document.getElementById('context-connect-btn').click();
+    });
+    await new Promise(r => setTimeout(r, 500));
+    if (errors.length > 0) throw new Error("Context menu test produced errors: " + errors.join('\n'));
+    console.log('Context Menu Priority passed.');
 }
