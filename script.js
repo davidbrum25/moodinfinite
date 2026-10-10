@@ -1760,7 +1760,10 @@ function saveDefaultTheme() {
     defaultAccent = accentColor;
     defaultGridColor = gridColor;
     const savedSettings = localStorage.getItem('moodinfinite-settings');
-    let settings = savedSettings ? JSON.parse(savedSettings) : {};
+    let settings = {};
+    try {
+        if (savedSettings) settings = JSON.parse(savedSettings);
+    } catch(e) {}
     settings.defaultCanvasBg = defaultCanvasBg;
     settings.defaultAccent = defaultAccent;
     settings.defaultGridColor = defaultGridColor;
