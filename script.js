@@ -870,7 +870,7 @@ function renderMoodpromptView(project) {
         addBtnItem.innerHTML = `<iconify-icon icon="lucide:plus-circle" width="16" height="16"></iconify-icon> <span>Add New Prompt</span>`;
         addBtnItem.onclick = () => {
             const currentProject = projects.find(p => p.id === activeProjectId) || project;
-            currentProject.data.prompts.push({ id: Date.now(), title: 'New Prompt', platform: 'midjourney', mediaType: 'image', image1: null, image2: null, text: '', tags: [] });
+            currentProject.data.prompts.push({ id: 'group_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5), title: 'New Prompt', platform: 'midjourney', mediaType: 'image', image1: null, image2: null, text: '', tags: [] });
             renderMoodpromptView(currentProject);
             saveToBrowser();
         };
@@ -1020,7 +1020,7 @@ function renderMoodpromptView(project) {
             addBtn.textContent = 'Add a prompt';
             addBtn.onclick = () => {
                 const currentProject = projects.find(p => p.id === activeProjectId) || project;
-                currentProject.data.prompts.push({ id: Date.now(), title: 'New Prompt', platform: 'midjourney', mediaType: 'image', image1: null, image2: null, text: '', tags: [] });
+                currentProject.data.prompts.push({ id: 'group_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5), title: 'New Prompt', platform: 'midjourney', mediaType: 'image', image1: null, image2: null, text: '', tags: [] });
                 renderMoodpromptView(currentProject);
                 saveToBrowser();
             };
@@ -3787,7 +3787,7 @@ function createSimpleConnector(source, target) {
     });
 
     const newConn = {
-        id: Date.now(),
+        id: 'group_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5),
         type: 'connector',
         sourceId: source.id,
         sourcePort: bestS,
@@ -4214,6 +4214,10 @@ function drawGroupItem(e, t) {
         else if (o.type === "textList") drawTextListItem(e, a);
         else if (o.type === "counter") drawCounterItem(e, a);
         else if (o.type === "group") drawGroupItem(e, a);
+        else if (o.type === "video") drawVideoItem(e, a);
+
+
+        else if (o.type === "group") drawGroupItem(e, a);
     });
     e.restore();
 }
@@ -4443,7 +4447,7 @@ function onDoubleClick(e) {
     const hoveredConn = getHoveredConnector(t);
     if (hoveredConn) {
         const rerouteNode = {
-            id: Date.now(),
+            id: 'group_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5),
             type: 'reroute',
             x: t.x,
             y: t.y,
@@ -4455,7 +4459,7 @@ function onDoubleClick(e) {
         addItemToLayeredItems(rerouteNode);
 
         const newConn = {
-            id: Date.now() + 1,
+            id: 'group_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5) + 1,
             type: 'connector',
             sourceId: rerouteNode.id,
             sourcePort: 'right',
@@ -4594,7 +4598,7 @@ function onMouseDown(e) {
                 if (e.preventDefault) e.preventDefault();
                 isDraggingConnector = true;
                 tempConnector = {
-                    id: Date.now(),
+                    id: 'group_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5),
                     type: 'connector',
                     sourceId: hoveredPort.item.id,
                     sourcePort: hoveredPort.side,
@@ -4655,27 +4659,27 @@ function onMouseDown(e) {
             isDrawing = true;
             let newItem;
             if (currentTool === 'arrow') {
-                newItem = { id: Date.now(), type: 'arrow', startX: o.x, startY: o.y, endX: o.x, endY: o.y, rotation: 0, isPinned: false, x: o.x, y: o.y, width: 0, height: 0, opacity: 1, scaleX: 1, scaleY: 1, color: accentColor };
+                newItem = { id: 'group_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5), type: 'arrow', startX: o.x, startY: o.y, endX: o.x, endY: o.y, rotation: 0, isPinned: false, x: o.x, y: o.y, width: 0, height: 0, opacity: 1, scaleX: 1, scaleY: 1, color: accentColor };
             } else if (currentTool === 'text') {
-                newItem = { id: Date.now(), type: 'text', text: 'Write your note here...', title: '', x: o.x, y: o.y, width: 220, height: 180, fontSize: 16, rotation: 0, isPinned: false, opacity: 1, fontFamily: 'Nunito', color: accentColor, scaleX: 1, scaleY: 1 };
+                newItem = { id: 'group_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5), type: 'text', text: 'Write your note here...', title: '', x: o.x, y: o.y, width: 220, height: 180, fontSize: 16, rotation: 0, isPinned: false, opacity: 1, fontFamily: 'Nunito', color: accentColor, scaleX: 1, scaleY: 1 };
                 updateNoteDimensions(newItem);
             } else if (currentTool === 'comment') {
-                newItem = { id: Date.now(), type: 'comment', text: 'Note...', x: o.x, y: o.y, width: 0, height: 0, fontSize: 16, rotation: 0, isPinned: false, opacity: 1, fontFamily: 'Nunito', textAlign: 'left', fontWeight: 'bold', fontStyle: 'normal', color: accentColor, scaleX: 1, scaleY: 1, icon: 'none' };
+                newItem = { id: 'group_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5), type: 'comment', text: 'Note...', x: o.x, y: o.y, width: 0, height: 0, fontSize: 16, rotation: 0, isPinned: false, opacity: 1, fontFamily: 'Nunito', textAlign: 'left', fontWeight: 'bold', fontStyle: 'normal', color: accentColor, scaleX: 1, scaleY: 1, icon: 'none' };
             } else if (currentTool === 'box') {
-                newItem = { id: Date.now(), type: 'box', color: accentColor, x: o.x, y: o.y, width: 0, height: 0, rotation: 0, isPinned: false, style: 'fill', opacity: 1, scaleX: 1, scaleY: 1 };
+                newItem = { id: 'group_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5), type: 'box', color: accentColor, x: o.x, y: o.y, width: 0, height: 0, rotation: 0, isPinned: false, style: 'fill', opacity: 1, scaleX: 1, scaleY: 1 };
             } else if (currentTool === 'circle') {
-                newItem = { id: Date.now(), type: 'circle', color: accentColor, x: o.x, y: o.y, width: 0, height: 0, rotation: 0, isPinned: false, style: 'fill', opacity: 1, scaleX: 1, scaleY: 1 };
+                newItem = { id: 'group_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5), type: 'circle', color: accentColor, x: o.x, y: o.y, width: 0, height: 0, rotation: 0, isPinned: false, style: 'fill', opacity: 1, scaleX: 1, scaleY: 1 };
             } else if (currentTool === 'measure') {
-                newItem = { id: Date.now(), type: 'measure', startX: o.x, startY: o.y, endX: o.x, endY: o.y, unit: 'px', color: accentColor, isPinned: false, x: o.x, y: o.y, width: 0, height: 0, rotation: 0, opacity: 1 };
+                newItem = { id: 'group_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5), type: 'measure', startX: o.x, startY: o.y, endX: o.x, endY: o.y, unit: 'px', color: accentColor, isPinned: false, x: o.x, y: o.y, width: 0, height: 0, rotation: 0, opacity: 1 };
             } else if (currentTool === 'grid') {
-                newItem = { id: Date.now(), type: 'grid', color: accentColor, x: o.x, y: o.y, width: 0, height: 0, rotation: 0, isPinned: false, opacity: 1, rows: 3, cols: 3, scaleX: 1, scaleY: 1 };
+                newItem = { id: 'group_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5), type: 'grid', color: accentColor, x: o.x, y: o.y, width: 0, height: 0, rotation: 0, isPinned: false, opacity: 1, rows: 3, cols: 3, scaleX: 1, scaleY: 1 };
             } else if (currentTool === 'textList') {
-                newItem = { id: Date.now(), type: 'textList', items: [{ text: 'Item 1', completed: false }], text: 'Item 1', x: o.x, y: o.y, width: 0, height: 0, fontSize: 18, rotation: 0, isPinned: false, opacity: 1, fontFamily: 'Nunito', textAlign: 'left', fontWeight: 'bold', fontStyle: 'normal', color: accentColor, scaleX: 1, scaleY: 1 };
+                newItem = { id: 'group_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5), type: 'textList', items: [{ text: 'Item 1', completed: false }], text: 'Item 1', x: o.x, y: o.y, width: 0, height: 0, fontSize: 18, rotation: 0, isPinned: false, opacity: 1, fontFamily: 'Nunito', textAlign: 'left', fontWeight: 'bold', fontStyle: 'normal', color: accentColor, scaleX: 1, scaleY: 1 };
                 updateTextListDimensions(newItem);
             } else if (currentTool === 'counter') {
-                newItem = { id: Date.now(), type: 'counter', value: 0, x: o.x, y: o.y, width: 140, height: 60, fontSize: 24, rotation: 0, isPinned: false, opacity: 1, fontFamily: 'Nunito', color: accentColor, scaleX: 1, scaleY: 1 };
+                newItem = { id: 'group_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5), type: 'counter', value: 0, x: o.x, y: o.y, width: 140, height: 60, fontSize: 24, rotation: 0, isPinned: false, opacity: 1, fontFamily: 'Nunito', color: accentColor, scaleX: 1, scaleY: 1 };
             } else if (currentTool === 'draw') {
-                newItem = { id: Date.now(), type: 'stroke', points: [{ x: o.x, y: o.y }], color: accentColor, isPinned: false, x: o.x, y: o.y, width: 0, height: 0, opacity: 1, scaleX: 1, scaleY: 1 };
+                newItem = { id: 'group_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5), type: 'stroke', points: [{ x: o.x, y: o.y }], color: accentColor, isPinned: false, x: o.x, y: o.y, width: 0, height: 0, opacity: 1, scaleX: 1, scaleY: 1 };
             }
 
             if (newItem) {
@@ -5513,7 +5517,11 @@ function loadProject(e) {
             ...processedItems.filter(i => i.type === 'comment')
         ];
         items = o.data.items;
-        o.data.historyStack = []; o.data.historyIndex = -1; switchTab(activeProjectId); updateUIColors(); saveStateForUndo(); showToast("Project loaded successfully.");
+        o.data.historyStack = []; o.data.historyIndex = -1;
+        historyStack = []; historyIndex = -1;
+        switchTab(activeProjectId); updateUIColors(); saveStateForUndo(); showToast("Project loaded successfully.");
+
+
     } catch (e) { console.error("Failed to load project:", e); showToast("Failed to load project. Invalid file.", "error") }
 }
 
@@ -5633,14 +5641,21 @@ window.reloadCurrentProjectFromBlob = async function(blob) {
                 ...processedItems.filter(i => i.type !== 'comment'),
                 ...processedItems.filter(i => i.type === 'comment')
             ];
+            activeProject.data.historyStack = [];
+            activeProject.data.historyIndex = -1;
             
             // Sync the global items variable if this is still the active project
             if (activeProjectId === activeProject.id) {
                 items = activeProject.data.items;
+                historyStack = [];
+                historyIndex = -1;
                 updateUIColors();
+                saveStateForUndo();
                 requestUpdate();
             }
         } else {
+
+
             // General reload for other types
             activeProject.data = { ...activeProject.data, ...data };
             if (activeProjectId === activeProject.id) {
@@ -5715,13 +5730,13 @@ function handlePaste(e) {
                 if (data && data.type === 'moodlist-card') {
                     e.preventDefault();
                     const newCard = {
-                        id: Date.now() + '_' + Math.random().toString(36).slice(2, 9),
+                        id: 'group_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5) + '_' + Math.random().toString(36).slice(2, 9),
                         title: data.title || 'Pasted List',
                         color: '',
                         pinned: false,
                         image: null,
                         items: (data.items || []).map(it => ({
-                            id: Date.now() + '_' + Math.random().toString(36).slice(2, 9),
+                            id: 'group_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5) + '_' + Math.random().toString(36).slice(2, 9),
                             text: it.text || '',
                             checked: !!it.checked
                         }))
@@ -5767,7 +5782,7 @@ function handlePaste(e) {
                         }
                         
                         itemsList.push({
-                            id: Date.now() + '_' + Math.random().toString(36).slice(2, 9) + '_' + i,
+                            id: 'group_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5) + '_' + Math.random().toString(36).slice(2, 9) + '_' + i,
                             text: line,
                             checked: checked
                         });
@@ -5775,7 +5790,7 @@ function handlePaste(e) {
                     
                     if (itemsList.length > 0) {
                         const newCard = {
-                            id: Date.now() + '_' + Math.random().toString(36).slice(2, 9),
+                            id: 'group_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5) + '_' + Math.random().toString(36).slice(2, 9),
                             title: title,
                             color: '',
                             pinned: false,
@@ -5858,7 +5873,7 @@ function processFiles(files, worldPos) {
                 globalImageCache[imageId] = readEvent.target.result;
 
                 addItemToLayeredItems({
-                    id: Date.now() + index,
+                    id: 'group_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5) + index,
                     type: 'image',
                     imageId: imageId, // Reference to cache
                     img: img, // Runtime object (not for JSON)
@@ -5906,7 +5921,7 @@ function processVideoFiles(files, worldPos) {
             const initialHeight = initialWidth / aspectRatio;
             
             addItemToLayeredItems({
-                id: Date.now() + index,
+                id: 'group_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5) + index,
                 type: 'video',
                 videoId: videoId,
                 videoSrc: objectURL, // runtime object URL
@@ -5935,7 +5950,7 @@ function processVideoFiles(files, worldPos) {
     setTimeout(saveStateForUndo, 500);
 }
 
-function downloadSourceImage() { if (selectedItems.length !== 1 || selectedItems[0].type !== 'image') return; const e = selectedItems[0], t = document.createElement('a'); t.href = e.img.src; try { const e = new URL(t.href), o = e.pathname.split('/'); t.download = o[o.length - 1] || 'source_image' } catch (e) { t.download = 'source_image.png' } document.body.appendChild(t); t.click(); document.body.removeChild(t); showToast("Source image download started.") }
+function downloadSourceImage() { if (selectedItems.length !== 1 || selectedItems[0].type !== 'image') return; const e = selectedItems[0]; if (!e.img) return; const t = document.createElement('a'); t.href = e.img.src; try { const e = new URL(t.href), o = e.pathname.split('/'); t.download = o[o.length - 1] || 'source_image' } catch (e) { t.download = 'source_image.png' } document.body.appendChild(t); t.click(); document.body.removeChild(t); showToast("Source image download started.") }
 
 function copyItems(e = !0) {
     if (selectedItems.length === 0) return;
@@ -6728,16 +6743,57 @@ function loadStateFromHistory(e) {
     requestUpdate();
 }
 
-function undoLastAction() { if (historyIndex > 0) { historyIndex--; const e = historyStack[historyIndex]; loadStateFromHistory(e) } }
+function undoLastAction() {
+    const currentState = JSON.stringify(items, storageReplacer);
+    if (historyIndex >= 0 && currentState !== historyStack[historyIndex]) {
+        saveStateForUndo();
+        if (historyIndex > 0) {
+            historyIndex--;
+            loadStateFromHistory(historyStack[historyIndex]);
+        }
+    } else {
+        if (historyIndex > 0) {
+            historyIndex--;
+            loadStateFromHistory(historyStack[historyIndex]);
+        }
+    }
+}
 function redoLastAction() { if (historyIndex < historyStack.length - 1) { historyIndex++; const e = historyStack[historyIndex]; loadStateFromHistory(e) } }
 function groupSelectedItems() {
-    if (selectedItems.length <= 1) return; saveStateForUndo(); const e = []; selectedItems.forEach(t => { if (t.type === 'group') { const o = t.x + t.width / 2, a = t.y + t.height / 2, i = Math.cos(t.rotation), r = Math.sin(t.rotation); t.items.forEach(s => { const n = JSON.parse(JSON.stringify(s)); reattachImages(s, n); if (n.type === 'arrow' || n.type === 'stroke' || n.type === 'measure') { const transformPt = (px, py) => { const dx = px - t.width / 2, dy = py - t.height / 2, rx = dx * i - dy * r, ry = dx * r + dy * i; return { x: o + rx, y: a + ry } }; if (n.type === 'arrow' || n.type === 'measure') { const p1 = transformPt(s.startX, s.startY), p2 = transformPt(s.endX, s.endY); n.startX = p1.x; n.startY = p1.y; n.endX = p2.x; n.endY = p2.y } else { n.points = s.points.map(pt => transformPt(pt.x, pt.y)) } } else { const l = s.x + s.width / 2, c = s.y + s.height / 2, d = l - t.width / 2, h = c - t.height / 2, p = d * i - h * r, m = d * r + h * i, u = o + p, g = a + m; n.x = u - s.width / 2; n.y = g - s.height / 2; n.rotation = (s.rotation || 0) + t.rotation; } e.push(n) }) } else { e.push(t) } }); const t = getCollectiveBoundingBox(e), o = { id: Date.now(), type: 'group', x: t.x, y: t.y, width: t.width, height: t.height, rotation: 0, isPinned: !1, opacity: 1, scaleX: 1, scaleY: 1, items: [] }; e.forEach(e => { const t = JSON.parse(JSON.stringify(e)); reattachImages(e, t); t.x -= o.x; t.y -= o.y; if (t.type === 'arrow' || t.type === 'measure') { t.startX -= o.x; t.startY -= o.y; t.endX -= o.x; t.endY -= o.y } else if (t.type === 'stroke') { t.points.forEach(e => { e.x -= o.x; e.y -= o.y }) } delete t._cachedBox; t._isDirty = true; o.items.push(t) }); const a = new Set(selectedItems.map(e => e.id));
+    if (selectedItems.length <= 1) return; 
+    saveStateForUndo(); 
+    
+    // Instead of unpacking nested groups, we just add them as-is.
+    const e = [...selectedItems]; 
+    const t = getCollectiveBoundingBox(e), 
+    o = { id: 'group_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5), type: 'group', x: t.x, y: t.y, width: t.width, height: t.height, rotation: 0, isPinned: !1, opacity: 1, scaleX: 1, scaleY: 1, items: [] }; 
+    
+    e.forEach(e => { 
+        const t = JSON.parse(JSON.stringify(e)); 
+        reattachImages(e, t); 
+        t.x -= o.x; 
+        t.y -= o.y; 
+        if (t.type === 'arrow' || t.type === 'measure') { 
+            t.startX -= o.x; 
+            t.startY -= o.y; 
+            t.endX -= o.x; 
+            t.endY -= o.y;
+        } else if (t.type === 'stroke') { 
+            t.points.forEach(e => { e.x -= o.x; e.y -= o.y }) 
+        } 
+        delete t._cachedBox; 
+        t._isDirty = true; 
+        o.items.push(t) 
+    }); 
+    const a = new Set(selectedItems.map(e => e.id));
     items = items.filter(e => !a.has(e.id));
     addItemToLayeredItems(o);
     selectedItems = [o];
     updateSelectionToolbar();
     updateLeftBarState()
 }
+
+
 function groupOrderedItems() {
     if (selectedItems.length <= 1) return;
     const images = selectedItems.filter(item => item.type === 'image');
@@ -7361,7 +7417,7 @@ confirmInputBtn.onclick = () => {
         saveStateForUndo();
     } else {
         const newItem = {
-            id: Date.now(),
+            id: 'group_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5),
             type: 'link',
             url: url,
             title: title,
@@ -8521,7 +8577,7 @@ function renderStoryflowView(project) {
         addBtn.textContent = 'Add a frame';
         addBtn.onclick = () => {
             project.data.frames.push({
-                id: Date.now(),
+                id: 'group_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5),
                 title: '',
                 image: null,
                 description: '',
