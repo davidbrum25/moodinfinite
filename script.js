@@ -2069,6 +2069,116 @@ function setupEventListeners() {
         }
     });
 
+    document.addEventListener('keydown', (e) => {
+        if (e.key !== 'Escape' && e.key !== 'Esc') return;
+
+        let closed = false;
+
+        const ganttCtx = document.getElementById('gantt-context-menu');
+        const cloudUserMenu = document.getElementById('cloud-user-menu');
+
+        // Context menus & popups
+        if (contextMenu && contextMenu.style.display !== 'none') {
+            contextMenu.style.display = 'none';
+            closed = true;
+        }
+        if (tabContextMenu && tabContextMenu.style.display !== 'none') {
+            tabContextMenu.style.display = 'none';
+            closed = true;
+        }
+        if (sfContextMenu && sfContextMenu.style.display !== 'none') {
+            sfContextMenu.style.display = 'none';
+            closed = true;
+        }
+        if (ganttCtx && ganttCtx.style.display !== 'none') {
+            ganttCtx.style.display = 'none';
+            closed = true;
+        }
+        if (mobileTabsPopup && mobileTabsPopup.style.display === 'block') {
+            mobileTabsPopup.style.display = 'none';
+            closed = true;
+        }
+        if (palettePanel && palettePanel.classList.contains('open')) {
+            palettePanel.classList.remove('open');
+            closed = true;
+        }
+        if (iconPickerPanel && iconPickerPanel.style.display === 'flex') {
+            iconPickerPanel.style.display = 'none';
+            closed = true;
+        }
+        if (cloudUserMenu && cloudUserMenu.classList.contains('open')) {
+            cloudUserMenu.classList.remove('open');
+            closed = true;
+        }
+
+        // Modals & overlays
+        const imageLightbox = document.getElementById('image-lightbox-overlay');
+        const deleteGroupModal = document.getElementById('delete-group-modal-overlay');
+        const ganttWorkersModal = document.getElementById('gantt-workers-modal-overlay');
+        const cloudPickerOverlay = document.getElementById('cloud-picker-overlay');
+        const cloudConflictOverlay = document.getElementById('cloud-conflict-overlay');
+        const cloudDeleteOverlay = document.getElementById('cloud-delete-confirm-overlay');
+        const ganttDetailPanel = document.getElementById('gantt-detail-panel');
+
+        if (imageLightbox && imageLightbox.style.display === 'flex') {
+            imageLightbox.style.display = 'none';
+            closed = true;
+        }
+        if (helpModalOverlay && helpModalOverlay.style.display === 'flex') {
+            helpModalOverlay.style.display = 'none';
+            closed = true;
+        }
+        if (assetLibraryOverlay && assetLibraryOverlay.style.display === 'flex') {
+            assetLibraryOverlay.style.display = 'none';
+            closed = true;
+        }
+        if (inputModalOverlay && inputModalOverlay.style.display === 'flex') {
+            hideLinkInputModal();
+            closed = true;
+        }
+        if (confirmationModalOverlay && confirmationModalOverlay.style.display === 'flex') {
+            hideConfirmationModal();
+            closed = true;
+        }
+        if (closeBoardModalOverlay && closeBoardModalOverlay.style.display === 'flex') {
+            hideCloseBoardModal();
+            closed = true;
+        }
+        if (deleteGroupModal && deleteGroupModal.style.display === 'flex') {
+            deleteGroupModal.style.display = 'none';
+            closed = true;
+        }
+        if (ganttWorkersModal && ganttWorkersModal.style.display === 'flex') {
+            ganttWorkersModal.style.display = 'none';
+            closed = true;
+        }
+        if (cloudPickerOverlay && cloudPickerOverlay.style.display !== 'none') {
+            cloudPickerOverlay.style.display = 'none';
+            closed = true;
+        }
+        if (cloudConflictOverlay && cloudConflictOverlay.style.display !== 'none') {
+            cloudConflictOverlay.style.display = 'none';
+            closed = true;
+        }
+        if (cloudDeleteOverlay && cloudDeleteOverlay.style.display !== 'none') {
+            cloudDeleteOverlay.style.display = 'none';
+            closed = true;
+        }
+        if (noteEditorOverlay && noteEditorOverlay.style.display === 'flex') {
+            cancelNoteEditing();
+            closed = true;
+        }
+        if (ganttDetailPanel && ganttDetailPanel.classList.contains('open')) {
+            ganttCloseDetail();
+            closed = true;
+        }
+
+        if (closed) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
+    }, true);
+
     if (closeAssetLibraryBtn) closeAssetLibraryBtn.addEventListener('click', () => assetLibraryOverlay.style.display = 'none');
     if (assetLibraryOverlay) assetLibraryOverlay.addEventListener('click', (e) => { if (e.target === assetLibraryOverlay) assetLibraryOverlay.style.display = 'none'; });
 
