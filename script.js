@@ -7308,14 +7308,80 @@ function focusOnSelection() {
     if (targets.length === 0) { centerView(); return; }
     const bbox = getCollectiveBoundingBox(targets);
     if (bbox.width === 0 && bbox.height === 0) return;
-    const padding = 80;
-    const scaleX = (canvas.width - padding * 2) / bbox.width;
-    const scaleY = (canvas.height - padding * 2) / bbox.height;
+
+    let padTop = 32;
+    const tabsBar = document.getElementById('tabs-bar');
+    if (tabsBar) {
+        const r = tabsBar.getBoundingClientRect();
+        if (r.bottom > 0) padTop = Math.max(padTop, r.bottom + 20);
+    }
+
+    let padLeft = 32;
+    let padBottom = 32;
+    const leftBar = document.getElementById('left-bar');
+    if (leftBar) {
+        const r = leftBar.getBoundingClientRect();
+        if (r.width > 0 && r.height > 0) {
+            if (r.left < 100) {
+                padLeft = Math.max(padLeft, r.right + 20);
+            }
+            if (r.top > window.innerHeight * 0.6) {
+                padBottom = Math.max(padBottom, (window.innerHeight - r.top) + 20);
+            }
+        }
+    }
+
+    let padRight = 32;
+    const minimap = document.getElementById('canvas-minimap');
+    const fitBtn = document.getElementById('canvas-fit-view-btn');
+    const zoomBtn = document.getElementById('canvas-zoom-readout');
+
+    let minimapRightInset = 0;
+    let minimapBottomInset = 0;
+    if (minimap) {
+        const r = minimap.getBoundingClientRect();
+        if (r.width > 0 && r.height > 0) {
+            minimapRightInset = (window.innerWidth - r.left) + 20;
+            minimapBottomInset = (window.innerHeight - r.top) + 20;
+        } else {
+            const isMobile = window.innerWidth <= 768;
+            minimapRightInset = isMobile ? 160 : 204;
+            minimapBottomInset = isMobile ? 180 : 182;
+        }
+    }
+    if (fitBtn) {
+        const r = fitBtn.getBoundingClientRect();
+        if (r.width > 0 && r.height > 0) {
+            minimapRightInset = Math.max(minimapRightInset, (window.innerWidth - r.left) + 20);
+            minimapBottomInset = Math.max(minimapBottomInset, (window.innerHeight - r.top) + 20);
+        }
+    }
+    if (zoomBtn) {
+        const r = zoomBtn.getBoundingClientRect();
+        if (r.width > 0 && r.height > 0) {
+            minimapRightInset = Math.max(minimapRightInset, (window.innerWidth - r.left) + 20);
+            minimapBottomInset = Math.max(minimapBottomInset, (window.innerHeight - r.top) + 20);
+        }
+    }
+
+    padRight = Math.max(padRight, minimapRightInset);
+    padBottom = Math.max(padBottom, minimapBottomInset);
+
+    const safeW = Math.max(100, canvas.width - padLeft - padRight);
+    const safeH = Math.max(100, canvas.height - padTop - padBottom);
+    const safeLeft = padLeft;
+    const safeTop = padTop;
+    const safeCenterX = safeLeft + safeW / 2;
+    const safeCenterY = safeTop + safeH / 2;
+
+    const scaleX = safeW / Math.max(1, bbox.width);
+    const scaleY = safeH / Math.max(1, bbox.height);
     cameraZoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, Math.min(scaleX, scaleY)));
+
     const centerX = bbox.x + bbox.width / 2;
     const centerY = bbox.y + bbox.height / 2;
-    cameraOffset.x = canvas.width / 2 - centerX;
-    cameraOffset.y = canvas.height / 2 - centerY;
+    cameraOffset.x = (safeCenterX - canvas.width / 2) / cameraZoom + canvas.width / 2 - centerX;
+    cameraOffset.y = (safeCenterY - canvas.height / 2) / cameraZoom + canvas.height / 2 - centerY;
     requestUpdate();
 }
 

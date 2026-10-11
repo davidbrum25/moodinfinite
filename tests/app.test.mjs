@@ -1818,6 +1818,7 @@ try {
     await assertB4MoodtoneContrastLabels(page);
     await assertB5MoodtoneSwatchPanelOverlap(page);
     await assertB6ToolbarClamping(page);
+    await assertB7FitViewPadding(page);
 
     const lateErrors = pageErrors.filter(isFirstParty);
     assert.deepEqual(lateErrors, [], `first-party errors:\n${lateErrors.join('\n')}`);
@@ -2847,5 +2848,74 @@ async function assertB6ToolbarClamping(page) {
 
     console.log('B6 Floating Selection Toolbar Clamping passed.');
 }
+
+async function assertB7FitViewPadding(page) {
+    console.log('Testing B7 Fit-to-view Padding around UI overlays...');
+    await page.setViewport({ width: 1280, height: 800 });
+
+    const checkResult = await page.evaluate(() => {
+        const board = projects.find(p => p.type === 'moodinfinite');
+        if (board) switchTab(board.id);
+
+        const savedItems = [...items];
+        items = [
+            { id: 'b7_1', type: 'box', x: 100, y: 100, width: 200, height: 200, color: '#3498db' },
+            { id: 'b7_2', type: 'box', x: 400, y: 250, width: 150, height: 150, color: '#3498db' },
+            { id: 'b7_3', type: 'box', x: 650, y: 350, width: 150, height: 150, color: '#3498db' },
+            { id: 'b7_4', type: 'box', x: 900, y: 450, width: 180, height: 180, color: '#3498db' },
+            { id: 'b7_5', type: 'box', x: 1200, y: 600, width: 200, height: 200, color: '#3498db' }
+        ];
+        selectedItems = [];
+
+        focusOnSelection();
+
+        const itemScreenBoxes = items.map(it => {
+            const box = getItemBoundingBox(it);
+            const tl = worldToScreen({ x: box.x, y: box.y });
+            const br = worldToScreen({ x: box.x + box.width, y: box.y + box.height });
+            return {
+                id: it.id,
+                left: Math.min(tl.x, br.x),
+                right: Math.max(tl.x, br.x),
+                top: Math.min(tl.y, br.y),
+                bottom: Math.max(tl.y, br.y)
+            };
+        });
+
+        const tabsBar = document.getElementById('tabs-bar');
+        const leftBar = document.getElementById('left-bar');
+        const minimap = document.getElementById('canvas-minimap');
+
+        const tabsRect = tabsBar ? tabsBar.getBoundingClientRect() : null;
+        const leftRect = leftBar ? leftBar.getBoundingClientRect() : null;
+        const minimapRect = minimap ? minimap.getBoundingClientRect() : null;
+
+        const overlaps = [];
+        for (const ib of itemScreenBoxes) {
+            if (tabsRect && ib.top < tabsRect.bottom && ib.bottom > tabsRect.top && ib.left < tabsRect.right && ib.right > tabsRect.left) {
+                overlaps.push({ item: ib.id, element: 'tabs-bar' });
+            }
+            if (leftRect && ib.top < leftRect.bottom && ib.bottom > leftRect.top && ib.left < leftRect.right && ib.right > leftRect.left) {
+                overlaps.push({ item: ib.id, element: 'left-bar' });
+            }
+            if (minimapRect && ib.top < minimapRect.bottom && ib.bottom > minimapRect.top && ib.left < minimapRect.right && ib.right > minimapRect.left) {
+                overlaps.push({ item: ib.id, element: 'minimap' });
+            }
+        }
+
+        items = savedItems;
+        requestUpdate();
+
+        return {
+            overlaps,
+            itemScreenBoxes,
+            minimapRect
+        };
+    });
+
+    assert.equal(checkResult.overlaps.length, 0, `no item should overlap overlays: ${JSON.stringify(checkResult.overlaps)}`);
+    console.log('B7 Fit-to-view Padding passed.');
+}
+
 
 
