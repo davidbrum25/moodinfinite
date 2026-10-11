@@ -6661,8 +6661,31 @@ function updateToolbarPosition() {
         const e = getCollectiveBoundingBox(selectedItems),
             // Use the bottom of the bounding box for "under" alignment
             t = worldToScreen({ x: e.x + e.width / 2, y: e.y + e.height });
-        selectionToolbar.style.left = `${t.x}px`;
-        selectionToolbar.style.top = `${t.y}px`
+
+        const margin = 12;
+        const rect = selectionToolbar.getBoundingClientRect();
+        const tbWidth = rect.width || selectionToolbar.offsetWidth || 300;
+        const tbHeight = rect.height || selectionToolbar.offsetHeight || 44;
+
+        let posX = t.x;
+        const halfW = tbWidth / 2;
+        if (tbWidth >= window.innerWidth - 2 * margin) {
+            posX = window.innerWidth / 2;
+        } else if (posX - halfW < margin) {
+            posX = margin + halfW;
+        } else if (posX + halfW > window.innerWidth - margin) {
+            posX = window.innerWidth - margin - halfW;
+        }
+
+        let posY = t.y;
+        if (posY + 10 < margin) {
+            posY = margin - 10;
+        } else if (posY + 10 + tbHeight > window.innerHeight - margin) {
+            posY = window.innerHeight - margin - tbHeight - 10;
+        }
+
+        selectionToolbar.style.left = `${posX}px`;
+        selectionToolbar.style.top = `${posY}px`;
     }
 }
 function editText(e) {

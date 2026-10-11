@@ -1817,6 +1817,7 @@ try {
     await assertB3MobileControls(page);
     await assertB4MoodtoneContrastLabels(page);
     await assertB5MoodtoneSwatchPanelOverlap(page);
+    await assertB6ToolbarClamping(page);
 
     const lateErrors = pageErrors.filter(isFirstParty);
     assert.deepEqual(lateErrors, [], `first-party errors:\n${lateErrors.join('\n')}`);
@@ -2740,4 +2741,111 @@ async function assertB5MoodtoneSwatchPanelOverlap(page) {
 
     console.log('B5 Moodtone Swatch Panel Overlap passed.');
 }
+
+async function assertB6ToolbarClamping(page) {
+    console.log('Testing B6 Floating Selection Toolbar Clamping...');
+    await page.setViewport({ width: 1280, height: 800 });
+
+    // Switch to first moodinfinite board
+    await page.evaluate(() => {
+        const board = projects.find(p => p.type === 'moodinfinite');
+        if (board) switchTab(board.id);
+    });
+
+    // 1. Place item near right edge (e.g. screen x = 1200)
+    const rightEdgeRect = await page.evaluate(() => {
+        const w = screenToWorld({ x: 1200, y: 300 });
+        const item = {
+            id: 'b6_test_right',
+            type: 'box',
+            x: w.x,
+            y: w.y,
+            width: 80,
+            height: 80,
+            color: '#3498db'
+        };
+        items.push(item);
+        selectedItems = [item];
+        updateSelectionToolbar();
+        updateToolbarPosition();
+        const tb = document.getElementById('selection-toolbar');
+        const r = tb.getBoundingClientRect();
+        return {
+            left: r.left,
+            right: r.right,
+            top: r.top,
+            bottom: r.bottom
+        };
+    });
+
+    assert.ok(rightEdgeRect.right <= 1280, `toolbar right (${rightEdgeRect.right}) must not exceed viewport width (1280)`);
+    assert.ok(rightEdgeRect.left >= 0, `toolbar left (${rightEdgeRect.left}) must not be negative`);
+
+    // 2. Place item near left edge (e.g. screen x = 20)
+    const leftEdgeRect = await page.evaluate(() => {
+        const w = screenToWorld({ x: 20, y: 300 });
+        const item = {
+            id: 'b6_test_left',
+            type: 'box',
+            x: w.x,
+            y: w.y,
+            width: 80,
+            height: 80,
+            color: '#3498db'
+        };
+        items.push(item);
+        selectedItems = [item];
+        updateSelectionToolbar();
+        updateToolbarPosition();
+        const tb = document.getElementById('selection-toolbar');
+        const r = tb.getBoundingClientRect();
+        return {
+            left: r.left,
+            right: r.right,
+            top: r.top,
+            bottom: r.bottom
+        };
+    });
+
+    assert.ok(leftEdgeRect.left >= 0, `toolbar left (${leftEdgeRect.left}) must not be negative`);
+    assert.ok(leftEdgeRect.right <= 1280, `toolbar right (${leftEdgeRect.right}) must not exceed viewport width`);
+
+    // 3. Place item near top edge (e.g. screen x = 600, y = -100)
+    const topEdgeRect = await page.evaluate(() => {
+        const w = screenToWorld({ x: 600, y: -100 });
+        const item = {
+            id: 'b6_test_top',
+            type: 'box',
+            x: w.x,
+            y: w.y,
+            width: 80,
+            height: 80,
+            color: '#3498db'
+        };
+        items.push(item);
+        selectedItems = [item];
+        updateSelectionToolbar();
+        updateToolbarPosition();
+        const tb = document.getElementById('selection-toolbar');
+        const r = tb.getBoundingClientRect();
+        return {
+            left: r.left,
+            right: r.right,
+            top: r.top,
+            bottom: r.bottom
+        };
+    });
+
+    assert.ok(topEdgeRect.top >= 0, `toolbar top (${topEdgeRect.top}) must not be negative`);
+
+    // Cleanup added test items
+    await page.evaluate(() => {
+        items = items.filter(it => !it.id.startsWith('b6_test_'));
+        selectedItems = [];
+        updateSelectionToolbar();
+    });
+
+    console.log('B6 Floating Selection Toolbar Clamping passed.');
+}
+
 
