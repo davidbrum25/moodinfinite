@@ -1813,6 +1813,7 @@ try {
     await assertToolbarPriority(page);
     await assertContextMenuPriority(page);
     await assertB1MoodtoneBaseSwatch(page);
+    await assertB2ExportSelectionPng(page);
 
     const lateErrors = pageErrors.filter(isFirstParty);
     assert.deepEqual(lateErrors, [], `first-party errors:\n${lateErrors.join('\n')}`);
@@ -2520,4 +2521,69 @@ async function assertB1MoodtoneBaseSwatch(page) {
     assert.equal(toneMaxTest.baseColor, 'rgb(255, 0, 0)');
 
     console.log('B1 Moodtone Base Swatch passed.');
+}
+
+async function assertB2ExportSelectionPng(page) {
+    console.log('Testing B2 Export Selection as PNG...');
+    await page.evaluate(() => createNewProject('moodinfinite'));
+    await page.waitForSelector('#moodboard-canvas');
+
+    const result = await page.evaluate(() => {
+        items.length = 0;
+        selectedItems = [];
+        const box1 = { id: 'box1', type: 'box', x: 100, y: 100, width: 80, height: 80, color: '#ff0000', rotation: 0 };
+        const box2 = { id: 'box2', type: 'box', x: 300, y: 300, width: 100, height: 100, color: '#00ff00', rotation: 0 };
+        items.push(box1, box2);
+
+        // Initially no selection
+        updateSelectionToolbar();
+        const exportBtnInitial = document.getElementById('export-selection-png-btn');
+        const initialDisplay = exportBtnInitial ? exportBtnInitial.style.display : 'none';
+
+        // Select box1
+        selectedItems = [box1];
+        updateSelectionToolbar();
+        const selectedDisplay = exportBtnInitial ? exportBtnInitial.style.display : 'none';
+
+        // Context menu check
+        onContextMenu({ preventDefault: () => {}, isFake: true });
+        const contextExportBtn = document.getElementById('context-export-selection-btn');
+        const contextDisplay = contextExportBtn ? contextExportBtn.style.display : 'none';
+
+        // Check full board save PNG button is still intact
+        const fullSaveBtn = document.getElementById('save-png-btn');
+        const fullSaveTitle = fullSaveBtn ? fullSaveBtn.title : '';
+
+        // Test exportSelectionAsPng execution
+        let downloadedName = null;
+        let downloadedHref = null;
+        const origClick = HTMLAnchorElement.prototype.click;
+        HTMLAnchorElement.prototype.click = function() {
+            downloadedName = this.download;
+            downloadedHref = this.href;
+        };
+        try {
+            exportSelectionAsPng();
+        } finally {
+            HTMLAnchorElement.prototype.click = origClick;
+        }
+
+        return {
+            initialDisplay,
+            selectedDisplay,
+            contextDisplay,
+            fullSaveTitle,
+            downloadedName,
+            isDataUrl: !!(downloadedHref && downloadedHref.startsWith('data:image/png'))
+        };
+    });
+
+    assert.equal(result.initialDisplay, 'none');
+    assert.equal(result.selectedDisplay, 'flex');
+    assert.equal(result.contextDisplay, 'flex');
+    assert.ok(result.fullSaveTitle.includes('Export as PNG'), 'full board export title preserved');
+    assert.ok(result.downloadedName && result.downloadedName.includes('_selection.png'), 'selection export filename');
+    assert.ok(result.isDataUrl, 'selection export produced PNG data URL');
+
+    console.log('B2 Export Selection as PNG passed.');
 }

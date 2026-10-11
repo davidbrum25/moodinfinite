@@ -1540,6 +1540,8 @@ const flipHorizontalBtn = document.getElementById('flip-horizontal-btn');
 const flipVerticalBtn = document.getElementById('flip-vertical-btn');
 const pinBtn = document.getElementById('pin-btn');
 const duplicateSelectionBtn = document.getElementById('duplicate-selection-btn');
+const exportSelectionPngBtn = document.getElementById('export-selection-png-btn');
+const contextExportSelectionBtn = document.getElementById('context-export-selection-btn');
 const deleteSelectionBtn = document.getElementById('delete-selection-btn');
 const bringFrontBtn = document.getElementById('bring-front-btn');
 const sendBackBtn = document.getElementById('send-back-btn');
@@ -2479,6 +2481,11 @@ canvas.addEventListener('mouseleave', clearHoverStates);
     if (flipVerticalBtn) flipVerticalBtn.addEventListener('click', flipVertical);
     if (pinBtn) pinBtn.addEventListener('click', togglePin);
     if (duplicateSelectionBtn) duplicateSelectionBtn.addEventListener('click', duplicateItems);
+    if (exportSelectionPngBtn) exportSelectionPngBtn.addEventListener('click', exportSelectionAsPng);
+    if (contextExportSelectionBtn) contextExportSelectionBtn.addEventListener('click', () => {
+        exportSelectionAsPng();
+        if (contextMenu) contextMenu.style.display = 'none';
+    });
     if (deleteSelectionBtn) deleteSelectionBtn.addEventListener('click', deleteSelectedItems);
     if (bringFrontBtn) bringFrontBtn.addEventListener('click', bringSelectedToFront);
     if (sendBackBtn) sendBackBtn.addEventListener('click', sendSelectedToBack);
@@ -5220,6 +5227,10 @@ function onContextMenu(e) {
         copyForMoodlistBtn.style.display = isTextList ? 'flex' : 'none';
     }
 
+    if (contextExportSelectionBtn) {
+        contextExportSelectionBtn.style.display = selectedItems.length > 0 ? 'flex' : 'none';
+    }
+
     showAndPositionMenu(contextMenu, e)
 }
 function confirmNewBoard() { if (items.length > 0) { showConfirmationModal() } else { resetBoard() } }
@@ -5354,6 +5365,77 @@ function saveAsPng() {
     l.href = s.toDataURL('image/png');
     l.click();
     showToast("Image exported as PNG.")
+}
+function exportSelectionAsPng() {
+    const activeProject = projects.find(p => p.id === activeProjectId);
+    if (!activeProject) return;
+
+    if (selectedItems.length === 0) {
+        showToast("No items selected to export.", "error");
+        return;
+    }
+
+    const bbox = getCollectiveBoundingBox(selectedItems);
+    const padding = 50;
+    const w = bbox.width + padding * 2;
+    const h = bbox.height + padding * 2;
+    const s = document.createElement('canvas');
+    s.width = Math.max(1, Math.round(w));
+    s.height = Math.max(1, Math.round(h));
+    const n = s.getContext('2d');
+    n.fillStyle = canvasBackgroundColor;
+    n.fillRect(0, 0, s.width, s.height);
+    n.translate(-bbox.x + padding, -bbox.y + padding);
+
+    const drawItemToCtx = (e, ctx) => {
+        ctx.save();
+        ctx.globalAlpha = e.opacity ?? 1;
+        if (showDropShadow) {
+            ctx.shadowColor = 'rgba(0,0,0,0.4)';
+            ctx.shadowBlur = 15;
+            ctx.shadowOffsetX = 4;
+            ctx.shadowOffsetY = 4;
+        }
+        if (e.type === 'image') {
+            const t = e.x + e.width / 2, o = e.y + e.height / 2;
+            ctx.translate(t, o);
+            ctx.rotate(e.rotation);
+            ctx.scale(e.scaleX || 1, e.scaleY || 1);
+            ctx.drawImage(e.img, -e.width / 2, -e.height / 2, e.width, e.height);
+        } else if (e.type === 'video') { drawVideoItem(ctx, e); }
+        else if (e.type === 'arrow') { drawArrow(ctx, e); }
+        else if (e.type === 'text') { drawTextItem(ctx, e); }
+        else if (e.type === 'box') { drawBoxItem(ctx, e); }
+        else if (e.type === 'circle') { drawCircleItem(ctx, e); }
+        else if (e.type === 'measure') { drawMeasureItem(ctx, e); }
+        else if (e.type === 'stroke') { drawStrokeItem(ctx, e); }
+        else if (e.type === 'grid') { drawGridItem(ctx, e); }
+        else if (e.type === 'group') { drawGroupItem(ctx, e); }
+        else if (e.type === 'comment') { drawCommentItem(ctx, e); }
+        else if (e.type === 'link') { drawLinkItem(ctx, e); }
+        else if (e.type === 'textList') { drawTextListItem(ctx, e); }
+        else if (e.type === 'counter') { drawCounterItem(ctx, e); }
+        else if (e.type === 'reroute') { drawRerouteItem(ctx, e); }
+        else if (e.type === 'connector') { drawConnectorItem(e, ctx); }
+        ctx.restore();
+    };
+
+    const selectedSet = new Set(selectedItems);
+    const toDraw = items.filter(e => selectedSet.has(e));
+    selectedItems.forEach(e => { if (!toDraw.includes(e)) toDraw.push(e); });
+
+    toDraw.forEach(e => { if (e.type !== 'comment' && e.type !== 'link' && e.type !== 'connector') drawItemToCtx(e, n); });
+    toDraw.forEach(e => { if (e.type === 'connector') drawItemToCtx(e, n); });
+    toDraw.forEach(e => { if (e.type === 'link') drawItemToCtx(e, n); });
+    toDraw.forEach(e => { if (e.type === 'comment') drawItemToCtx(e, n); });
+
+    const baseName = activeProject && activeProject.name ? activeProject.name : 'moodboard';
+    const fileName = `${baseName}_selection.png`;
+    const l = document.createElement('a');
+    l.download = fileName;
+    l.href = s.toDataURL('image/png');
+    l.click();
+    showToast("Selection exported as PNG.");
 }
 function saveProject() {
     const t = projects.find(e => e.id === activeProjectId);
@@ -6539,6 +6621,7 @@ function updateSelectionToolbar() {
             countBadge.textContent = String(selectedItems.length);
         }
         if (duplicateSelectionBtn) duplicateSelectionBtn.style.display = selectedItems.length > 0 ? 'flex' : 'none';
+        if (exportSelectionPngBtn) exportSelectionPngBtn.style.display = selectedItems.length > 0 ? 'flex' : 'none';
 
         // Ensure position is updated when toolbar is shown
         updateToolbarPosition();
@@ -6547,6 +6630,7 @@ function updateSelectionToolbar() {
         const countBadge = document.getElementById('selection-count-badge');
         if (countBadge) countBadge.style.display = 'none';
         if (duplicateSelectionBtn) duplicateSelectionBtn.style.display = 'none';
+        if (exportSelectionPngBtn) exportSelectionPngBtn.style.display = 'none';
         itemColorToolContainer.style.display = 'none';
         textToolsContainer.style.display = 'none';
         gridToolsContainer.style.display = 'none';
