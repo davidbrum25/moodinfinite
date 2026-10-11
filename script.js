@@ -7909,21 +7909,73 @@ function generatePalette(baseHex, mode, lockedColors) {
     let colors = [];
 
     if (mode === 'shades') {
-        colors = [
-            hslToHex(hsl.h, hsl.s, Math.max(0, hsl.l - 40)),
-            hslToHex(hsl.h, hsl.s, Math.max(0, hsl.l - 20)),
-            baseHex,
-            hslToHex(hsl.h, hsl.s, Math.min(100, hsl.l + 20)),
-            hslToHex(hsl.h, hsl.s, Math.min(100, hsl.l + 40))
-        ];
+        const l = hsl.l;
+        if (l === 0) {
+            colors = [hslToHex(hsl.h, hsl.s, 0), hslToHex(hsl.h, hsl.s, 12), hslToHex(hsl.h, hsl.s, 25), hslToHex(hsl.h, hsl.s, 50), hslToHex(hsl.h, hsl.s, 75)];
+        } else if (l === 100) {
+            colors = [hslToHex(hsl.h, hsl.s, 25), hslToHex(hsl.h, hsl.s, 50), hslToHex(hsl.h, hsl.s, 75), hslToHex(hsl.h, hsl.s, 88), hslToHex(hsl.h, hsl.s, 100)];
+        } else {
+            let l0, l1, l3, l4;
+            if (l >= 45) {
+                l1 = l - 20;
+                l0 = l - 40;
+            } else {
+                l1 = Math.max(5, Math.round(l * 0.6));
+                l0 = Math.max(0, Math.round(l * 0.25));
+                if (l1 >= l) l1 = Math.max(3, l - 1);
+                if (l0 >= l1) l0 = Math.max(0, l1 - 3);
+            }
+            if (l <= 55) {
+                l3 = l + 20;
+                l4 = l + 40;
+            } else {
+                l3 = Math.min(95, Math.round(l + (100 - l) * 0.4));
+                l4 = Math.min(100, Math.round(l + (100 - l) * 0.75));
+                if (l3 <= l) l3 = Math.min(97, l + 1);
+                if (l4 <= l3) l4 = Math.min(100, l3 + 3);
+            }
+            colors = [
+                hslToHex(hsl.h, hsl.s, l0),
+                hslToHex(hsl.h, hsl.s, l1),
+                baseHex,
+                hslToHex(hsl.h, hsl.s, l3),
+                hslToHex(hsl.h, hsl.s, l4)
+            ];
+        }
     } else if (mode === 'tones') {
-        colors = [
-            hslToHex(hsl.h, Math.max(0, hsl.s - 40), hsl.l),
-            hslToHex(hsl.h, Math.max(0, hsl.s - 20), hsl.l),
-            baseHex,
-            hslToHex(hsl.h, Math.min(100, hsl.s + 20), hsl.l),
-            hslToHex(hsl.h, Math.min(100, hsl.s + 40), hsl.l)
-        ];
+        const s = hsl.s;
+        if (s === 0) {
+            colors = [hslToHex(hsl.h, 0, hsl.l), hslToHex(hsl.h, 15, hsl.l), hslToHex(hsl.h, 30, hsl.l), hslToHex(hsl.h, 55, hsl.l), hslToHex(hsl.h, 80, hsl.l)];
+        } else if (s === 100) {
+            colors = [hslToHex(hsl.h, 25, hsl.l), hslToHex(hsl.h, 50, hsl.l), hslToHex(hsl.h, 75, hsl.l), hslToHex(hsl.h, 88, hsl.l), hslToHex(hsl.h, 100, hsl.l)];
+        } else {
+            let s0, s1, s3, s4;
+            if (s >= 45) {
+                s1 = s - 20;
+                s0 = s - 40;
+            } else {
+                s1 = Math.max(5, Math.round(s * 0.6));
+                s0 = Math.max(0, Math.round(s * 0.25));
+                if (s1 >= s) s1 = Math.max(3, s - 1);
+                if (s0 >= s1) s0 = Math.max(0, s1 - 3);
+            }
+            if (s <= 55) {
+                s3 = s + 20;
+                s4 = s + 40;
+            } else {
+                s3 = Math.min(95, Math.round(s + (100 - s) * 0.4));
+                s4 = Math.min(100, Math.round(s + (100 - s) * 0.75));
+                if (s3 <= s) s3 = Math.min(97, s + 1);
+                if (s4 <= s3) s4 = Math.min(100, s3 + 3);
+            }
+            colors = [
+                hslToHex(hsl.h, s0, hsl.l),
+                hslToHex(hsl.h, s1, hsl.l),
+                baseHex,
+                hslToHex(hsl.h, s3, hsl.l),
+                hslToHex(hsl.h, s4, hsl.l)
+            ];
+        }
     } else if (mode === 'harmonies') {
         // Analogous: ±15°, ±30° around the base
         colors = [
@@ -7974,6 +8026,21 @@ function generatePalette(baseHex, mode, lockedColors) {
             hslToHex((hsl.h + 270) % 360, hsl.s, hsl.l),
             hslToHex((hsl.h + 45) % 360, hsl.s, Math.min(95, hsl.l + 10))
         ];
+    }
+
+    // Ensure all adjacent generated swatches have distinct hex values
+    for (let i = 0; i < colors.length - 1; i++) {
+        if (colors[i].toLowerCase() === colors[i + 1].toLowerCase()) {
+            const parsed = hexToHsl(colors[i]);
+            const nudgedL = parsed.l > 50 ? Math.max(0, parsed.l - 4) : Math.min(100, parsed.l + 4);
+            const nudged = hslToHex(parsed.h, parsed.s, nudgedL);
+            if (nudged.toLowerCase() !== colors[i + 1].toLowerCase()) {
+                colors[i] = nudged;
+            } else {
+                const val = parseInt(colors[i].slice(1), 16);
+                colors[i] = '#' + (val > 0 ? (val - 0x010101) : 0x010101).toString(16).padStart(6, '0');
+            }
+        }
     }
 
     // Apply locked colors — locked slots keep their existing value
