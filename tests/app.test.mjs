@@ -1808,6 +1808,7 @@ try {
     await assertRound2Upgrades(page);
     await assertConnectorHoverClearBug(page);
     await assertGroupsPriority(page);
+    await assertRealPointerGroupInteractions(page);
     await assertUndoPriority(page);
     await assertToolbarPriority(page);
     await assertContextMenuPriority(page);
@@ -2043,6 +2044,311 @@ async function assertGroupsPriority(page) {
     });
     console.log('Groups Priority passed.');
 }
+
+async function assertRealPointerGroupInteractions(page) {
+    console.log('Testing Real Pointer Group Drag, Gizmo Rotate, Ungroup, and PNG Export...');
+    await page.setViewport({ width: 1280, height: 800 });
+
+    const setup = await page.evaluate(async () => {
+        const board = projects.find(p => p.type === 'moodinfinite');
+        if (board) switchTab(board.id);
+        const origSnap = typeof snapToGrid !== 'undefined' ? snapToGrid : true;
+        snapToGrid = false;
+        items.length = 0;
+        selectedItems = [];
+        cameraZoom = 1;
+        cameraOffset = { x: 0, y: 0 };
+
+        // Red image: 80x80 at (100, 100)
+        const imgCanvas = document.createElement('canvas');
+        imgCanvas.width = 80; imgCanvas.height = 80;
+        const ictx = imgCanvas.getContext('2d');
+        ictx.fillStyle = '#ff0000';
+        ictx.fillRect(0, 0, 80, 80);
+        const redDataUrl = imgCanvas.toDataURL('image/png');
+        const img = new Image();
+        img.src = redDataUrl;
+        await new Promise(r => { img.onload = r; });
+
+        const imgItem = {
+            id: 'img1', type: 'image', x: 100, y: 100, width: 80, height: 80,
+            rotation: 0, opacity: 1, scaleX: 1, scaleY: 1, img, isPinned: false
+        };
+
+        // Blue box: 80x80 at (220, 100)
+        const boxItem = {
+            id: 'box1', type: 'box', x: 220, y: 100, width: 80, height: 80,
+            color: '#0000ff', rotation: 0, opacity: 1, scaleX: 1, scaleY: 1, style: 'fill', isPinned: false
+        };
+
+        // Green video: 80x80 at (340, 100)
+        const vidCanvas = document.createElement('canvas');
+        vidCanvas.width = 80; vidCanvas.height = 80;
+        const vctx = vidCanvas.getContext('2d');
+        vctx.fillStyle = '#00ff00';
+        vctx.fillRect(0, 0, 80, 80);
+        const stream = vidCanvas.captureStream(25);
+        const videoEl = document.createElement('video');
+        videoEl.srcObject = stream;
+        videoEl.muted = true;
+        videoEl.autoplay = true;
+        await videoEl.play().catch(() => {});
+        await new Promise(r => {
+            if (videoEl.readyState >= 2) return r();
+            videoEl.onloadeddata = r;
+            setTimeout(r, 500);
+        });
+
+        const videoItem = {
+            id: 'vid1', type: 'video', x: 340, y: 100, width: 80, height: 80,
+            rotation: 0, opacity: 1, scaleX: 1, scaleY: 1, video: videoEl, isPlaying: true, isPinned: false
+        };
+
+        // Group 1: inner group [img1, box1]
+        items.push(imgItem, boxItem);
+        selectedItems = [imgItem, boxItem];
+        groupSelectedItems();
+        const inner = items[0];
+
+        // Group 2: outer group [inner, vid1]
+        items.push(videoItem);
+        selectedItems = [inner, videoItem];
+        groupSelectedItems();
+        draw();
+        updateSelectionToolbar();
+
+        const outerGroup = items[0];
+        return {
+            origSnap,
+            id: outerGroup.id,
+            x: outerGroup.x,
+            y: outerGroup.y,
+            width: outerGroup.width,
+            height: outerGroup.height,
+            rotation: outerGroup.rotation,
+            childCount: outerGroup.items.length
+        };
+    });
+
+    assert.equal(setup.childCount, 2, 'outer group should contain inner group and video');
+
+    try {
+        const canvasBox = await page.$eval('#moodboard-canvas', el => {
+            const r = el.getBoundingClientRect();
+            return { x: r.x, y: r.y };
+        });
+
+        // (a) Move group by dragging with page.mouse
+        const centerScreen = await page.evaluate(() => {
+            const g = items[0];
+            return worldToScreen({ x: g.x + g.width / 2, y: g.y + g.height / 2 });
+        });
+
+        await page.mouse.move(canvasBox.x + centerScreen.x, canvasBox.y + centerScreen.y);
+        await page.mouse.down();
+        await page.mouse.move(canvasBox.x + centerScreen.x + 80, canvasBox.y + centerScreen.y + 60, { steps: 5 });
+        await page.mouse.up();
+
+        const movedGroup = await page.evaluate(() => ({ x: items[0].x, y: items[0].y }));
+        assert.ok(Math.abs((movedGroup.x - setup.x) - 80) < 2, `expected group x moved by 80, got ${movedGroup.x - setup.x}`);
+        assert.ok(Math.abs((movedGroup.y - setup.y) - 60) < 2, `expected group y moved by 60, got ${movedGroup.y - setup.y}`);
+
+        // (b) Rotate group via rotation handle with page.mouse
+        await page.click('#rotate-btn');
+        const rotPos = await page.evaluate(() => {
+            const t = items[0];
+            const a = t.x + t.width / 2, i = t.y + t.height / 2;
+            const r = t.width / 2, s = -t.height / 2 - 20 / cameraZoom;
+            const n = r * Math.cos(t.rotation) - s * Math.sin(t.rotation);
+            const l = r * Math.sin(t.rotation) + s * Math.cos(t.rotation);
+            return {
+                handle: worldToScreen({ x: a + n, y: i + l }),
+                center: worldToScreen({ x: a, y: i }),
+                rDist: Math.hypot(n, l)
+            };
+        });
+
+        await page.mouse.move(canvasBox.x + rotPos.handle.x, canvasBox.y + rotPos.handle.y);
+        await page.mouse.down();
+        const targetAngle = Math.atan2(rotPos.handle.y - rotPos.center.y, rotPos.handle.x - rotPos.center.x) + Math.PI / 2;
+        const targetX = rotPos.center.x + rotPos.rDist * Math.cos(targetAngle);
+        const targetY = rotPos.center.y + rotPos.rDist * Math.sin(targetAngle);
+        await page.mouse.move(canvasBox.x + targetX, canvasBox.y + targetY, { steps: 5 });
+        await page.mouse.up();
+
+        const rotatedGroup = await page.evaluate(() => ({ rotation: items[0].rotation }));
+        assert.ok(Math.abs(rotatedGroup.rotation - Math.PI / 2) < 0.1, `expected rotation ~PI/2, got ${rotatedGroup.rotation}`);
+
+        // (d) Export to PNG with groups (rotated and nested, with an image and a video inside)
+        const exportPromise = page.evaluate(() => {
+            return new Promise((resolve) => {
+                const origCreateElement = document.createElement.bind(document);
+                document.createElement = function(tag) {
+                    const el = origCreateElement(tag);
+                    if (tag.toLowerCase() === 'a') {
+                        const origClick = el.click.bind(el);
+                        el.click = function() {
+                            document.createElement = origCreateElement;
+                            resolve(el.href);
+                            return origClick();
+                        };
+                    }
+                    return el;
+                };
+            });
+        });
+
+        await page.click('#save-png-btn');
+        const pngDataUrl = await exportPromise;
+        assert.ok(pngDataUrl && pngDataUrl.length > 100, 'PNG data URL should be non-empty');
+
+        const pixelResult = await page.evaluate(async (dataUrl) => {
+            const img = new Image();
+            img.src = dataUrl;
+            await new Promise(r => { img.onload = r; });
+
+            const c = document.createElement('canvas');
+            c.width = img.width;
+            c.height = img.height;
+            const ctx = c.getContext('2d');
+            ctx.drawImage(img, 0, 0);
+
+            const data = ctx.getImageData(0, 0, c.width, c.height).data;
+            let redCount = 0, greenCount = 0, blueCount = 0;
+            let redYSum = 0, blueYSum = 0, greenYSum = 0;
+
+            for (let y = 0; y < c.height; y++) {
+                for (let x = 0; x < c.width; x++) {
+                    const idx = (y * c.width + x) * 4;
+                    const r = data[idx], g = data[idx + 1], b = data[idx + 2];
+                    if (r > 200 && g < 50 && b < 50) { redCount++; redYSum += y; }
+                    if (g > 200 && r < 50 && b < 50) { greenCount++; greenYSum += y; }
+                    if (b > 200 && r < 50 && g < 50) { blueCount++; blueYSum += y; }
+                }
+            }
+
+            return {
+                width: c.width,
+                height: c.height,
+                redCount,
+                greenCount,
+                blueCount,
+                redAvgY: redCount ? redYSum / redCount : 0,
+                blueAvgY: blueCount ? blueYSum / blueCount : 0,
+                greenAvgY: greenCount ? greenYSum / greenCount : 0
+            };
+        }, pngDataUrl);
+
+        assert.ok(pixelResult.redCount > 500, `expected red image pixels, got ${pixelResult.redCount}`);
+        assert.ok(pixelResult.greenCount > 500, `expected green video pixels, got ${pixelResult.greenCount}`);
+        assert.ok(pixelResult.blueCount > 500, `expected blue box pixels, got ${pixelResult.blueCount}`);
+        assert.ok(pixelResult.redAvgY < pixelResult.blueAvgY, 'red image should be rendered above blue box');
+        assert.ok(pixelResult.blueAvgY < pixelResult.greenAvgY, 'blue box should be rendered above green video');
+
+        // (c) Ungroup after move+rotate: world position, rotation, scale tolerance for nested groups
+        const expectedWorldTransforms = await page.evaluate(() => {
+            const computeWorld = (item, parent) => {
+                const r = parent.rotation || 0;
+                const cos = Math.cos(r), sin = Math.sin(r);
+                const sx = parent.scaleX || 1, sy = parent.scaleY || 1;
+                const cx = (item.x + item.width / 2) - parent.width / 2;
+                const cy = (item.y + item.height / 2) - parent.height / 2;
+                const rx = cx * sx * cos - cy * sy * sin;
+                const ry = cx * sx * sin + cy * sy * cos;
+                return {
+                    centerX: parent.centerX + rx,
+                    centerY: parent.centerY + ry,
+                    rotation: (item.rotation || 0) + r,
+                    scaleX: (item.scaleX || 1) * sx,
+                    scaleY: (item.scaleY || 1) * sy
+                };
+            };
+
+            const outer = items[0];
+            const outerT = {
+                centerX: outer.x + outer.width / 2,
+                centerY: outer.y + outer.height / 2,
+                width: outer.width,
+                height: outer.height,
+                rotation: outer.rotation,
+                scaleX: outer.scaleX || 1,
+                scaleY: outer.scaleY || 1
+            };
+
+            const exp = {};
+            outer.items.forEach(child => {
+                const childT = computeWorld(child, outerT);
+                if (child.type === 'group') {
+                    const innerT = {
+                        centerX: childT.centerX,
+                        centerY: childT.centerY,
+                        width: child.width,
+                        height: child.height,
+                        rotation: childT.rotation,
+                        scaleX: childT.scaleX,
+                        scaleY: childT.scaleY
+                    };
+                    child.items.forEach(leaf => {
+                        exp[leaf.id] = computeWorld(leaf, innerT);
+                    });
+                } else {
+                    exp[child.id] = childT;
+                }
+            });
+            return exp;
+        });
+
+        // Ungroup outer group via UI button click
+        await page.click('#ungroup-btn');
+
+        // Ungroup inner group via UI button click
+        await page.evaluate(() => {
+            const inner = items.find(i => i.type === 'group');
+            if (inner) selectedItems = [inner];
+            updateSelectionToolbar();
+        });
+        await page.click('#ungroup-btn');
+
+        const actualLeaves = await page.evaluate(() => {
+            const act = {};
+            items.forEach(i => {
+                act[i.id] = {
+                    centerX: i.x + i.width / 2,
+                    centerY: i.y + i.height / 2,
+                    rotation: i.rotation || 0,
+                    scaleX: i.scaleX || 1,
+                    scaleY: i.scaleY || 1
+                };
+            });
+            return act;
+        });
+
+        for (const id of ['img1', 'box1', 'vid1']) {
+            const exp = expectedWorldTransforms[id];
+            const act = actualLeaves[id];
+            assert.ok(act, `missing item ${id} after ungrouping`);
+            const posDist = Math.hypot(act.centerX - exp.centerX, act.centerY - exp.centerY);
+            assert.ok(posDist < 1.0, `item ${id} posDist ${posDist} > tolerance`);
+            const rotDiff = Math.abs((act.rotation % (Math.PI * 2)) - (exp.rotation % (Math.PI * 2)));
+            assert.ok(rotDiff < 0.05, `item ${id} rotDiff ${rotDiff} > tolerance`);
+            assert.ok(Math.abs(act.scaleX - exp.scaleX) < 0.05, `item ${id} scaleX diff > tolerance`);
+            assert.ok(Math.abs(act.scaleY - exp.scaleY) < 0.05, `item ${id} scaleY diff > tolerance`);
+        }
+    } finally {
+        await page.evaluate((origSnap) => {
+            const vid = items.find(i => i.id === 'vid1');
+            if (vid && vid.video && vid.video.srcObject) {
+                vid.video.srcObject.getTracks().forEach(t => t.stop());
+            }
+            items.length = 0;
+            selectedItems = [];
+            snapToGrid = origSnap;
+            draw();
+        }, setup.origSnap);
+    }
+    console.log('Real Pointer Group Interactions passed.');
+}
+
 async function assertUndoPriority(page) {
     console.log('Testing Undo Priority...');
     await page.evaluate(async () => {
