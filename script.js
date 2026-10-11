@@ -3387,9 +3387,9 @@ function wrapText(ctx, text, maxWidth) {
     return lines;
 }
 
-function drawBoxItem(e, t) { e.save(); const o = t.x + t.width / 2, a = t.y + t.height / 2; e.translate(o, a); e.rotate(t.rotation); e.scale(t.scaleX || 1, t.scaleY || 1); if (!t.style || t.style === 'fill') { e.fillStyle = t.color; e.fillRect(-t.width / 2, -t.height / 2, t.width, t.height) } else { e.strokeStyle = t.color; e.lineWidth = 4 / cameraZoom; e.strokeRect(-t.width / 2, -t.height / 2, t.width, t.height) } e.restore() }
-function drawCircleItem(e, t) { e.save(); const o = t.x + t.width / 2, a = t.y + t.height / 2, i = t.width / 2, r = t.height / 2; e.translate(o, a); e.rotate(t.rotation); e.scale(t.scaleX || 1, t.scaleY || 1); e.beginPath(); e.ellipse(0, 0, i, r, 0, 0, Math.PI * 2); if (!t.style || t.style === "fill") { e.fillStyle = t.color; e.fill(); } else { e.strokeStyle = t.color; e.lineWidth = 4 / cameraZoom; e.stroke(); } e.restore(); }
-function drawCommentItem(e, t) { e.save(); const o = t.x + t.width / 2, a = t.y + t.height / 2; e.translate(o, a); e.rotate(t.rotation); e.scale(t.scaleX || 1, t.scaleY || 1); e.globalAlpha = t.opacity ?? 1; e.fillStyle = t.color; e.beginPath(); if (e.roundRect) { e.roundRect(-t.width / 2, -t.height / 2, t.width, t.height, 12 / cameraZoom); } else { e.rect(-t.width / 2, -t.height / 2, t.width, t.height); } e.fill(); const lum = getLuminance(t.color); const textColor = lum > 0.5 ? '#111111' : '#ffffff'; e.fillStyle = textColor; const i = t.fontStyle || 'normal', r = t.fontWeight || 'bold', s = t.fontFamily || 'Nunito'; e.font = `${i} ${r} ${t.fontSize}px '${s}', sans-serif`; let iconOffset = 0; if (t.icon && t.icon !== 'none') { const img = getIconImage(t.icon, textColor); const iconSize = t.fontSize * 1.2; iconOffset = iconSize + 10; if (img.complete && img.naturalWidth !== 0) { e.drawImage(img, -t.width / 2 + 15, -iconSize / 2, iconSize, iconSize) } } e.textAlign = t.textAlign || 'left'; e.textBaseline = 'top'; const l = t.text.split('\n'); const h = t.fontSize * 1.4; let m = 0; if (e.textAlign === 'left') { m = -t.width / 2 + 15 + iconOffset } else if (e.textAlign === 'right') { m = t.width / 2 - 15 } else { m = iconOffset / 2 } l.forEach((txt, i) => { const yLineStart = -(l.length * h) / 2 + i * h; const yTextTop = yLineStart + (h - t.fontSize) / 2; e.fillText(txt, m, yTextTop); }); e.restore(); }
+function drawBoxItem(e, t) { e.save(); const o = t.x + t.width / 2, a = t.y + t.height / 2; e.translate(o, a); e.rotate(t.rotation || 0); e.scale(t.scaleX || 1, t.scaleY || 1); if (!t.style || t.style === 'fill') { e.fillStyle = t.color; e.fillRect(-t.width / 2, -t.height / 2, t.width, t.height) } else { e.strokeStyle = t.color; e.lineWidth = 4 / cameraZoom; e.strokeRect(-t.width / 2, -t.height / 2, t.width, t.height) } e.restore() }
+function drawCircleItem(e, t) { e.save(); const o = t.x + t.width / 2, a = t.y + t.height / 2, i = t.width / 2, r = t.height / 2; e.translate(o, a); e.rotate(t.rotation || 0); e.scale(t.scaleX || 1, t.scaleY || 1); e.beginPath(); e.ellipse(0, 0, i, r, 0, 0, Math.PI * 2); if (!t.style || t.style === "fill") { e.fillStyle = t.color; e.fill(); } else { e.strokeStyle = t.color; e.lineWidth = 4 / cameraZoom; e.stroke(); } e.restore(); }
+function drawCommentItem(e, t) { e.save(); const o = t.x + t.width / 2, a = t.y + t.height / 2; e.translate(o, a); e.rotate(t.rotation || 0); e.scale(t.scaleX || 1, t.scaleY || 1); e.globalAlpha = t.opacity ?? 1; e.fillStyle = t.color; e.beginPath(); if (e.roundRect) { e.roundRect(-t.width / 2, -t.height / 2, t.width, t.height, 12 / cameraZoom); } else { e.rect(-t.width / 2, -t.height / 2, t.width, t.height); } e.fill(); const lum = getLuminance(t.color); const textColor = lum > 0.5 ? '#111111' : '#ffffff'; e.fillStyle = textColor; const i = t.fontStyle || 'normal', r = t.fontWeight || 'bold', s = t.fontFamily || 'Nunito'; e.font = `${i} ${r} ${t.fontSize}px '${s}', sans-serif`; let iconOffset = 0; if (t.icon && t.icon !== 'none') { const img = getIconImage(t.icon, textColor); const iconSize = t.fontSize * 1.2; iconOffset = iconSize + 10; if (img.complete && img.naturalWidth !== 0) { e.drawImage(img, -t.width / 2 + 15, -iconSize / 2, iconSize, iconSize) } } e.textAlign = t.textAlign || 'left'; e.textBaseline = 'top'; const l = t.text.split('\n'); const h = t.fontSize * 1.4; let m = 0; if (e.textAlign === 'left') { m = -t.width / 2 + 15 + iconOffset } else if (e.textAlign === 'right') { m = t.width / 2 - 15 } else { m = iconOffset / 2 } l.forEach((txt, i) => { const yLineStart = -(l.length * h) / 2 + i * h; const yTextTop = yLineStart + (h - t.fontSize) / 2; e.fillText(txt, m, yTextTop); }); e.restore(); }
 
 function drawImageItem(ctx, item) {
     if (!item.img) return;
@@ -3397,7 +3397,7 @@ function drawImageItem(ctx, item) {
     const centerX = item.x + item.width / 2;
     const centerY = item.y + item.height / 2;
     ctx.translate(centerX, centerY);
-    ctx.rotate(item.rotation);
+    ctx.rotate(item.rotation || 0);
     ctx.scale(item.scaleX || 1, item.scaleY || 1);
     ctx.globalAlpha = item.opacity ?? 1;
     try {
@@ -4943,6 +4943,8 @@ function onMouseMove(e) {
                 newRotation = Math.round(newRotation / (Math.PI / 12)) * (Math.PI / 12);
             }
             item.rotation = newRotation;
+            delete item._cachedBox;
+            item._isDirty = true;
         } else if (activeGizmo === 'scale') {
             let scaleRatio = 1;
             if (e.shiftKey) { // Free scaling
@@ -5029,6 +5031,8 @@ function onMouseMove(e) {
                     });
                 }
             }
+            delete item._cachedBox;
+            item._isDirty = true;
         }
     } else if (isMovingItems && selectedItems.length > 0) {
         const deltaX = worldPos.x - moveStart.x;
