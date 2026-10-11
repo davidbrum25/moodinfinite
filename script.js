@@ -509,6 +509,7 @@ function switchTab(projectId) {
     connectionSourceItem = null;
     currentlyEditingText = false;
     ctx.setLineDash([]); // Prevent any dashed line leakage
+    updateSelectionToolbar();
 
     applySettingsToUI();
     mobileTabsPopup.style.display = 'none'; // Hide popup on tab switch

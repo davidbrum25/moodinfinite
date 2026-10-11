@@ -1814,6 +1814,7 @@ try {
     await assertContextMenuPriority(page);
     await assertB1MoodtoneBaseSwatch(page);
     await assertB2ExportSelectionPng(page);
+    await assertB3MobileControls(page);
 
     const lateErrors = pageErrors.filter(isFirstParty);
     assert.deepEqual(lateErrors, [], `first-party errors:\n${lateErrors.join('\n')}`);
@@ -2586,4 +2587,54 @@ async function assertB2ExportSelectionPng(page) {
     assert.ok(result.isDataUrl, 'selection export produced PNG data URL');
 
     console.log('B2 Export Selection as PNG passed.');
+}
+
+async function assertB3MobileControls(page) {
+    console.log('Testing B3 Mobile Controls at 390px...');
+    await page.setViewport({ width: 390, height: 626 });
+    await page.evaluate(() => {
+        document.querySelectorAll('.toast-notification').forEach(el => el.remove());
+        createNewProject('moodinfinite');
+    });
+    await page.waitForSelector('#canvas-fit-view-btn');
+
+    const hitTest = await page.evaluate(() => {
+        document.querySelectorAll('.toast-notification').forEach(el => el.remove());
+        const fitBtn = document.getElementById('canvas-fit-view-btn');
+        const zoomReadout = document.getElementById('canvas-zoom-readout');
+        const leftBar = document.getElementById('left-bar');
+        const minimap = document.getElementById('canvas-minimap');
+
+        const fitRect = fitBtn.getBoundingClientRect();
+        const fitHit = document.elementFromPoint(fitRect.left + fitRect.width / 2, fitRect.top + fitRect.height / 2);
+
+        const zoomRect = zoomReadout.getBoundingClientRect();
+        const zoomHit = document.elementFromPoint(zoomRect.left + zoomRect.width / 2, zoomRect.top + zoomRect.height / 2);
+        return {
+            fitHitOuter: fitHit ? fitHit.outerHTML : null,
+            fitRect,
+            fitHitIsFitBtn: fitBtn.contains(fitHit),
+            fitHitTag: fitHit ? fitHit.tagName : null,
+            fitHitId: fitHit ? fitHit.id : null,
+            fitOverlapsLeftBar: leftBar.contains(fitHit),
+            fitOverlapsMinimap: minimap.contains(fitHit),
+            zoomHitIsZoom: zoomReadout.contains(zoomHit),
+            zoomOverlapsLeftBar: leftBar.contains(zoomHit),
+            zoomOverlapsMinimap: minimap.contains(zoomHit)
+        };
+    });
+
+    assert.ok(hitTest.fitHitIsFitBtn, `fit button hit test failed: hit ${hitTest.fitHitTag}#${hitTest.fitHitId}`);
+    assert.ok(!hitTest.fitOverlapsLeftBar, 'fit button overlaps left bar');
+    assert.ok(!hitTest.fitOverlapsMinimap, 'fit button overlaps minimap');
+    assert.ok(hitTest.zoomHitIsZoom, 'zoom readout hit test failed');
+    assert.ok(!hitTest.zoomOverlapsLeftBar, 'zoom readout overlaps left bar');
+    assert.ok(!hitTest.zoomOverlapsMinimap, 'zoom readout overlaps minimap');
+
+    // Ensure click succeeds without interception error
+    await page.click('#canvas-fit-view-btn');
+
+    // Restore desktop viewport
+    await page.setViewport({ width: 1280, height: 800 });
+    console.log('B3 Mobile Controls at 390px passed.');
 }

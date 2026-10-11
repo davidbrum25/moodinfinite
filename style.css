@@ -3025,6 +3025,16 @@
                 transform-origin: bottom right;
             }
 
+            #canvas-zoom-readout {
+                bottom: calc(var(--bottom-toolbar-height, 66px) + 1.75rem + var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px)) + 92px);
+                right: 1rem;
+            }
+
+            #canvas-fit-view-btn {
+                bottom: calc(var(--bottom-toolbar-height, 66px) + 1.75rem + var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px)) + 92px);
+                right: 5.75rem;
+            }
+
             .separator {
                 margin: .1rem .25rem;
             }
