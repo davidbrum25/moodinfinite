@@ -3434,16 +3434,16 @@ function drawImageItem(ctx, item) {
 }
 
 function drawVideoItem(ctx, item) {
-    if (!item.video) return;
+    if (!item.video && !item._offscreenCanvas) return;
     ctx.save();
     const centerX = item.x + item.width / 2;
     const centerY = item.y + item.height / 2;
     ctx.translate(centerX, centerY);
-    ctx.rotate(item.rotation);
+    ctx.rotate(item.rotation || 0);
     ctx.scale(item.scaleX || 1, item.scaleY || 1);
     ctx.globalAlpha = item.opacity ?? 1;
 
-    const isLoaded = item.video.src && item.video.readyState >= 2;
+    const isLoaded = !!(item.video && item.video.readyState >= 2);
 
     try {
         if (isLoaded) {
@@ -3501,6 +3501,8 @@ function drawVideoItem(ctx, item) {
                 ctx.closePath();
                 ctx.fill();
             }
+        } else if (item._offscreenCanvas) {
+            ctx.drawImage(item._offscreenCanvas, -item.width / 2, -item.height / 2, item.width, item.height);
         } else {
             // Draw a beautiful glassmorphic loading placeholder
             ctx.fillStyle = 'rgba(20, 20, 20, 0.75)';
