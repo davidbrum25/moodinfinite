@@ -1812,6 +1812,7 @@ try {
     await assertUndoPriority(page);
     await assertToolbarPriority(page);
     await assertContextMenuPriority(page);
+    await assertB1MoodtoneBaseSwatch(page);
 
     const lateErrors = pageErrors.filter(isFirstParty);
     assert.deepEqual(lateErrors, [], `first-party errors:\n${lateErrors.join('\n')}`);
@@ -2418,4 +2419,105 @@ async function assertContextMenuPriority(page) {
     await new Promise(r => setTimeout(r, 500));
     if (errors.length > 0) throw new Error("Context menu test produced errors: " + errors.join('\n'));
     console.log('Context Menu Priority passed.');
+}
+
+async function assertB1MoodtoneBaseSwatch(page) {
+    console.log('Testing B1 Moodtone Base Swatch...');
+    await page.evaluate(() => createNewProject('colorseeker'));
+    await page.waitForSelector('.colorseeker-bar');
+
+    // 1. Shades mode with black #000000
+    await page.evaluate(() => {
+        const p = projects.find(proj => proj.id === activeProjectId);
+        p.data.mode = 'shades';
+        p.data.baseColor = '#000000';
+        p.data.colors = generatePalette(p.data.baseColor, p.data.mode, p.data.lockedColors);
+        renderColorSeeker(p.id);
+    });
+
+    const blackTest = await page.evaluate(() => {
+        const baseBtn = document.querySelector('.colorseeker-set-base.is-base');
+        const baseBar = baseBtn ? baseBtn.closest('.colorseeker-bar') : null;
+        const baseColor = baseBar ? baseBar.style.backgroundColor : null;
+        const hexList = document.getElementById('colorseeker-hex-list').textContent.trim().split(',');
+        return {
+            hasBaseBtn: !!baseBtn,
+            baseText: baseBtn ? baseBtn.textContent.trim() : null,
+            baseColor,
+            hexList
+        };
+    });
+    assert.ok(blackTest.hasBaseBtn, 'missing .colorseeker-set-base.is-base for black');
+    assert.equal(blackTest.baseText, '★ Base');
+    assert.equal(blackTest.baseColor, 'rgb(0, 0, 0)');
+    assert.equal(blackTest.hexList[0].toLowerCase(), '#000000');
+    // Ensure all adjacent shades are distinct
+    for (let i = 0; i < blackTest.hexList.length - 1; i++) {
+        assert.notEqual(blackTest.hexList[i].toLowerCase(), blackTest.hexList[i + 1].toLowerCase());
+    }
+
+    // 2. Shades mode with white #ffffff
+    await page.evaluate(() => {
+        const p = projects.find(proj => proj.id === activeProjectId);
+        p.data.mode = 'shades';
+        p.data.baseColor = '#ffffff';
+        p.data.colors = generatePalette(p.data.baseColor, p.data.mode, p.data.lockedColors);
+        renderColorSeeker(p.id);
+    });
+
+    const whiteTest = await page.evaluate(() => {
+        const baseBtn = document.querySelector('.colorseeker-set-base.is-base');
+        const baseBar = baseBtn ? baseBtn.closest('.colorseeker-bar') : null;
+        const baseColor = baseBar ? baseBar.style.backgroundColor : null;
+        const hexList = document.getElementById('colorseeker-hex-list').textContent.trim().split(',');
+        return {
+            hasBaseBtn: !!baseBtn,
+            baseText: baseBtn ? baseBtn.textContent.trim() : null,
+            baseColor,
+            hexList
+        };
+    });
+    assert.ok(whiteTest.hasBaseBtn, 'missing .colorseeker-set-base.is-base for white');
+    assert.equal(whiteTest.baseText, '★ Base');
+    assert.equal(whiteTest.baseColor, 'rgb(255, 255, 255)');
+    assert.equal(whiteTest.hexList[whiteTest.hexList.length - 1].toLowerCase(), '#ffffff');
+    for (let i = 0; i < whiteTest.hexList.length - 1; i++) {
+        assert.notEqual(whiteTest.hexList[i].toLowerCase(), whiteTest.hexList[i + 1].toLowerCase());
+    }
+
+    // 3. Tones mode with black #000000 (s = 0)
+    await page.evaluate(() => {
+        const p = projects.find(proj => proj.id === activeProjectId);
+        p.data.mode = 'tones';
+        p.data.baseColor = '#000000';
+        p.data.colors = generatePalette(p.data.baseColor, p.data.mode, p.data.lockedColors);
+        renderColorSeeker(p.id);
+    });
+
+    const toneZeroTest = await page.evaluate(() => {
+        const baseBtn = document.querySelector('.colorseeker-set-base.is-base');
+        const baseBar = baseBtn ? baseBtn.closest('.colorseeker-bar') : null;
+        const baseColor = baseBar ? baseBar.style.backgroundColor : null;
+        return { baseColor };
+    });
+    assert.equal(toneZeroTest.baseColor, 'rgb(0, 0, 0)');
+
+    // 4. Tones mode with saturated red #ff0000 (s = 100)
+    await page.evaluate(() => {
+        const p = projects.find(proj => proj.id === activeProjectId);
+        p.data.mode = 'tones';
+        p.data.baseColor = '#ff0000';
+        p.data.colors = generatePalette(p.data.baseColor, p.data.mode, p.data.lockedColors);
+        renderColorSeeker(p.id);
+    });
+
+    const toneMaxTest = await page.evaluate(() => {
+        const baseBtn = document.querySelector('.colorseeker-set-base.is-base');
+        const baseBar = baseBtn ? baseBtn.closest('.colorseeker-bar') : null;
+        const baseColor = baseBar ? baseBar.style.backgroundColor : null;
+        return { baseColor };
+    });
+    assert.equal(toneMaxTest.baseColor, 'rgb(255, 0, 0)');
+
+    console.log('B1 Moodtone Base Swatch passed.');
 }

@@ -7917,9 +7917,9 @@ function generatePalette(baseHex, mode, lockedColors) {
     if (mode === 'shades') {
         const l = hsl.l;
         if (l === 0) {
-            colors = [hslToHex(hsl.h, hsl.s, 0), hslToHex(hsl.h, hsl.s, 12), hslToHex(hsl.h, hsl.s, 25), hslToHex(hsl.h, hsl.s, 50), hslToHex(hsl.h, hsl.s, 75)];
+            colors = [baseHex, hslToHex(hsl.h, hsl.s, 12), hslToHex(hsl.h, hsl.s, 25), hslToHex(hsl.h, hsl.s, 50), hslToHex(hsl.h, hsl.s, 75)];
         } else if (l === 100) {
-            colors = [hslToHex(hsl.h, hsl.s, 25), hslToHex(hsl.h, hsl.s, 50), hslToHex(hsl.h, hsl.s, 75), hslToHex(hsl.h, hsl.s, 88), hslToHex(hsl.h, hsl.s, 100)];
+            colors = [hslToHex(hsl.h, hsl.s, 25), hslToHex(hsl.h, hsl.s, 50), hslToHex(hsl.h, hsl.s, 75), hslToHex(hsl.h, hsl.s, 88), baseHex];
         } else {
             let l0, l1, l3, l4;
             if (l >= 45) {
@@ -7951,9 +7951,9 @@ function generatePalette(baseHex, mode, lockedColors) {
     } else if (mode === 'tones') {
         const s = hsl.s;
         if (s === 0) {
-            colors = [hslToHex(hsl.h, 0, hsl.l), hslToHex(hsl.h, 15, hsl.l), hslToHex(hsl.h, 30, hsl.l), hslToHex(hsl.h, 55, hsl.l), hslToHex(hsl.h, 80, hsl.l)];
+            colors = [baseHex, hslToHex(hsl.h, 15, hsl.l), hslToHex(hsl.h, 30, hsl.l), hslToHex(hsl.h, 55, hsl.l), hslToHex(hsl.h, 80, hsl.l)];
         } else if (s === 100) {
-            colors = [hslToHex(hsl.h, 25, hsl.l), hslToHex(hsl.h, 50, hsl.l), hslToHex(hsl.h, 75, hsl.l), hslToHex(hsl.h, 88, hsl.l), hslToHex(hsl.h, 100, hsl.l)];
+            colors = [hslToHex(hsl.h, 25, hsl.l), hslToHex(hsl.h, 50, hsl.l), hslToHex(hsl.h, 75, hsl.l), hslToHex(hsl.h, 88, hsl.l), baseHex];
         } else {
             let s0, s1, s3, s4;
             if (s >= 45) {
@@ -8037,14 +8037,15 @@ function generatePalette(baseHex, mode, lockedColors) {
     // Ensure all adjacent generated swatches have distinct hex values
     for (let i = 0; i < colors.length - 1; i++) {
         if (colors[i].toLowerCase() === colors[i + 1].toLowerCase()) {
-            const parsed = hexToHsl(colors[i]);
+            const targetIdx = (colors[i].toLowerCase() === baseHex.toLowerCase()) ? i + 1 : i;
+            const parsed = hexToHsl(colors[targetIdx]);
             const nudgedL = parsed.l > 50 ? Math.max(0, parsed.l - 4) : Math.min(100, parsed.l + 4);
             const nudged = hslToHex(parsed.h, parsed.s, nudgedL);
-            if (nudged.toLowerCase() !== colors[i + 1].toLowerCase()) {
-                colors[i] = nudged;
+            if (nudged.toLowerCase() !== (targetIdx === i ? colors[i + 1] : colors[i]).toLowerCase()) {
+                colors[targetIdx] = nudged;
             } else {
-                const val = parseInt(colors[i].slice(1), 16);
-                colors[i] = '#' + (val > 0 ? (val - 0x010101) : 0x010101).toString(16).padStart(6, '0');
+                const val = parseInt(colors[targetIdx].slice(1), 16);
+                colors[targetIdx] = '#' + (val > 0 ? (val - 0x010101) : 0x010101).toString(16).padStart(6, '0');
             }
         }
     }
@@ -8132,10 +8133,27 @@ function renderColorSeeker(projectId) {
             const isLocked = !!project.data.lockedColors[i];
 
             // Base indicator (only when not locked)
-            const isBase = (project.data.mode === 'shades' || project.data.mode === 'tones') ? i === 2
-                         : (project.data.mode === 'harmonies' || project.data.mode === 'split-complementary' || project.data.mode === 'triadic') ? i === 2
-                         : (project.data.mode === 'complementary' || project.data.mode === 'tetradic') ? i === 0
-                         : false;
+            let isBase = false;
+            const normBase = (project.data.baseColor || '').toLowerCase();
+            const firstBaseIdx = project.data.colors.findIndex(c => c && c.toLowerCase() === normBase);
+            if (firstBaseIdx !== -1) {
+                isBase = (i === firstBaseIdx);
+            } else {
+                const bHsl = hexToHsl(project.data.baseColor || '#ffffff');
+                if (project.data.mode === 'shades') {
+                    if (bHsl.l === 0) isBase = (i === 0);
+                    else if (bHsl.l === 100) isBase = (i === project.data.colors.length - 1);
+                    else isBase = (i === 2);
+                } else if (project.data.mode === 'tones') {
+                    if (bHsl.s === 0) isBase = (i === 0);
+                    else if (bHsl.s === 100) isBase = (i === project.data.colors.length - 1);
+                    else isBase = (i === 2);
+                } else if (project.data.mode === 'complementary' || project.data.mode === 'tetradic') {
+                    isBase = (i === 0);
+                } else {
+                    isBase = (i === 2);
+                }
+            }
 
             // Remove button
             const removeBtn = document.createElement('button');
