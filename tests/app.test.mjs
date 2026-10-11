@@ -1815,6 +1815,7 @@ try {
     await assertB1MoodtoneBaseSwatch(page);
     await assertB2ExportSelectionPng(page);
     await assertB3MobileControls(page);
+    await assertB4MoodtoneContrastLabels(page);
 
     const lateErrors = pageErrors.filter(isFirstParty);
     assert.deepEqual(lateErrors, [], `first-party errors:\n${lateErrors.join('\n')}`);
@@ -2637,4 +2638,60 @@ async function assertB3MobileControls(page) {
     // Restore desktop viewport
     await page.setViewport({ width: 1280, height: 800 });
     console.log('B3 Mobile Controls at 390px passed.');
+}
+
+async function assertB4MoodtoneContrastLabels(page) {
+    console.log('Testing B4 Moodtone Contrast Labels...');
+
+    // 1. Check shared getContrastTextColor function outputs
+    const contrastChecks = await page.evaluate(() => {
+        const fn = window.getContrastTextColor;
+        return {
+            cyan: fn('#00FFFF'),
+            yellow: fn('#FFFF00'),
+            black: fn('#000000'),
+            white: fn('#FFFFFF'),
+            magenta: fn('#FF00FF'),
+            lightCyan: fn('#4DFFFF'),
+            lightYellow: fn('#FFFF4D')
+        };
+    });
+
+    assert.equal(contrastChecks.cyan, '#000000', 'cyan must use black text for higher contrast');
+    assert.equal(contrastChecks.yellow, '#000000', 'yellow must use black text for higher contrast');
+    assert.equal(contrastChecks.black, '#ffffff', 'black must use white text');
+    assert.equal(contrastChecks.white, '#000000', 'white must use black text');
+    assert.equal(contrastChecks.lightCyan, '#000000', '#4DFFFF must use black text');
+    assert.equal(contrastChecks.lightYellow, '#000000', '#FFFF4D must use black text');
+
+    // 2. Test in Triadic mode with base #FF00FF
+    await page.evaluate(() => {
+        createNewProject('colorseeker');
+        const p = projects.find(proj => proj.id === activeProjectId);
+        p.data.mode = 'triadic';
+        p.data.baseColor = '#FF00FF';
+        p.data.colors = generatePalette(p.data.baseColor, p.data.mode, p.data.lockedColors);
+        renderColorSeeker(p.id);
+    });
+
+    // Check on-screen labels in info tooltips
+    const tooltipColors = await page.evaluate(() => {
+        const bars = Array.from(document.querySelectorAll('.colorseeker-bar'));
+        return bars.map(bar => {
+            const info = bar.querySelector('.colorseeker-info');
+            return {
+                bg: bar.style.backgroundColor,
+                textColor: info ? info.style.color : null
+            };
+        });
+    });
+
+    // Yellow and cyan swatches must have rgb(0, 0, 0) text
+    tooltipColors.forEach(item => {
+        if (item.bg === 'rgb(255, 255, 0)' || item.bg === 'rgb(0, 255, 255)') {
+            assert.equal(item.textColor, 'rgb(0, 0, 0)', `expected black text for ${item.bg}, got ${item.textColor}`);
+        }
+    });
+
+    console.log('B4 Moodtone Contrast Labels passed.');
 }

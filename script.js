@@ -8184,6 +8184,26 @@ function colorseekerMoveSwatch(project, from, to) {
     renderColorSeeker(project.id);
 }
 
+function getContrastTextColor(hex) {
+    let clean = (hex || '').replace('#', '').trim();
+    if (clean.length === 3) {
+        clean = clean.split('').map(c => c + c).join('');
+    }
+    if (clean.length !== 6) return '#000000';
+    const r = parseInt(clean.substring(0, 2), 16) / 255;
+    const g = parseInt(clean.substring(2, 4), 16) / 255;
+    const b = parseInt(clean.substring(4, 6), 16) / 255;
+
+    const toLinear = (c) => (c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4));
+    const L = 0.2126 * toLinear(r) + 0.7152 * toLinear(g) + 0.0722 * toLinear(b);
+
+    const contrastWhite = 1.05 / (L + 0.05);
+    const contrastBlack = (L + 0.05) / 0.05;
+
+    return contrastBlack >= contrastWhite ? '#000000' : '#ffffff';
+}
+window.getContrastTextColor = getContrastTextColor;
+
 function renderColorSeeker(projectId) {
     const project = projects.find(p => p.id === projectId);
     if (!project || project.type !== 'colorseeker') return;
@@ -8293,7 +8313,7 @@ function renderColorSeeker(projectId) {
             info.className = 'colorseeker-info';
             info.style.cssText = 'position:absolute;bottom:4.5rem;left:50%;transform:translateX(-50%);opacity:0;transition:opacity 0.2s;display:flex;flex-direction:column;gap:0.5rem;align-items:center;pointer-events:none;white-space:nowrap;';
             const hslStr = hexToHsl(cHex);
-            info.style.color = hslStr.l > 50 ? '#000' : '#fff';
+            info.style.color = getContrastTextColor(cHex);
             info.innerHTML = `
                 <div style="font-size:1.5rem;font-weight:bold;margin-bottom:0.5rem;">${cHex.toUpperCase()}</div>
                 <div style="font-size:0.9rem;">RGB: ${hexToRgb(cHex)}</div>
@@ -8430,7 +8450,7 @@ function downloadColorSeekerPalette() {
         ctx.fillRect(i * barWidth, 0, barWidth, h);
 
         // Add hex text
-        ctx.fillStyle = hexToHsl(color).l > 50 ? '#000' : '#fff';
+        ctx.fillStyle = getContrastTextColor(color);
         ctx.font = 'bold 40px Inter, sans-serif';
         ctx.textAlign = 'center';
         ctx.fillText(color.toUpperCase(), i * barWidth + barWidth / 2, h - 60);
