@@ -1816,6 +1816,7 @@ try {
     await assertB2ExportSelectionPng(page);
     await assertB3MobileControls(page);
     await assertB4MoodtoneContrastLabels(page);
+    await assertB5MoodtoneSwatchPanelOverlap(page);
 
     const lateErrors = pageErrors.filter(isFirstParty);
     assert.deepEqual(lateErrors, [], `first-party errors:\n${lateErrors.join('\n')}`);
@@ -2695,3 +2696,48 @@ async function assertB4MoodtoneContrastLabels(page) {
 
     console.log('B4 Moodtone Contrast Labels passed.');
 }
+
+async function assertB5MoodtoneSwatchPanelOverlap(page) {
+    console.log('Testing B5 Moodtone Swatch Panel Overlap at 1280px...');
+    await page.setViewport({ width: 1280, height: 800 });
+
+    const layout = await page.evaluate(() => {
+        createNewProject('colorseeker');
+        const sidebar = document.getElementById('colorseeker-sidebar');
+        const firstSwatch = document.querySelector('.colorseeker-bar[data-index="0"]');
+        const removeBtn = firstSwatch ? firstSwatch.querySelector('.colorseeker-remove') : null;
+        const setBaseBtn = firstSwatch ? firstSwatch.querySelector('.colorseeker-set-base') : null;
+
+        const sidebarRect = sidebar ? sidebar.getBoundingClientRect() : null;
+        const swatchRect = firstSwatch ? firstSwatch.getBoundingClientRect() : null;
+        const removeRect = removeBtn ? removeBtn.getBoundingClientRect() : null;
+        const setBaseRect = setBaseBtn ? setBaseBtn.getBoundingClientRect() : null;
+
+        let removeTarget = null;
+        if (removeRect) {
+            removeTarget = document.elementFromPoint(removeRect.x + removeRect.width / 2, removeRect.y + removeRect.height / 2);
+        }
+        let setBaseTarget = null;
+        if (setBaseRect) {
+            setBaseTarget = document.elementFromPoint(setBaseRect.x + setBaseRect.width / 2, setBaseRect.y + setBaseRect.height / 2);
+        }
+
+        return {
+            sidebarRight: sidebarRect ? sidebarRect.right : null,
+            swatchLeft: swatchRect ? swatchRect.left : null,
+            removeHitsButton: removeTarget === removeBtn,
+            setBaseHitsButton: setBaseTarget === setBaseBtn,
+            removeHitsSidebar: sidebar ? sidebar.contains(removeTarget) : false,
+            setBaseHitsSidebar: sidebar ? sidebar.contains(setBaseTarget) : false
+        };
+    });
+
+    assert.ok(layout.swatchLeft >= layout.sidebarRight, `first swatch (left: ${layout.swatchLeft}) must not sit under sidebar (right: ${layout.sidebarRight})`);
+    assert.ok(!layout.removeHitsSidebar, 'remove button must not be covered by sidebar');
+    assert.ok(!layout.setBaseHitsSidebar, 'set base button must not be covered by sidebar');
+    assert.ok(layout.removeHitsButton, 'elementFromPoint on remove button must hit remove button');
+    assert.ok(layout.setBaseHitsButton, 'elementFromPoint on set-base button must hit set-base button');
+
+    console.log('B5 Moodtone Swatch Panel Overlap passed.');
+}
+

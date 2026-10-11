@@ -1823,6 +1823,20 @@
             width: auto;
         }
 
+        #colorseeker-palette {
+            display: flex;
+            width: 100%;
+            height: 100%;
+            box-sizing: border-box;
+            padding-left: calc(1.5rem + 220px + 1.25rem);
+        }
+
+        @media (max-width: 768px) {
+            #colorseeker-palette {
+                padding-left: 0;
+            }
+        }
+
         #colorseeker-add-swatch,
         #colorseeker-to-canvas,
         #colorseeker-from-image,
