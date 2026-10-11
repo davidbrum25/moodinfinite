@@ -1819,6 +1819,7 @@ try {
     await assertB5MoodtoneSwatchPanelOverlap(page);
     await assertB6ToolbarClamping(page);
     await assertB7FitViewPadding(page);
+    await assertB8DuplicateTabNames(page);
 
     const lateErrors = pageErrors.filter(isFirstParty);
     assert.deepEqual(lateErrors, [], `first-party errors:\n${lateErrors.join('\n')}`);
@@ -2916,6 +2917,33 @@ async function assertB7FitViewPadding(page) {
     assert.equal(checkResult.overlaps.length, 0, `no item should overlap overlays: ${JSON.stringify(checkResult.overlaps)}`);
     console.log('B7 Fit-to-view Padding passed.');
 }
+
+async function assertB8DuplicateTabNames(page) {
+    console.log('Testing B8 Deduplication of Tab Names on Duplicate Loads...');
+
+    const tabNames = await page.evaluate(() => {
+        const dummyMood = JSON.stringify({ items: [{ id: 'test_item', type: 'box', x: 0, y: 0, width: 100, height: 100 }] });
+
+        // Load same file three times
+        loadFileAsNewTab(dummyMood, 'TestProject.mood');
+        const p1 = projects[projects.length - 1];
+
+        loadFileAsNewTab(dummyMood, 'TestProject.mood');
+        const p2 = projects[projects.length - 1];
+
+        loadFileAsNewTab(dummyMood, 'TestProject.mood');
+        const p3 = projects[projects.length - 1];
+
+        return [p1.name, p2.name, p3.name];
+    });
+
+    assert.equal(tabNames[0], 'TestProject', 'first loaded tab should keep base name');
+    assert.equal(tabNames[1], 'TestProject (2)', 'second loaded tab should append (2)');
+    assert.equal(tabNames[2], 'TestProject (3)', 'third loaded tab should append (3)');
+
+    console.log('B8 Deduplication of Tab Names passed.');
+}
+
 
 
 

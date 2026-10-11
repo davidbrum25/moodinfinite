@@ -5570,10 +5570,24 @@ function saveProject() {
         });
     }
 }
+function getDeduplicatedTabName(baseName) {
+    const existingNames = new Set(projects.map(p => p.name));
+    if (!existingNames.has(baseName)) {
+        return baseName;
+    }
+    let count = 2;
+    while (existingNames.has(`${baseName} (${count})`)) {
+        count++;
+    }
+    return `${baseName} (${count})`;
+}
+window.getDeduplicatedTabName = getDeduplicatedTabName;
+
 function loadFileAsNewTab(fileContent, fileName) {
     try {
         const data = JSON.parse(fileContent);
-        const name = fileName.split('.').slice(0, -1).join('.') || 'Loaded Project';
+        const rawName = (fileName && fileName.includes('.') ? fileName.split('.').slice(0, -1).join('.') : (fileName || '')) || 'Loaded Project';
+        const name = getDeduplicatedTabName(rawName);
         if (data.prompts && Array.isArray(data.prompts)) {
             const newId = nextProjectId();
             const newProject = { id: newId, type: 'moodprompt', name: name, data: { prompts: data.prompts, canvasBackgroundColor: data.canvasBackgroundColor || '#0d0d0d' } };
