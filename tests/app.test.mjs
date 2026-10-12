@@ -1820,6 +1820,8 @@ try {
     await assertB6ToolbarClamping(page);
     await assertB7FitViewPadding(page);
     await assertB8DuplicateTabNames(page);
+    await assertFitViewGeometry(page);
+    await assertBottomToolbarScrollEnd(page);
 
     const lateErrors = pageErrors.filter(isFirstParty);
     assert.deepEqual(lateErrors, [], `first-party errors:\n${lateErrors.join('\n')}`);
@@ -3020,6 +3022,248 @@ async function assertB8DuplicateTabNames(page) {
     assert.equal(tabNames[2], 'TestProject (3)', 'third loaded tab should append (3)');
 
     console.log('B8 Deduplication of Tab Names passed.');
+}
+
+function fitScenes() {
+    const base = { rotation: 0, scaleX: 1, scaleY: 1, opacity: 1, style: 'fill', isPinned: false };
+    const scattered = [
+        { ...base, id: 'neg', type: 'box', x: -200, y: -4200, width: 520, height: 1100, color: '#e74c3c' },
+        { ...base, id: 'far', type: 'box', x: 480, y: 4300, width: 520, height: 1100, color: '#3498db' },
+        { ...base, id: 'rot', type: 'box', x: 40, y: -180, width: 360, height: 140, rotation: Math.PI / 5, scaleX: 1.35, scaleY: 1.15, color: '#f1c40f' },
+        {
+            ...base, id: 'grp', type: 'group', x: -40, y: 220, width: 420, height: 280, rotation: 0.4, scaleX: 1.2, scaleY: 0.9,
+            items: [
+                { ...base, id: 'gchild', type: 'box', x: 30, y: 24, width: 160, height: 100, rotation: 0.7, color: '#2ecc71' },
+                {
+                    ...base, id: 'nested', type: 'group', x: 150, y: 50, width: 200, height: 150, rotation: -0.5, scaleX: 1.15, scaleY: 1.05,
+                    items: [
+                        { ...base, id: 'nchild', type: 'box', x: 16, y: 14, width: 100, height: 70, rotation: 0.55, scaleX: 1.4, scaleY: 1.1, color: '#9b59b6' },
+                    ],
+                },
+            ],
+        },
+    ];
+    const scaled = [
+        { ...base, id: 'neg', type: 'box', x: -520, y: -360, width: 120, height: 80, rotation: -0.4, scaleX: 1.3, scaleY: 1.2, color: '#e74c3c' },
+        { ...base, id: 'rot', type: 'box', x: -30, y: -10, width: 260, height: 34, rotation: Math.PI / 2, scaleX: 2.2, scaleY: 1.15, color: '#f1c40f' },
+        {
+            ...base, id: 'grp', type: 'group', x: 40, y: -70, width: 170, height: 120, rotation: 0.65, scaleX: 1.8, scaleY: 1.45,
+            items: [
+                { ...base, id: 'gchild', type: 'box', x: 18, y: 14, width: 64, height: 36, rotation: 0.35, color: '#2ecc71' },
+                {
+                    ...base, id: 'nested', type: 'group', x: 48, y: 22, width: 96, height: 70, rotation: -0.7, scaleX: 1.25, scaleY: 1.1,
+                    items: [
+                        { ...base, id: 'nchild', type: 'box', x: 10, y: 8, width: 42, height: 26, rotation: 0.75, scaleX: 1.5, scaleY: 1.2, color: '#9b59b6' },
+                    ],
+                },
+            ],
+        },
+    ];
+    return { scattered, scaled };
+}
+
+async function measureFittedItems(page, sceneItems) {
+    return page.evaluate((sceneItems) => {
+        const board = projects.find((p) => p.type === 'moodinfinite');
+        if (board) switchTab(board.id);
+        const prevGrid = showGrid;
+        showGrid = false;
+        const saved = items.slice();
+        const savedSelection = selectedItems.slice();
+        items = sceneItems;
+        selectedItems = [];
+        document.getElementById('canvas-fit-view-btn').click();
+        draw();
+
+        const canvas = document.getElementById('moodboard-canvas');
+        const ctx = canvas.getContext('2d');
+        const img = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+        const targets = {
+            neg: [231, 76, 60],
+            far: [52, 152, 219],
+            rot: [241, 196, 15],
+            gchild: [46, 204, 113],
+            nchild: [155, 89, 182],
+        };
+        const found = {};
+        const want = new Set();
+        const walk = (list) => list.forEach((item) => {
+            if (item.items) walk(item.items);
+            else if (targets[item.id]) want.add(item.id);
+        });
+        walk(sceneItems);
+        want.forEach((id) => { found[id] = null; });
+        const w = canvas.width;
+        const h = canvas.height;
+        for (let y = 0; y < h; y++) {
+            for (let x = 0; x < w; x++) {
+                const i = (y * w + x) * 4;
+                const r = img[i];
+                const g = img[i + 1];
+                const b = img[i + 2];
+                const a = img[i + 3];
+                if (a < 180) continue;
+                for (const id of want) {
+                    const c = targets[id];
+                    if (Math.abs(r - c[0]) > 28 || Math.abs(g - c[1]) > 28 || Math.abs(b - c[2]) > 28) continue;
+                    const box = found[id] || { minX: x, minY: y, maxX: x, maxY: y, n: 0 };
+                    if (x < box.minX) box.minX = x;
+                    if (y < box.minY) box.minY = y;
+                    if (x > box.maxX) box.maxX = x;
+                    if (y > box.maxY) box.maxY = y;
+                    box.n++;
+                    found[id] = box;
+                }
+            }
+        }
+        const chrome = ['tabs-bar', 'left-bar', 'canvas-minimap', 'canvas-fit-view-btn', 'canvas-zoom-readout'].map((id) => {
+            const el = document.getElementById(id);
+            const r = el.getBoundingClientRect();
+            const cs = getComputedStyle(el);
+            return {
+                id,
+                left: r.left,
+                top: r.top,
+                right: r.right,
+                bottom: r.bottom,
+                w: r.width,
+                h: r.height,
+                hidden: el.hidden || cs.display === 'none' || cs.visibility === 'hidden',
+            };
+        });
+        const zoom = cameraZoom;
+        const dpr = window.devicePixelRatio;
+        const cssW = canvas.clientWidth;
+        const cssH = canvas.clientHeight;
+        showGrid = prevGrid;
+        items = saved;
+        selectedItems = savedSelection;
+        items.forEach((item) => { delete item._cachedBox; item._isDirty = true; });
+        requestUpdate();
+        return { found, chrome, zoom, dpr, canvas: { w, h, cssW, cssH }, minZoom: MIN_ZOOM };
+    }, sceneItems);
+}
+
+function freeRectForChrome(canvas, chrome) {
+    let left = 0;
+    let top = 0;
+    let right = canvas.w;
+    let bottom = canvas.h;
+    const corners = [];
+    for (const r of chrome) {
+        if (r.hidden || r.w < 1 || r.h < 1) continue;
+        const cx = (r.left + r.right) / 2;
+        const cy = (r.top + r.bottom) / 2;
+        const wide = r.w >= r.h * 1.4 && r.w > canvas.w * 0.35;
+        const tall = r.h >= r.w * 1.4 && r.h > canvas.h * 0.35;
+        if (wide && cy < canvas.h * 0.45) top = Math.max(top, r.bottom);
+        else if (wide && cy > canvas.h * 0.55) bottom = Math.min(bottom, r.top);
+        else if (tall && cx < canvas.w * 0.45) left = Math.max(left, r.right);
+        else if (tall && cx > canvas.w * 0.55) right = Math.min(right, r.left);
+        else corners.push(r);
+    }
+    for (const r of corners) {
+        const overlaps = r.right > left && r.left < right && r.bottom > top && r.top < bottom;
+        if (!overlaps) continue;
+        const cx = (r.left + r.right) / 2;
+        const cy = (r.top + r.bottom) / 2;
+        if (cx >= canvas.w / 2) right = Math.min(right, r.left);
+        else left = Math.max(left, r.right);
+        if (cy >= canvas.h / 2) bottom = Math.min(bottom, r.top);
+        else top = Math.max(top, r.bottom);
+    }
+    return { left, top, right, bottom };
+}
+
+function assertItemsInsideFreeRect(result, label, { expectBelowMinZoom }) {
+    assert.equal(result.canvas.w, result.canvas.cssW, `${label} canvas buffer width should match CSS px`);
+    assert.equal(result.canvas.h, result.canvas.cssH, `${label} canvas buffer height should match CSS px`);
+    const free = freeRectForChrome(result.canvas, result.chrome);
+    const pad = 6;
+    let minX = Infinity;
+    let minY = Infinity;
+    let maxX = -Infinity;
+    let maxY = -Infinity;
+    for (const [id, box] of Object.entries(result.found)) {
+        assert.ok(box && box.n >= 4, `${label} ${id} is not fully inside the view: ${JSON.stringify(box)}`);
+        assert.ok(box.minX >= free.left + pad, `${label} ${id} left ${box.minX} is outside the chrome-free area ${free.left}`);
+        assert.ok(box.minY >= free.top + pad, `${label} ${id} top ${box.minY} is outside the chrome-free area ${free.top}`);
+        assert.ok(box.maxX <= free.right - pad, `${label} ${id} right ${box.maxX} is outside the chrome-free area ${free.right}`);
+        assert.ok(box.maxY <= free.bottom - pad, `${label} ${id} bottom ${box.maxY} is outside the chrome-free area ${free.bottom}`);
+        minX = Math.min(minX, box.minX);
+        minY = Math.min(minY, box.minY);
+        maxX = Math.max(maxX, box.maxX);
+        maxY = Math.max(maxY, box.maxY);
+    }
+    const cx = (minX + maxX) / 2;
+    const cy = (minY + maxY) / 2;
+    const fcx = (free.left + free.right) / 2;
+    const fcy = (free.top + free.bottom) / 2;
+    const tolX = Math.max(36, (free.right - free.left) * 0.18);
+    const tolY = Math.max(36, (free.bottom - free.top) * 0.18);
+    assert.ok(Math.abs(cx - fcx) <= tolX, `${label} items are not centered horizontally: ${cx} vs ${fcx}`);
+    assert.ok(Math.abs(cy - fcy) <= tolY, `${label} items are not centered vertically: ${cy} vs ${fcy}`);
+    if (expectBelowMinZoom) {
+        assert.ok(result.zoom < result.minZoom, `${label} fit stayed at MIN_ZOOM ${result.minZoom}, zoom ${result.zoom}`);
+    }
+}
+
+async function assertFitViewGeometry(page) {
+    console.log('Testing fit-to-view geometry (negative, far, rotated, nested, DPR)...');
+    const { scattered, scaled } = fitScenes();
+    const viewports = [
+        { name: 'desktop', width: 1280, height: 800, deviceScaleFactor: 1, isMobile: false },
+        { name: 'desktop-dpr2', width: 1280, height: 800, deviceScaleFactor: 2, isMobile: false },
+        { name: 'mobile-dpr2', width: 390, height: 780, deviceScaleFactor: 2, isMobile: true, hasTouch: true },
+        { name: 'mobile-dpr3', width: 390, height: 780, deviceScaleFactor: 3, isMobile: true, hasTouch: true },
+    ];
+    for (const viewport of viewports) {
+        await page.setViewport(viewport);
+        await page.waitForFunction((width) => window.innerWidth === width, {}, viewport.width);
+        const scatteredResult = await measureFittedItems(page, scattered);
+        assert.equal(scatteredResult.dpr, viewport.deviceScaleFactor, `${viewport.name} devicePixelRatio`);
+        assertItemsInsideFreeRect(scatteredResult, `${viewport.name} scattered`, { expectBelowMinZoom: true });
+        const scaledResult = await measureFittedItems(page, scaled);
+        assertItemsInsideFreeRect(scaledResult, `${viewport.name} scaled`, { expectBelowMinZoom: false });
+    }
+    await page.setViewport({ width: 1280, height: 800, deviceScaleFactor: 1, isMobile: false });
+    await page.waitForFunction(() => window.innerWidth === 1280);
+    console.log('Fit-to-view geometry passed.');
+}
+
+async function assertBottomToolbarScrollEnd(page) {
+    console.log('Testing bottom toolbar scroll-end hint at 390px...');
+    await page.setViewport({ width: 390, height: 780, deviceScaleFactor: 2, isMobile: true, hasTouch: true });
+    await page.waitForFunction(() => window.innerWidth === 390);
+    const result = await page.evaluate(async () => {
+        document.querySelectorAll('.toast-notification').forEach((el) => el.remove());
+        const board = projects.find((p) => p.type === 'moodinfinite');
+        if (board) switchTab(board.id);
+        if (typeof updateMobileBottomToolbarHeight === 'function') updateMobileBottomToolbarHeight();
+        updateHScrollOverflowHints();
+        await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+        const bar = document.getElementById('left-bar');
+        const track = bar.querySelector(':scope > .h-scroll-track');
+        const scroller = track && getComputedStyle(track).overflowX !== 'hidden' && track.scrollWidth > track.clientWidth + 2
+            ? track
+            : bar;
+        scroller.scrollLeft = scroller.scrollWidth;
+        updateHScrollOverflowHints();
+        return {
+            canRight: bar.classList.contains('can-scroll-right'),
+            canLeft: bar.classList.contains('can-scroll-left'),
+            scrollLeft: scroller.scrollLeft,
+            scrollWidth: scroller.scrollWidth,
+            clientWidth: scroller.clientWidth,
+            atEnd: scroller.scrollLeft + scroller.clientWidth >= scroller.scrollWidth - 2,
+        };
+    });
+    assert.equal(result.atEnd, true, `bottom toolbar did not scroll to the end: ${JSON.stringify(result)}`);
+    assert.equal(result.canRight, false, `can-scroll-right stayed on at the end: ${JSON.stringify(result)}`);
+    assert.equal(result.canLeft, true, `can-scroll-left missing after scrolling to the end: ${JSON.stringify(result)}`);
+    await page.setViewport({ width: 1280, height: 800, deviceScaleFactor: 1, isMobile: false });
+    await page.waitForFunction(() => window.innerWidth === 1280);
+    console.log('Bottom toolbar scroll-end hint passed.');
 }
 
 

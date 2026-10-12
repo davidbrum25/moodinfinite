@@ -2929,6 +2929,33 @@ const hScrollHintPairs = [
     ['#left-bar', '#left-bar > .h-scroll-track'],
 ];
 
+function hScrollCanScroll(el) {
+    if (!el) return false;
+    const ox = getComputedStyle(el).overflowX;
+    if (ox === 'hidden' || ox === 'clip' || ox === 'visible') return false;
+    return el.scrollWidth - el.clientWidth > H_SCROLL_HINT_EPS;
+}
+
+function hScrollScroller(host, track) {
+    if (hScrollCanScroll(track)) return track;
+    if (hScrollCanScroll(host)) return host;
+    return track || host;
+}
+
+// Flex tracks drop padding-inline-end, so a ::after spacer keeps the last control
+// reachable. That spacer is part of scrollWidth but is not more content.
+function hScrollEndPadding(el) {
+    if (!el) return 0;
+    const own = parseFloat(getComputedStyle(el).paddingRight) || 0;
+    const pseudo = getComputedStyle(el, '::after');
+    if (!pseudo || pseudo.content === 'none' || pseudo.content === 'normal') return own;
+    if (pseudo.position === 'absolute' || pseudo.position === 'fixed') return own;
+    const width = parseFloat(pseudo.width);
+    if (!Number.isFinite(width) || width <= 0) return own;
+    const margin = (parseFloat(pseudo.marginLeft) || 0) + (parseFloat(pseudo.marginRight) || 0);
+    return own + width + margin;
+}
+
 function updateHScrollOverflowHints() {
     const mobile = window.innerWidth <= 768;
     for (const [hostSel, trackSel] of hScrollHintPairs) {
@@ -2938,26 +2965,30 @@ function updateHScrollOverflowHints() {
             host.classList.remove('can-scroll-left', 'can-scroll-right');
             continue;
         }
-        const scroller = document.querySelector(trackSel) || host;
-        const maxScroll = scroller.scrollWidth - scroller.clientWidth;
+        const scroller = hScrollScroller(host, document.querySelector(trackSel));
+        if (!scroller) continue;
         const sl = scroller.scrollLeft;
-        host.classList.toggle('can-scroll-left', maxScroll > H_SCROLL_HINT_EPS && sl > H_SCROLL_HINT_EPS);
-        host.classList.toggle('can-scroll-right', maxScroll > H_SCROLL_HINT_EPS && sl < maxScroll - H_SCROLL_HINT_EPS);
+        const limit = scroller.scrollWidth - hScrollEndPadding(scroller);
+        host.classList.toggle('can-scroll-left', sl > H_SCROLL_HINT_EPS);
+        host.classList.toggle('can-scroll-right', sl + scroller.clientWidth < limit - H_SCROLL_HINT_EPS);
     }
 }
 
 function initHScrollOverflowHints() {
-    for (const [hostSel, trackSel] of hScrollHintPairs) {
-        const host = document.querySelector(hostSel);
-        const scroller = document.querySelector(trackSel);
-        if (!host || !scroller) continue;
-        scroller.addEventListener('scroll', updateHScrollOverflowHints, { passive: true });
+    const seen = new Set();
+    const watch = (el) => {
+        if (!el || seen.has(el)) return;
+        seen.add(el);
+        el.addEventListener('scroll', updateHScrollOverflowHints, { passive: true });
         if (typeof ResizeObserver !== 'undefined') {
             const ro = new ResizeObserver(updateHScrollOverflowHints);
-            ro.observe(host);
-            ro.observe(scroller);
-            for (const child of scroller.children) ro.observe(child);
+            ro.observe(el);
+            for (const child of el.children) ro.observe(child);
         }
+    };
+    for (const [hostSel, trackSel] of hScrollHintPairs) {
+        watch(document.querySelector(hostSel));
+        watch(document.querySelector(trackSel));
     }
     window.addEventListener('resize', updateHScrollOverflowHints);
     updateHScrollOverflowHints();
@@ -7169,7 +7200,7 @@ function onTouchMove(e) {
         const deltaX = center.x - lastPinchCenter.x; const deltaY = center.y - lastPinchCenter.y;
         cameraOffset.x += deltaX / cameraZoom; cameraOffset.y += deltaY / cameraZoom;
         const dist = getPinchDistance(e); const zoomFactor = dist / initialPinchDistance; const newZoom = initialCameraZoomOnPinch * zoomFactor;
-        const worldPosBeforeZoom = screenToWorld(center); cameraZoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, newZoom)); const worldPosAfterZoom = screenToWorld(center);
+        const worldPosBeforeZoom = screenToWorld(center); cameraZoom = clampCameraZoom(newZoom); const worldPosAfterZoom = screenToWorld(center);
         cameraOffset.x += worldPosAfterZoom.x - worldPosBeforeZoom.x; cameraOffset.y += worldPosAfterZoom.y - worldPosBeforeZoom.y;
         lastPinchCenter = center;
         requestUpdate();
@@ -7313,20 +7344,24 @@ function getItemBoundingBox(item) {
     if (item.type === 'reroute') {
         box = { x: item.x - 12 / cameraZoom, y: item.y - 12 / cameraZoom, width: 24 / cameraZoom, height: 24 / cameraZoom };
     } else if (item.type === 'group') {
-        if (!item.items || item.items.length === 0) {
-            box = { x: item.x, y: item.y, width: itemW, height: itemH };
-        } else {
-            let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-            const centerX = item.x + itemW / 2, centerY = item.y + itemH / 2, cos = Math.cos(itemRot), sin = Math.sin(itemRot);
-            item.items.forEach(child => {
-                const childBox = getItemBoundingBox(child), vertices = [{ x: childBox.x, y: childBox.y }, { x: childBox.x + childBox.width, y: childBox.y }, { x: childBox.x + childBox.width, y: childBox.y + childBox.height }, { x: childBox.x, y: childBox.y + childBox.height }];
-                vertices.forEach(v => {
-                    const dx = (item.x + v.x) - centerX, dy = (item.y + v.y) - centerY, rx = dx * cos - dy * sin, ry = dx * sin + dy * cos, x = centerX + rx, y = centerY + ry;
-                    minX = Math.min(minX, x); minY = Math.min(minY, y); maxX = Math.max(maxX, x); maxY = Math.max(maxY, y)
-                })
+        // Child boxes are in this group's local space (origin at the group top-left).
+        // Nested groups return that same space, so scale and rotation compose down the tree.
+        // Draw order is scale, then rotation, around the group center.
+        const sx = item.scaleX || 1, sy = item.scaleY || 1;
+        const cos = Math.cos(itemRot), sin = Math.sin(itemRot);
+        const centerX = item.x + itemW / 2, centerY = item.y + itemH / 2;
+        const locals = (!item.items || item.items.length === 0)
+            ? [{ x: 0, y: 0, width: itemW, height: itemH }]
+            : item.items.map(child => getItemBoundingBox(child));
+        let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+        locals.forEach(childBox => {
+            [{ x: childBox.x, y: childBox.y }, { x: childBox.x + childBox.width, y: childBox.y }, { x: childBox.x + childBox.width, y: childBox.y + childBox.height }, { x: childBox.x, y: childBox.y + childBox.height }].forEach(v => {
+                const dx = (v.x - itemW / 2) * sx, dy = (v.y - itemH / 2) * sy;
+                const x = centerX + dx * cos - dy * sin, y = centerY + dx * sin + dy * cos;
+                minX = Math.min(minX, x); minY = Math.min(minY, y); maxX = Math.max(maxX, x); maxY = Math.max(maxY, y);
             });
-            box = { x: minX, y: minY, width: Math.max(1, maxX - minX), height: Math.max(1, maxY - minY) };
-        }
+        });
+        box = { x: minX, y: minY, width: Math.max(1, maxX - minX), height: Math.max(1, maxY - minY) };
     } else if (item.type === 'stroke') {
         let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
         if (item.points && item.points.length > 0) {
@@ -7339,9 +7374,11 @@ function getItemBoundingBox(item) {
         box = { x: Math.min(item.startX, item.endX), y: Math.min(item.startY, item.endY), width: Math.abs(item.startX - item.endX), height: Math.abs(item.startY - item.endY) };
     } else {
         const centerX = item.x + itemW / 2, centerY = item.y + itemH / 2, cos = Math.cos(itemRot), sin = Math.sin(itemRot);
+        const sx = item.scaleX || 1, sy = item.scaleY || 1;
         let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
         [{ x: -itemW / 2, y: -itemH / 2 }, { x: itemW / 2, y: -itemH / 2 }, { x: itemW / 2, y: itemH / 2 }, { x: -itemW / 2, y: itemH / 2 }].forEach(v => {
-            const x = v.x * cos - v.y * sin + centerX, y = v.x * sin + v.y * cos + centerY;
+            const lx = v.x * sx, ly = v.y * sy;
+            const x = lx * cos - ly * sin + centerX, y = lx * sin + ly * cos + centerY;
             minX = Math.min(minX, x); minY = Math.min(minY, y); maxX = Math.max(maxX, x); maxY = Math.max(maxY, y)
         });
         box = { x: minX, y: minY, width: Math.max(1, maxX - minX), height: Math.max(1, maxY - minY) };
@@ -7359,7 +7396,13 @@ function distSq(e, t) { return Math.pow(e.x - t.x, 2) + Math.pow(e.y - t.y, 2) }
 function distToSegmentSquared(e, t, o) { const a = distSq(t, o); if (a === 0) return distSq(e, t); let i = ((e.x - t.x) * (o.x - t.x) + (e.y - t.y) * (o.y - t.y)) / a; i = Math.max(0, Math.min(1, i)); return distSq(e, { x: t.x + i * (o.x - t.x), y: t.y + i * (o.y - t.y) }) }
 function invertColor(e) { if (e.indexOf('#') === 0) e = e.slice(1); if (e.length === 3) e = e[0] + e[0] + e[1] + e[1] + e[2] + e[2]; if (e.length !== 6) return '#ffffff'; const t = (255 - parseInt(e.slice(0, 2), 16)).toString(16), o = (255 - parseInt(e.slice(2, 4), 16)).toString(16), a = (255 - parseInt(e.slice(4, 6), 16)).toString(16); return '#' + padZero(t) + padZero(o) + padZero(a) }
 function padZero(e, t) { t = t || 2; const o = (new Array(t + 1)).join('0'); return (o + e).slice(-t) }
-function adjustZoom(e, t) { if (isDragging) return; const evLoc = getEventLocation(e); if (!evLoc) return; const o = screenToWorld(evLoc); cameraZoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, cameraZoom * (1 + t))); const a = screenToWorld(getEventLocation(e)); cameraOffset.x += a.x - o.x; cameraOffset.y += a.y - o.y; requestUpdate(); }
+function clampCameraZoom(next) {
+    // A fit below MIN_ZOOM must not snap back up on the next wheel or pinch tick.
+    const floor = Math.min(MIN_ZOOM, cameraZoom || MIN_ZOOM);
+    if (!Number.isFinite(next) || next <= 0) return cameraZoom || 1;
+    return Math.max(floor, Math.min(MAX_ZOOM, next));
+}
+function adjustZoom(e, t) { if (isDragging) return; const evLoc = getEventLocation(e); if (!evLoc) return; const o = screenToWorld(evLoc); cameraZoom = clampCameraZoom(cameraZoom * (1 + t)); const a = screenToWorld(getEventLocation(e)); cameraOffset.x += a.x - o.x; cameraOffset.y += a.y - o.y; requestUpdate(); }
 
 function centerView() {
     cameraZoom = 1;
@@ -7369,85 +7412,124 @@ function centerView() {
     requestUpdate();
 }
 
+function fitChromeRect(el) {
+    if (!el || el.hidden) return null;
+    const cs = getComputedStyle(el);
+    if (cs.display === 'none' || cs.visibility === 'hidden') return null;
+    const r = el.getBoundingClientRect();
+    if (r.width < 1 || r.height < 1) return null;
+    return r;
+}
+
+function computeFitSafeRect() {
+    const canvasRect = canvas.getBoundingClientRect();
+    const viewW = canvasRect.width || canvas.clientWidth || canvas.width;
+    const viewH = canvasRect.height || canvas.clientHeight || canvas.height;
+    const originX = canvasRect.width ? canvasRect.left : 0;
+    const originY = canvasRect.height ? canvasRect.top : 0;
+    const GAP = 20;
+    const MIN = 32;
+    // The minimap is hidden until the first paint after items exist. Unhide it
+    // so its real box, including the mobile scale, is part of the safe rect.
+    const minimap = document.getElementById('canvas-minimap');
+    const minimapWasHidden = !!(minimap && minimap.hidden && items.length);
+    if (minimapWasHidden) minimap.hidden = false;
+    const ids = ['tabs-bar', 'left-bar', 'canvas-minimap', 'canvas-fit-view-btn', 'canvas-zoom-readout'];
+    const rects = [];
+    ids.forEach(id => {
+        const r = fitChromeRect(document.getElementById(id));
+        if (!r) return;
+        rects.push({
+            left: r.left - originX,
+            top: r.top - originY,
+            right: r.right - originX,
+            bottom: r.bottom - originY,
+            width: r.width,
+            height: r.height,
+        });
+    });
+    let padLeft = MIN, padRight = MIN, padTop = MIN, padBottom = MIN;
+    const corners = [];
+    rects.forEach(r => {
+        const cx = (r.left + r.right) / 2;
+        const cy = (r.top + r.bottom) / 2;
+        const wide = r.width >= r.height * 1.4 && r.width > viewW * 0.35;
+        const tall = r.height >= r.width * 1.4 && r.height > viewH * 0.35;
+        if (wide && cy < viewH * 0.45) { padTop = Math.max(padTop, r.bottom + GAP); return; }
+        if (wide && cy > viewH * 0.55) { padBottom = Math.max(padBottom, viewH - r.top + GAP); return; }
+        if (tall && cx < viewW * 0.45) { padLeft = Math.max(padLeft, r.right + GAP); return; }
+        if (tall && cx > viewW * 0.55) { padRight = Math.max(padRight, viewW - r.left + GAP); return; }
+        corners.push(r);
+    });
+    corners.forEach(r => {
+        const safeLeft = padLeft, safeTop = padTop;
+        const safeRight = viewW - padRight, safeBottom = viewH - padBottom;
+        const overlaps = r.right > safeLeft && r.left < safeRight && r.bottom > safeTop && r.top < safeBottom;
+        if (!overlaps) return;
+        const cx = (r.left + r.right) / 2;
+        const cy = (r.top + r.bottom) / 2;
+        if (cx >= viewW / 2) padRight = Math.max(padRight, viewW - r.left + GAP);
+        else padLeft = Math.max(padLeft, r.right + GAP);
+        if (cy >= viewH / 2) padBottom = Math.max(padBottom, viewH - r.top + GAP);
+        else padTop = Math.max(padTop, r.bottom + GAP);
+    });
+    const minW = Math.min(64, viewW);
+    const minH = Math.min(64, viewH);
+    if (padLeft + padRight > viewW - minW) {
+        const room = Math.max(0, viewW - minW);
+        const sum = padLeft + padRight || 1;
+        padLeft = room * (padLeft / sum);
+        padRight = room - padLeft;
+    }
+    if (padTop + padBottom > viewH - minH) {
+        const room = Math.max(0, viewH - minH);
+        const sum = padTop + padBottom || 1;
+        padTop = room * (padTop / sum);
+        padBottom = room - padTop;
+    }
+    // Camera math is in canvas buffer pixels. Chrome boxes are CSS pixels.
+    const bufW = canvas.width || viewW;
+    const bufH = canvas.height || viewH;
+    const toBufX = viewW > 0 ? bufW / viewW : 1;
+    const toBufY = viewH > 0 ? bufH / viewH : 1;
+    return {
+        left: padLeft * toBufX,
+        top: padTop * toBufY,
+        width: (viewW - padLeft - padRight) * toBufX,
+        height: (viewH - padTop - padBottom) * toBufY,
+        bufW,
+        bufH,
+    };
+}
+
 function focusOnSelection() {
     const targets = selectedItems.length > 0 ? selectedItems : items;
     if (targets.length === 0) { centerView(); return; }
+    const dropBoxCache = (item) => {
+        if (!item) return;
+        delete item._cachedBox;
+        item._isDirty = true;
+        if (item.items) item.items.forEach(dropBoxCache);
+    };
+    targets.forEach(dropBoxCache);
     const bbox = getCollectiveBoundingBox(targets);
     if (bbox.width === 0 && bbox.height === 0) return;
 
-    let padTop = 32;
-    const tabsBar = document.getElementById('tabs-bar');
-    if (tabsBar) {
-        const r = tabsBar.getBoundingClientRect();
-        if (r.bottom > 0) padTop = Math.max(padTop, r.bottom + 20);
-    }
-
-    let padLeft = 32;
-    let padBottom = 32;
-    const leftBar = document.getElementById('left-bar');
-    if (leftBar) {
-        const r = leftBar.getBoundingClientRect();
-        if (r.width > 0 && r.height > 0) {
-            if (r.left < 100) {
-                padLeft = Math.max(padLeft, r.right + 20);
-            }
-            if (r.top > window.innerHeight * 0.6) {
-                padBottom = Math.max(padBottom, (window.innerHeight - r.top) + 20);
-            }
-        }
-    }
-
-    let padRight = 32;
-    const minimap = document.getElementById('canvas-minimap');
-    const fitBtn = document.getElementById('canvas-fit-view-btn');
-    const zoomBtn = document.getElementById('canvas-zoom-readout');
-
-    let minimapRightInset = 0;
-    let minimapBottomInset = 0;
-    if (minimap) {
-        const r = minimap.getBoundingClientRect();
-        if (r.width > 0 && r.height > 0) {
-            minimapRightInset = (window.innerWidth - r.left) + 20;
-            minimapBottomInset = (window.innerHeight - r.top) + 20;
-        } else {
-            const isMobile = window.innerWidth <= 768;
-            minimapRightInset = isMobile ? 160 : 204;
-            minimapBottomInset = isMobile ? 180 : 182;
-        }
-    }
-    if (fitBtn) {
-        const r = fitBtn.getBoundingClientRect();
-        if (r.width > 0 && r.height > 0) {
-            minimapRightInset = Math.max(minimapRightInset, (window.innerWidth - r.left) + 20);
-            minimapBottomInset = Math.max(minimapBottomInset, (window.innerHeight - r.top) + 20);
-        }
-    }
-    if (zoomBtn) {
-        const r = zoomBtn.getBoundingClientRect();
-        if (r.width > 0 && r.height > 0) {
-            minimapRightInset = Math.max(minimapRightInset, (window.innerWidth - r.left) + 20);
-            minimapBottomInset = Math.max(minimapBottomInset, (window.innerHeight - r.top) + 20);
-        }
-    }
-
-    padRight = Math.max(padRight, minimapRightInset);
-    padBottom = Math.max(padBottom, minimapBottomInset);
-
-    const safeW = Math.max(100, canvas.width - padLeft - padRight);
-    const safeH = Math.max(100, canvas.height - padTop - padBottom);
-    const safeLeft = padLeft;
-    const safeTop = padTop;
-    const safeCenterX = safeLeft + safeW / 2;
-    const safeCenterY = safeTop + safeH / 2;
-
-    const scaleX = safeW / Math.max(1, bbox.width);
-    const scaleY = safeH / Math.max(1, bbox.height);
-    cameraZoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, Math.min(scaleX, scaleY)));
+    const safe = computeFitSafeRect();
+    const scaleX = safe.width / Math.max(1, bbox.width);
+    const scaleY = safe.height / Math.max(1, bbox.height);
+    let zoom = Math.min(scaleX, scaleY);
+    if (!Number.isFinite(zoom) || zoom <= 0) zoom = 1;
+    // MIN_ZOOM would leave a wide board hanging outside the viewport. Fit may go lower.
+    // Wheel and pinch still refuse to zoom out past MIN_ZOOM via clampCameraZoom.
+    cameraZoom = Math.min(MAX_ZOOM, Math.max(1e-4, zoom));
 
     const centerX = bbox.x + bbox.width / 2;
     const centerY = bbox.y + bbox.height / 2;
-    cameraOffset.x = (safeCenterX - canvas.width / 2) / cameraZoom + canvas.width / 2 - centerX;
-    cameraOffset.y = (safeCenterY - canvas.height / 2) / cameraZoom + canvas.height / 2 - centerY;
+    const safeCenterX = safe.left + safe.width / 2;
+    const safeCenterY = safe.top + safe.height / 2;
+    cameraOffset.x = (safeCenterX - safe.bufW / 2) / cameraZoom + safe.bufW / 2 - centerX;
+    cameraOffset.y = (safeCenterY - safe.bufH / 2) / cameraZoom + safe.bufH / 2 - centerY;
     requestUpdate();
 }
 
