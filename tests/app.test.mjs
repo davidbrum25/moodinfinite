@@ -2639,8 +2639,86 @@ async function assertB3MobileControls(page) {
     // Ensure click succeeds without interception error
     await page.click('#canvas-fit-view-btn');
 
+    await page.waitForFunction(() => window.innerWidth === 390);
+    const mobileChrome = await page.evaluate(async () => {
+        document.getElementById('cloud-sync-indicator')?.classList.add('visible');
+        if (typeof updateMobileBottomToolbarHeight === 'function') updateMobileBottomToolbarHeight();
+        if (typeof updateHScrollOverflowHints === 'function') updateHScrollOverflowHints();
+        await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+
+        const overlap = (a, b) => !(a.right <= b.left || a.left >= b.right || a.bottom <= b.top || a.top >= b.bottom);
+        const box = (r) => ({ left: r.left, right: r.right, top: r.top, bottom: r.bottom });
+        const cloud = document.getElementById('cloud-sync-indicator').getBoundingClientRect();
+        const bar = document.getElementById('left-bar').getBoundingClientRect();
+        const leftBar = document.getElementById('left-bar');
+        const tabsBar = document.getElementById('tabs-bar');
+        const track = document.querySelector('#left-bar > .h-scroll-track');
+        const tabsTrack = document.querySelector('#tabs-bar > .h-scroll-track');
+        const atStart = {
+            leftBarRight: leftBar.classList.contains('can-scroll-right'),
+            leftBarLeft: leftBar.classList.contains('can-scroll-left'),
+            tabsRight: tabsBar.classList.contains('can-scroll-right'),
+            trackOverflows: track.scrollWidth > track.clientWidth + 2,
+            tabsOverflows: tabsTrack.scrollWidth > tabsTrack.clientWidth + 2,
+        };
+
+        const textBtn = document.querySelector('#left-bar .tool-button[title="Text Tools (T, N, K, L)"]');
+        textBtn.scrollIntoView({ inline: 'nearest', block: 'nearest' });
+        const textRect = textBtn.getBoundingClientRect();
+        const barForText = leftBar.getBoundingClientRect();
+
+        const helpBtn = document.getElementById('open-help-btn');
+        helpBtn.scrollIntoView({ inline: 'nearest', block: 'nearest' });
+        const helpRect = helpBtn.getBoundingClientRect();
+        const barForHelp = leftBar.getBoundingClientRect();
+
+        track.scrollLeft = 0;
+        if (typeof updateHScrollOverflowHints === 'function') updateHScrollOverflowHints();
+
+        return {
+            overlaps: overlap(cloud, bar),
+            cloud: box(cloud),
+            bar: box(bar),
+            atStart,
+            textFullyInBar: textRect.left >= barForText.left - 1 && textRect.right <= barForText.right + 1,
+            helpFullyInBar: helpRect.left >= barForHelp.left - 1 && helpRect.right <= barForHelp.right + 1,
+        };
+    });
+
+    assert.equal(mobileChrome.overlaps, false, `cloud indicator overlaps bottom toolbar at 390px: cloud=${JSON.stringify(mobileChrome.cloud)} bar=${JSON.stringify(mobileChrome.bar)}`);
+    assert.ok(mobileChrome.cloud.bottom <= mobileChrome.bar.top + 0.5, `cloud indicator is not above the bottom toolbar: cloud=${JSON.stringify(mobileChrome.cloud)} bar=${JSON.stringify(mobileChrome.bar)}`);
+    assert.equal(mobileChrome.atStart.trackOverflows, true, 'bottom toolbar should overflow on a 390px viewport');
+    assert.equal(mobileChrome.atStart.leftBarRight, true, 'bottom toolbar should show a can-scroll-right hint');
+    assert.equal(mobileChrome.atStart.leftBarLeft, false, 'bottom toolbar should not show a can-scroll-left hint at the start');
+    assert.equal(mobileChrome.atStart.tabsOverflows, true, 'top bar should overflow on a 390px viewport');
+    assert.equal(mobileChrome.atStart.tabsRight, true, 'top bar should show a can-scroll-right hint');
+    assert.equal(mobileChrome.textFullyInBar, true, 'text tool is not fully reachable by scrolling');
+    assert.equal(mobileChrome.helpFullyInBar, true, 'last bottom-toolbar icon is not fully reachable by scrolling');
+
     // Restore desktop viewport
     await page.setViewport({ width: 1280, height: 800 });
+    await page.waitForFunction(() => window.innerWidth === 1280);
+    const desktopChrome = await page.evaluate(async () => {
+        document.getElementById('cloud-sync-indicator')?.classList.add('visible');
+        if (typeof updateMobileBottomToolbarHeight === 'function') updateMobileBottomToolbarHeight();
+        if (typeof updateHScrollOverflowHints === 'function') updateHScrollOverflowHints();
+        await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+        const overlap = (a, b) => !(a.right <= b.left || a.left >= b.right || a.bottom <= b.top || a.top >= b.bottom);
+        const box = (r) => ({ left: r.left, right: r.right, top: r.top, bottom: r.bottom });
+        const cloud = document.getElementById('cloud-sync-indicator').getBoundingClientRect();
+        const bar = document.getElementById('left-bar').getBoundingClientRect();
+        return {
+            overlaps: overlap(cloud, bar),
+            cloud: box(cloud),
+            bar: box(bar),
+            hasHints: document.getElementById('left-bar').classList.contains('can-scroll-right')
+                || document.getElementById('left-bar').classList.contains('can-scroll-left')
+                || document.getElementById('tabs-bar').classList.contains('can-scroll-right')
+                || document.getElementById('tabs-bar').classList.contains('can-scroll-left'),
+        };
+    });
+    assert.equal(desktopChrome.overlaps, false, `cloud indicator overlaps left toolbar at 1280px: cloud=${JSON.stringify(desktopChrome.cloud)} bar=${JSON.stringify(desktopChrome.bar)}`);
+    assert.equal(desktopChrome.hasHints, false, 'overflow hints should not show on desktop widths');
     console.log('B3 Mobile Controls at 390px passed.');
 }
 

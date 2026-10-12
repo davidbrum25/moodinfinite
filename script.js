@@ -2908,14 +2908,59 @@ function syncCanvasChrome() {
 let minimapFrame = null;
 
 function updateMobileBottomToolbarHeight() {
-    if (window.innerWidth > 768) return;
     const bar = document.getElementById('left-bar');
-    if (bar) {
-        const h = Math.ceil(bar.getBoundingClientRect().height);
-        if (h > 0) {
-            document.documentElement.style.setProperty('--bottom-toolbar-height', `${h}px`);
+    if (!bar) return;
+    const rect = bar.getBoundingClientRect();
+    if (window.innerWidth <= 768) {
+        if (rect.height > 0) {
+            document.documentElement.style.setProperty('--bottom-toolbar-height', `${Math.ceil(rect.height)}px`);
+        }
+        return;
+    }
+    if (rect.width > 0) {
+        document.documentElement.style.setProperty('--left-toolbar-width', `${Math.ceil(rect.width)}px`);
+        document.documentElement.style.setProperty('--left-toolbar-right', `${Math.ceil(rect.right)}px`);
+    }
+}
+
+const H_SCROLL_HINT_EPS = 2;
+const hScrollHintPairs = [
+    ['#tabs-bar', '#tabs-bar > .h-scroll-track'],
+    ['#left-bar', '#left-bar > .h-scroll-track'],
+];
+
+function updateHScrollOverflowHints() {
+    const mobile = window.innerWidth <= 768;
+    for (const [hostSel, trackSel] of hScrollHintPairs) {
+        const host = document.querySelector(hostSel);
+        if (!host) continue;
+        if (!mobile) {
+            host.classList.remove('can-scroll-left', 'can-scroll-right');
+            continue;
+        }
+        const scroller = document.querySelector(trackSel) || host;
+        const maxScroll = scroller.scrollWidth - scroller.clientWidth;
+        const sl = scroller.scrollLeft;
+        host.classList.toggle('can-scroll-left', maxScroll > H_SCROLL_HINT_EPS && sl > H_SCROLL_HINT_EPS);
+        host.classList.toggle('can-scroll-right', maxScroll > H_SCROLL_HINT_EPS && sl < maxScroll - H_SCROLL_HINT_EPS);
+    }
+}
+
+function initHScrollOverflowHints() {
+    for (const [hostSel, trackSel] of hScrollHintPairs) {
+        const host = document.querySelector(hostSel);
+        const scroller = document.querySelector(trackSel);
+        if (!host || !scroller) continue;
+        scroller.addEventListener('scroll', updateHScrollOverflowHints, { passive: true });
+        if (typeof ResizeObserver !== 'undefined') {
+            const ro = new ResizeObserver(updateHScrollOverflowHints);
+            ro.observe(host);
+            ro.observe(scroller);
+            for (const child of scroller.children) ro.observe(child);
         }
     }
+    window.addEventListener('resize', updateHScrollOverflowHints);
+    updateHScrollOverflowHints();
 }
 
 function syncCanvasMinimap() {
@@ -3010,14 +3055,21 @@ if (canvasMinimap) {
     const endMinimapDrag = () => { dragFrame = null; };
     canvasMinimap.addEventListener('pointerup', endMinimapDrag);
     canvasMinimap.addEventListener('pointercancel', endMinimapDrag);
-    window.addEventListener('resize', updateMobileBottomToolbarHeight);
+    window.addEventListener('resize', () => {
+        updateMobileBottomToolbarHeight();
+        updateHScrollOverflowHints();
+    });
     if (typeof ResizeObserver !== 'undefined') {
         const leftBar = document.getElementById('left-bar');
         if (leftBar) {
-            new ResizeObserver(updateMobileBottomToolbarHeight).observe(leftBar);
+            new ResizeObserver(() => {
+                updateMobileBottomToolbarHeight();
+                updateHScrollOverflowHints();
+            }).observe(leftBar);
         }
     }
     updateMobileBottomToolbarHeight();
+    initHScrollOverflowHints();
 }
 
 function syncSnapIndicator(active, shiftKey) {
