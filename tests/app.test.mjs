@@ -103,6 +103,32 @@ function wait(ms) {
     return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+// Make elementFromPoint-based tap assertions deterministic: toasts can appear
+// late under CPU load and cover controls, so clear them, wait until none are
+// left, and wait until layout is stable for a few consecutive frames.
+async function settleForHitTest(page) {
+    await page.evaluate(() => {
+        document.querySelectorAll('.toast-notification').forEach((el) => el.remove());
+    });
+    await page.waitForFunction(() => {
+        document.querySelectorAll('.toast-notification').forEach((el) => el.remove());
+        return !document.querySelector('.toast-notification');
+    }, { timeout: 10000 });
+    await page.waitForFunction(() => {
+        const state = window.__hitTestSettle || (window.__hitTestSettle = { sig: null, stable: 0 });
+        const sig = [
+            window.innerWidth, window.innerHeight,
+            document.documentElement.scrollWidth, document.documentElement.scrollHeight,
+            document.querySelectorAll('*').length,
+        ].join('|');
+        state.stable = sig === state.sig ? state.stable + 1 : 0;
+        state.sig = sig;
+        const done = state.stable >= 5 && !document.querySelector('.toast-notification');
+        if (done) delete window.__hitTestSettle;
+        return done;
+    }, { polling: 'raf', timeout: 10000 });
+}
+
 async function exerciseBoardInteractions(page) {
     const canvas = await page.$('#moodboard-canvas');
     const canvasBox = await canvas.boundingBox();
@@ -1795,6 +1821,11 @@ async function assertNonCanvasRound1(page) {
     assert.equal(toneKeys.arrow, true, 'ArrowRight did not move the focused swatch');
 
     await page.setViewport({ width: 390, height: 844 });
+    await page.evaluate(() => {
+        const tone = projects.find((p) => p.type === 'colorseeker');
+        switchTab(tone.id);
+    });
+    await settleForHitTest(page);
     const mobile = await page.evaluate(() => {
         const box = (el) => el ? el.getBoundingClientRect() : null;
         const list = projects.find((p) => p.data && p.data.cards && p.data.cards.some((card) => card.title === 'Round1 Kept'));
@@ -1819,6 +1850,7 @@ async function assertNonCanvasRound1(page) {
         const swatch = document.querySelector('.colorseeker-bar');
         const remove = swatch.querySelector('.colorseeker-remove');
         const removeBox = box(remove);
+        document.querySelectorAll('.toast-notification').forEach((el) => el.remove());
         const hit = document.elementFromPoint(removeBox.x + removeBox.width / 2, removeBox.y + removeBox.height / 2);
         const sidebar = document.getElementById('colorseeker-sidebar');
         const label = swatch.querySelector('.colorseeker-hex-label');
@@ -2248,6 +2280,7 @@ try {
     await assertRound5NoteTabCommit(page);
     await assertRound5TextAlign(page);
     await assertRound5RerouteDelete(page);
+    await assertToolCreationHistory(page);
 
     const lateErrors = pageErrors.filter(isFirstParty);
     assert.deepEqual(lateErrors, [], `first-party errors:\n${lateErrors.join('\n')}`);
@@ -3030,6 +3063,7 @@ async function assertB3MobileControls(page) {
         createNewProject('moodinfinite');
     });
     await page.waitForSelector('#canvas-fit-view-btn');
+    await settleForHitTest(page);
 
     const hitTest = await page.evaluate(() => {
         document.querySelectorAll('.toast-notification').forEach(el => el.remove());
@@ -3210,8 +3244,19 @@ async function assertB5MoodtoneSwatchPanelOverlap(page) {
     console.log('Testing B5 Moodtone Swatch Panel Overlap at 1280px...');
     await page.setViewport({ width: 1280, height: 800 });
 
-    const layout = await page.evaluate(() => {
+    await page.evaluate(() => {
         createNewProject('colorseeker');
+    });
+    await page.waitForFunction(() => {
+        const project = projects.find((p) => p.id === activeProjectId);
+        return !!(project && project.type === 'colorseeker' && project.data.colors
+            && document.querySelectorAll('.colorseeker-bar').length === project.data.colors.length
+            && document.querySelector('.colorseeker-bar[data-index="0"] .colorseeker-remove'));
+    });
+    await settleForHitTest(page);
+
+    const layout = await page.evaluate(() => {
+        document.querySelectorAll('.toast-notification').forEach((el) => el.remove());
         const sidebar = document.getElementById('colorseeker-sidebar');
         const firstSwatch = document.querySelector('.colorseeker-bar[data-index="0"]');
         const removeBtn = firstSwatch ? firstSwatch.querySelector('.colorseeker-remove') : null;
@@ -3752,16 +3797,28 @@ async function assertFitViewGeometry(page) {
     ];
     for (const viewport of strictViewports) {
         await page.setViewport(viewport);
-        await page.evaluate(async (width, height) => {
-            const start = performance.now();
-            while (performance.now() - start < 3000) {
-                if (window.innerWidth === width && window.innerHeight === height) break;
-                await new Promise((resolve) => setTimeout(resolve, 50));
-            }
+        await page.waitForFunction((width, height) => window.innerWidth === width && window.innerHeight === height, {}, viewport.width, viewport.height);
+        // resizeCanvas() ignores non-board tabs, so make sure the board is active first.
+        await page.evaluate(() => {
+            const board = projects.find((p) => p.type === 'moodinfinite');
+            if (board && activeProjectId !== board.id) switchTab(board.id);
             window.dispatchEvent(new Event('resize'));
             if (typeof resizeCanvas === 'function') resizeCanvas();
-            await new Promise((resolve) => requestAnimationFrame(resolve));
-        }, viewport.width, viewport.height);
+        });
+        // Wait on the actual layout state instead of a fixed delay: the canvas buffer
+        // must equal the content area and the viewport, with the DPR applied.
+        await page.waitForFunction((width, height, dpr) => {
+            const cv = document.getElementById('moodboard-canvas');
+            const area = document.getElementById('content-area');
+            if (!cv || !area || window.devicePixelRatio !== dpr) return false;
+            if (cv.width !== area.clientWidth || cv.height !== area.clientHeight) {
+                if (typeof resizeCanvas === 'function') resizeCanvas();
+                return false;
+            }
+            return cv.clientWidth === width && cv.clientHeight === height
+                && cv.width === cv.clientWidth && cv.height === cv.clientHeight;
+        }, { timeout: 10000 }, viewport.width, viewport.height, viewport.deviceScaleFactor);
+        await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
         const scatteredResult = await measureFittedItems(page, scattered);
         assert.equal(scatteredResult.canvas.cssW, viewport.width, `${viewport.name} canvas CSS width`);
         assert.equal(scatteredResult.canvas.cssH, viewport.height, `${viewport.name} canvas CSS height`);
@@ -4804,8 +4861,10 @@ async function assertRound4ListTone(page) {
     assert.equal((kept.afterMode.lock || '').toLowerCase(), '#666666');
 
     await page.setViewport({ width: 390, height: 844, deviceScaleFactor: 1, isMobile: true, hasTouch: true });
+    await settleForHitTest(page);
     const reorder = await page.evaluate(() => {
         createNewProject('colorseeker');
+        document.querySelectorAll('.toast-notification').forEach((el) => el.remove());
         const project = projects.find((p) => p.id === activeProjectId);
         const before = project.data.colors.slice();
         const bar = document.querySelector('.colorseeker-bar');
@@ -4943,31 +5002,66 @@ async function assertRound5NoteTabCommit(page) {
     console.log('Note commit across tab switch passed.');
 }
 
+// Forces a draw of the active board and reports where the text landed. Waits on real
+// state (active board, settled canvas, item.textAlign) and on two animation frames so
+// the pixel read never races the app's own render loop.
+async function captureAlignPaint(page, id, expectedAlign) {
+    await page.waitForFunction((itemId, align) => {
+        const project = projects.find((entry) => entry.id === activeProjectId);
+        const area = document.getElementById('content-area');
+        const item = items.find((entry) => entry.id === itemId);
+        return !!project && project.type === 'moodinfinite'
+            && document.body.contains(canvas)
+            && canvas.width > 0 && area && canvas.width === area.clientWidth
+            && !!item && item.textAlign === align;
+    }, { timeout: 10000 }, id, expectedAlign);
+    return page.evaluate(async (itemId) => {
+        const nextFrames = () => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+        await nextFrames();
+        const item = items.find((entry) => entry.id === itemId);
+        const liveCtx = document.getElementById('moodboard-canvas').getContext('2d');
+        const calls = [];
+        const orig = liveCtx.fillText;
+        liveCtx.fillText = function (text, x, y, maxW) {
+            calls.push({ text: String(text), x: Math.round(x), y: Math.round(y) });
+            return orig.call(this, text, x, y, maxW);
+        };
+        try {
+            draw();
+        } finally {
+            liveCtx.fillText = orig;
+        }
+        await nextFrames();
+        const darkest = (worldX, worldY) => {
+            const s = worldToScreen({ x: worldX, y: worldY });
+            const data = liveCtx.getImageData(Math.round(s.x), Math.round(s.y), 40, 22).data;
+            let min = 255;
+            for (let i = 0; i < data.length; i += 4) min = Math.min(min, data[i], data[i + 1], data[i + 2]);
+            return { min, sx: Math.round(s.x), sy: Math.round(s.y) };
+        };
+        return {
+            align: item.textAlign,
+            calls,
+            titleCall: calls.find((call) => call.text === item.title) || null,
+            left: darkest(item.x + 14, item.y + 36),
+            right: darkest(item.x + item.width - 54, item.y + 36),
+        };
+    }, id);
+}
+
 async function assertRound5TextAlign(page) {
     console.log('Testing text alignment...');
     await page.setViewport({ width: 1280, height: 800, deviceScaleFactor: 1, isMobile: false, hasTouch: false });
+    await page.waitForFunction(() => window.innerWidth === 1280 && window.innerHeight === 800);
+    await page.evaluate(() => { createNewProject('moodinfinite'); });
+    await page.waitForFunction(() => {
+        const project = projects.find((entry) => entry.id === activeProjectId);
+        const area = document.getElementById('content-area');
+        if (project && project.type === 'moodinfinite') resizeCanvas();
+        return !!project && project.type === 'moodinfinite' && area && area.clientWidth === 1280
+            && canvas.width === area.clientWidth && canvas.height === area.clientHeight;
+    }, { timeout: 10000 });
     await page.evaluate(() => {
-        if (!window.__switchWrapped) {
-            window.__switchWrapped = true;
-            window.__switches = [];
-            const orig = switchTab;
-            switchTab = function (id, options) {
-                const project = projects.find((entry) => entry.id === id);
-                window.__switches.push({
-                    id,
-                    type: project && project.type,
-                    name: project && project.name,
-                    from: activeProjectId,
-                    stack: (new Error()).stack.split('\n').slice(2, 6).map((line) => line.trim()),
-                });
-                return orig.call(this, id, options);
-            };
-        } else {
-            window.__switches = [];
-        }
-    });
-    await page.evaluate(() => {
-        createNewProject('moodinfinite');
         (0, eval)('cameraZoom = 1');
         (0, eval)('cameraOffset = { x: canvas.width / 2, y: canvas.height / 2 }');
         (0, eval)('showDropShadow = false');
@@ -5035,83 +5129,14 @@ async function assertRound5TextAlign(page) {
     assert.equal(shown.hitBefore, 0, 'checkbox hit missed before align');
     assert.equal(shown.hitAfter, 0, 'align moved the checkbox hit target');
 
-    const clickInfo = await page.evaluate(() => {
+    await page.evaluate(() => {
         document.querySelectorAll('.toast-notification').forEach((el) => el.remove());
-        const beforeSel = selectedItems.map((item) => ({ id: item && item.id, type: item && item.type, align: item && item.textAlign, inItems: items.includes(item) }));
-        const btn = document.getElementById('text-align-right-btn');
-        btn.click();
-        const note = items.find((entry) => entry.id === 'align-note');
-        return {
-            beforeSel,
-            afterSel: selectedItems.map((item) => ({ id: item && item.id, align: item && item.textAlign })),
-            noteAlign: note && note.textAlign,
-            btnDisplay: getComputedStyle(btn).display,
-            disabled: btn.disabled,
-        };
+        document.getElementById('text-align-right-btn').click();
     });
-    console.log('ALIGN CLICK', JSON.stringify(clickInfo));
-    const right = await page.evaluate(() => {
-        const item = items.find((entry) => entry.id === 'align-note');
-        const ctx = document.getElementById('moodboard-canvas').getContext('2d');
-        const calls = [];
-        const orig = ctx.fillText;
-        ctx.fillText = function (text, x, y, maxW) {
-            calls.push({ text: String(text).slice(0, 20), x: Math.round(x), y: Math.round(y), align: this.textAlign, font: this.font });
-            return orig.call(this, text, x, y, maxW);
-        };
-        const project = projects.find((entry) => entry.id === activeProjectId);
-        const live = document.getElementById('moodboard-canvas');
-        const before = ctx.getImageData(10, 10, 1, 1).data.slice(0, 4);
-        ctx.fillRect(10, 10, 4, 4);
-        draw();
-        const after = ctx.getImageData(10, 10, 1, 1).data.slice(0, 4);
-        ctx.fillText = orig;
-        const diag = {
-            type: project && project.type,
-            active: activeProjectId,
-            sameCtx: ctx === live.getContext('2d'),
-            inDom: document.body.contains(canvas),
-            idMatch: live === canvas,
-            before: Array.from(before),
-            after: Array.from(after),
-            nItems: items.length,
-            hidden: item.isHidden,
-            switches: window.__switches,
-        };
-        const darkest = (worldX, worldY) => {
-            const s = worldToScreen({ x: worldX, y: worldY });
-            const data = ctx.getImageData(Math.round(s.x), Math.round(s.y), 40, 22).data;
-            let min = 255;
-            for (let i = 0; i < data.length; i += 4) min = Math.min(min, data[i], data[i + 1], data[i + 2]);
-            return { min, sx: Math.round(s.x), sy: Math.round(s.y) };
-        };
-        const tl = worldToScreen({ x: item.x, y: item.y });
-        const scanW = Math.min(item.width, 400);
-        const scanH = 90;
-        const img = ctx.getImageData(Math.round(tl.x), Math.round(tl.y), scanW, scanH).data;
-        let textXs = [];
-        for (let y = 0; y < scanH; y++) {
-            for (let x = 0; x < scanW; x++) {
-                const i = (y * scanW + x) * 4;
-                if (img[i] < 40 && img[i + 1] < 50 && img[i + 2] < 80) textXs.push(x + y * 0);
-            }
-        }
-        const xs = textXs.length ? { n: textXs.length, min: Math.min(...textXs), max: Math.max(...textXs) } : null;
-        return {
-            align: item.textAlign,
-            left: darkest(item.x + 14, item.y + 36),
-            right: darkest(item.x + item.width - 54, item.y + 36),
-            calls: calls.filter((c) => c.text === 'Hi' || c.text === 'Go'),
-            zoom: cameraZoom,
-            offset: cameraOffset,
-            canvas: { w: canvas.width, h: canvas.height, dpr: window.devicePixelRatio },
-            item: { x: item.x, y: item.y, w: item.width, h: item.height },
-            xs,
-            alpha: ctx.globalAlpha,
-            diag,
-        };
-    });
+    const right = await captureAlignPaint(page, 'align-note', 'right');
     assert.equal(right.align, 'right');
+    assert.ok(right.titleCall, `title fillText was not captured during the forced draw (${JSON.stringify(right.calls)})`);
+    assert.ok(right.titleCall.x > 0, `right align drew the title at local x ${right.titleCall.x}, expected the right half`);
     assert.ok(right.right.min < 120, `right align did not paint the right side (${JSON.stringify(right)})`);
     assert.ok(right.left.min > 180, `right align still painted the left side (${right.left.min})`);
 
@@ -5119,26 +5144,12 @@ async function assertRound5TextAlign(page) {
         document.querySelectorAll('.toast-notification').forEach((el) => el.remove());
         document.getElementById('text-align-left-btn').click();
     });
-    const left = await page.evaluate(() => {
-        const item = items.find((entry) => entry.id === 'align-note');
-        draw();
-        const ctx = document.getElementById('moodboard-canvas').getContext('2d');
-        const darkest = (worldX, worldY) => {
-            const s = worldToScreen({ x: worldX, y: worldY });
-            const data = ctx.getImageData(Math.round(s.x), Math.round(s.y), 40, 22).data;
-            let min = 255;
-            for (let i = 0; i < data.length; i += 4) min = Math.min(min, data[i], data[i + 1], data[i + 2]);
-            return min;
-        };
-        return {
-            align: item.textAlign,
-            left: darkest(item.x + 14, item.y + 36),
-            right: darkest(item.x + item.width - 54, item.y + 36),
-        };
-    });
+    const left = await captureAlignPaint(page, 'align-note', 'left');
     assert.equal(left.align, 'left');
-    assert.ok(left.left < 120, `left align did not paint the left side (${left.left})`);
-    assert.ok(left.right > 180, `left align still painted the right side (${left.right})`);
+    assert.ok(left.titleCall, `title fillText was not captured during the forced draw (${JSON.stringify(left.calls)})`);
+    assert.ok(left.titleCall.x < -150, `left align drew the title at local x ${left.titleCall.x}, expected the left edge`);
+    assert.ok(left.left.min < 120, `left align did not paint the left side (${left.left.min})`);
+    assert.ok(left.right.min > 180, `left align still painted the right side (${left.right.min})`);
 
     await page.setViewport({ width: 390, height: 844, deviceScaleFactor: 1, isMobile: true, hasTouch: true });
     const phone = await page.evaluate(() => {
@@ -5302,6 +5313,88 @@ async function assertRound5RerouteDelete(page) {
     console.log('Reroute delete passed.');
 }
 
+// A click on a creation tool must not leave history steps or ghost items behind,
+// and a drag-created item must be removed by a single Ctrl+Z.
+async function assertToolCreationHistory(page) {
+    console.log('Testing tool creation history...');
+    await page.setViewport({ width: 1280, height: 800, deviceScaleFactor: 1, isMobile: false, hasTouch: false });
+    await page.waitForFunction(() => window.innerWidth === 1280 && window.innerHeight === 800);
+    await page.evaluate(() => { createNewProject('moodinfinite'); });
+    await page.waitForFunction(() => {
+        const project = projects.find((entry) => entry.id === activeProjectId);
+        const area = document.getElementById('content-area');
+        if (project && project.type === 'moodinfinite') resizeCanvas();
+        return !!project && project.type === 'moodinfinite' && area && area.clientWidth === 1280
+            && canvas.width === area.clientWidth && canvas.height === area.clientHeight;
+    }, { timeout: 10000 });
+    await page.evaluate(() => {
+        (0, eval)('cameraZoom = 1');
+        (0, eval)('cameraOffset = { x: canvas.width / 2, y: canvas.height / 2 }');
+        items.length = 0;
+        selectedItems = [];
+        saveStateForUndo();
+        updateSelectionToolbar();
+    });
+    const canvasBox = await (await page.$('#moodboard-canvas')).boundingBox();
+    const cx = canvasBox.x + canvasBox.width / 2;
+    const cy = canvasBox.y + canvasBox.height / 2;
+    const snapshot = () => page.evaluate(() => ({
+        steps: historyStack.length,
+        index: historyIndex,
+        count: items.length,
+        types: items.map((item) => item.type),
+    }));
+    const undoOnce = async () => {
+        await page.evaluate(() => { if (document.activeElement) document.activeElement.blur(); });
+        await page.keyboard.down('Control');
+        await page.keyboard.press('z');
+        await page.keyboard.up('Control');
+    };
 
+    for (const tool of ['box', 'circle', 'grid', 'arrow', 'measure']) {
+        await page.evaluate((name) => { items.length = 0; selectedItems = []; saveStateForUndo(); setCurrentTool(name); }, tool);
+        const base = await snapshot();
 
+        await page.mouse.move(cx - 60, cy - 40);
+        await page.mouse.down();
+        await page.mouse.up();
+        const afterClick = await page.evaluate(() => ({ steps: historyStack.length, count: items.length }));
+        assert.equal(afterClick.steps, base.steps, `${tool}: a click without drag added history steps`);
+        assert.equal(afterClick.count, 0, `${tool}: a click without drag left an item behind`);
+        await undoOnce();
+        await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+        const afterClickUndo = await snapshot();
+        assert.equal(afterClickUndo.count, 0, `${tool}: undo after a click showed a ghost item`);
 
+        await page.evaluate((name) => { items.length = 0; selectedItems = []; saveStateForUndo(); setCurrentTool(name); }, tool);
+        const beforeDrag = await snapshot();
+        await page.mouse.move(cx - 100, cy - 60);
+        await page.mouse.down();
+        await page.mouse.move(cx + 120, cy + 80, { steps: 8 });
+        await page.mouse.up();
+        const afterDrag = await snapshot();
+        assert.equal(afterDrag.count, 1, `${tool}: drag did not create exactly one item (${JSON.stringify(afterDrag)})`);
+        assert.equal(afterDrag.steps, beforeDrag.steps + 1, `${tool}: drag creation should add exactly one history step`);
+        await undoOnce();
+        await page.waitForFunction(() => items.length === 0, { timeout: 5000 }).catch(() => {});
+        const afterUndo = await snapshot();
+        assert.equal(afterUndo.count, 0, `${tool}: the first Ctrl+Z did not remove the drag-created item`);
+        await page.evaluate(() => setCurrentTool(null));
+    }
+
+    // Text is created at a default size on a plain click, so it is one step by design.
+    await page.evaluate(() => { items.length = 0; selectedItems = []; saveStateForUndo(); setCurrentTool('text'); });
+    const textBase = await snapshot();
+    await page.mouse.move(cx - 60, cy - 40);
+    await page.mouse.down();
+    await page.mouse.up();
+    const textAfter = await snapshot();
+    assert.equal(textAfter.count, 1, 'text click should create the default note');
+    assert.equal(textAfter.steps, textBase.steps + 1, 'text click should add exactly one history step');
+    await page.evaluate(() => {
+        if (document.activeElement) document.activeElement.blur();
+        setCurrentTool(null);
+    });
+    await page.setViewport({ width: 1280, height: 800, deviceScaleFactor: 1, isMobile: false, hasTouch: false });
+    console.log('Tool creation history passed.');
+}

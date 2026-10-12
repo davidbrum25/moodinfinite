@@ -5013,7 +5013,9 @@ function onMouseDown(e) {
             if (newItem) {
                 addItemToLayeredItems(newItem);
                 selectedItems = [newItem];
-                bringSelectedToFront();
+                // History is recorded once on mouseup. Saving here would push a zero-size
+                // placeholder state that undo later resurrects as a ghost item.
+                reorderSelectedToFront();
                 if (['textList', 'text', 'comment', 'counter'].includes(newItem.type)) {
                     setCurrentTool(null);
                 }
@@ -5131,16 +5133,21 @@ function onMouseUp(e) {
             return;
         }
         if (isDrawing || isMovingItems || isTransforming || isTransformingArrow) {
+            let discardedDrawing = false;
             if (isDrawing) {
                 const e = selectedItems[0];
-                if (e && (e.type === 'box' || e.type === 'circle' || e.type === 'grid') && (Math.abs(e.width) < 10 || Math.abs(e.height) < 10)) {
+                const tooSmallShape = e && (e.type === 'box' || e.type === 'circle' || e.type === 'grid') && (Math.abs(e.width) < 10 || Math.abs(e.height) < 10);
+                const tooShortLine = e && (e.type === 'arrow' || e.type === 'measure') && Math.hypot(e.endX - e.startX, e.endY - e.startY) < 5 / cameraZoom;
+                if (tooSmallShape || tooShortLine) {
                     items = items.filter(t => t.id !== e.id);
                     selectedItems = [];
+                    discardedDrawing = true;
                 } else if (e && (e.type === 'text' || e.type === 'comment')) {
                     editText(e);
                 }
             }
-            saveStateForUndo();
+            // Nothing was created when the click never became a drag, so there is no step to record.
+            if (!discardedDrawing) saveStateForUndo();
             if (isMovingItems || isTransforming || isTransformingArrow) {
                 updateSelectionToolbar(); // Re-open toolbar after movement/transform
             }
@@ -6715,8 +6722,8 @@ function addItemToLayeredItems(item) {
     }
 }
 
-function bringSelectedToFront() {
-    if (selectedItems.length === 0) return;
+function reorderSelectedToFront() {
+    if (selectedItems.length === 0) return false;
     const ids = new Set(selectedItems.map(e => e.id));
     const selected = items.filter(t => ids.has(t.id));
     const others = items.filter(t => !ids.has(t.id));
@@ -6725,6 +6732,11 @@ function bringSelectedToFront() {
     const selectedRegular = selected.filter(s => s.type !== 'comment');
     const selectedComments = selected.filter(s => s.type === 'comment');
     items = [...otherRegular, ...selectedRegular, ...otherComments, ...selectedComments];
+    return true;
+}
+
+function bringSelectedToFront() {
+    if (!reorderSelectedToFront()) return;
     saveStateForUndo();
 }
 
