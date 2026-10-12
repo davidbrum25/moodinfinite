@@ -5893,3 +5893,217 @@ body.no-blur * {
     outline: 2px solid var(--switch-bg-checked, #429eff);
     outline-offset: 2px;
 }
+
+/* Prompt card body: row on desktop, stacked on a narrow screen.
+   The search field used to set its width inline; keep that desktop size here. */
+.prompt-content-row {
+    display: flex;
+    flex-direction: row;
+    gap: 1rem;
+    width: 100%;
+    min-width: 0;
+}
+.prompt-content-row > :last-child {
+    flex: 1;
+    min-width: 0;
+}
+.moodprompt-top-bar input.bar-input[type="text"] {
+    width: 150px;
+}
+
+/* Moodtone: the container stays a block on desktop so the absolute sidebar
+   and padded palette keep their places. Hex text is a narrow-screen aid. */
+#colorseeker-container {
+    display: block;
+}
+.colorseeker-hex-label {
+    display: none;
+}
+
+/* Moodlist reorder buttons are a touch stand-in for drag. Hidden on desktop
+   so the due-date control stays a small icon left of the checkbox. */
+.ml-item-move {
+    display: none;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    background: transparent;
+    border: none;
+    color: var(--ml-muted);
+    padding: 0;
+    cursor: pointer;
+    border-radius: 0.35rem;
+}
+.ml-item-move:disabled {
+    opacity: 0.35;
+    cursor: default;
+}
+
+@media (max-width: 768px) {
+    .moodprompt-top-bar {
+        flex-wrap: wrap;
+        gap: 0.5rem;
+        padding: calc(var(--tabs-bar-height) + 0.5rem) 0.75rem 0.6rem;
+    }
+    .moodprompt-top-bar .stats-item {
+        min-height: 44px;
+    }
+    .moodprompt-top-bar input.bar-input[type="text"] {
+        width: 9rem;
+    }
+    .prompt-content-row {
+        flex-direction: column;
+    }
+    .prompt-card .tab-add-btn,
+    .prompt-card .media-type-btn,
+    .prompt-card .prompt-previous-btn {
+        min-width: 44px;
+        min-height: 44px;
+    }
+
+    #colorseeker-container {
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+    }
+    #colorseeker-sidebar {
+        position: relative !important;
+        left: auto !important;
+        top: auto !important;
+        width: auto !important;
+        height: auto !important;
+        min-height: 0 !important;
+        max-height: 38vh !important;
+        flex-shrink: 1 !important;
+        overflow: auto !important;
+        margin: 0 0.75rem 0.5rem !important;
+    }
+    #colorseeker-sidebar button,
+    #colorseeker-mode-select {
+        min-height: 44px;
+    }
+    #colorseeker-base-picker {
+        height: 44px !important;
+        min-height: 44px !important;
+    }
+    #colorseeker-palette {
+        flex: 1;
+        min-height: 0;
+        padding-left: 0;
+    }
+    .colorseeker-hex-label {
+        display: block;
+        position: absolute;
+        left: 50%;
+        bottom: 4.6rem;
+        transform: translateX(-50%);
+        z-index: 4;
+        font: 700 0.72rem/1 Inter, sans-serif;
+        letter-spacing: 0.04em;
+        pointer-events: none;
+        text-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+    }
+    .colorseeker-remove {
+        top: 0.4rem;
+        min-height: 44px;
+        display: inline-flex;
+        align-items: center;
+    }
+    .colorseeker-set-base {
+        top: calc(0.4rem + 44px + 8px);
+        min-height: 44px;
+        display: inline-flex;
+        align-items: center;
+    }
+    .colorseeker-move-btn,
+    .colorseeker-lock-btn {
+        width: 44px;
+        height: 44px;
+    }
+
+    #gantt-container {
+        max-width: 100%;
+        overflow: hidden;
+    }
+    #gantt-main,
+    #gantt-timeline,
+    #gantt-sidebar,
+    #gantt-stats-bar,
+    #gantt-bottom-bar {
+        min-width: 0;
+        max-width: 100%;
+    }
+    #gantt-stats-bar,
+    #gantt-bottom-bar {
+        overflow-x: auto;
+    }
+    #gantt-bottom-bar {
+        height: auto;
+        min-height: 44px;
+        justify-content: flex-start;
+    }
+    #gantt-add-group-btn,
+    #gantt-toggle-collapse-btn,
+    .gantt-zoom-btn,
+    .gantt-nav-btn,
+    #gantt-detail-close {
+        min-width: 44px;
+        min-height: 44px;
+    }
+    #gantt-detail-close {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    .gantt-task-sidebar-row,
+    .gantt-task-track {
+        height: 44px;
+        min-height: 44px;
+    }
+    .board-empty-guide button {
+        min-height: 44px;
+    }
+    .ml-search-wrap,
+    .ml-view-toggle,
+    .ml-save-btn {
+        min-height: 44px;
+    }
+    .image-upload-slot .slot-action-btn {
+        display: flex;
+        min-width: 44px;
+        min-height: 44px;
+    }
+    .ml-card-footer,
+    .ml-card-add-item,
+    .ml-card-item-del,
+    .ml-drag-handle {
+        opacity: 1;
+    }
+    .ml-card-add-item,
+    .ml-card-btn,
+    .ml-icon-btn,
+    .ml-add-item-btn,
+    .ml-card-item-del,
+    .ml-indent-btn,
+    .ml-due-wrap {
+        min-width: 44px;
+        min-height: 44px;
+    }
+    .ml-swatch {
+        width: 44px;
+        height: 44px;
+    }
+    .ml-item-move {
+        display: flex;
+        min-width: 44px;
+        min-height: 44px;
+    }
+    .gantt-group-add-task-btn,
+    .gantt-group-del-btn,
+    .gantt-task-del-btn {
+        opacity: 1;
+        min-width: 44px;
+        min-height: 44px;
+        justify-content: center;
+    }
+}

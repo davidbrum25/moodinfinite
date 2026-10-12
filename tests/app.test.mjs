@@ -1475,6 +1475,404 @@ async function assertRound2Upgrades(page) {
     });
 }
 
+async function assertNonCanvasRound1(page) {
+    await page.setViewport({ width: 1280, height: 800 });
+
+    const promptFix = await page.evaluate(() => {
+        (0, eval)('moodpromptFilterPlatform = "all"');
+        (0, eval)('moodpromptSearchQuery = ""');
+        createNewProject('moodprompt');
+        const project = projects.find((p) => p.id === activeProjectId);
+        const blank = (id, title, platform) => ({
+            id, title, platform, mediaType: 'image', image1: null, image2: null, text: title + ' body', tags: [],
+        });
+        project.data.prompts = [
+            blank('keep', 'Keep me', 'midjourney'),
+            blank('drop', 'Drop me', 'sora'),
+        ];
+        renderMoodpromptView(project);
+        const filter = document.querySelector('.moodprompt-top-bar select.bar-input');
+        filter.value = 'sora';
+        filter.dispatchEvent(new Event('change', { bubbles: true }));
+        const visibleBefore = [...document.querySelectorAll('.prompt-title-input')].map((el) => el.value);
+        document.querySelector('.prompt-delete-btn').click();
+        const afterDelete = projects.find((p) => p.id === project.id).data.prompts.map((p) => p.id);
+
+        createNewProject('moodprompt');
+        const board = projects.find((p) => p.id === activeProjectId);
+        board.data.prompts = [
+            blank('a', 'Alpha', 'midjourney'),
+            blank('b', 'Beta', 'sora'),
+            blank('c', 'Gamma', 'sora'),
+        ];
+        (0, eval)('moodpromptFilterPlatform = "all"');
+        renderMoodpromptView(board);
+        const filter2 = document.querySelector('.moodprompt-top-bar select.bar-input');
+        filter2.value = 'sora';
+        filter2.dispatchEvent(new Event('change', { bubbles: true }));
+        const cards = [...document.querySelectorAll('.prompt-card')];
+        const data = new DataTransfer();
+        data.setData('text/plain', 'c');
+        cards[0].dispatchEvent(new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer: data }));
+        const afterDrag = projects.find((p) => p.id === board.id).data.prompts.map((p) => p.id);
+
+        (0, eval)('moodpromptFilterPlatform = "all"');
+        renderMoodpromptView(board);
+        const search = document.querySelector('.moodprompt-top-bar input.bar-input[type="text"]');
+        search.focus();
+        search.value = 'Alpha';
+        search.dispatchEvent(new Event('input', { bubbles: true }));
+        const titleHits = [...document.querySelectorAll('.prompt-title-input')].map((el) => el.value);
+        search.value = 'sora';
+        search.dispatchEvent(new Event('input', { bubbles: true }));
+        const platformHits = [...document.querySelectorAll('.prompt-title-input')].map((el) => el.value).sort();
+        search.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+        const afterEscape = {
+            query: (0, eval)('moodpromptSearchQuery'),
+            value: search.value,
+            count: document.querySelectorAll('.prompt-card').length,
+        };
+
+        let saves = 0;
+        const origSave = scheduleAutoSave;
+        scheduleAutoSave = () => { saves += 1; origSave(); };
+        const card = document.querySelector('.prompt-card');
+        const title = card.querySelector('.prompt-title-input');
+        title.value = 'Alpha Saved';
+        title.dispatchEvent(new Event('input', { bubbles: true }));
+        const platform = card.querySelector('.platform-select');
+        platform.value = 'runway';
+        platform.dispatchEvent(new Event('change', { bubbles: true }));
+        [...card.querySelectorAll('.media-type-btn')].find((btn) => btn.textContent === 'Video').click();
+        const edited = board.data.prompts.find((p) => p.id === 'a');
+        scheduleAutoSave = origSave;
+        return {
+            visibleBefore,
+            afterDelete,
+            afterDrag,
+            titleHits,
+            platformHits,
+            afterEscape,
+            saves,
+            edited: { title: edited.title, platform: edited.platform, mediaType: edited.mediaType },
+            boardId: board.id,
+        };
+    });
+    assert.deepEqual(promptFix.visibleBefore, ['Drop me']);
+    assert.deepEqual(promptFix.afterDelete, ['keep'], 'filtered delete removed the wrong prompt');
+    assert.deepEqual(promptFix.afterDrag, ['a', 'c', 'b'], 'filtered drag reordered the wrong prompt');
+    assert.deepEqual(promptFix.titleHits, ['Alpha']);
+    assert.deepEqual(promptFix.platformHits, ['Beta', 'Gamma']);
+    assert.equal(promptFix.afterEscape.query, '');
+    assert.equal(promptFix.afterEscape.value, '');
+    assert.equal(promptFix.afterEscape.count, 3);
+    assert.ok(promptFix.saves >= 3, `title, platform, and media did not schedule a save (${promptFix.saves})`);
+    assert.deepEqual(promptFix.edited, { title: 'Alpha Saved', platform: 'runway', mediaType: 'video' });
+
+    const promptStored = await page.evaluate(async (boardId) => {
+        await saveToBrowser();
+        const stored = await window.localforage.getItem('moodinfinite_projects');
+        const board = stored.find((p) => p.id === boardId);
+        const prompt = board.data.prompts.find((p) => p.id === 'a');
+        return { title: prompt.title, platform: prompt.platform, mediaType: prompt.mediaType };
+    }, promptFix.boardId);
+    assert.deepEqual(promptStored, { title: 'Alpha Saved', platform: 'runway', mediaType: 'video' });
+
+    await page.evaluate(() => createNewProject('moodlist'));
+    await page.waitForSelector('.ml-add-title');
+    await page.type('.ml-add-title', 'Round1 Keep');
+    await page.type('.ml-item-text', 'One');
+    await page.click('.ml-add-item-btn');
+    await page.waitForFunction(() => document.querySelectorAll('.ml-add-panel .ml-item-text').length === 2);
+    const mlDraft = await page.$$('.ml-add-panel .ml-item-text');
+    await mlDraft[1].type('Two');
+    await page.click('.ml-save-btn');
+    await page.waitForSelector('.ml-card .ml-item-move');
+    const listDesktop = await page.evaluate(() => {
+        const badge = document.getElementById('ml-cards-count').textContent.trim();
+        const due = document.querySelector('.ml-card .ml-item-due').getBoundingClientRect().width;
+        const move = getComputedStyle(document.querySelector('.ml-item-move')).display;
+        document.querySelector('.ml-card-item .ml-item-move[data-dir="1"]').click();
+        const order = [...document.querySelectorAll('.ml-card .ml-card-item-text')].map((el) => el.value);
+        const search = document.querySelector('.ml-search');
+        search.focus();
+        search.value = 'nomatch';
+        search.dispatchEvent(new Event('input', { bubbles: true }));
+        const filtered = document.getElementById('ml-cards-count').textContent.trim();
+        search.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+        const title = document.querySelector('.ml-card-title');
+        title.textContent = 'Round1 Kept';
+        title.dispatchEvent(new Event('blur', { bubbles: true }));
+        return {
+            badge,
+            due,
+            move,
+            order,
+            filtered,
+            afterEscape: document.getElementById('ml-cards-count').textContent.trim(),
+            search: document.querySelector('.ml-search').value,
+            title: projects.find((p) => p.id === activeProjectId).data.cards[0].title,
+        };
+    });
+    assert.equal(listDesktop.badge, '1 card');
+    assert.ok(listDesktop.due < 40, `desktop due control grew: ${listDesktop.due}`);
+    assert.equal(listDesktop.move, 'none');
+    assert.deepEqual(listDesktop.order, ['Two', 'One']);
+    assert.match(listDesktop.filtered, /of/);
+    assert.equal(listDesktop.afterEscape, '1 card');
+    assert.equal(listDesktop.search, '');
+    assert.equal(listDesktop.title, 'Round1 Kept');
+    const listStored = await page.evaluate(async () => {
+        await saveToBrowser();
+        const stored = await window.localforage.getItem('moodinfinite_projects');
+        const board = stored.find((p) => p.id === activeProjectId);
+        return board.data.cards[0].title;
+    });
+    assert.equal(listStored, 'Round1 Kept');
+
+    const ganttFix = await page.evaluate(() => {
+        createNewProject('moodgantt');
+        const project = projects.find((p) => p.id === activeProjectId);
+        ganttAddGroup(project);
+        const group = project.data.groups[0];
+        ganttAddTask(project, group.id);
+        const task = group.tasks[0];
+        task.status = 'done';
+        task.name = 'Ship it';
+        group.collapsed = true;
+        renderGanttView(project);
+        const collapsed = {
+            tasks: document.querySelector('#gantt-stat-tasks span').textContent.trim(),
+            done: document.getElementById('gantt-done-pct').textContent.trim(),
+            rows: document.querySelectorAll('.gantt-task-sidebar-row').length,
+        };
+        group.collapsed = false;
+        renderGanttView(project);
+        const row = document.querySelector('.gantt-task-sidebar-row');
+        row.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+        const opened = document.getElementById('gantt-detail-panel').classList.contains('open');
+        const end = document.getElementById('gantt-detail-end');
+        end.value = '2000-01-01';
+        end.dispatchEvent(new Event('change', { bubbles: true }));
+        const snapped = {
+            end: task.endDate,
+            start: task.startDate,
+            input: document.getElementById('gantt-detail-end').value,
+        };
+        if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
+        document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+        const closed = !document.getElementById('gantt-detail-panel').classList.contains('open');
+        project.data.viewStartDate = '2020-01-01';
+        project.data.viewEndDate = '2020-06-01';
+        ganttJumpToToday(project);
+        return {
+            collapsed,
+            opened,
+            snapped,
+            closed,
+            viewStart: project.data.viewStartDate,
+            id: project.id,
+        };
+    });
+    assert.equal(ganttFix.collapsed.tasks, '1 Task');
+    assert.equal(ganttFix.collapsed.done, '100% Done');
+    assert.equal(ganttFix.collapsed.rows, 0);
+    assert.equal(ganttFix.opened, true, 'Enter on a task row did not open the detail panel');
+    assert.equal(ganttFix.snapped.end, ganttFix.snapped.start, 'end date before start was kept');
+    assert.equal(ganttFix.snapped.input, ganttFix.snapped.start);
+    assert.equal(ganttFix.closed, true, 'Escape did not close the gantt detail panel');
+    assert.notEqual(ganttFix.viewStart, '2020-01-01');
+    const ganttStored = await page.evaluate(async (id) => {
+        await saveToBrowser();
+        const stored = await window.localforage.getItem('moodinfinite_projects');
+        return stored.find((p) => p.id === id).data.viewStartDate;
+    }, ganttFix.id);
+    assert.equal(ganttStored, ganttFix.viewStart);
+
+    const exported = await page.evaluate(async () => {
+        window.__downloads = [];
+        const origClick = HTMLAnchorElement.prototype.click;
+        const origRevoke = URL.revokeObjectURL;
+        URL.revokeObjectURL = () => {};
+        HTMLAnchorElement.prototype.click = function () {
+            window.__downloads.push({ download: this.download || '', href: this.href || '' });
+        };
+        const readZip = async () => {
+            const href = window.__downloads.at(-1) && window.__downloads.at(-1).href;
+            const buf = await (await fetch(href)).arrayBuffer();
+            const zip = await window.JSZip.loadAsync(buf);
+            const name = Object.keys(zip.files).find((entry) => entry.endsWith('data.json'));
+            return name ? JSON.parse(await zip.files[name].async('string')) : null;
+        };
+        saveProject();
+        for (let i = 0; i < 80 && !window.__downloads.length; i++) {
+            await new Promise((resolve) => setTimeout(resolve, 25));
+        }
+        const ganttData = await readZip();
+        window.__downloads = [];
+        const tone = projects.find((p) => p.type === 'colorseeker');
+        switchTab(tone.id);
+        saveProject();
+        for (let i = 0; i < 80 && !window.__downloads.length; i++) {
+            await new Promise((resolve) => setTimeout(resolve, 25));
+        }
+        const toneData = await readZip();
+        const list = projects.find((p) => p.data && p.data.cards && p.data.cards.some((card) => card.title === 'Round1 Kept'));
+        switchTab(list.id);
+        window.__downloads = [];
+        saveAsPng();
+        const png = window.__downloads.at(-1) ? window.__downloads.at(-1).href : '';
+        let copyError = '';
+        try { await copyToClipboard(); } catch (err) { copyError = String(err); }
+        const prints = {};
+        const origPrint = window.print;
+        window.print = () => {
+            window.__printed = document.getElementById('print-board-type').textContent;
+            window.dispatchEvent(new Event('afterprint'));
+        };
+        prepareAndPrint();
+        prints.list = window.__printed;
+        switchTab(projects.find((p) => p.id === ganttFixId(projects)).id);
+        prepareAndPrint();
+        prints.gantt = window.__printed;
+        window.print = origPrint;
+        HTMLAnchorElement.prototype.click = origClick;
+        URL.revokeObjectURL = origRevoke;
+        const loaded = [];
+        loadFileAsNewTab(JSON.stringify({ groups: [{ id: 'g', name: 'Imported', tasks: [] }] }), 'plan.json');
+        loaded.push(projects.at(-1).type);
+        loadFileAsNewTab(JSON.stringify({ baseColor: '#112233', mode: 'shades', colors: ['#112233', '#000000'] }), 'tone.json');
+        loaded.push(projects.at(-1).type);
+        return {
+            ganttGroups: Array.isArray(ganttData && ganttData.groups),
+            toneBase: toneData && toneData.baseColor,
+            toneColors: Array.isArray(toneData && toneData.colors),
+            png: png.slice(0, 15),
+            copyError,
+            prints,
+            loaded,
+        };
+        function ganttFixId(listProjects) {
+            return listProjects.find((p) => p.type === 'moodgantt' && p.data.groups && p.data.groups[0] && p.data.groups[0].tasks && p.data.groups[0].tasks[0] && p.data.groups[0].tasks[0].name === 'Ship it').id;
+        }
+    });
+    assert.equal(exported.ganttGroups, true, 'moodgantt export zip had no groups');
+    assert.ok(exported.toneBase, 'moodtone export zip had no base color');
+    assert.equal(exported.toneColors, true);
+    assert.equal(exported.png, 'data:image/png;');
+    assert.equal(exported.copyError, '');
+    assert.equal(exported.prints.list, 'Moodlist');
+    assert.equal(exported.prints.gantt, 'Moodgantt');
+    assert.deepEqual(exported.loaded, ['moodgantt', 'colorseeker']);
+
+    const toneKeys = await page.evaluate(() => {
+        createNewProject('colorseeker');
+        const project = projects.find((p) => p.id === activeProjectId);
+        const before = project.data.colors.slice();
+        window.__moveLogs = [];
+        const orig = console.log;
+        console.log = (...args) => {
+            const text = args.map((part) => String(part)).join(' ');
+            if (text.includes('Moving swatch')) window.__moveLogs.push(text);
+            orig.apply(console, args);
+        };
+        document.querySelector('.colorseeker-move-right').click();
+        const afterClick = project.data.colors.slice();
+        console.log = orig;
+        if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
+        const again = projects.find((p) => p.id === activeProjectId);
+        const left = again.data.colors.slice();
+        window._colorseekerFocusedIndex = 0;
+        document.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
+        return {
+            logs: window.__moveLogs,
+            clicked: before[0] !== afterClick[0] && afterClick[1] === before[0],
+            arrow: again.data.colors[1] === left[0] && again.data.colors[0] === left[1],
+        };
+    });
+    assert.deepEqual(toneKeys.logs, []);
+    assert.equal(toneKeys.clicked, true);
+    assert.equal(toneKeys.arrow, true, 'ArrowRight did not move the focused swatch');
+
+    await page.setViewport({ width: 390, height: 844 });
+    const mobile = await page.evaluate(() => {
+        const box = (el) => el ? el.getBoundingClientRect() : null;
+        const list = projects.find((p) => p.data && p.data.cards && p.data.cards.some((card) => card.title === 'Round1 Kept'));
+        switchTab(list.id);
+        const footer = getComputedStyle(document.querySelector('.ml-card-footer')).opacity;
+        const addItem = getComputedStyle(document.querySelector('.ml-card-add-item')).opacity;
+        const del = getComputedStyle(document.querySelector('.ml-card-item-del')).opacity;
+        const move = document.querySelector('.ml-item-move');
+        const moveBox = box(move);
+        const saveBox = box(document.querySelector('.ml-save-btn'));
+        const gantt = projects.find((p) => p.type === 'moodgantt' && p.data.groups && p.data.groups[0] && p.data.groups[0].tasks[0] && p.data.groups[0].tasks[0].name === 'Ship it');
+        switchTab(gantt.id);
+        const addTask = getComputedStyle(document.querySelector('.gantt-group-add-task-btn')).opacity;
+        const ganttScroll = document.getElementById('gantt-container').scrollWidth <= document.getElementById('gantt-container').clientWidth + 1;
+        const pageScroll = document.documentElement.scrollWidth <= window.innerWidth + 1;
+        const prompt = projects.find((p) => p.type === 'moodprompt' && p.data.prompts && p.data.prompts.some((row) => row.id === 'a'));
+        switchTab(prompt.id);
+        const row = document.querySelector('.prompt-content-row');
+        const promptScroll = document.getElementById('moodprompt-container').scrollWidth <= document.getElementById('moodprompt-container').clientWidth + 1;
+        const tone = projects.find((p) => p.type === 'colorseeker');
+        switchTab(tone.id);
+        const swatch = document.querySelector('.colorseeker-bar');
+        const remove = swatch.querySelector('.colorseeker-remove');
+        const removeBox = box(remove);
+        const hit = document.elementFromPoint(removeBox.x + removeBox.width / 2, removeBox.y + removeBox.height / 2);
+        const sidebar = document.getElementById('colorseeker-sidebar');
+        const label = swatch.querySelector('.colorseeker-hex-label');
+        const labelStyle = getComputedStyle(label);
+        const probe = document.createElement('div');
+        probe.style.color = getContrastTextColor(label.textContent);
+        document.body.appendChild(probe);
+        const labelMatch = labelStyle.color === getComputedStyle(probe).color;
+        probe.remove();
+        return {
+            footer, addItem, del,
+            moveH: moveBox.height,
+            moveDisplay: getComputedStyle(move).display,
+            saveH: saveBox.height,
+            addTask, ganttScroll, pageScroll,
+            promptDir: getComputedStyle(row).flexDirection,
+            promptScroll,
+            removeHits: !!hit && (remove === hit || remove.contains(hit)),
+            removeCovered: !!(hit && sidebar.contains(hit)),
+            hit: hit ? `${hit.id || hit.tagName}.${hit.className || ''}` : 'none',
+            removeTop: Math.round(removeBox.top),
+            removeH: Math.round(removeBox.height),
+            labelOn: labelStyle.display !== 'none',
+            labelMatch,
+            container: getComputedStyle(document.getElementById('colorseeker-container')).display,
+        };
+    });
+    assert.equal(mobile.footer, '1');
+    assert.equal(mobile.addItem, '1');
+    assert.equal(mobile.del, '1');
+    assert.equal(mobile.moveDisplay, 'flex');
+    assert.ok(mobile.moveH >= 44, `moodlist move button is ${mobile.moveH}px`);
+    assert.ok(mobile.saveH >= 44, `moodlist save button is ${mobile.saveH}px`);
+    assert.notEqual(mobile.addTask, '0');
+    assert.equal(mobile.ganttScroll, true, 'moodgantt is wider than the phone');
+    assert.equal(mobile.pageScroll, true, 'the page scrolls sideways on a phone');
+    assert.equal(mobile.promptDir, 'column');
+    assert.equal(mobile.promptScroll, true, 'moodprompt is wider than the phone');
+    assert.equal(mobile.removeCovered, false, `moodtone sidebar covers the first swatch (${mobile.hit} top ${mobile.removeTop})`);
+    assert.equal(mobile.removeHits, true, `tap on the swatch remove control misses the button (${mobile.hit} top ${mobile.removeTop} h ${mobile.removeH})`);
+    assert.equal(mobile.labelOn, true);
+    assert.equal(mobile.labelMatch, true, 'hex label contrast does not match the swatch');
+    assert.equal(mobile.container, 'flex');
+
+    await page.setViewport({ width: 1280, height: 800 });
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await page.waitForFunction(() => window.projects && window.projects.some((p) => p.data && p.data.cards && p.data.cards.some((card) => card.title === 'Round1 Kept')), { timeout: 15000 });
+    const reloaded = await page.evaluate(() => {
+        const board = projects.find((p) => p.data && p.data.cards && p.data.cards.some((card) => card.title === 'Round1 Kept'));
+        return board.data.cards[0].items.map((item) => item.text);
+    });
+    assert.deepEqual(reloaded, ['Two', 'One']);
+}
+
 const server = startServer();
 const pageErrors = [];
 try {
@@ -1822,6 +2220,7 @@ try {
     await assertB8DuplicateTabNames(page);
     await assertFitViewGeometry(page);
     await assertBottomToolbarScrollEnd(page);
+    await assertNonCanvasRound1(page);
 
     const lateErrors = pageErrors.filter(isFirstParty);
     assert.deepEqual(lateErrors, [], `first-party errors:\n${lateErrors.join('\n')}`);

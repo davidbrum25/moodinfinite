@@ -417,7 +417,7 @@ function switchTab(projectId) {
     } else if (newActiveProject.type === 'colorseeker') {
         moodinfiniteContainer.style.display = 'none';
         moodpromptContainer.style.display = 'none';
-        if (colorseekerContainer) colorseekerContainer.style.display = 'block';
+        if (colorseekerContainer) colorseekerContainer.style.display = '';
         if (storyflowContainer) storyflowContainer.style.display = 'none';
         const storyflowMinimap = document.getElementById('storyflow-minimap');
         if (storyflowMinimap) storyflowMinimap.style.display = 'none';
@@ -907,14 +907,22 @@ function renderMoodpromptView(project) {
         const searchInput = document.createElement('input');
         searchInput.type = 'text';
         searchInput.className = 'bar-input';
-        searchInput.placeholder = 'Search tags...';
+        searchInput.placeholder = 'Search prompts...';
         searchInput.value = moodpromptSearchQuery;
-        searchInput.style.width = '150px';
         searchInput.oninput = (e) => {
             moodpromptSearchQuery = e.target.value.toLowerCase();
             const currentProject = projects.find(p => p.id === activeProjectId) || project;
             renderMoodpromptView(currentProject);
         };
+        searchInput.addEventListener('keydown', (e) => {
+            if (e.key !== 'Escape' || !searchInput.value) return;
+            e.preventDefault();
+            e.stopPropagation();
+            searchInput.value = '';
+            moodpromptSearchQuery = '';
+            const currentProject = projects.find(p => p.id === activeProjectId) || project;
+            renderMoodpromptView(currentProject);
+        });
         searchItem.appendChild(searchInput);
 
         // 4. Prompt Count Badge
@@ -930,18 +938,7 @@ function renderMoodpromptView(project) {
         copyAllBtnItem.innerHTML = `<iconify-icon icon="lucide:copy" width="16" height="16"></iconify-icon> <span>Copy All</span>`;
         copyAllBtnItem.onclick = () => {
             const currentProject = projects.find(p => p.id === activeProjectId) || project;
-            const prompts = currentProject.data.prompts || [];
-            if (!prompts.length) {
-                showToast('No prompts to copy.');
-                return;
-            }
-            const textToCopy = prompts.map((p, i) => `${i + 1}. ${p.title || 'Untitled'}\n${resolveVariables(p.text, currentProject)}`).join('\n\n');
-            try {
-                if (navigator.clipboard && navigator.clipboard.writeText) {
-                    navigator.clipboard.writeText(textToCopy);
-                }
-            } catch (_) {}
-            showToast('All prompts copied to clipboard!');
+            copyBoardPlainText(currentProject);
         };
 
         // 6. Variables Item
@@ -973,26 +970,34 @@ function renderMoodpromptView(project) {
         promptList.addEventListener('drop', (e) => {
             e.preventDefault();
             const currentProject = projects.find(p => p.id === activeProjectId) || project;
-            const oldIndex = parseInt(e.dataTransfer.getData('text/plain'), 10);
+            const draggedId = e.dataTransfer.getData('text/plain');
             const dropTargetCard = e.target.closest('.prompt-card');
-            if (!dropTargetCard) return;
-
-            const allCards = Array.from(promptList.querySelectorAll('.prompt-card'));
-            const newIndex = allCards.indexOf(dropTargetCard);
-
-            if (oldIndex !== newIndex) {
-                const [movedPrompt] = currentProject.data.prompts.splice(oldIndex, 1);
-                currentProject.data.prompts.splice(newIndex, 0, movedPrompt);
-                renderMoodpromptView(currentProject);
-                saveToBrowser();
+            if (!dropTargetCard || !draggedId) return;
+            const prompts = currentProject.data.prompts;
+            const oldIndex = prompts.findIndex(p => String(p.id) === draggedId);
+            if (oldIndex < 0 || String(prompts[oldIndex].id) === dropTargetCard.dataset.promptId) return;
+            const [movedPrompt] = prompts.splice(oldIndex, 1);
+            const newIndex = prompts.findIndex(p => String(p.id) === dropTargetCard.dataset.promptId);
+            if (newIndex < 0) {
+                prompts.push(movedPrompt);
+            } else {
+                prompts.splice(newIndex, 0, movedPrompt);
             }
+            renderMoodpromptView(currentProject);
+            saveToBrowser();
         });
     }
 
     promptList.innerHTML = '';
     const filteredPrompts = project.data.prompts.filter(p => {
         const matchesPlatform = moodpromptFilterPlatform === 'all' || p.platform === moodpromptFilterPlatform;
-        const matchesSearch = !moodpromptSearchQuery || (p.tags && p.tags.some(t => t.toLowerCase().includes(moodpromptSearchQuery)));
+        const query = moodpromptSearchQuery;
+        const platformName = (platformData[p.platform] && platformData[p.platform].name || '').toLowerCase();
+        const matchesSearch = !query ||
+            (p.title || '').toLowerCase().includes(query) ||
+            (p.text || '').toLowerCase().includes(query) ||
+            platformName.includes(query) ||
+            (p.tags && p.tags.some(t => t.toLowerCase().includes(query)));
         return matchesPlatform && matchesSearch;
     });
 
@@ -1002,6 +1007,7 @@ function renderMoodpromptView(project) {
     }
 
     filteredPrompts.forEach((prompt, index) => {
+        if (!prompt.id) prompt.id = 'group_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7);
         promptList.appendChild(createPromptCard(project, prompt, index));
     });
 
@@ -1039,8 +1045,9 @@ function createPromptCard(project, prompt, index) {
     const card = document.createElement('div');
     card.className = 'prompt-card';
     card.draggable = true;
+    card.dataset.promptId = String(prompt.id);
 
-    card.addEventListener('dragstart', (e) => { e.dataTransfer.setData('text/plain', index); card.classList.add('dragging'); });
+    card.addEventListener('dragstart', (e) => { e.dataTransfer.setData('text/plain', String(prompt.id)); card.classList.add('dragging'); });
     card.addEventListener('dragend', () => { card.classList.remove('dragging'); });
 
     const header = document.createElement('div');
@@ -1056,7 +1063,12 @@ function createPromptCard(project, prompt, index) {
     titleInput.type = 'text';
     titleInput.className = 'prompt-title-input';
     titleInput.value = prompt.title;
-    titleInput.onchange = (e) => prompt.title = e.target.value;
+    const rememberTitle = (e) => {
+        prompt.title = e.target.value;
+        scheduleAutoSave();
+    };
+    titleInput.addEventListener('input', rememberTitle);
+    titleInput.addEventListener('change', rememberTitle);
     titleContainer.append(numberSpan, titleInput);
     const controls = document.createElement('div');
     controls.className = 'prompt-controls';
@@ -1073,7 +1085,7 @@ function createPromptCard(project, prompt, index) {
     });
     const updateIcon = () => { if (platformData[platformSelect.value]) { platformSelectWrapper.style.setProperty('--icon-url', `url('data:image/svg+xml;utf8,${encodeURIComponent(platformData[platformSelect.value].icon)}')`); } };
     updateIcon();
-    platformSelect.onchange = (e) => { prompt.platform = e.target.value; updateIcon(); };
+    platformSelect.onchange = (e) => { prompt.platform = e.target.value; updateIcon(); scheduleAutoSave(); };
     platformSelectWrapper.appendChild(platformSelect);
     const mediaToggle = document.createElement('div');
     mediaToggle.className = 'media-type-toggle';
@@ -1088,7 +1100,14 @@ function createPromptCard(project, prompt, index) {
     deleteBtn.className = 'tab-add-btn prompt-delete-btn';
     deleteBtn.title = 'Delete Prompt';
     deleteBtn.innerHTML = `<iconify-icon icon="lucide:trash-2" width="18" height="18"></iconify-icon>`;
-    deleteBtn.onclick = () => { project.data.prompts.splice(index, 1); renderMoodpromptView(project); };
+    deleteBtn.onclick = () => {
+        const currentProject = projects.find(p => p.id === activeProjectId) || project;
+        const idx = currentProject.data.prompts.indexOf(prompt);
+        if (idx < 0) return;
+        currentProject.data.prompts.splice(idx, 1);
+        renderMoodpromptView(currentProject);
+        scheduleAutoSave();
+    };
     
     const previousBtn = document.createElement('button');
     previousBtn.type = 'button';
@@ -1227,15 +1246,16 @@ function createPromptCard(project, prompt, index) {
     promptText.addEventListener('input', updateCounter);
 
     textWrapper.append(promptText, counterBadge, expandBtn);
-    const setMediaType = (type) => {
+    const setMediaType = (type, persist) => {
         prompt.mediaType = type;
         imgBtn.classList.toggle('active', type === 'image');
         vidBtn.classList.toggle('active', type === 'video');
         imgSlot2.style.display = type === 'video' ? 'flex' : 'none';
+        if (persist) scheduleAutoSave();
     };
-    imgBtn.onclick = () => setMediaType('image');
-    vidBtn.onclick = () => setMediaType('video');
-    setMediaType(prompt.mediaType);
+    imgBtn.onclick = () => setMediaType('image', true);
+    vidBtn.onclick = () => setMediaType('video', true);
+    setMediaType(prompt.mediaType, false);
     const tagsWrapper = document.createElement('div');
     tagsWrapper.className = 'prompt-tags-wrapper';
     
@@ -1309,10 +1329,7 @@ function createPromptCard(project, prompt, index) {
 
     body.style.flexDirection = 'column';
     const contentRow = document.createElement('div');
-    contentRow.style.display = 'flex';
-    contentRow.style.gap = '1rem';
-    contentRow.style.flexDirection = 'row';
-    contentRow.style.width = '100%';
+    contentRow.className = 'prompt-content-row';
     contentRow.append(imagesContainer, textWrapper);
     
     body.append(contentRow, tagsWrapper);
@@ -4402,6 +4419,16 @@ function handleKeyDown(e) {
             }
             return;
         }
+        if ((key === 'arrowleft' || key === 'arrowright') && window._colorseekerFocusedIndex !== null && window._colorseekerFocusedIndex !== undefined) {
+            const from = window._colorseekerFocusedIndex;
+            const to = from + (key === 'arrowright' ? 1 : -1);
+            const colors = activeProject.data.colors || [];
+            if (to < 0 || to >= colors.length) return;
+            e.preventDefault();
+            window._colorseekerKeepFocus = to;
+            colorseekerMoveSwatch(activeProject, from, to);
+            return;
+        }
     }
     // Moodgantt global keys intercept
     if (activeProject && activeProject.type === 'moodgantt') {
@@ -4448,6 +4475,16 @@ function handleKeyDown(e) {
 
     if (key === 'escape') {
         e.preventDefault();
+        const deleteOverlay = document.getElementById('delete-group-modal-overlay');
+        if (deleteOverlay && deleteOverlay.style.display === 'flex') {
+            deleteOverlay.style.display = 'none';
+            return;
+        }
+        const ganttPanel = document.getElementById('gantt-detail-panel');
+        if (ganttPanel && ganttPanel.classList.contains('open')) {
+            ganttCloseDetail();
+            return;
+        }
         clearHoverStates();
         if (helpModalOverlay && helpModalOverlay.style.display === 'flex') { helpModalOverlay.style.display = 'none'; return; }
         const sfLightbox = document.getElementById('storyflow-lightbox');
@@ -5321,7 +5358,87 @@ function confirmNewBoard() { if (items.length > 0) { showConfirmationModal() } e
 function resetBoard() { const e = projects.find(e => e.id === activeProjectId); if (!e) return; e.data.items = []; e.data.cameraOffset = { x: window.innerWidth / 2, y: (window.innerHeight - 48) / 2 }; e.data.cameraZoom = 1; e.data.historyStack = []; e.data.historyIndex = -1; e.data.canvasBackgroundColor = '#0d0d0d'; e.data.accentColor = '#429eff'; e.data.gridColor = '#f9f8f6'; switchTab(activeProjectId); saveStateForUndo() }
 function showConfirmationModal() { confirmationModalOverlay.style.display = 'flex' }
 function hideConfirmationModal() { confirmationModalOverlay.style.display = 'none' }
+function boardPlainText(project) {
+    if (!project || !project.data) return '';
+    if (project.type === 'moodprompt') {
+        const prompts = project.data.prompts || [];
+        return prompts.map((p, i) => `${i + 1}. ${p.title || 'Untitled'}\n${resolveVariables(p.text, project)}`).join('\n\n');
+    }
+    if (project.type === 'moodlist') {
+        return (project.data.cards || []).map(card => {
+            const rows = (card.items || []).map(item => `${item.checked ? '[x]' : '[ ]'} ${item.text || ''}${item.due ? ' (' + item.due + ')' : ''}`).join('\n');
+            return `${card.pinned ? 'Pinned: ' : ''}${card.title || 'Untitled'}${rows ? '\n' + rows : ''}`;
+        }).join('\n\n');
+    }
+    if (project.type === 'moodgantt') {
+        return (project.data.groups || []).map(group => {
+            const rows = (group.tasks || []).map(task => `- ${task.name || 'Untitled'} (${task.startDate || ''} to ${task.endDate || ''})${task.status ? ' ' + task.status : ''}`).join('\n');
+            return `${group.name || 'Group'}${rows ? '\n' + rows : ''}`;
+        }).join('\n\n');
+    }
+    return '';
+}
+
+function copyBoardPlainText(project) {
+    const text = boardPlainText(project);
+    if (!text.trim()) {
+        showToast(project && project.type === 'moodprompt' ? 'No prompts to copy.' : 'Board is empty, nothing to copy.', 'error');
+        return;
+    }
+    try {
+        const pending = navigator.clipboard && navigator.clipboard.writeText(text);
+        if (pending && typeof pending.catch === 'function') pending.catch(() => {});
+    } catch (_) {}
+    showToast(project && project.type === 'moodprompt' ? 'All prompts copied to clipboard!' : 'Copied to clipboard.');
+}
+
+function structuredBoardLines(project) {
+    const text = boardPlainText(project);
+    if (!text.trim()) return [];
+    const lines = [project.name || 'Board', ''];
+    text.split('\n').forEach(row => lines.push(row));
+    return lines;
+}
+
+function downloadStructuredBoardPng(project) {
+    const raw = structuredBoardLines(project);
+    if (!raw.length) { showToast("Board is empty, nothing to export.", "error"); return; }
+    const maxChars = 90;
+    const lines = [];
+    raw.forEach(line => {
+        const text = String(line);
+        if (text.length <= maxChars) { lines.push(text); return; }
+        for (let i = 0; i < text.length; i += maxChars) lines.push(text.slice(i, i + maxChars));
+    });
+    const capped = lines.slice(0, 240);
+    if (lines.length > capped.length) capped.push('...');
+    const width = 1400;
+    const lineHeight = 28;
+    const pad = 48;
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = pad * 2 + capped.length * lineHeight;
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#0d0d0d';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = '#e2e8f0';
+    ctx.font = '20px Inter, sans-serif';
+    ctx.textBaseline = 'top';
+    capped.forEach((line, i) => ctx.fillText(line, pad, pad + i * lineHeight));
+    const link = document.createElement('a');
+    link.download = `${project.name || 'board'}.png`;
+    link.href = canvas.toDataURL('image/png');
+    link.click();
+    showToast("Image exported as PNG.");
+}
+
 async function copyToClipboard() {
+    const activeBoard = projects.find(p => p.id === activeProjectId);
+    if (activeBoard && activeBoard.type === 'colorseeker') { colorseekerCopyHex(activeBoard); return; }
+    if (activeBoard && (activeBoard.type === 'moodprompt' || activeBoard.type === 'moodlist' || activeBoard.type === 'moodgantt')) {
+        copyBoardPlainText(activeBoard);
+        return;
+    }
     if (items.length === 0) { showToast("Board is empty, nothing to copy.", "error"); return }
     let e = Infinity, t = Infinity, o = -Infinity, a = -Infinity;
     items.forEach(i => {
@@ -5388,6 +5505,14 @@ function saveAsPng() {
 
     if (activeProject.type === 'storyflow') {
         saveStoryflowAsPdf(activeProject);
+        return;
+    }
+    if (activeProject.type === 'colorseeker') {
+        downloadColorSeekerPalette();
+        return;
+    }
+    if (activeProject.type === 'moodprompt' || activeProject.type === 'moodlist' || activeProject.type === 'moodgantt') {
+        downloadStructuredBoardPng(activeProject);
         return;
     }
 
@@ -5638,7 +5763,7 @@ function saveProject() {
                 showToast("Project exported successfully.");
             });
         });
-    } else if (t.type === 'moodprompt' || t.type === 'storyflow') {
+    } else if (t.type === 'moodprompt' || t.type === 'storyflow' || t.type === 'moodlist' || t.type === 'moodgantt' || t.type === 'colorseeker') {
         eJSON = t.data;
         rootDir.file("data.json", JSON.stringify(eJSON, null, 2));
         zip.generateAsync({ type: "blob" }).then(function (content) {
@@ -5705,6 +5830,24 @@ function loadFileAsNewTab(fileContent, fileName) {
             renderTabs();
             switchTab(newId);
             showToast("Moodlist file loaded successfully.");
+            return;
+        }
+        if (data.groups && Array.isArray(data.groups)) {
+            const newId = nextProjectId();
+            const newProject = { id: newId, type: 'moodgantt', name: name, data: data };
+            projects.push(newProject);
+            renderTabs();
+            switchTab(newId);
+            showToast("Moodgantt file loaded successfully.");
+            return;
+        }
+        if (data.baseColor && data.mode && Array.isArray(data.colors)) {
+            const newId = nextProjectId();
+            const newProject = { id: newId, type: 'colorseeker', name: name, data: data };
+            projects.push(newProject);
+            renderTabs();
+            switchTab(newId);
+            showToast("Moodtone file loaded successfully.");
             return;
         }
         showToast("Failed to load project. Unknown format.", "error");
@@ -8438,7 +8581,10 @@ function colorseekerRemoveSwatch(project, index) {
 function colorseekerMoveSwatch(project, from, to) {
     colorseekerEnsureLocks(project);
     const colors = project.data.colors;
-    if (!colors || from === to || from < 0 || to < 0 || from >= colors.length || to >= colors.length) return;
+    if (!colors || from === to || from < 0 || to < 0 || from >= colors.length || to >= colors.length) {
+        window._colorseekerKeepFocus = null;
+        return;
+    }
     const [color] = colors.splice(from, 1);
     const [lock] = project.data.lockedColors.splice(from, 1);
     colors.splice(to, 0, color);
@@ -8472,6 +8618,9 @@ function renderColorSeeker(projectId) {
     if (!project || project.type !== 'colorseeker') return;
 
     if (!project.data.lockedColors) project.data.lockedColors = [];
+
+    const keepFocus = Number.isInteger(window._colorseekerKeepFocus) ? window._colorseekerKeepFocus : null;
+    window._colorseekerKeepFocus = null;
 
     if (colorseekerModeSelect) colorseekerModeSelect.value = project.data.mode || 'shades';
     if (colorseekerBasePicker) colorseekerBasePicker.value = project.data.baseColor || '#ffffff';
@@ -8634,13 +8783,22 @@ function renderColorSeeker(projectId) {
             moveRightBtn.addEventListener('click', (ev) => {
                 ev.stopPropagation();
                 ev.preventDefault();
-                console.log('Moving swatch', i, i + 1); colorseekerMoveSwatch(project, i, i + 1);
+                colorseekerMoveSwatch(project, i, i + 1);
             });
             bottomActions.appendChild(moveRightBtn);
 
             bar.appendChild(bottomActions);
 
             // Hover effects
+            const hexLabel = document.createElement('div');
+            hexLabel.className = 'colorseeker-hex-label';
+            hexLabel.textContent = cHex.toUpperCase();
+            hexLabel.style.color = getContrastTextColor(cHex);
+            bar.appendChild(hexLabel);
+
+            bar.addEventListener('pointerdown', () => {
+                window._colorseekerFocusedIndex = i;
+            });
             bar.addEventListener('mouseenter', () => {
                 bar.style.flex = '1.5';
                 info.style.opacity = '1';
@@ -8692,6 +8850,7 @@ function renderColorSeeker(projectId) {
                 }
             });
 
+            if (keepFocus === i) window._colorseekerFocusedIndex = i;
             colorseekerPalette.appendChild(bar);
         });
     }
@@ -8759,8 +8918,8 @@ if (colorseekerHexList) {
                 .then(() => {
                     showToast('Copied palette to clipboard!');
                 })
-                .catch(err => {
-                    console.error('Could not copy palette: ', err);
+                .catch(() => {
+                    showToast('Could not copy the palette.', 'error');
                 });
         }
     });
@@ -10187,7 +10346,9 @@ function prepareAndPrint() {
                 activeProject.type === 'moodinfinite' ? 'Moodinfinite' : 
                 activeProject.type === 'moodprompt' ? 'Moodprompt' : 
                 activeProject.type === 'storyflow' ? 'Moodflow' : 
-                activeProject.type === 'colorseeker' ? 'Moodtone' : 'Board';
+                activeProject.type === 'colorseeker' ? 'Moodtone' :
+                activeProject.type === 'moodgantt' ? 'Moodgantt' :
+                activeProject.type === 'moodlist' ? 'Moodlist' : 'Board';
         }
         if (dateEl) dateEl.textContent = new Date().toLocaleDateString();
 
@@ -10397,6 +10558,16 @@ function renderGanttView(project) {
     let nextDeadline = null;
 
     groups.forEach(group => {
+        (group.tasks || []).forEach(task => {
+            totalTasks++;
+            if (task.status === 'done') doneTasks++;
+            if (task.status === 'blocked') blockedTasks++;
+            const taskEnd = ganttParseDate(task.endDate);
+            if (taskEnd >= today && (!nextDeadline || taskEnd < nextDeadline)) nextDeadline = taskEnd;
+        });
+    });
+
+    groups.forEach(group => {
         let groupColor = group.color;
         if (!groupColor || groupColor.startsWith('var(')) {
             groupColor = accentColor || '#429eff';
@@ -10584,12 +10755,6 @@ function renderGanttView(project) {
         // ── Tasks ──
         if (!group.collapsed) {
             (group.tasks || []).forEach(task => {
-                totalTasks++;
-                if (task.status === 'done') doneTasks++;
-                if (task.status === 'blocked') blockedTasks++;
-                const taskEnd = ganttParseDate(task.endDate);
-                if (taskEnd >= today && (!nextDeadline || taskEnd < nextDeadline)) nextDeadline = taskEnd;
-
                 // Sidebar task row
                 const tSide = document.createElement('div');
                 tSide.className = 'gantt-task-sidebar-row';
@@ -10703,7 +10868,13 @@ function renderGanttView(project) {
                 };
                 
                 tSide.append(statusDot, tLbl, delBtn);
+                tSide.tabIndex = 0;
                 tSide.onclick = () => ganttOpenDetail(project, group.id, task.id);
+                tSide.addEventListener('keydown', (e) => {
+                    if (e.key !== 'Enter') return;
+                    e.preventDefault();
+                    ganttOpenDetail(project, group.id, task.id);
+                });
                 sidebarBody.appendChild(tSide);
 
                 // Timeline task track + bar
@@ -11148,8 +11319,14 @@ function ganttSyncDetailToTask() {
     if (!task) return;
     const previousStart = ganttParseDate(task.startDate);
     task.name      = document.getElementById('gantt-detail-name').value;
-    task.startDate = document.getElementById('gantt-detail-start').value || task.startDate;
-    task.endDate   = document.getElementById('gantt-detail-end').value || task.endDate;
+    const startInput = document.getElementById('gantt-detail-start');
+    const endInput = document.getElementById('gantt-detail-end');
+    task.startDate = (startInput && startInput.value) || task.startDate;
+    task.endDate   = (endInput && endInput.value) || task.endDate;
+    if (ganttParseDate(task.endDate) < ganttParseDate(task.startDate)) {
+        task.endDate = task.startDate;
+        if (endInput) endInput.value = task.endDate;
+    }
     const dependsEl = document.getElementById('gantt-detail-depends');
     task.dependsOn = dependsEl && dependsEl.value && dependsEl.value !== String(task.id) ? dependsEl.value : '';
     const daysShift = Math.round((ganttParseDate(task.startDate).getTime() - previousStart.getTime()) / GANTT_MS_DAY);
@@ -11250,6 +11427,7 @@ function ganttJumpToToday(project) {
         project.data.viewEndDate   = ganttFormatDate(ganttAddMonths(today,  half));
     }
     renderGanttView(project);
+    scheduleAutoSave();
     // Scroll to today
     setTimeout(() => {
         const cols     = ganttGetColumns(project.data.viewStartDate, project.data.viewEndDate, zoom);
