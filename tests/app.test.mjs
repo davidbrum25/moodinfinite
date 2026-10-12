@@ -1894,10 +1894,31 @@ try {
     const page = await browser.newPage();
     const consoleLines = [];
     page.on('pageerror', (err) => pageErrors.push(String(err && err.stack || err)));
-    page.on('console', (msg) => consoleLines.push(`${msg.type()}: ${msg.text()}`));
+    page.on('console', (msg) => {
+        const text = `${msg.type()}: ${msg.text()}`;
+        consoleLines.push(text);
+        if (text.includes('SWITCH')) console.log(text);
+    });
     await page.setViewport({ width: 1280, height: 800 });
     await page.goto(`http://127.0.0.1:${PORT}/`, { waitUntil: 'domcontentloaded', timeout: 30000 });
     await page.waitForFunction(() => window.projects && window.projects.length > 0 && typeof draw === 'function' && typeof renderMoodlistView === 'function', { timeout: 15000 });
+    await page.evaluate(() => {
+        const orig = switchTab;
+        switchTab = function (id, options) {
+            const project = projects.find((entry) => entry.id === id);
+            const stack = (new Error()).stack.split('\n').slice(2, 8).map((line) => line.trim());
+            const suspicious = stack.join(' ').match(/setTimeout|localforage|executeTabSwitch|HTMLButtonElement|clickTimeout/);
+            if (suspicious) {
+                console.log('SWITCH', JSON.stringify({
+                    to: project && project.type,
+                    name: project && project.name,
+                    from: activeProjectId,
+                    stack,
+                }));
+            }
+            return orig.call(this, id, options);
+        };
+    });
 
     const firstParty = pageErrors.filter(isFirstParty);
     assert.deepEqual(firstParty, [], `first-party boot errors:\n${firstParty.join('\n')}`);
@@ -2224,6 +2245,9 @@ try {
     await assertShellCanvasFixes(page);
     await assertRound3GanttPrompt(page);
     await assertRound4ListTone(page);
+    await assertRound5NoteTabCommit(page);
+    await assertRound5TextAlign(page);
+    await assertRound5RerouteDelete(page);
 
     const lateErrors = pageErrors.filter(isFirstParty);
     assert.deepEqual(lateErrors, [], `first-party errors:\n${lateErrors.join('\n')}`);
@@ -4815,6 +4839,467 @@ async function assertRound4ListTone(page) {
 
     await page.setViewport({ width: 1280, height: 800, deviceScaleFactor: 1, isMobile: false, hasTouch: false });
     console.log('Moodlist and Moodtone round 4 passed.');
+}
+
+async function assertRound5NoteTabCommit(page) {
+    console.log('Testing note commit across tab switch...');
+    await page.setViewport({ width: 1280, height: 800, deviceScaleFactor: 1, isMobile: false, hasTouch: false });
+
+    const committed = await page.evaluate(() => {
+        createNewProject('moodinfinite');
+        const boardId = activeProjectId;
+        items.length = 0;
+        items.push({
+            id: 'keep-note', type: 'text', title: 'T', text: 'One',
+            x: 40, y: 40, width: 280, height: 180, fontSize: 16, rotation: 0,
+            isPinned: false, opacity: 1, fontFamily: 'Nunito', color: '#429eff',
+            bgColor: '#ffffff', scaleX: 1, scaleY: 1,
+        });
+        items.push({
+            id: 'keep-comment', type: 'comment', text: 'Note...',
+            x: 360, y: 40, width: 160, height: 80, fontSize: 16, rotation: 0,
+            isPinned: false, opacity: 1, fontFamily: 'Nunito', textAlign: 'left',
+            fontWeight: 'bold', fontStyle: 'normal', color: '#f5e6c8', scaleX: 1, scaleY: 1, icon: 'none',
+        });
+        editText(items[0]);
+        document.getElementById('note-title-input').value = 'Kept';
+        document.getElementById('note-body-input').value = 'Line one\nLine two';
+        const before = {
+            hidden: items[0].isHidden === true,
+            overlay: document.getElementById('note-editor-overlay').style.display,
+            editing: !!(0, eval)('currentlyEditingText'),
+        };
+        createNewProject('moodprompt');
+        switchTab(boardId);
+        editText(items[1]);
+        document.getElementById('text-editor').value = 'Hi\nThere';
+        createNewProject('moodprompt');
+        switchTab(boardId);
+        const note = items.find((item) => item.id === 'keep-note');
+        const comment = items.find((item) => item.id === 'keep-comment');
+        const stored = JSON.parse(JSON.stringify({ isHidden: true, text: 'x' }, storageReplacer));
+        return {
+            before,
+            title: note && note.title,
+            text: note && note.text,
+            hidden: !!(note && note.isHidden),
+            overlay: document.getElementById('note-editor-overlay').style.display,
+            editor: document.getElementById('text-editor').style.display,
+            editing: !!(0, eval)('currentlyEditingText'),
+            comment: comment && comment.text,
+            commentHidden: !!(comment && comment.isHidden),
+            storedHidden: Object.prototype.hasOwnProperty.call(stored, 'isHidden'),
+        };
+    });
+    assert.equal(committed.before.hidden, true);
+    assert.equal(committed.before.overlay, 'flex');
+    assert.equal(committed.before.editing, true);
+    assert.equal(committed.title, 'Kept');
+    assert.equal(committed.text, 'Line one\nLine two');
+    assert.equal(committed.hidden, false, 'note stayed hidden after the tab round trip');
+    assert.equal(committed.overlay, 'none');
+    assert.equal(committed.editing, false);
+    assert.equal(committed.comment, 'Hi\nThere');
+    assert.equal(committed.commentHidden, false, 'comment stayed hidden after the tab round trip');
+    assert.notEqual(committed.editor, 'block');
+    assert.equal(committed.storedHidden, false, 'storage kept isHidden');
+
+    await page.setViewport({ width: 390, height: 844, deviceScaleFactor: 1, isMobile: true, hasTouch: true });
+    const phone = await page.evaluate(() => {
+        createNewProject('moodinfinite');
+        const boardId = activeProjectId;
+        items.length = 0;
+        items.push({
+            id: 'phone-note', type: 'text', title: 'T', text: 'One',
+            x: 20, y: 20, width: 220, height: 180, fontSize: 16, rotation: 0,
+            isPinned: false, opacity: 1, fontFamily: 'Nunito', color: '#429eff',
+            bgColor: '#ffffff', scaleX: 1, scaleY: 1,
+        });
+        editText(items[0]);
+        document.getElementById('note-title-input').value = 'Phone';
+        document.getElementById('note-body-input').value = 'Line one\nLine two';
+        createNewProject('moodprompt');
+        switchTab(boardId);
+        const note = items.find((item) => item.id === 'phone-note');
+        const done = document.getElementById('confirm-note-btn');
+        const rect = done ? done.getBoundingClientRect() : null;
+        return {
+            title: note && note.title,
+            text: note && note.text,
+            hidden: !!(note && note.isHidden),
+            overlay: document.getElementById('note-editor-overlay').style.display,
+            scrollW: document.documentElement.scrollWidth,
+            innerW: window.innerWidth,
+            doneW: rect ? rect.width : 0,
+            doneH: rect ? rect.height : 0,
+        };
+    });
+    assert.equal(phone.title, 'Phone');
+    assert.equal(phone.text, 'Line one\nLine two');
+    assert.equal(phone.hidden, false, 'phone note stayed hidden');
+    assert.equal(phone.overlay, 'none', 'note editor stayed open on the phone');
+    assert.ok(phone.scrollW <= phone.innerW + 1, `note tab switch overflowed (${phone.scrollW})`);
+    await page.setViewport({ width: 1280, height: 800, deviceScaleFactor: 1, isMobile: false, hasTouch: false });
+    console.log('Note commit across tab switch passed.');
+}
+
+async function assertRound5TextAlign(page) {
+    console.log('Testing text alignment...');
+    await page.setViewport({ width: 1280, height: 800, deviceScaleFactor: 1, isMobile: false, hasTouch: false });
+    await page.evaluate(() => {
+        if (!window.__switchWrapped) {
+            window.__switchWrapped = true;
+            window.__switches = [];
+            const orig = switchTab;
+            switchTab = function (id, options) {
+                const project = projects.find((entry) => entry.id === id);
+                window.__switches.push({
+                    id,
+                    type: project && project.type,
+                    name: project && project.name,
+                    from: activeProjectId,
+                    stack: (new Error()).stack.split('\n').slice(2, 6).map((line) => line.trim()),
+                });
+                return orig.call(this, id, options);
+            };
+        } else {
+            window.__switches = [];
+        }
+    });
+    await page.evaluate(() => {
+        createNewProject('moodinfinite');
+        (0, eval)('cameraZoom = 1');
+        (0, eval)('cameraOffset = { x: canvas.width / 2, y: canvas.height / 2 }');
+        (0, eval)('showDropShadow = false');
+        (0, eval)('showGrid = false');
+        items.length = 0;
+        items.push({
+            id: 'align-note', type: 'text', title: 'Hi', text: 'Go',
+            x: -200, y: -90, width: 400, height: 180, fontSize: 16, rotation: 0,
+            isPinned: false, opacity: 1, fontFamily: 'Nunito', color: '#429eff',
+            bgColor: '#ffffff', textAlign: 'left', scaleX: 1, scaleY: 1,
+        });
+        (0, eval)('selectedItems = [items[0]]');
+        updateSelectionToolbar();
+        draw();
+    });
+    const shown = await page.evaluate(() => {
+        const btn = document.getElementById('text-align-right-btn');
+        const comment = {
+            id: 'align-comment', type: 'comment', text: 'Hi\nThere',
+            x: -180, y: 120, width: 220, height: 80, fontSize: 16, rotation: 0,
+            isPinned: false, opacity: 1, fontFamily: 'Nunito', textAlign: 'left',
+            fontWeight: 'bold', fontStyle: 'normal', color: '#f5e6c8', scaleX: 1, scaleY: 1, icon: 'none',
+        };
+        items.push(comment);
+        (0, eval)('selectedItems = [items.find((item) => item.id === "align-comment")]');
+        updateSelectionToolbar();
+        const commentDisplay = getComputedStyle(document.getElementById('text-align-right-btn')).display;
+        const list = {
+            id: 'align-list', type: 'textList', title: 'Tasks', text: 'Milk',
+            items: [{ text: 'Milk', completed: false, indent: 0 }],
+            x: -180, y: 220, width: 280, height: 120, fontSize: 18, rotation: 0,
+            isPinned: false, opacity: 1, fontFamily: 'Nunito', textAlign: 'left',
+            fontWeight: 'bold', fontStyle: 'normal', color: '#f5e6c8', scaleX: 1, scaleY: 1,
+        };
+        items.push(list);
+        (0, eval)('selectedItems = [items.find((item) => item.id === "align-list")]');
+        updateSelectionToolbar();
+        const listDisplay = getComputedStyle(document.getElementById('text-align-center-btn')).display;
+        const padding = 15;
+        const rowH = list.fontSize * 1.5;
+        const checkboxSize = list.fontSize * 1.1;
+        const handleSize = list.fontSize * 0.8;
+        let rowY = padding + rowH * 1.2 + 10;
+        const cbX = padding + handleSize + 8;
+        const cbY = rowY + (rowH - checkboxSize) / 2;
+        const hitPoint = { x: list.x + cbX + 4, y: list.y + cbY + 4 };
+        const hitBefore = getCheckboxHitIndex(list, hitPoint);
+        document.getElementById('text-align-right-btn').click();
+        const hitAfter = getCheckboxHitIndex(list, hitPoint);
+        (0, eval)('selectedItems = [items.find((item) => item.id === "align-note")]');
+        updateSelectionToolbar();
+        return {
+            note: getComputedStyle(btn).display,
+            comment: commentDisplay,
+            list: listDisplay,
+            listAlign: list.textAlign,
+            hitBefore,
+            hitAfter,
+        };
+    });
+    assert.notEqual(shown.note, 'none', 'note align button stayed hidden');
+    assert.notEqual(shown.comment, 'none', 'comment align button stayed hidden');
+    assert.notEqual(shown.list, 'none', 'list align button stayed hidden');
+    assert.equal(shown.listAlign, 'right');
+    assert.equal(shown.hitBefore, 0, 'checkbox hit missed before align');
+    assert.equal(shown.hitAfter, 0, 'align moved the checkbox hit target');
+
+    const clickInfo = await page.evaluate(() => {
+        document.querySelectorAll('.toast-notification').forEach((el) => el.remove());
+        const beforeSel = selectedItems.map((item) => ({ id: item && item.id, type: item && item.type, align: item && item.textAlign, inItems: items.includes(item) }));
+        const btn = document.getElementById('text-align-right-btn');
+        btn.click();
+        const note = items.find((entry) => entry.id === 'align-note');
+        return {
+            beforeSel,
+            afterSel: selectedItems.map((item) => ({ id: item && item.id, align: item && item.textAlign })),
+            noteAlign: note && note.textAlign,
+            btnDisplay: getComputedStyle(btn).display,
+            disabled: btn.disabled,
+        };
+    });
+    console.log('ALIGN CLICK', JSON.stringify(clickInfo));
+    const right = await page.evaluate(() => {
+        const item = items.find((entry) => entry.id === 'align-note');
+        const ctx = document.getElementById('moodboard-canvas').getContext('2d');
+        const calls = [];
+        const orig = ctx.fillText;
+        ctx.fillText = function (text, x, y, maxW) {
+            calls.push({ text: String(text).slice(0, 20), x: Math.round(x), y: Math.round(y), align: this.textAlign, font: this.font });
+            return orig.call(this, text, x, y, maxW);
+        };
+        const project = projects.find((entry) => entry.id === activeProjectId);
+        const live = document.getElementById('moodboard-canvas');
+        const before = ctx.getImageData(10, 10, 1, 1).data.slice(0, 4);
+        ctx.fillRect(10, 10, 4, 4);
+        draw();
+        const after = ctx.getImageData(10, 10, 1, 1).data.slice(0, 4);
+        ctx.fillText = orig;
+        const diag = {
+            type: project && project.type,
+            active: activeProjectId,
+            sameCtx: ctx === live.getContext('2d'),
+            inDom: document.body.contains(canvas),
+            idMatch: live === canvas,
+            before: Array.from(before),
+            after: Array.from(after),
+            nItems: items.length,
+            hidden: item.isHidden,
+            switches: window.__switches,
+        };
+        const darkest = (worldX, worldY) => {
+            const s = worldToScreen({ x: worldX, y: worldY });
+            const data = ctx.getImageData(Math.round(s.x), Math.round(s.y), 40, 22).data;
+            let min = 255;
+            for (let i = 0; i < data.length; i += 4) min = Math.min(min, data[i], data[i + 1], data[i + 2]);
+            return { min, sx: Math.round(s.x), sy: Math.round(s.y) };
+        };
+        const tl = worldToScreen({ x: item.x, y: item.y });
+        const scanW = Math.min(item.width, 400);
+        const scanH = 90;
+        const img = ctx.getImageData(Math.round(tl.x), Math.round(tl.y), scanW, scanH).data;
+        let textXs = [];
+        for (let y = 0; y < scanH; y++) {
+            for (let x = 0; x < scanW; x++) {
+                const i = (y * scanW + x) * 4;
+                if (img[i] < 40 && img[i + 1] < 50 && img[i + 2] < 80) textXs.push(x + y * 0);
+            }
+        }
+        const xs = textXs.length ? { n: textXs.length, min: Math.min(...textXs), max: Math.max(...textXs) } : null;
+        return {
+            align: item.textAlign,
+            left: darkest(item.x + 14, item.y + 36),
+            right: darkest(item.x + item.width - 54, item.y + 36),
+            calls: calls.filter((c) => c.text === 'Hi' || c.text === 'Go'),
+            zoom: cameraZoom,
+            offset: cameraOffset,
+            canvas: { w: canvas.width, h: canvas.height, dpr: window.devicePixelRatio },
+            item: { x: item.x, y: item.y, w: item.width, h: item.height },
+            xs,
+            alpha: ctx.globalAlpha,
+            diag,
+        };
+    });
+    assert.equal(right.align, 'right');
+    assert.ok(right.right.min < 120, `right align did not paint the right side (${JSON.stringify(right)})`);
+    assert.ok(right.left.min > 180, `right align still painted the left side (${right.left.min})`);
+
+    await page.evaluate(() => {
+        document.querySelectorAll('.toast-notification').forEach((el) => el.remove());
+        document.getElementById('text-align-left-btn').click();
+    });
+    const left = await page.evaluate(() => {
+        const item = items.find((entry) => entry.id === 'align-note');
+        draw();
+        const ctx = document.getElementById('moodboard-canvas').getContext('2d');
+        const darkest = (worldX, worldY) => {
+            const s = worldToScreen({ x: worldX, y: worldY });
+            const data = ctx.getImageData(Math.round(s.x), Math.round(s.y), 40, 22).data;
+            let min = 255;
+            for (let i = 0; i < data.length; i += 4) min = Math.min(min, data[i], data[i + 1], data[i + 2]);
+            return min;
+        };
+        return {
+            align: item.textAlign,
+            left: darkest(item.x + 14, item.y + 36),
+            right: darkest(item.x + item.width - 54, item.y + 36),
+        };
+    });
+    assert.equal(left.align, 'left');
+    assert.ok(left.left < 120, `left align did not paint the left side (${left.left})`);
+    assert.ok(left.right > 180, `left align still painted the right side (${left.right})`);
+
+    await page.setViewport({ width: 390, height: 844, deviceScaleFactor: 1, isMobile: true, hasTouch: true });
+    const phone = await page.evaluate(() => {
+        createNewProject('moodinfinite');
+        items.length = 0;
+        items.push({
+            id: 'align-note', type: 'text', title: 'Hi', text: 'Go',
+            x: 20, y: 20, width: 220, height: 140, fontSize: 16, rotation: 0,
+            isPinned: false, opacity: 1, fontFamily: 'Nunito', color: '#429eff',
+            bgColor: '#ffffff', textAlign: 'left', scaleX: 1, scaleY: 1,
+        });
+        (0, eval)('selectedItems = [items[0]]');
+        updateSelectionToolbar();
+        const btn = document.getElementById('text-align-right-btn');
+        const rect = btn.getBoundingClientRect();
+        return {
+            display: getComputedStyle(btn).display,
+            w: rect.width,
+            h: rect.height,
+            scrollW: document.documentElement.scrollWidth,
+            innerW: window.innerWidth,
+        };
+    });
+    assert.notEqual(phone.display, 'none', 'phone align button stayed hidden');
+    assert.ok(phone.w > 8 && phone.h > 8, `phone align button has no box (${phone.w}x${phone.h})`);
+    assert.ok(phone.scrollW <= phone.innerW + 1, `align toolbar overflowed (${phone.scrollW})`);
+    await page.setViewport({ width: 1280, height: 800, deviceScaleFactor: 1, isMobile: false, hasTouch: false });
+    console.log('Text alignment passed.');
+}
+
+async function assertRound5RerouteDelete(page) {
+    console.log('Testing reroute delete...');
+    await page.setViewport({ width: 1280, height: 800, deviceScaleFactor: 1, isMobile: false, hasTouch: false });
+    const result = await page.evaluate(() => {
+        createNewProject('moodinfinite');
+        (0, eval)('cameraZoom = 1');
+        (0, eval)('cameraOffset = { x: canvas.width / 2, y: canvas.height / 2 }');
+        items.length = 0;
+        const box = (id, x) => ({
+            id, type: 'box', color: '#429eff', x, y: 80, width: 80, height: 60,
+            rotation: 0, isPinned: false, style: 'fill', opacity: 1, scaleX: 1, scaleY: 1,
+        });
+        items.push(box('box-a', 40), box('box-b', 360));
+        createSimpleConnector(items[0], items[1]);
+        draw();
+        const conn = items.find((item) => item.type === 'connector');
+        let spot = null;
+        let best = 0;
+        const route = conn && conn.route ? conn.route : [];
+        for (let i = 0; i < route.length - 1; i++) {
+            const len = Math.hypot(route[i + 1].x - route[i].x, route[i + 1].y - route[i].y);
+            if (len > best) {
+                best = len;
+                spot = { x: (route[i].x + route[i + 1].x) / 2, y: (route[i].y + route[i + 1].y) / 2 };
+            }
+        }
+        const screen = spot ? worldToScreen(spot) : { x: 0, y: 0 };
+        const rect = document.getElementById('moodboard-canvas').getBoundingClientRect();
+        onDoubleClick({ clientX: rect.left + screen.x, clientY: rect.top + screen.y });
+        const reroute = items.find((item) => item.type === 'reroute');
+        const outgoing = items.find((item) => item.type === 'connector' && reroute && item.sourceId === reroute.id);
+        if (outgoing) outgoing.label = 'via';
+        const split = {
+            reroutes: items.filter((item) => item.type === 'reroute').length,
+            connectors: items.filter((item) => item.type === 'connector').length,
+        };
+        (0, eval)('selectedItems = items.filter((item) => item.type === "reroute").slice(0, 1)');
+        deleteSelectedItems();
+        draw();
+        const joined = items.filter((item) => item.type === 'connector');
+        const startBefore = joined[0] ? joined[0].computedStartX : null;
+        const source = items.find((item) => item.id === 'box-a');
+        source.x += 80;
+        draw();
+        const moved = items.find((item) => item.type === 'connector');
+        (0, eval)('selectedItems = [items.find((item) => item.id === "box-a")]');
+        deleteSelectedItems();
+        const afterSource = {
+            connectors: items.filter((item) => item.type === 'connector').length,
+            keptTarget: items.some((item) => item.id === 'box-b'),
+        };
+
+        items.length = 0;
+        items.push(box('box-a', 40), box('box-b', 420));
+        items.push(
+            { id: 'r1', type: 'reroute', x: 180, y: 110, width: 0, height: 0, color: '#429eff', isPinned: false },
+            { id: 'r2', type: 'reroute', x: 280, y: 110, width: 0, height: 0, color: '#429eff', isPinned: false },
+            { id: 'c1', type: 'connector', sourceId: 'box-a', sourcePort: 'right', targetId: 'r1', targetPort: 'left', color: '#429eff' },
+            { id: 'c2', type: 'connector', sourceId: 'r1', sourcePort: 'right', targetId: 'r2', targetPort: 'left', color: '#429eff', label: 'mid' },
+            { id: 'c3', type: 'connector', sourceId: 'r2', sourcePort: 'right', targetId: 'box-b', targetPort: 'left', color: '#429eff', label: 'end' },
+        );
+        (0, eval)('selectedItems = items.filter((item) => item.type === "reroute")');
+        deleteSelectedItems();
+        const chain = items.filter((item) => item.type === 'connector');
+
+        items.length = 0;
+        items.push(box('box-a', 40), box('box-b', 420));
+        items.push(
+            { id: 'r1', type: 'reroute', x: 180, y: 110, width: 0, height: 0, color: '#429eff', isPinned: false },
+            { id: 'c-in', type: 'connector', sourceId: 'box-a', sourcePort: 'right', targetId: 'r1', targetPort: 'left', color: '#429eff' },
+            { id: 'c-out', type: 'connector', sourceId: 'r1', sourcePort: 'right', targetId: 'box-b', targetPort: 'left', color: '#429eff' },
+        );
+        (0, eval)('selectedItems = items.filter((item) => item.id === "r1" || item.id === "c-out")');
+        deleteSelectedItems();
+        return {
+            split,
+            joined: joined.map((item) => ({ sourceId: item.sourceId, targetId: item.targetId, label: item.label || '' })),
+            delta: moved && startBefore != null ? moved.computedStartX - startBefore : null,
+            afterSource,
+            chain: chain.map((item) => ({ sourceId: item.sourceId, targetId: item.targetId, label: item.label || '' })),
+            explicit: items.filter((item) => item.type === 'connector').length,
+        };
+    });
+    assert.equal(result.split.reroutes, 1, `double-click did not insert a reroute (${JSON.stringify(result.split)})`);
+    assert.equal(result.split.connectors, 2, 'double-click did not split the connector');
+    assert.equal(result.joined.length, 1, 'deleting the reroute dropped the connection');
+    assert.equal(result.joined[0].sourceId, 'box-a');
+    assert.equal(result.joined[0].targetId, 'box-b');
+    assert.equal(result.joined[0].label, 'via');
+    assert.ok(Math.abs(result.delta - 80) < 0.5, `moving the source detached the connector (${result.delta})`);
+    assert.equal(result.afterSource.connectors, 0, 'deleting the source left a connector');
+    assert.equal(result.afterSource.keptTarget, true);
+    assert.equal(result.chain.length, 1, 'deleting two reroutes dropped the chain');
+    assert.equal(result.chain[0].sourceId, 'box-a');
+    assert.equal(result.chain[0].targetId, 'box-b');
+    assert.equal(result.chain[0].label, 'mid');
+    assert.equal(result.explicit, 0, 'deleting a connector with its reroute rejoined through it');
+
+    await page.setViewport({ width: 390, height: 844, deviceScaleFactor: 1, isMobile: true, hasTouch: true });
+    const phone = await page.evaluate(() => {
+        createNewProject('moodinfinite');
+        items.length = 0;
+        const box = (id, x) => ({
+            id, type: 'box', color: '#429eff', x, y: 40, width: 70, height: 50,
+            rotation: 0, isPinned: false, style: 'fill', opacity: 1, scaleX: 1, scaleY: 1,
+        });
+        items.push(box('box-a', 10), box('box-b', 220));
+        items.push({ id: 'r1', type: 'reroute', x: 120, y: 65, width: 0, height: 0, color: '#429eff', isPinned: false });
+        items.push(
+            { id: 'c1', type: 'connector', sourceId: 'box-a', sourcePort: 'right', targetId: 'r1', targetPort: 'left', color: '#429eff' },
+            { id: 'c2', type: 'connector', sourceId: 'r1', sourcePort: 'right', targetId: 'box-b', targetPort: 'left', color: '#429eff', label: 'via' },
+        );
+        (0, eval)('selectedItems = [items.find((item) => item.id === "r1")]');
+        deleteSelectedItems();
+        const left = items.filter((item) => item.type === 'connector');
+        return {
+            n: left.length,
+            sourceId: left[0] && left[0].sourceId,
+            targetId: left[0] && left[0].targetId,
+            label: left[0] && left[0].label,
+            scrollW: document.documentElement.scrollWidth,
+            innerW: window.innerWidth,
+        };
+    });
+    assert.equal(phone.n, 1);
+    assert.equal(phone.sourceId, 'box-a');
+    assert.equal(phone.targetId, 'box-b');
+    assert.equal(phone.label, 'via');
+    assert.ok(phone.scrollW <= phone.innerW + 1, `reroute delete overflowed (${phone.scrollW})`);
+    await page.setViewport({ width: 1280, height: 800, deviceScaleFactor: 1, isMobile: false, hasTouch: false });
+    console.log('Reroute delete passed.');
 }
 
 

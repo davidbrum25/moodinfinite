@@ -55,7 +55,7 @@ function scheduleAutoSave() {
 }
 
 function storageReplacer(key, val) {
-    if (key === 'img' || key === 'video' || key === '_cachedBox' || key === 'iconImage' || key === '_offscreenCanvas') return undefined;
+    if (key === 'img' || key === 'video' || key === '_cachedBox' || key === 'iconImage' || key === '_offscreenCanvas' || key === 'isHidden') return undefined;
     if (typeof Element !== 'undefined' && val instanceof Element) return undefined;
     if (typeof OffscreenCanvas !== 'undefined' && val instanceof OffscreenCanvas) return undefined;
     return val;
@@ -369,6 +369,18 @@ function createNewProject(type) {
 function switchTab(projectId, options) {
     const force = !!(options && options.force);
     if (activeProjectId === projectId && !force) return;
+
+    // Commit an open note, comment, or list before the board is copied.
+    // Otherwise the item stays isHidden and the in-progress text is dropped.
+    if (currentlyEditingText) {
+        if (items.includes(currentlyEditingText)) {
+            finishEditingText();
+        } else {
+            currentlyEditingText = null;
+            if (noteEditorOverlay) noteEditorOverlay.style.display = 'none';
+            if (textEditor) textEditor.style.display = 'none';
+        }
+    }
 
     // A same-id refresh already wrote the incoming board. Copying globals
     // here would put the previous board's items and camera back.
@@ -3422,8 +3434,18 @@ function drawTextItem(ctx, item) {
         ctx.textBaseline = 'top';
 
         const titleLines = wrapText(ctx, item.title, item.width - pX * 2);
+        const titleAlign = item.textAlign || 'left';
+        const titleInner = item.width - pX * 2;
         titleLines.forEach(line => {
-            ctx.fillText(line, x + pX, currY);
+            let titleX = x + pX;
+            if (titleAlign === 'center' || titleAlign === 'right') {
+                const titleW = ctx.measureText(line).width;
+                titleX = titleAlign === 'right'
+                    ? x + pX + Math.max(0, titleInner - titleW)
+                    : x + pX + Math.max(0, (titleInner - titleW) / 2);
+            }
+            ctx.textAlign = 'left';
+            ctx.fillText(line, titleX, currY);
             currY += 32; // Slightly more line height for title
         });
         currY += 10;
@@ -3435,8 +3457,9 @@ function drawTextItem(ctx, item) {
 
     const baseSize = item.fontSize || 14;
     const lines = item.text.replace(/\r/g, '').split('\n');
+    const bodyAlign = item.textAlign || 'left';
     lines.forEach(line => {
-        const consumedH = renderMarkdownLine(ctx, line, x + pX, currY, item.width - pX * 2, baseSize, item.fontFamily, textPrimary, textSecondary);
+        const consumedH = renderMarkdownLine(ctx, line, x + pX, currY, item.width - pX * 2, baseSize, item.fontFamily, textPrimary, textSecondary, bodyAlign);
         currY += consumedH;
     });
 
@@ -3455,7 +3478,43 @@ function drawTextItem(ctx, item) {
     ctx.restore();
 }
 
-function renderMarkdownLine(ctx, text, x, y, maxWidth, baseSize, fontFamily, primaryColor, secondaryColor) {
+function measureInlineFormattedText(ctx, text, size, fontFamily, forceBold) {
+    const regex = /(\*\*.*?\*\*|\*.*?\*|`.*?`|[^*`]+|[*`])/g;
+    const matches = text ? text.match(regex) : null;
+    if (!matches) {
+        ctx.font = `${forceBold ? 'bold ' : ''}${size}px '${fontFamily || 'Nunito'}', sans-serif`;
+        return ctx.measureText(text || '').width;
+    }
+    let width = 0;
+    matches.forEach(part => {
+        let isItalic = false;
+        let isBold = forceBold;
+        let isCode = false;
+        let content = part;
+        let currentSize = size;
+        if (part.length >= 4 && part.startsWith('**') && part.endsWith('**')) {
+            isBold = true;
+            content = part.slice(2, -2);
+        } else if (part.length >= 2 && part.startsWith('*') && part.endsWith('*')) {
+            isItalic = true;
+            content = part.slice(1, -1);
+        } else if (part.length >= 2 && part.startsWith('`') && part.endsWith('`')) {
+            isCode = true;
+            currentSize = size * 0.85;
+            content = part.slice(1, -1);
+        }
+        let fontStr = '';
+        if (isItalic) fontStr += 'italic ';
+        if (isBold) fontStr += 'bold ';
+        fontStr += `${currentSize}px `;
+        fontStr += isCode ? "'Source Code Pro', monospace" : `'${fontFamily || 'Nunito'}', sans-serif`;
+        ctx.font = fontStr.trim();
+        width += ctx.measureText(content).width;
+    });
+    return width;
+}
+
+function renderMarkdownLine(ctx, text, x, y, maxWidth, baseSize, fontFamily, primaryColor, secondaryColor, align) {
     let cleanText = text.trimStart();
     let lineScale = 1.0;
     let isHeadingBold = false;
@@ -3498,15 +3557,27 @@ function renderMarkdownLine(ctx, text, x, y, maxWidth, baseSize, fontFamily, pri
     ctx.font = `${weightStr}${finalSize}px '${safeFont}', sans-serif`;
 
     const wrappedLines = wrapText(ctx, cleanText, maxWidth - bulletIndent);
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'top';
 
     wrappedLines.forEach((lineText, lineIdx) => {
-        drawInlineFormattedText(ctx, lineText, x + bulletIndent, y + (lineIdx * lineHeight), finalSize, safeFont, isHeadingBold, color);
+        let drawX = x + bulletIndent;
+        if (align === 'center' || align === 'right') {
+            const lineWidth = measureInlineFormattedText(ctx, lineText, finalSize, safeFont, isHeadingBold);
+            const inner = Math.max(0, maxWidth - bulletIndent);
+            drawX = align === 'right'
+                ? x + bulletIndent + Math.max(0, inner - lineWidth)
+                : x + bulletIndent + Math.max(0, (inner - lineWidth) / 2);
+        }
+        drawInlineFormattedText(ctx, lineText, drawX, y + (lineIdx * lineHeight), finalSize, safeFont, isHeadingBold, color);
     });
 
     return wrappedLines.length * lineHeight;
 }
 
 function drawInlineFormattedText(ctx, text, x, y, size, fontFamily, forceBold, defaultColor) {
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'top';
     const regex = /(\*\*.*?\*\*|\*.*?\*|`.*?`|[^*`]+|[*`])/g;
     const matches = text.match(regex);
     if (!matches) {
@@ -3890,11 +3961,20 @@ function drawTextListItem(e, t) {
     const indentSize = 25;
 
     let currentY = -t.height / 2 + padding;
+    const align = t.textAlign || 'left';
+    const contentLeft = -t.width / 2 + padding;
+    const contentRight = t.width / 2 - padding;
+    const placeText = (text, minX) => {
+        if (align !== 'center' && align !== 'right') return minX;
+        const w = e.measureText(text).width;
+        if (align === 'right') return Math.max(minX, contentRight - w);
+        return Math.max(minX, (contentLeft + contentRight - w) / 2);
+    };
 
     // Draw Title
     if (t.title) {
         e.font = `bold ${t.fontSize * 1.2}px '${s}', sans-serif`;
-        e.fillText(t.title, -t.width / 2 + padding, currentY);
+        e.fillText(t.title, placeText(t.title, contentLeft), currentY);
         currentY += h * 1.2;
         // Divider
         e.strokeStyle = textColor;
@@ -3944,16 +4024,17 @@ function drawTextListItem(e, t) {
             e.stroke();
         }
 
-        // Draw Text
+        // Draw Text. Checkboxes and drag handles stay put so hit tests still match.
         e.save();
         if (item.completed) e.globalAlpha *= 0.5;
-        e.fillText(item.text, cbX + checkboxSize + checkboxMargin, itemY + (h - t.fontSize) / 2);
+        const textX = placeText(item.text, cbX + checkboxSize + checkboxMargin);
+        e.fillText(item.text, textX, itemY + (h - t.fontSize) / 2);
 
         if (item.completed) {
             const metrics = e.measureText(item.text);
             e.beginPath();
-            e.moveTo(cbX + checkboxSize + checkboxMargin, itemY + h / 2);
-            e.lineTo(cbX + checkboxSize + checkboxMargin + metrics.width, itemY + h / 2);
+            e.moveTo(textX, itemY + h / 2);
+            e.lineTo(textX + metrics.width, itemY + h / 2);
             e.stroke();
         }
         e.restore();
@@ -4351,6 +4432,16 @@ function drawConnectorItem(e, renderCtx) {
     }
 
     _ctx.stroke();
+    if (e.label) {
+        const seg = Math.max(0, cleanRoute.length - 2);
+        const p0 = cleanRoute[seg];
+        const p1 = cleanRoute[seg + 1];
+        _ctx.font = `${12 / cameraZoom}px Nunito, sans-serif`;
+        _ctx.fillStyle = e.color || accentColor;
+        _ctx.textAlign = 'center';
+        _ctx.textBaseline = 'bottom';
+        _ctx.fillText(String(e.label), (p0.x + p1.x) / 2, (p0.y + p1.y) / 2 - 8 / cameraZoom);
+    }
     _ctx.restore();
 }
 
@@ -6576,7 +6667,41 @@ function duplicateItems() {
     showToast(`${t.length} item${t.length > 1 ? 's' : ''} duplicated.`)
 }
 
-function deleteSelectedItems() { if (selectedItems.length > 0) { const e = new Set(selectedItems.map(e => e.id)); items = items.filter(t => !e.has(t.id)); items = items.filter(t => !(t.type === 'connector' && (e.has(t.sourceId) || e.has(t.targetId)))); selectedItems = []; updateSelectionToolbar(); updateLeftBarState(); saveStateForUndo() } }
+function rejoinConnectorsAround(removedIds) {
+    const original = new Set(removedIds);
+    const connectors = items.filter(i => i.type === 'connector' && !original.has(i.id));
+    connectors.forEach(conn => {
+        if (!conn.targetId || !original.has(conn.targetId)) return;
+        const targetItem = items.find(i => i.id === conn.targetId);
+        if (!targetItem || targetItem.type !== 'reroute') return;
+        let guard = 0;
+        let hopId = conn.targetId;
+        while (hopId && original.has(hopId) && guard < 24) {
+            const hop = items.find(i => i.id === hopId);
+            if (!hop || hop.type !== 'reroute') break;
+            const next = items.find(i => i.type === 'connector' && i.sourceId === hopId && !original.has(i.id));
+            if (!next) break;
+            removedIds.add(next.id);
+            conn.targetId = next.targetId;
+            conn.targetPort = next.targetPort;
+            if (next.label && !conn.label) conn.label = next.label;
+            hopId = next.targetId;
+            guard++;
+        }
+    });
+}
+
+function deleteSelectedItems() {
+    if (selectedItems.length === 0) return;
+    const removedIds = new Set(selectedItems.map(item => item.id));
+    rejoinConnectorsAround(removedIds);
+    items = items.filter(item => !removedIds.has(item.id));
+    items = items.filter(item => !(item.type === 'connector' && (removedIds.has(item.sourceId) || removedIds.has(item.targetId))));
+    selectedItems = [];
+    updateSelectionToolbar();
+    updateLeftBarState();
+    saveStateForUndo();
+}
 function addItemToLayeredItems(item) {
     if (item.type === 'comment') {
         items.push(item);
@@ -6932,12 +7057,13 @@ function updateSelectionToolbar() {
             const e = selectedItems[0];
             fontFamilySelect.value = e.fontFamily || 'Nunito';
             [textAlignLeftBtn, textAlignCenterBtn, textAlignRightBtn].forEach(el => {
+                if (!el) return;
                 el.classList.remove('active');
-                el.style.display = (isComment || isTextList || selectedItems[0].type === 'text') ? 'none' : 'flex';
+                el.style.display = 'flex';
             });
-            if (e.textAlign === 'left') textAlignLeftBtn.classList.add('active');
-            else if (e.textAlign === 'right') textAlignRightBtn.classList.add('active');
-            else textAlignCenterBtn.classList.add('active');
+            if (e.textAlign === 'right' && textAlignRightBtn) textAlignRightBtn.classList.add('active');
+            else if (e.textAlign === 'center' && textAlignCenterBtn) textAlignCenterBtn.classList.add('active');
+            else if (textAlignLeftBtn) textAlignLeftBtn.classList.add('active');
             textStyleBoldBtn.classList.toggle('active', e.fontWeight === 'bold');
             textStyleItalicBtn.classList.toggle('active', e.fontStyle === 'italic');
             textStyleBoldBtn.style.display = (isTextList || selectedItems[0].type === 'text') ? 'none' : 'flex';
