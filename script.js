@@ -767,13 +767,18 @@ function openLightbox(src) {
     overlay.style.display = 'flex';
 }
 
+function escapeRegExp(value) {
+    return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 function resolveVariables(text, project) {
-    if (!text || !project.data.variables) return text;
+    if (!text || !project || !project.data || !project.data.variables) return text;
     let resolved = text;
     Object.entries(project.data.variables).forEach(([key, val]) => {
         if (!key) return;
-        const regex = new RegExp(`\\{\\{${key}\\}\\}`, 'g');
-        resolved = resolved.replace(regex, val);
+        const regex = new RegExp(`\\{\\{${escapeRegExp(key)}\\}\\}`, 'g');
+        const replacement = val == null ? '' : String(val);
+        resolved = resolved.replace(regex, () => replacement);
     });
     return resolved;
 }
@@ -1396,35 +1401,43 @@ function createImageSlot(project, prompt, slotNumber) {
         replaceBtn.innerHTML = '<iconify-icon icon="lucide:refresh-cw"></iconify-icon>';
         replaceBtn.onclick = (e) => {
             e.stopPropagation();
-            promptImageInput.onchange = (ev) => {
-                const file = ev.target.files[0];
-                handleImageFile(file, (dataUrl) => {
-                    prompt[prop] = dataUrl;
-                    renderMoodpromptView(project);
-                    saveToBrowser();
-                });
-            };
-            promptImageInput.click();
+            choosePromptImage((dataUrl) => {
+                prompt[prop] = dataUrl;
+                renderMoodpromptView(project);
+                saveToBrowser();
+            });
+        };
+
+        const removeBtn = document.createElement('button');
+        removeBtn.type = 'button';
+        removeBtn.className = 'slot-action-btn remove-btn';
+        removeBtn.title = 'Remove Image';
+        removeBtn.setAttribute('aria-label', 'Remove Image');
+        removeBtn.innerHTML = '<iconify-icon icon="lucide:trash-2"></iconify-icon>';
+        removeBtn.onclick = (e) => {
+            e.stopPropagation();
+            e.preventDefault();
+            prompt[prop] = null;
+            renderMoodpromptView(project);
+            saveToBrowser();
         };
         
         slot.appendChild(zoomBtn);
         slot.appendChild(replaceBtn);
+        slot.appendChild(removeBtn);
     } else {
         const placeholder = document.createElement('div');
         placeholder.className = 'placeholder';
         placeholder.textContent = `+ Add Image ${slotNumber}`;
         slot.appendChild(placeholder);
     }
-    slot.onclick = () => {
-        promptImageInput.onchange = (e) => {
-            const file = e.target.files[0];
-            handleImageFile(file, (dataUrl) => {
-                prompt[prop] = dataUrl;
-                renderMoodpromptView(project);
-                saveToBrowser();
-            });
-        };
-        promptImageInput.click();
+    slot.onclick = (e) => {
+        if (e.target.closest('.slot-action-btn')) return;
+        choosePromptImage((dataUrl) => {
+            prompt[prop] = dataUrl;
+            renderMoodpromptView(project);
+            saveToBrowser();
+        });
     };
 
     // Drag & Drop
@@ -1453,6 +1466,18 @@ function createImageSlot(project, prompt, slotNumber) {
     });
 
     return slot;
+}
+
+function choosePromptImage(onData) {
+    if (!promptImageInput) return;
+    promptImageInput.value = '';
+    promptImageInput.onchange = (ev) => {
+        const file = ev.target.files && ev.target.files[0];
+        promptImageInput.value = '';
+        promptImageInput.onchange = null;
+        handleImageFile(file, onData);
+    };
+    promptImageInput.click();
 }
 
 function renderMobileTabsPopup() {
@@ -10539,7 +10564,26 @@ function ganttFormatDate(date) {
 }
 function ganttToday() { const t=new Date(); return new Date(t.getFullYear(),t.getMonth(),t.getDate()); }
 function ganttAddDays(date, n) { const d=new Date(date); d.setDate(d.getDate()+n); return d; }
-function ganttAddMonths(date, n) { const d=new Date(date); d.setMonth(d.getMonth()+n); return d; }
+function ganttAddMonths(date, n) {
+    const months = Math.trunc(Number(n) || 0);
+    const target = new Date(date.getFullYear(), date.getMonth() + months, 1);
+    const last = new Date(target.getFullYear(), target.getMonth() + 1, 0).getDate();
+    target.setDate(Math.min(date.getDate(), last));
+    return target;
+}
+function ganttColumnEnd(col, next, zoom) {
+    if (next) return next;
+    if (zoom === 'day') return ganttAddDays(col, 1);
+    if (zoom === 'week') return ganttAddDays(col, 7);
+    if (zoom === 'month') return new Date(col.getFullYear(), col.getMonth() + 1, 1);
+    return new Date(col.getFullYear(), col.getMonth() + 3, 1);
+}
+function ganttRoundToDay(date) {
+    const day = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+    const next = ganttAddDays(day, 1);
+    const half = (next.getTime() - day.getTime()) / 2;
+    return date.getTime() - day.getTime() >= half ? next : day;
+}
 function ganttWeekNum(date) {
     const d=new Date(Date.UTC(date.getFullYear(),date.getMonth(),date.getDate()));
     d.setUTCDate(d.getUTCDate()+4-(d.getUTCDay()||7));
@@ -10575,50 +10619,52 @@ function ganttGetColumns(viewStartStr, viewEndStr, zoom) {
     return cols;
 }
 
-function ganttColOffset(date, cols, colWidth) {
+function ganttColOffset(date, cols, colWidth, zoom) {
+    if (!cols.length || !(colWidth > 0)) return 0;
     const ts = date.getTime();
-    let diffDays = 7;
-    if (cols.length > 1) {
-        const diffMs = cols[1].getTime() - cols[0].getTime();
-        if (diffMs <= GANTT_MS_DAY * 1.5) diffDays = 1;
-        else if (diffMs <= GANTT_MS_DAY * 7.5) diffDays = 7;
-        else if (diffMs <= GANTT_MS_DAY * 32) diffDays = 30;
-        else diffDays = 90;
+    const firstEnd = ganttColumnEnd(cols[0], cols[1] || null, zoom);
+    const firstSpan = firstEnd.getTime() - cols[0].getTime();
+    if (ts < cols[0].getTime()) {
+        if (firstSpan <= 0) return 0;
+        return ((ts - cols[0].getTime()) / firstSpan) * colWidth;
     }
-    
     for (let i = 0; i < cols.length; i++) {
-        const colEnd = i < cols.length-1 ? cols[i+1] : ganttAddDays(cols[i], diffDays);
+        const colEnd = ganttColumnEnd(cols[i], cols[i + 1] || null, zoom);
         if (ts < colEnd.getTime()) {
-            const fraction = (ts - cols[i].getTime()) / (colEnd.getTime() - cols[i].getTime());
+            const span = colEnd.getTime() - cols[i].getTime();
+            const fraction = span > 0 ? (ts - cols[i].getTime()) / span : 0;
             return (i + fraction) * colWidth;
         }
     }
-    return cols.length * colWidth;
+    const last = cols.length - 1;
+    const lastEnd = ganttColumnEnd(cols[last], null, zoom);
+    const lastSpan = Math.max(1, lastEnd.getTime() - cols[last].getTime());
+    return (last + (ts - cols[last].getTime()) / lastSpan) * colWidth;
 }
 
 function ganttPixelToDate(pixelLeft, cols, colWidth, zoom) {
-    if (pixelLeft < 0) pixelLeft = 0;
-    let currentLeft = 0;
-    const diffDays = zoom === 'day' ? 1 : (zoom === 'week' ? 7 : (zoom === 'month' ? 30 : 90));
-    for (let i = 0; i < cols.length; i++) {
-        const nextDate = i < cols.length - 1 ? cols[i+1] : ganttAddDays(cols[i], diffDays);
-        if (pixelLeft >= currentLeft && pixelLeft < currentLeft + colWidth) {
-            const fraction = (pixelLeft - currentLeft) / colWidth;
-            return new Date(cols[i].getTime() + fraction * (nextDate.getTime() - cols[i].getTime()));
-        } else if (pixelLeft >= currentLeft + colWidth && i === cols.length - 1) {
-            const fraction = (pixelLeft - currentLeft) / colWidth;
-            return new Date(cols[i].getTime() + fraction * (nextDate.getTime() - cols[i].getTime()));
-        }
-        currentLeft += colWidth;
+    if (!cols.length || !(colWidth > 0)) return ganttToday();
+    if (pixelLeft < 0) {
+        const span = ganttColumnEnd(cols[0], cols[1] || null, zoom).getTime() - cols[0].getTime();
+        return new Date(cols[0].getTime() + (pixelLeft / colWidth) * span);
     }
-    return cols[0] || ganttToday();
+    const index = Math.min(cols.length - 1, Math.floor(pixelLeft / colWidth));
+    const colEnd = ganttColumnEnd(cols[index], index < cols.length - 1 ? cols[index + 1] : null, zoom);
+    const span = colEnd.getTime() - cols[index].getTime();
+    const into = pixelLeft - index * colWidth;
+    return new Date(cols[index].getTime() + (into / colWidth) * span);
 }
 
-function ganttBarPixels(task, cols, colWidth) {
+function ganttBarPixels(task, cols, colWidth, zoom) {
+    if (!cols.length) return null;
     const start = ganttParseDate(task.startDate);
     const end   = ganttAddDays(ganttParseDate(task.endDate), 1);
-    const left  = Math.max(0, ganttColOffset(start, cols, colWidth));
-    const right = ganttColOffset(end, cols, colWidth);
+    const rawLeft = ganttColOffset(start, cols, colWidth, zoom);
+    const rawRight = ganttColOffset(end, cols, colWidth, zoom);
+    const total = cols.length * colWidth;
+    if (rawRight <= 0 || rawLeft >= total) return null;
+    const left = Math.max(0, rawLeft);
+    const right = Math.min(total, rawRight);
     return { left, width: Math.max(colWidth * 0.4, right - left - 2) };
 }
 
@@ -10675,8 +10721,8 @@ function renderGanttView(project) {
     rowsArea.style.width = totalW + 'px';
 
     // Today line
-    const todayOffset = ganttColOffset(today, cols, colWidth);
-    if (todayOffset >= 0 && todayOffset <= totalW) {
+    const todayOffset = ganttColOffset(today, cols, colWidth, zoom);
+    if (todayOffset >= 0 && todayOffset < totalW) {
         const todayLine = document.createElement('div');
         todayLine.className = 'gantt-today-line';
         todayLine.style.left = todayOffset + 'px';
@@ -10868,14 +10914,16 @@ function renderGanttView(project) {
             const ends   = group.tasks.map(t => ganttParseDate(t.endDate).getTime());
             const gStart = new Date(Math.min(...starts));
             const gEnd   = ganttAddDays(new Date(Math.max(...ends)), 1);
-            const gl = ganttColOffset(gStart, cols, colWidth);
-            const gr = ganttColOffset(gEnd, cols, colWidth);
-            if (gr > gl) {
+            const gl = ganttColOffset(gStart, cols, colWidth, zoom);
+            const gr = ganttColOffset(gEnd, cols, colWidth, zoom);
+            const visibleLeft = Math.max(0, gl);
+            const visibleRight = Math.min(totalW, gr);
+            if (visibleRight > visibleLeft) {
                 const sumBar = document.createElement('div');
                 sumBar.className = 'gantt-group-summary-bar';
                 sumBar.dataset.groupId = group.id;
-                sumBar.style.left  = gl + 'px';
-                sumBar.style.width = (gr - gl - 2) + 'px';
+                sumBar.style.left  = visibleLeft + 'px';
+                sumBar.style.width = (visibleRight - visibleLeft - 2) + 'px';
                 sumBar.style.background = groupColor;
                 gTrack.appendChild(sumBar);
             }
@@ -11010,7 +11058,12 @@ function renderGanttView(project) {
                 // Timeline task track + bar
                 const tTrack = document.createElement('div');
                 tTrack.className = 'gantt-task-track';
-                const { left, width } = ganttBarPixels(task, cols, colWidth);
+                const geom = ganttBarPixels(task, cols, colWidth, zoom);
+                if (!geom) {
+                    rowsArea.appendChild(tTrack);
+                    return;
+                }
+                const { left, width } = geom;
                 const barColor = ganttStatusColor(task, groupColor);
                 const textColor = getContrastColor(barColor.startsWith('#') ? barColor : '#429eff');
                 const bar = document.createElement('div');
@@ -11059,107 +11112,83 @@ function renderGanttView(project) {
                 rightHandle.className = 'gantt-bar-handle-right';
                 bar.append(leftHandle, rightHandle);
 
+                const startAnchor = ganttColOffset(ganttParseDate(task.startDate), cols, colWidth, zoom);
+                const endAnchor = ganttColOffset(ganttAddDays(ganttParseDate(task.endDate), 1), cols, colWidth, zoom);
+                const trackPointer = (startEvent, onMove, onUp) => {
+                    if (startEvent.pointerType === 'mouse' && startEvent.button !== 0) return;
+                    startEvent.stopPropagation();
+                    startEvent.preventDefault();
+                    const originX = startEvent.clientX;
+                    let lastDelta = 0;
+                    const move = (ev) => {
+                        lastDelta = ev.clientX - originX;
+                        onMove(lastDelta);
+                    };
+                    const up = (ev) => {
+                        document.removeEventListener('pointermove', move);
+                        document.removeEventListener('pointerup', up);
+                        document.removeEventListener('pointercancel', up);
+                        const delta = ev.type === 'pointercancel' ? lastDelta : ev.clientX - originX;
+                        onUp(delta);
+                    };
+                    document.addEventListener('pointermove', move);
+                    document.addEventListener('pointerup', up);
+                    document.addEventListener('pointercancel', up);
+                };
+
                 const setupHandleDrag = (handle, isLeft) => {
-                    handle.onmousedown = (e) => {
-                        if (e.button !== 0) return;
-                        e.stopPropagation();
-                        let isDraggingHandle = true;
-                        const startX = e.clientX;
+                    handle.onpointerdown = (e) => {
                         const initialLeft = left;
                         const initialWidth = width;
-                        
-                        const mousemove = (ev) => {
-                            if (!isDraggingHandle) return;
-                            const delta = ev.clientX - startX;
+                        trackPointer(e, (delta) => {
                             if (isLeft) {
                                 const newWidth = Math.max(10, initialWidth - delta);
                                 const newLeft = initialLeft + (initialWidth - newWidth);
                                 bar.style.left = newLeft + 'px';
                                 bar.style.width = newWidth + 'px';
                             } else {
-                                const newWidth = Math.max(10, initialWidth + delta);
-                                bar.style.width = newWidth + 'px';
+                                bar.style.width = Math.max(10, initialWidth + delta) + 'px';
                             }
-                        };
-                        
-                        const mouseup = (ev) => {
-                            if (!isDraggingHandle) return;
-                            isDraggingHandle = false;
-                            document.removeEventListener('mousemove', mousemove);
-                            document.removeEventListener('mouseup', mouseup);
-                            
-                            const deltaX = ev.clientX - startX;
+                        }, (deltaX) => {
                             if (isLeft) {
                                 const previousStart = task.startDate;
-                                const newLeft = initialLeft + deltaX;
-                                const foundDate = ganttPixelToDate(newLeft, cols, colWidth, zoom);
+                                const foundDate = ganttRoundToDay(ganttPixelToDate(startAnchor + deltaX, cols, colWidth, zoom));
                                 task.startDate = ganttFormatDate(foundDate);
                                 if (ganttParseDate(task.startDate) > ganttParseDate(task.endDate)) task.startDate = task.endDate;
                                 const daysShift = Math.round((ganttParseDate(task.startDate).getTime() - ganttParseDate(previousStart).getTime()) / GANTT_MS_DAY);
                                 if (daysShift) ganttPushDependents(project, task.id, daysShift);
                             } else {
-                                const newRight = initialLeft + initialWidth + deltaX;
-                                const foundDate = ganttPixelToDate(newRight, cols, colWidth, zoom);
+                                const foundDate = ganttRoundToDay(ganttPixelToDate(endAnchor + deltaX, cols, colWidth, zoom));
                                 task.endDate = ganttFormatDate(ganttAddDays(foundDate, -1));
                                 if (ganttParseDate(task.endDate) < ganttParseDate(task.startDate)) task.endDate = task.startDate;
                             }
-                            
                             renderGanttView(project);
                             scheduleAutoSave();
-                        };
-                        document.addEventListener('mousemove', mousemove);
-                        document.addEventListener('mouseup', mouseup);
+                        });
                     };
                 };
                 
                 setupHandleDrag(leftHandle, true);
                 setupHandleDrag(rightHandle, false);
                 
-                // Task Dragging Logic
-                let isDraggingTask = false;
-                let startLeft = 0;
-                let startX = 0;
-                bar.onmousedown = (e) => {
-                    if (e.button !== 0) return;
-                    e.stopPropagation();
-                    isDraggingTask = true;
-                    startLeft = left;
-                    startX = e.clientX;
-                    
-                    const mousemove = (ev) => {
-                        if (!isDraggingTask) return;
-                        const delta = ev.clientX - startX;
-                        bar.style.left = Math.max(0, startLeft + delta) + 'px';
-                    };
-                    const mouseup = (ev) => {
-                        if (!isDraggingTask) return;
-                        isDraggingTask = false;
-                        document.removeEventListener('mousemove', mousemove);
-                        document.removeEventListener('mouseup', mouseup);
-                        
-                        const deltaLeft = ev.clientX - startX;
+                bar.onpointerdown = (e) => {
+                    if (e.target.closest('.gantt-bar-handle-left, .gantt-bar-handle-right')) return;
+                    trackPointer(e, (delta) => {
+                        bar.style.left = Math.max(0, left + delta) + 'px';
+                    }, (deltaLeft) => {
                         if (Math.abs(deltaLeft) < 5) {
                             ganttOpenDetail(project, group.id, task.id);
                             bar.style.left = left + 'px';
                             return;
                         }
-                        
-                        // Calculate new date
-                        const newLeft = Math.max(0, startLeft + deltaLeft);
-                        const foundDate = ganttPixelToDate(newLeft, cols, colWidth, zoom);
-                        
-                        const msShift = foundDate.getTime() - ganttParseDate(task.startDate).getTime();
-                        const daysShift = Math.round(msShift / GANTT_MS_DAY);
-                        
+                        const foundDate = ganttRoundToDay(ganttPixelToDate(startAnchor + deltaLeft, cols, colWidth, zoom));
+                        const daysShift = Math.round((foundDate.getTime() - ganttParseDate(task.startDate).getTime()) / GANTT_MS_DAY);
                         task.startDate = ganttFormatDate(ganttAddDays(ganttParseDate(task.startDate), daysShift));
                         task.endDate = ganttFormatDate(ganttAddDays(ganttParseDate(task.endDate), daysShift));
-                        ganttPushDependents(project, task.id, daysShift);
-                        
+                        if (daysShift) ganttPushDependents(project, task.id, daysShift);
                         renderGanttView(project);
                         scheduleAutoSave();
-                    };
-                    document.addEventListener('mousemove', mousemove);
-                    document.addEventListener('mouseup', mouseup);
+                    });
                 };
                 
                 tTrack.appendChild(bar);
@@ -11531,15 +11560,24 @@ function ganttDuplicateTask() {
 function ganttShiftView(project, direction) {
     const zoom = project.data.zoomLevel || 'week';
     const steps = { day: 7, week: 4, month: 3, quarter: 2 };
-    const n = steps[zoom] * direction;
-    if (zoom === 'day' || zoom === 'week') {
-        const days = zoom === 'day' ? n : n * 7;
-        project.data.viewStartDate = ganttFormatDate(ganttAddDays(ganttParseDate(project.data.viewStartDate), days));
-        project.data.viewEndDate   = ganttFormatDate(ganttAddDays(ganttParseDate(project.data.viewEndDate),   days));
+    const n = (steps[zoom] || 1) * direction;
+    let start = ganttParseDate(project.data.viewStartDate);
+    let end = ganttParseDate(project.data.viewEndDate);
+    if (zoom === 'day') {
+        start = ganttAddDays(start, n);
+        end = ganttAddDays(end, n);
+    } else if (zoom === 'week') {
+        start = ganttAddDays(start, n * 7);
+        end = ganttAddDays(end, n * 7);
+    } else if (zoom === 'quarter') {
+        start = ganttAddMonths(start, n * 3);
+        end = ganttAddMonths(end, n * 3);
     } else {
-        project.data.viewStartDate = ganttFormatDate(ganttAddMonths(ganttParseDate(project.data.viewStartDate), n));
-        project.data.viewEndDate   = ganttFormatDate(ganttAddMonths(ganttParseDate(project.data.viewEndDate),   n));
+        start = ganttAddMonths(start, n);
+        end = ganttAddMonths(end, n);
     }
+    project.data.viewStartDate = ganttFormatDate(start);
+    project.data.viewEndDate = ganttFormatDate(end);
     renderGanttView(project);
     scheduleAutoSave();
 }
@@ -11562,7 +11600,7 @@ function ganttJumpToToday(project) {
     setTimeout(() => {
         const cols     = ganttGetColumns(project.data.viewStartDate, project.data.viewEndDate, zoom);
         const colWidth = GANTT_ZOOM[zoom].colWidth;
-        const offset   = ganttColOffset(today, cols, colWidth);
+        const offset   = ganttColOffset(today, cols, colWidth, zoom);
         const timeline = document.getElementById('gantt-timeline');
         if (timeline) timeline.scrollLeft = Math.max(0, offset - timeline.clientWidth / 2);
     }, 50);

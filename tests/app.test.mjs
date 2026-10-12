@@ -2222,6 +2222,7 @@ try {
     await assertBottomToolbarScrollEnd(page);
     await assertNonCanvasRound1(page);
     await assertShellCanvasFixes(page);
+    await assertRound3GanttPrompt(page);
 
     const lateErrors = pageErrors.filter(isFirstParty);
     assert.deepEqual(lateErrors, [], `first-party errors:\n${lateErrors.join('\n')}`);
@@ -4452,6 +4453,211 @@ async function assertShellCanvasFixes(page) {
         await page.waitForFunction(() => window.innerWidth === 1280);
     }
     console.log('Shell and canvas fixes passed.');
+}
+
+async function assertRound3GanttPrompt(page) {
+    console.log('Testing gantt drag, today line, month boundaries, and prompt slots...');
+    await page.setViewport({ width: 1280, height: 800, deviceScaleFactor: 1, isMobile: false, hasTouch: false });
+    await page.waitForFunction(() => window.innerWidth === 1280);
+
+    const drag = await page.evaluate(() => {
+        createNewProject('moodgantt');
+        const project = projects.find((p) => p.id === activeProjectId);
+        project.data.zoomLevel = 'month';
+        project.data.zoomScale = 1;
+        project.data.viewStartDate = '2026-02-01';
+        project.data.viewEndDate = '2026-06-01';
+        project.data.groups = [{
+            id: 'g', name: 'Plan', color: '#429eff', collapsed: false,
+            tasks: [
+                { id: 'before', name: 'Before', startDate: '2026-01-10', endDate: '2026-02-20', progress: 0, status: '', assignee: '', notes: '', dependsOn: '' },
+                { id: 'short', name: 'Short', startDate: '2026-03-03', endDate: '2026-03-03', progress: 0, status: '', assignee: '', notes: '', dependsOn: '' },
+            ],
+        }];
+        renderGanttView(project);
+        document.getElementById('gantt-timeline').scrollLeft = 0;
+        return project.id;
+    });
+    const beforeBox = await page.$eval('.gantt-bar[data-task-id="before"]', (bar) => {
+        const rect = bar.getBoundingClientRect();
+        return { x: rect.x, y: rect.y, w: rect.width, h: rect.height };
+    });
+    await page.mouse.move(beforeBox.x + 24, beforeBox.y + beforeBox.h / 2);
+    await page.mouse.down();
+    await page.mouse.move(beforeBox.x + 24 + 40, beforeBox.y + beforeBox.h / 2, { steps: 6 });
+    await page.mouse.up();
+    const afterDrag = await page.evaluate((id) => {
+        const task = projects.find((p) => p.id === id).data.groups[0].tasks.find((t) => t.id === 'before');
+        return { start: task.startDate, end: task.endDate };
+    }, drag);
+    assert.equal(afterDrag.start, '2026-01-19', `clamped bar drag jumped the start to ${afterDrag.start}`);
+    assert.equal(afterDrag.end, '2026-03-01', `clamped bar drag changed the length: ${afterDrag.end}`);
+
+    const handle = await page.$eval('.gantt-bar[data-task-id="short"] .gantt-bar-handle-right', (el) => {
+        el.scrollIntoView({ block: 'center', inline: 'center' });
+        const rect = el.getBoundingClientRect();
+        return { x: rect.x, y: rect.y, w: rect.width, h: rect.height };
+    });
+    await page.mouse.move(handle.x + handle.w / 2, handle.y + handle.h / 2);
+    await page.mouse.down();
+    await page.mouse.move(handle.x + handle.w / 2 + 120, handle.y + handle.h / 2, { steps: 6 });
+    await page.mouse.up();
+    const afterResize = await page.evaluate((id) => {
+        const task = projects.find((p) => p.id === id).data.groups[0].tasks.find((t) => t.id === 'short');
+        return { start: task.startDate, end: task.endDate };
+    }, drag);
+    assert.equal(afterResize.start, '2026-03-03', `resize moved the start: ${afterResize.start}`);
+    assert.equal(afterResize.end, '2026-04-03', `short bar resize wrote ${afterResize.end}`);
+
+    const today = await page.evaluate((id) => {
+        const project = projects.find((p) => p.id === id);
+        project.data.zoomLevel = 'month';
+        project.data.viewStartDate = '2025-12-01';
+        project.data.viewEndDate = '2026-01-15';
+        renderGanttView(project);
+        const outside = document.querySelector('.gantt-today-line');
+        const todayDate = ganttToday();
+        project.data.viewStartDate = ganttFormatDate(new Date(todayDate.getFullYear(), todayDate.getMonth(), 1));
+        project.data.viewEndDate = ganttFormatDate(ganttAddDays(todayDate, 5));
+        project.data.zoomLevel = 'month';
+        renderGanttView(project);
+        const line = document.querySelector('.gantt-today-line');
+        const cols = ganttGetColumns(project.data.viewStartDate, project.data.viewEndDate, 'month');
+        const days = new Date(todayDate.getFullYear(), todayDate.getMonth() + 1, 0).getDate();
+        return {
+            outside: !!outside,
+            inside: line ? parseFloat(line.style.left) : null,
+            height: line ? line.getBoundingClientRect().height : 0,
+            columns: cols.length,
+            expected: ((todayDate.getDate() - 1) / days) * 120,
+        };
+    }, drag);
+    assert.equal(today.outside, false, 'today line was drawn on a range that does not include today');
+    assert.equal(today.columns, 1, `expected one month column, got ${today.columns}`);
+    assert.ok(Math.abs(today.inside - today.expected) < 1.5, `today line at ${today.inside}px, expected ${today.expected}`);
+    assert.ok(today.height > 20, `today line has no height (${today.height})`);
+
+    const shifted = await page.evaluate((id) => {
+        const months = {
+            jan: ganttFormatDate(ganttAddMonths(ganttParseDate('2026-01-31'), 1)),
+            back: ganttFormatDate(ganttAddMonths(ganttParseDate('2026-03-31'), -1)),
+            leap: ganttFormatDate(ganttAddMonths(ganttParseDate('2024-01-31'), 1)),
+            dec: ganttFormatDate(ganttAddMonths(ganttParseDate('2025-12-31'), 2)),
+        };
+        const project = projects.find((p) => p.id === id);
+        project.data.zoomLevel = 'month';
+        project.data.viewStartDate = '2026-01-31';
+        project.data.viewEndDate = '2026-06-30';
+        renderGanttView(project);
+        document.getElementById('gantt-next-btn').click();
+        const monthStart = project.data.viewStartDate;
+        project.data.zoomLevel = 'quarter';
+        project.data.viewStartDate = '2026-01-15';
+        project.data.viewEndDate = '2026-06-15';
+        renderGanttView(project);
+        const beforeHeader = document.querySelector('.gantt-col-header').innerText.replace(/\s+/g, ' ');
+        document.getElementById('gantt-next-btn').click();
+        const quarterStart = project.data.viewStartDate;
+        const afterHeader = document.querySelector('.gantt-col-header').innerText.replace(/\s+/g, ' ');
+        project.data.groups[0].collapsed = false;
+        renderGanttView(project);
+        const openRows = document.querySelectorAll('.gantt-task-sidebar-row').length;
+        document.querySelector('.gantt-group-collapse-btn').click();
+        const collapsedRows = document.querySelectorAll('.gantt-task-sidebar-row').length;
+        document.querySelector('.gantt-group-collapse-btn').click();
+        return { months, monthStart, beforeHeader, quarterStart, afterHeader, openRows, collapsedRows, reopened: document.querySelectorAll('.gantt-task-sidebar-row').length };
+    }, drag);
+    assert.equal(shifted.months.jan, '2026-02-28');
+    assert.equal(shifted.months.back, '2026-02-28');
+    assert.equal(shifted.months.leap, '2024-02-29');
+    assert.equal(shifted.months.dec, '2026-02-28');
+    assert.equal(shifted.monthStart, '2026-04-30', `month next from the 31st landed on ${shifted.monthStart}`);
+    assert.equal(shifted.quarterStart, '2026-07-15', `quarter next landed on ${shifted.quarterStart}`);
+    assert.match(shifted.beforeHeader, /Q1/);
+    assert.match(shifted.afterHeader, /Q3/);
+    assert.ok(shifted.openRows > 0, 'group had no task rows');
+    assert.equal(shifted.collapsedRows, 0, 'collapse left task rows open');
+    assert.equal(shifted.reopened, shifted.openRows, 'expand did not restore the task rows');
+
+    await page.evaluate(() => saveToBrowser());
+    await page.setViewport({ width: 390, height: 844, deviceScaleFactor: 1, isMobile: true, hasTouch: true });
+    await page.waitForFunction(() => window.innerWidth === 390 && window.projects && typeof renderGanttView === 'function');
+    const touch = await page.evaluate(() => {
+        createNewProject('moodgantt');
+        const project = projects.find((p) => p.id === activeProjectId);
+        project.data.zoomLevel = 'day';
+        project.data.zoomScale = 1;
+        project.data.viewStartDate = '2026-10-10';
+        project.data.viewEndDate = '2026-10-24';
+        project.data.groups = [{
+            id: 'g', name: 'Plan', color: '#429eff', collapsed: false,
+            tasks: [{ id: 'touch', name: 'Touch', startDate: '2026-10-12', endDate: '2026-10-14', progress: 0, status: '', assignee: '', notes: '', dependsOn: '' }],
+        }];
+        renderGanttView(project);
+        const timeline = document.getElementById('gantt-timeline');
+        const bar = document.querySelector('.gantt-bar[data-task-id="touch"]');
+        const goal = timeline.getBoundingClientRect().left + 16;
+        timeline.scrollLeft += bar.getBoundingClientRect().left - goal;
+        const rect = bar.getBoundingClientRect();
+        return { id: project.id, x: rect.x, y: rect.y, w: rect.width, h: rect.height };
+    });
+    await page.touchscreen.touchStart(touch.x + 30, touch.y + touch.h / 2);
+    await wait(40);
+    await page.touchscreen.touchMove(touch.x + 30 + 60, touch.y + touch.h / 2);
+    await wait(40);
+    await page.touchscreen.touchEnd();
+    const touchDates = await page.evaluate((id) => {
+        const task = projects.find((p) => p.id === id).data.groups[0].tasks.find((t) => t.id === 'touch');
+        return { start: task.startDate, end: task.endDate };
+    }, touch.id);
+    assert.equal(touchDates.start, '2026-10-13', `touch drag left the start at ${touchDates.start}`);
+    assert.equal(touchDates.end, '2026-10-15', `touch drag left the end at ${touchDates.end}`);
+
+    await page.setViewport({ width: 1280, height: 800, deviceScaleFactor: 1, isMobile: false, hasTouch: false });
+    await page.waitForFunction(() => window.innerWidth === 1280 && typeof createNewProject === 'function' && window.projects);
+    const prompt = await page.evaluate(() => {
+        createNewProject('moodprompt');
+        const project = projects.find((p) => p.id === activeProjectId);
+        project.data.variables = { 'a+b': 'boom', 'foo(': 'x' };
+        project.data.prompts = [{
+            id: 'p1', title: 'Hero', platform: 'midjourney', mediaType: 'image',
+            image1: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
+            image2: null,
+            text: '{{foo(}} {{a+b}}',
+            tags: [],
+        }];
+        renderMoodpromptView(project);
+        const writes = [];
+        navigator.clipboard.writeText = (text) => {
+            writes.push(String(text));
+            return Promise.resolve();
+        };
+        document.querySelector('.prompt-copy-btn').click();
+        document.querySelector('.platform-select').value = 'kling';
+        document.querySelector('.platform-select').dispatchEvent(new Event('change', { bubbles: true }));
+        const beforeRemove = {
+            image: project.data.prompts[0].image1 ? 'set' : 'empty',
+            remove: document.querySelectorAll('.remove-btn').length,
+            platform: project.data.prompts[0].platform,
+            copied: writes[0] || '',
+        };
+        document.querySelector('.remove-btn').click();
+        return {
+            beforeRemove,
+            image: project.data.prompts[0].image1,
+            placeholder: document.querySelector('.image-upload-slot .placeholder') ? document.querySelector('.image-upload-slot .placeholder').textContent : '',
+            text: project.data.prompts[0].text,
+            id: project.id,
+        };
+    });
+    assert.equal(prompt.beforeRemove.copied, 'x boom', `copy wrote ${prompt.beforeRemove.copied}`);
+    assert.equal(prompt.beforeRemove.platform, 'kling');
+    assert.equal(prompt.beforeRemove.image, 'set');
+    assert.equal(prompt.beforeRemove.remove, 1);
+    assert.equal(prompt.image, null, 'remove left the image data in place');
+    assert.match(prompt.placeholder, /Add Image 1/);
+    assert.equal(prompt.text, '{{foo(}} {{a+b}}', 'remove cleared the prompt text');
+    console.log('Gantt and prompt round 3 passed.');
 }
 
 
