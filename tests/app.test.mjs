@@ -3144,33 +3144,88 @@ async function measureFittedItems(page, sceneItems) {
     }, sceneItems);
 }
 
+// Mirrors computeFitSafeRect's edge choice. GAP and MIN match script.js and
+// are used only to decide which single side a corner widget reserves. The
+// returned rect is the chrome-free area itself (no extra padding).
 function freeRectForChrome(canvas, chrome) {
+    const GAP = 20;
+    const MIN = 32;
+    const viewW = canvas.w;
+    const viewH = canvas.h;
+    let padLeft = MIN;
+    let padRight = MIN;
+    let padTop = MIN;
+    let padBottom = MIN;
     let left = 0;
     let top = 0;
-    let right = canvas.w;
-    let bottom = canvas.h;
+    let right = viewW;
+    let bottom = viewH;
     const corners = [];
     for (const r of chrome) {
         if (r.hidden || r.w < 1 || r.h < 1) continue;
         const cx = (r.left + r.right) / 2;
         const cy = (r.top + r.bottom) / 2;
-        const wide = r.w >= r.h * 1.4 && r.w > canvas.w * 0.35;
-        const tall = r.h >= r.w * 1.4 && r.h > canvas.h * 0.35;
-        if (wide && cy < canvas.h * 0.45) top = Math.max(top, r.bottom);
-        else if (wide && cy > canvas.h * 0.55) bottom = Math.min(bottom, r.top);
-        else if (tall && cx < canvas.w * 0.45) left = Math.max(left, r.right);
-        else if (tall && cx > canvas.w * 0.55) right = Math.min(right, r.left);
-        else corners.push(r);
+        const wide = r.w >= r.h * 1.4 && r.w > viewW * 0.35;
+        const tall = r.h >= r.w * 1.4 && r.h > viewH * 0.35;
+        if (wide && cy < viewH * 0.45) {
+            padTop = Math.max(padTop, r.bottom + GAP);
+            top = Math.max(top, r.bottom);
+        } else if (wide && cy > viewH * 0.55) {
+            padBottom = Math.max(padBottom, viewH - r.top + GAP);
+            bottom = Math.min(bottom, r.top);
+        } else if (tall && cx < viewW * 0.45) {
+            padLeft = Math.max(padLeft, r.right + GAP);
+            left = Math.max(left, r.right);
+        } else if (tall && cx > viewW * 0.55) {
+            padRight = Math.max(padRight, viewW - r.left + GAP);
+            right = Math.min(right, r.left);
+        } else {
+            corners.push(r);
+        }
     }
+    corners.sort((a, b) => (b.w * b.h) - (a.w * a.h));
     for (const r of corners) {
-        const overlaps = r.right > left && r.left < right && r.bottom > top && r.top < bottom;
+        const safeLeft = padLeft;
+        const safeTop = padTop;
+        const safeRight = viewW - padRight;
+        const safeBottom = viewH - padBottom;
+        const overlaps = r.right > safeLeft && r.left < safeRight && r.bottom > safeTop && r.top < safeBottom;
         if (!overlaps) continue;
         const cx = (r.left + r.right) / 2;
         const cy = (r.top + r.bottom) / 2;
-        if (cx >= canvas.w / 2) right = Math.min(right, r.left);
-        else left = Math.max(left, r.right);
-        if (cy >= canvas.h / 2) bottom = Math.min(bottom, r.top);
-        else top = Math.max(top, r.bottom);
+        const freeW = Math.max(0, safeRight - safeLeft);
+        const freeH = Math.max(0, safeBottom - safeTop);
+        if (cy >= viewH * 0.5) {
+            const nextRight = Math.max(padRight, viewW - r.left + GAP);
+            const nextBottom = Math.max(padBottom, viewH - r.top + GAP);
+            const wasteRight = (nextRight - padRight) * freeH;
+            const wasteBottom = (nextBottom - padBottom) * freeW;
+            if (wasteBottom <= wasteRight) {
+                padBottom = nextBottom;
+                bottom = Math.min(bottom, r.top);
+            } else {
+                padRight = nextRight;
+                right = Math.min(right, r.left);
+            }
+        } else {
+            const nextTop = Math.max(padTop, r.bottom + GAP);
+            const growRight = cx >= viewW / 2;
+            const nextSide = growRight
+                ? Math.max(padRight, viewW - r.left + GAP)
+                : Math.max(padLeft, r.right + GAP);
+            const wasteSide = (nextSide - (growRight ? padRight : padLeft)) * freeH;
+            const wasteTop = (nextTop - padTop) * freeW;
+            if (wasteTop <= wasteSide) {
+                padTop = nextTop;
+                top = Math.max(top, r.bottom);
+            } else if (growRight) {
+                padRight = nextSide;
+                right = Math.min(right, r.left);
+            } else {
+                padLeft = nextSide;
+                left = Math.max(left, r.right);
+            }
+        }
     }
     return { left, top, right, bottom };
 }
@@ -3208,6 +3263,44 @@ function assertItemsInsideFreeRect(result, label, { expectBelowMinZoom }) {
     }
 }
 
+function assertScatteredFillsFreeArea(result, label) {
+    const free = freeRectForChrome(result.canvas, result.chrome);
+    const freeW = free.right - free.left;
+    const freeH = free.bottom - free.top;
+    let minX = Infinity;
+    let minY = Infinity;
+    let maxX = -Infinity;
+    let maxY = -Infinity;
+    for (const [id, box] of Object.entries(result.found)) {
+        assert.ok(box && box.n >= 4, `${label} ${id} is not fully inside the view: ${JSON.stringify(box)}`);
+        assert.ok(box.minX >= free.left, `${label} ${id} left ${box.minX} is outside the free area ${free.left}`);
+        assert.ok(box.minY >= free.top, `${label} ${id} top ${box.minY} is outside the free area ${free.top}`);
+        assert.ok(box.maxX <= free.right, `${label} ${id} right ${box.maxX} is outside the free area ${free.right}`);
+        assert.ok(box.maxY <= free.bottom, `${label} ${id} bottom ${box.maxY} is outside the free area ${free.bottom}`);
+        minX = Math.min(minX, box.minX);
+        minY = Math.min(minY, box.minY);
+        maxX = Math.max(maxX, box.maxX);
+        maxY = Math.max(maxY, box.maxY);
+    }
+    const cx = (minX + maxX) / 2;
+    const cy = (minY + maxY) / 2;
+    const fcx = (free.left + free.right) / 2;
+    const fcy = (free.top + free.bottom) / 2;
+    const contentW = maxX - minX;
+    const contentH = maxY - minY;
+    const fillX = contentW / freeW;
+    const fillY = contentH / freeH;
+    assert.ok(Math.abs(cx - fcx) <= 10, `${label} content center x ${cx} is more than 10px from free center ${fcx} (zoom ${result.zoom}, free ${JSON.stringify(free)})`);
+    if (fillY <= fillX) {
+        assert.ok(Math.abs(cy - fcy) <= 10, `${label} content center y ${cy} is more than 10px from free center ${fcy} on the non-limiting axis`);
+    }
+    const limitingFill = Math.max(fillX, fillY);
+    assert.ok(limitingFill >= 0.8, `${label} content fills ${limitingFill} of the limiting free-area side (content ${contentW}x${contentH}, free ${freeW}x${freeH}, zoom ${result.zoom})`);
+    if (result.canvas.w <= 500) {
+        assert.ok(Math.abs(fcx - result.canvas.w / 2) <= 10, `${label} bottom chrome reserved a side inset; free center ${fcx} vs ${result.canvas.w / 2}`);
+    }
+}
+
 async function assertFitViewGeometry(page) {
     console.log('Testing fit-to-view geometry (negative, far, rotated, nested, DPR)...');
     const { scattered, scaled } = fitScenes();
@@ -3225,6 +3318,32 @@ async function assertFitViewGeometry(page) {
         assertItemsInsideFreeRect(scatteredResult, `${viewport.name} scattered`, { expectBelowMinZoom: true });
         const scaledResult = await measureFittedItems(page, scaled);
         assertItemsInsideFreeRect(scaledResult, `${viewport.name} scaled`, { expectBelowMinZoom: false });
+    }
+    const strictViewports = [
+        { name: 'mobile-844-dpr1', width: 390, height: 844, deviceScaleFactor: 1, isMobile: true, hasTouch: true },
+        { name: 'mobile-844-dpr3', width: 390, height: 844, deviceScaleFactor: 3, isMobile: true, hasTouch: true },
+        { name: 'desktop-1280', width: 1280, height: 800, deviceScaleFactor: 1, isMobile: false },
+    ];
+    for (const viewport of strictViewports) {
+        await page.setViewport(viewport);
+        await page.evaluate(async (width, height) => {
+            const start = performance.now();
+            while (performance.now() - start < 3000) {
+                if (window.innerWidth === width && window.innerHeight === height) break;
+                await new Promise((resolve) => setTimeout(resolve, 50));
+            }
+            window.dispatchEvent(new Event('resize'));
+            if (typeof resizeCanvas === 'function') resizeCanvas();
+            await new Promise((resolve) => requestAnimationFrame(resolve));
+        }, viewport.width, viewport.height);
+        const scatteredResult = await measureFittedItems(page, scattered);
+        assert.equal(scatteredResult.canvas.cssW, viewport.width, `${viewport.name} canvas CSS width`);
+        assert.equal(scatteredResult.canvas.cssH, viewport.height, `${viewport.name} canvas CSS height`);
+        assert.equal(scatteredResult.dpr, viewport.deviceScaleFactor, `${viewport.name} devicePixelRatio`);
+        assert.equal(scatteredResult.canvas.w, scatteredResult.canvas.cssW, `${viewport.name} canvas buffer width should match CSS px`);
+        assert.equal(scatteredResult.canvas.h, scatteredResult.canvas.cssH, `${viewport.name} canvas buffer height should match CSS px`);
+        assert.ok(scatteredResult.zoom < scatteredResult.minZoom, `${viewport.name} fit stayed at MIN_ZOOM ${scatteredResult.minZoom}, zoom ${scatteredResult.zoom}`);
+        assertScatteredFillsFreeArea(scatteredResult, `${viewport.name} scattered`);
     }
     await page.setViewport({ width: 1280, height: 800, deviceScaleFactor: 1, isMobile: false });
     await page.waitForFunction(() => window.innerWidth === 1280);

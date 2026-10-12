@@ -7455,12 +7455,17 @@ function computeFitSafeRect() {
         const cy = (r.top + r.bottom) / 2;
         const wide = r.width >= r.height * 1.4 && r.width > viewW * 0.35;
         const tall = r.height >= r.width * 1.4 && r.height > viewH * 0.35;
+        // A wide bottom toolbar only shortens the bottom edge. It must not
+        // also become a left or right inset (that shoved the board sideways).
         if (wide && cy < viewH * 0.45) { padTop = Math.max(padTop, r.bottom + GAP); return; }
         if (wide && cy > viewH * 0.55) { padBottom = Math.max(padBottom, viewH - r.top + GAP); return; }
         if (tall && cx < viewW * 0.45) { padLeft = Math.max(padLeft, r.right + GAP); return; }
         if (tall && cx > viewW * 0.55) { padRight = Math.max(padRight, viewW - r.left + GAP); return; }
         corners.push(r);
     });
+    // Largest corner first so the minimap claims its strip before a button
+    // that already sits inside that strip can reserve a second edge.
+    corners.sort((a, b) => (b.width * b.height) - (a.width * a.height));
     corners.forEach(r => {
         const safeLeft = padLeft, safeTop = padTop;
         const safeRight = viewW - padRight, safeBottom = viewH - padBottom;
@@ -7468,10 +7473,31 @@ function computeFitSafeRect() {
         if (!overlaps) return;
         const cx = (r.left + r.right) / 2;
         const cy = (r.top + r.bottom) / 2;
-        if (cx >= viewW / 2) padRight = Math.max(padRight, viewW - r.left + GAP);
-        else padLeft = Math.max(padLeft, r.right + GAP);
-        if (cy >= viewH / 2) padBottom = Math.max(padBottom, viewH - r.top + GAP);
-        else padTop = Math.max(padTop, r.bottom + GAP);
+        const freeW = Math.max(0, safeRight - safeLeft);
+        const freeH = Math.max(0, safeBottom - safeTop);
+        // Bottom-corner chrome (minimap, fit, zoom) reserves one edge only.
+        // A full right column and a full bottom band together over-shrink the
+        // board and slide it left. Pick whichever single side removes less area.
+        // Never the left edge: only the tall desktop toolbar is a left inset.
+        if (cy >= viewH * 0.5) {
+            const nextRight = Math.max(padRight, viewW - r.left + GAP);
+            const nextBottom = Math.max(padBottom, viewH - r.top + GAP);
+            const wasteRight = (nextRight - padRight) * freeH;
+            const wasteBottom = (nextBottom - padBottom) * freeW;
+            if (wasteBottom <= wasteRight) padBottom = nextBottom;
+            else padRight = nextRight;
+            return;
+        }
+        const nextTop = Math.max(padTop, r.bottom + GAP);
+        const growRight = cx >= viewW / 2;
+        const nextSide = growRight
+            ? Math.max(padRight, viewW - r.left + GAP)
+            : Math.max(padLeft, r.right + GAP);
+        const wasteSide = (nextSide - (growRight ? padRight : padLeft)) * freeH;
+        const wasteTop = (nextTop - padTop) * freeW;
+        if (wasteTop <= wasteSide) padTop = nextTop;
+        else if (growRight) padRight = nextSide;
+        else padLeft = nextSide;
     });
     const minW = Math.min(64, viewW);
     const minH = Math.min(64, viewH);
