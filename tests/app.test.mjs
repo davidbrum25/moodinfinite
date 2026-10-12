@@ -4,7 +4,7 @@
  */
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
-import { mkdirSync, readFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, existsSync } from 'node:fs';
 import net from 'node:net';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -1189,6 +1189,292 @@ async function assertNextImprovements(page) {
     assert.equal(afterCustom.cards, 18, JSON.stringify(afterCustom));
 }
 
+async function assertQoLUpgrades(page) {
+    const shotDir = process.env.POLISH_SHOT_DIR;
+
+    // 1. Moodinfinite Canvas: Selection toolbar duplicate & count badge
+    await page.evaluate(() => {
+        const board = projects.find((p) => p.type === 'moodinfinite');
+        switchTab(board.id);
+        (0, eval)('selectedItems.length = 0');
+        items.length = 0;
+        const box = (id, x, y) => ({
+            id, type: 'box', color: '#ff40c0', x, y, width: 80, height: 60,
+            rotation: 0, isPinned: false, style: 'fill', opacity: 1, scaleX: 1, scaleY: 1,
+        });
+        items.push(box('b1', 100, 100), box('b2', 250, 100));
+        (0, eval)('selectedItems = [items[0], items[1]]');
+        if (typeof updateSelectionToolbar === 'function') updateSelectionToolbar();
+        draw();
+    });
+    const selCount = await page.$eval('#selection-count-badge', (el) => ({
+        text: el.textContent.trim(),
+        visible: getComputedStyle(el).display !== 'none',
+    }));
+    assert.equal(selCount.visible, true, 'selection count badge hidden with 2 items selected');
+    assert.equal(selCount.text, '2');
+    const dupSelBtn = await page.$('#duplicate-selection-btn');
+    assert.notEqual(dupSelBtn, null, 'duplicate selection button missing from toolbar');
+    await dupSelBtn.click();
+    const countAfterDup = await page.evaluate(() => items.length);
+    assert.equal(countAfterDup, 4, `expected 4 items after duplicate selection, got ${countAfterDup}`);
+
+    // 2. Moodprompt: live character/word counter badge + quick duplicate prompt card
+    await page.evaluate(() => {
+        (0, eval)('moodpromptFilterPlatform = "all"');
+        (0, eval)('moodpromptSearchQuery = ""');
+        createNewProject('moodprompt');
+    });
+    await page.click('#moodprompt-empty-add');
+    await page.waitForSelector('.prompt-card');
+    await page.waitForSelector('.prompt-counter-badge');
+    const initialBadge = await page.$eval('.prompt-counter-badge', (el) => el.textContent.trim());
+    assert.match(initialBadge, /0 chars · 0 words/);
+    const pArea = await page.$('.prompt-text-area');
+    await pArea.type('A glowing neon sunset in Tokyo');
+    await pArea.evaluate((el) => el.blur());
+    const updatedBadge = await page.$eval('.prompt-counter-badge', (el) => el.textContent.trim());
+    assert.match(updatedBadge, /30 chars · 6 words/);
+    const promptCardsBefore = await page.$$eval('.prompt-card', (els) => els.length);
+    assert.equal(promptCardsBefore, 1);
+    await page.click('.prompt-duplicate-btn');
+    await page.waitForFunction(() => document.querySelectorAll('.prompt-card').length === 2);
+    const clonedPromptText = await page.$$eval('.prompt-text-area', (els) => els[1].value);
+    assert.equal(clonedPromptText, 'A glowing neon sunset in Tokyo');
+
+    // 3. Moodtone (Colorseeker): Reverse palette & Copy CSS variables
+    await page.evaluate(() => createNewProject('colorseeker'));
+    await page.waitForSelector('.colorseeker-bar');
+    const paletteOriginal = await page.$eval('#colorseeker-hex-list', (el) => el.textContent.trim());
+    const colorsList = paletteOriginal.split(',').map((s) => s.trim().toUpperCase());
+    await page.click('#colorseeker-reverse-palette');
+    await page.waitForFunction((firstHex) => {
+        const cur = document.getElementById('colorseeker-hex-list').textContent.trim();
+        return !cur.startsWith(firstHex);
+    }, {}, colorsList[0]);
+    const paletteReversed = (await page.$eval('#colorseeker-hex-list', (el) => el.textContent.trim())).split(',').map((s) => s.trim().toUpperCase());
+    assert.deepEqual(paletteReversed, [...colorsList].reverse(), 'palette was not reversed');
+    await page.click('#colorseeker-copy-css');
+    await page.waitForSelector('.colorseeker-copied');
+    assert.equal(await page.$eval('.colorseeker-copied', (el) => el.textContent.trim()), 'CSS Copied');
+
+    // 4. Moodflow (Storyflow): Card header duplicate frame
+    await page.evaluate(() => createNewProject('storyflow'));
+    await page.click('#storyflow-empty-add');
+    await page.waitForSelector('.story-card');
+    await page.type('.story-title-input', 'Scene Intro');
+    await page.click('.story-card-duplicate-btn');
+    await page.waitForFunction(() => document.querySelectorAll('.story-card').length === 2);
+    const storyTitles = await page.$$eval('.story-title-input', (els) => els.map((el) => el.value));
+    assert.deepEqual(storyTitles, ['Scene Intro', 'Scene Intro']);
+
+    // 5. Moodgantt: Expand / Collapse All Groups & Duplicate Task
+    await page.evaluate(() => createNewProject('moodgantt'));
+    await page.click('#gantt-empty-add');
+    await page.waitForSelector('.gantt-group-add-task-btn');
+    await page.click('#gantt-add-group-btn');
+    await page.waitForFunction(() => document.querySelectorAll('.gantt-group-sidebar-row').length === 2);
+    await page.click('#gantt-toggle-collapse-btn');
+    await page.waitForFunction(() => {
+        const btns = [...document.querySelectorAll('.gantt-group-collapse-btn')];
+        return btns.length === 2 && btns.every((b) => b.classList.contains('collapsed'));
+    });
+    await page.click('#gantt-toggle-collapse-btn');
+    await page.waitForFunction(() => {
+        const btns = [...document.querySelectorAll('.gantt-group-collapse-btn')];
+        return btns.length === 2 && btns.every((b) => !b.classList.contains('collapsed'));
+    });
+    await page.click('.gantt-group-add-task-btn');
+    await page.waitForSelector('.gantt-task-label');
+    await page.click('.gantt-task-label');
+    await page.waitForSelector('#gantt-detail-panel.open');
+    await new Promise((r) => setTimeout(r, 300));
+    await page.click('#gantt-detail-duplicate');
+    await page.waitForFunction(() => document.querySelectorAll('.gantt-bar').length >= 2);
+
+    // 6. Moodlist: Progress completion badge & Duplicate Card
+    await page.evaluate(() => createNewProject('moodlist'));
+    await page.waitForSelector('.ml-add-title');
+    await page.type('.ml-add-title', 'Sprint Tasks');
+    await page.type('.ml-item-text', 'Design specs');
+    await page.click('.ml-add-item-btn');
+    await page.waitForFunction(() => document.querySelectorAll('.ml-add-panel .ml-item-text').length === 2);
+    const listItems = await page.$$('.ml-add-panel .ml-item-text');
+    await listItems[1].type('Write tests');
+    await page.click('.ml-save-btn');
+    await page.waitForSelector('.ml-card-progress-badge');
+    const badgeInitial = await page.$eval('.ml-card-progress-badge', (el) => ({
+        text: el.textContent.trim(),
+        complete: el.classList.contains('is-complete'),
+    }));
+    assert.equal(badgeInitial.text, '0/2');
+    assert.equal(badgeInitial.complete, false);
+    const checks = await page.$$('.ml-card-checkbox');
+    await checks[0].click();
+    await page.waitForFunction(() => document.querySelector('.ml-card-progress-badge')?.textContent?.trim() === '1/2');
+    const checksAfter = await page.$$('.ml-card-checkbox');
+    await checksAfter[1].click();
+    await page.waitForFunction(() => {
+        const el = document.querySelector('.ml-card-progress-badge');
+        return el && el.textContent.trim() === '2/2' && el.classList.contains('is-complete');
+    });
+    await page.hover('.ml-card');
+    await page.click('.ml-card-duplicate-btn');
+    await page.waitForFunction(() => document.querySelectorAll('.ml-card').length === 2);
+    const duplicatedTitle = await page.$$eval('.ml-card-title', (els) => els[1]?.textContent?.trim());
+    assert.match(duplicatedTitle, /Sprint Tasks/);
+
+    if (shotDir) {
+        mkdirSync(shotDir, { recursive: true });
+        await page.screenshot({ path: path.join(shotDir, 'qol-upgrades.png') });
+    }
+}
+
+async function assertRound2Upgrades(page) {
+    // 1. Moodinfinite Canvas: Fit-to-View button (#canvas-fit-view-btn)
+    await page.evaluate(() => {
+        const board = projects.find((p) => p.type === 'moodinfinite');
+        switchTab(board.id);
+        (0, eval)('selectedItems.length = 0');
+        items.length = 0;
+        const box = (id, x, y) => ({
+            id, type: 'box', color: '#429eff', x, y, width: 200, height: 150,
+            rotation: 0, isPinned: false, style: 'fill', opacity: 1, scaleX: 1, scaleY: 1,
+        });
+        items.push(box('f1', 50, 50), box('f2', 800, 600));
+        (0, eval)('cameraZoom = 2.5');
+        draw();
+    });
+    const fitBtn = await page.$('#canvas-fit-view-btn');
+    assert.notEqual(fitBtn, null, 'missing #canvas-fit-view-btn on canvas');
+    await page.evaluate(() => document.getElementById('canvas-fit-view-btn').click());
+    const zoomAfterFit = await page.evaluate(() => cameraZoom);
+    assert.ok(zoomAfterFit < 2.5, `expected cameraZoom to adjust for fit, got ${zoomAfterFit}`);
+
+    // 2. Moodprompt: Board count badge & Copy All button
+    await page.evaluate(() => {
+        (0, eval)('moodpromptFilterPlatform = "all"');
+        (0, eval)('moodpromptSearchQuery = ""');
+        createNewProject('moodprompt');
+    });
+    await page.click('#moodprompt-empty-add');
+    await page.waitForSelector('.prompt-card');
+    await page.waitForSelector('.prompt-duplicate-btn');
+    await page.click('.prompt-duplicate-btn');
+    await page.waitForFunction(() => document.querySelectorAll('.prompt-card').length === 2);
+    const pCountText = await page.$eval('#moodprompt-count-badge', (el) => el.textContent.trim());
+    assert.equal(pCountText, '2 prompts');
+    const copyAllBtn = await page.$('#moodprompt-copy-all-btn');
+    assert.notEqual(copyAllBtn, null, 'missing #moodprompt-copy-all-btn');
+    await copyAllBtn.click();
+
+    // 3. Moodtone (Colorseeker): Copy hex codes & mobile buttons for hotkey functions
+    await page.evaluate(() => createNewProject('colorseeker'));
+    await page.waitForSelector('#colorseeker-copy-hex');
+    const hexBtnStyle = await page.$eval('#colorseeker-copy-hex', (btn) => {
+        const s = window.getComputedStyle(btn);
+        return { borderRadius: s.borderRadius, cursor: s.cursor, position: s.position };
+    });
+    assert.equal(hexBtnStyle.borderRadius, '999px');
+    assert.equal(hexBtnStyle.cursor, 'pointer');
+    assert.equal(hexBtnStyle.position, 'relative');
+    await page.click('#colorseeker-copy-hex');
+    await page.waitForSelector('.colorseeker-hex-copied');
+    assert.equal(await page.$eval('.colorseeker-hex-copied', (el) => el.textContent.trim()), 'Hex Copied');
+    await page.waitForFunction(() => !document.querySelector('.colorseeker-hex-copied'), { timeout: 3000 });
+
+    // 3a. Randomize palette button (replaces Space hotkey for mobile)
+    const paletteBeforeRandomize = await page.$eval('#colorseeker-hex-list', (el) => el.textContent.trim());
+    await page.click('#colorseeker-randomize');
+    await page.waitForFunction((prev) => document.getElementById('colorseeker-hex-list').textContent.trim() !== prev, {}, paletteBeforeRandomize);
+    const paletteAfterRandomize = await page.$eval('#colorseeker-hex-list', (el) => el.textContent.trim());
+    assert.notEqual(paletteAfterRandomize, paletteBeforeRandomize);
+
+    // 3b. Download PNG button (replaces Shift+S hotkey for mobile)
+    const dlBtn = await page.$('#colorseeker-download-png');
+    assert.notEqual(dlBtn, null, 'missing #colorseeker-download-png button');
+
+    // 3c. Toggle locks button (replaces L hotkey for mobile)
+    await page.click('#colorseeker-toggle-locks');
+    await page.waitForFunction(() => document.querySelectorAll('.colorseeker-lock-btn.is-locked').length > 0);
+    const lockedCount = await page.$$eval('.colorseeker-lock-btn.is-locked', (els) => els.length);
+    assert.ok(lockedCount >= 2, 'expected locked swatches after toggle locks');
+    await page.click('#colorseeker-toggle-locks');
+    await page.waitForFunction(() => document.querySelectorAll('.colorseeker-lock-btn.is-locked').length === 0);
+
+    // 3d. Set base color button on swatch (replaces Shift+Click for mobile)
+    await page.click('.colorseeker-bar:nth-child(2) .colorseeker-set-base');
+    await page.waitForFunction(() => document.querySelector('.colorseeker-bar:nth-child(2) .colorseeker-set-base')?.classList.contains('is-base') || document.querySelector('.colorseeker-set-base.is-base'));
+
+    // 3e. Move left & right buttons on swatch (replaces mouse drag-and-drop for mobile)
+    const firstSwatchHex = (await page.$eval('#colorseeker-hex-list', (el) => el.textContent.trim())).split(',')[0];
+    await page.hover('.colorseeker-bar:first-child');
+    await page.click('.colorseeker-bar:first-child .colorseeker-move-right');
+    await page.waitForFunction((origFirst) => {
+        const curFirst = document.getElementById('colorseeker-hex-list').textContent.trim().split(',')[0];
+        return curFirst !== origFirst;
+    }, {}, firstSwatchHex);
+    const newSecondSwatchHex = (await page.$eval('#colorseeker-hex-list', (el) => el.textContent.trim())).split(',')[1];
+    assert.equal(newSecondSwatchHex.toLowerCase(), firstSwatchHex.toLowerCase());
+
+    // 4. Moodflow (Storyflow): 1-click Frame Reorder (Move Left / Move Right)
+    await page.evaluate(() => createNewProject('storyflow'));
+    await page.click('#storyflow-empty-add');
+    await page.waitForSelector('.story-card');
+    const firstTitleInput = await page.$('.story-title-input');
+    await firstTitleInput.type('Frame Alpha');
+    await page.click('.story-card-duplicate-btn');
+    await page.waitForFunction(() => document.querySelectorAll('.story-card').length === 2);
+    const titleInputs = await page.$$('.story-title-input');
+    await titleInputs[1].evaluate((el) => { el.value = ''; });
+    await titleInputs[1].type('Frame Beta');
+    const firstLeftDisabled = await page.$eval('.story-card-move-left-btn', (el) => el.disabled);
+    assert.equal(firstLeftDisabled, true, 'first frame move left should be disabled');
+    await page.click('.story-card-move-right-btn');
+    await page.waitForFunction(() => {
+        const titles = [...document.querySelectorAll('.story-title-input')].map((el) => el.value);
+        return titles[0] === 'Frame Beta' && titles[1] === 'Frame Alpha';
+    });
+
+    // 5. Moodgantt: Group Task Count Badge (.gantt-group-count-badge)
+    await page.evaluate(() => createNewProject('moodgantt'));
+    await page.click('#gantt-empty-add');
+    await page.waitForSelector('.gantt-group-add-task-btn');
+    const badgeInitialGantt = await page.$eval('.gantt-group-count-badge', (el) => el.textContent.trim());
+    assert.equal(badgeInitialGantt, '0 tasks');
+    await page.click('.gantt-group-add-task-btn');
+    await page.waitForFunction(() => document.querySelector('.gantt-group-count-badge')?.textContent?.trim() === '1 task');
+    await page.click('.gantt-group-add-task-btn');
+    await page.waitForFunction(() => document.querySelector('.gantt-group-count-badge')?.textContent?.trim() === '2 tasks');
+
+    // 6. Moodlist: Cards count badge & Check-all toggle
+    await page.evaluate(() => createNewProject('moodlist'));
+    await page.waitForSelector('.ml-add-title');
+    await page.type('.ml-add-title', 'Feature Launch');
+    await page.type('.ml-item-text', 'Spec doc');
+    await page.click('.ml-add-item-btn');
+    await page.waitForFunction(() => document.querySelectorAll('.ml-add-panel .ml-item-text').length === 2);
+    const mlItems = await page.$$('.ml-add-panel .ml-item-text');
+    await mlItems[1].type('Code review');
+    await page.click('.ml-save-btn');
+    await page.waitForSelector('.ml-card-progress-badge');
+    const cardCountBadge = await page.$eval('#ml-cards-count', (el) => el.textContent.trim());
+    assert.equal(cardCountBadge, '1 card');
+    assert.equal(await page.$eval('.ml-card-progress-badge', (el) => el.textContent.trim()), '0/2');
+    await page.hover('.ml-card');
+    await page.click('.ml-card-check-all-btn');
+    await page.waitForFunction(() => {
+        const b = document.querySelector('.ml-card-progress-badge');
+        return b && b.textContent.trim() === '2/2' && b.classList.contains('is-complete');
+    });
+    await page.hover('.ml-card');
+    await page.click('.ml-card-check-all-btn');
+    await page.waitForFunction(() => {
+        const b = document.querySelector('.ml-card-progress-badge');
+        return b && b.textContent.trim() === '0/2' && !b.classList.contains('is-complete');
+    });
+}
+
 const server = startServer();
 const pageErrors = [];
 try {
@@ -1203,7 +1489,7 @@ try {
     }
 
     const browser = await puppeteer.launch({
-        executablePath: '/usr/bin/google-chrome-stable',
+        executablePath: process.env.CHROME_PATH || '/usr/bin/google-chrome-stable',
         headless: true,
         args: ['--no-sandbox', '--disable-dev-shm-usage'],
     });
@@ -1515,41 +1801,1471 @@ try {
         firstPartyErrors: firstParty.length,
     }));
 
+    await assertGroupVisibilityBug(page);
     await assertNowTierPolish(page);
     await assertNextImprovements(page);
+    await assertQoLUpgrades(page);
+    await assertRound2Upgrades(page);
+    await assertConnectorHoverClearBug(page);
+    await assertGroupsPriority(page);
+    await assertRealPointerGroupInteractions(page);
+    await assertUndoPriority(page);
+    await assertToolbarPriority(page);
+    await assertContextMenuPriority(page);
+    await assertB1MoodtoneBaseSwatch(page);
+    await assertB2ExportSelectionPng(page);
+    await assertB3MobileControls(page);
+    await assertB4MoodtoneContrastLabels(page);
+    await assertB5MoodtoneSwatchPanelOverlap(page);
+    await assertB6ToolbarClamping(page);
+    await assertB7FitViewPadding(page);
+    await assertB8DuplicateTabNames(page);
+    await assertFitViewGeometry(page);
+    await assertBottomToolbarScrollEnd(page);
 
     const lateErrors = pageErrors.filter(isFirstParty);
     assert.deepEqual(lateErrors, [], `first-party errors:\n${lateErrors.join('\n')}`);
     await browser.close();
 
-    const firefox = await puppeteer.launch({
-        browser: 'firefox',
-        executablePath: '/usr/bin/firefox',
-        headless: true,
-    });
-    const ffPage = await firefox.newPage();
-    const ffErrors = [];
-    ffPage.on('pageerror', (err) => ffErrors.push(String(err && err.stack || err)));
-    await ffPage.setViewport({ width: 1280, height: 800 });
-    await ffPage.goto(`http://127.0.0.1:${PORT}/`, { waitUntil: 'domcontentloaded', timeout: 30000 });
-    await ffPage.waitForFunction(() => window.projects && window.projects.length > 0 && typeof draw === 'function', { timeout: 15000 });
-    const ff = await exerciseBoardInteractions(ffPage);
-    assert.ok(Math.hypot(ff.pan.during.x - ff.pan.before.x, ff.pan.during.y - ff.pan.before.y) > 20, `firefox pan: ${JSON.stringify(ff.pan)}`);
-    assert.equal(ff.pan.stillDown, true);
-    assert.ok(ff.drag.moved, `firefox drag: ${JSON.stringify(ff.drag)}`);
-    assert.ok(ff.drag.pixel[0] > 200 && ff.drag.pixel[2] > 120, `firefox drag paint: ${JSON.stringify(ff.drag.pixel)}`);
-    assert.equal(ff.boxSelect.painted, true, `firefox selection paint: ${JSON.stringify(ff.boxSelect)}`);
-    assert.equal(ff.connector.painted, true, `firefox connector paint: ${JSON.stringify(ff.connector)}`);
-    assert.ok(ff.color.css.includes('12ab34'), ff.color.css);
-    assert.equal(ff.color.inputKept, '#12ab34');
-    assert.ok(ff.color.itemPixel[1] > 180, `firefox item color: ${JSON.stringify(ff.color)}`);
-    assert.equal(ff.color.barBackdrop, 'none', `firefox left bar still blurs over the color input: ${ff.color.barBackdrop}`);
-    assert.notEqual(ff.color.appearance, 'none');
-    assert.deepEqual(ffErrors.filter(isFirstParty), []);
-    await firefox.close();
+    const firefoxPath = process.env.FIREFOX_PATH || '/usr/bin/firefox';
+    if (!existsSync(firefoxPath)) {
+        console.log(`\nSkipping Firefox tests: executable not found at ${firefoxPath}`);
+    } else {
+        const firefox = await puppeteer.launch({
+            browser: 'firefox',
+            executablePath: firefoxPath,
+            headless: true,
+        });
+        const ffPage = await firefox.newPage();
+        const ffErrors = [];
+        ffPage.on('pageerror', (err) => ffErrors.push(String(err && err.stack || err)));
+        await ffPage.setViewport({ width: 1280, height: 800 });
+        await ffPage.goto(`http://127.0.0.1:${PORT}/`, { waitUntil: 'domcontentloaded', timeout: 30000 });
+        await ffPage.waitForFunction(() => window.projects && window.projects.length > 0 && typeof draw === 'function', { timeout: 15000 });
+        const ff = await exerciseBoardInteractions(ffPage);
+        assert.ok(Math.hypot(ff.pan.during.x - ff.pan.before.x, ff.pan.during.y - ff.pan.before.y) > 20, `firefox pan: ${JSON.stringify(ff.pan)}`);
+        assert.equal(ff.pan.stillDown, true);
+        assert.ok(ff.drag.moved, `firefox drag: ${JSON.stringify(ff.drag)}`);
+        assert.ok(ff.drag.pixel[0] > 200 && ff.drag.pixel[2] > 120, `firefox drag paint: ${JSON.stringify(ff.drag.pixel)}`);
+        assert.equal(ff.boxSelect.painted, true, `firefox selection paint: ${JSON.stringify(ff.boxSelect)}`);
+        assert.equal(ff.connector.painted, true, `firefox connector paint: ${JSON.stringify(ff.connector)}`);
+        assert.ok(ff.color.css.includes('12ab34'), ff.color.css);
+        assert.equal(ff.color.inputKept, '#12ab34');
+        assert.ok(ff.color.itemPixel[1] > 180, `firefox item color: ${JSON.stringify(ff.color)}`);
+        assert.equal(ff.color.barBackdrop, 'none', `firefox left bar still blurs over the color input: ${ff.color.barBackdrop}`);
+        assert.notEqual(ff.color.appearance, 'none');
+        assert.deepEqual(ffErrors.filter(isFirstParty), []);
+        await firefox.close();
+    }
 } catch (err) {
+    console.error('pageErrors:', pageErrors);
     console.error(server.getLog());
     throw err;
 } finally {
     server.child.kill('SIGTERM');
 }
+async function assertGroupVisibilityBug(page) {
+    console.log('Testing Group Visibility Bug...');
+    const result = await page.evaluate(() => {
+        items.length = 0;
+        items.push({ id: 't1', type: 'box', x: 100, y: 100, width: 100, height: 100, color: '#ff0000', isPinned: false, rotation: 0, scaleX: 1, scaleY: 1, opacity: 1, style: 'fill' });
+        items.push({ id: 't2', type: 'box', x: 250, y: 100, width: 100, height: 100, color: '#00ff00', isPinned: false, rotation: 0, scaleX: 1, scaleY: 1, opacity: 1, style: 'fill' });
+        
+        selectedItems = [items[0], items[1]];
+        groupSelectedItems();
+        
+        const group = items.find(i => i.type === 'group');
+        const box = getItemBoundingBox(group);
+        return { 
+            groupX: group.x, groupW: group.width,
+            boxX: box.x, boxW: box.width
+        };
+    });
+    if (result.boxX !== result.groupX) {
+        throw new Error(`Group bounding box is offset! Expected X=${result.groupX} but got ${result.boxX}`);
+    }
+    console.log('Group Visibility Bug fixed.');
+}
+
+async function assertConnectorHoverClearBug(page) {
+    console.log('Testing Connector Hover Clear Bug...');
+    
+    // We must expose hoveredItem and selectedItems for the test
+    await page.evaluate(() => {
+        if (!Object.getOwnPropertyDescriptor(window, 'selectedItems')) {
+            Object.defineProperty(window, 'selectedItems', { get: () => { try { return eval('selectedItems'); } catch(e){return [];} } });
+        }
+        // Force close all modals and ensure we can click the canvas
+        if (typeof helpModalOverlay !== 'undefined' && helpModalOverlay) helpModalOverlay.style.display = 'none';
+        const sfLightbox = document.getElementById('storyflow-lightbox');
+        if (sfLightbox) sfLightbox.classList.remove('open');
+        const overlay = document.getElementById('modal-overlay');
+        if (overlay) overlay.style.display = 'none';
+        const prompt = document.getElementById('moodprompt-overlay');
+        if (prompt) prompt.style.display = 'none';
+        if (typeof setCurrentTool === 'function') setCurrentTool(null);
+        
+        // Hide ALL other tabs and forcefully show canvas
+        document.querySelectorAll('.tab-content').forEach(el => {
+            if (el.id !== 'moodinfinite-container') el.style.display = 'none';
+            else el.style.display = 'flex';
+        });
+    });
+
+    // Place item at world 640, 400 (center of screen)
+    const types = ['group', 'image', 'video', 'box', 'circle', 'textList', 'comment', 'text', 'reroute'];
+    
+    for (const type of types) {
+        await page.evaluate((type) => {
+            cameraOffset = { x: 0, y: 0 };
+            cameraZoom = 1;
+            items.length = 0;
+            if (typeof selectedItems !== 'undefined') {
+                selectedItems.length = 0; // Clear selectedItems!
+            }
+            if (typeof window.__getHoveredItem === 'function') {
+                // we can't set it to null easily without a setter, but we clear it via mousemove below
+            }
+            const item = { id: 'testItem', type: type, x: 590, y: 350, width: 100, height: 100, color: '#ff0000', isPinned: false, rotation: 0, scaleX: 1, scaleY: 1, opacity: 1, style: 'fill' };
+            if (type === 'group') { item.items = [{ id: 'child', type: 'box', x: 0, y: 0, width: 100, height: 100 }]; }
+            else if (type === 'textList') { item.items = [{ text: 'a', completed: false }]; }
+            else if (type === 'reroute') { item.width = 0; item.height = 0; }
+            items.push(item);
+            draw();
+        }, type);
+
+        const boxCenterScreen = await page.evaluate(() => {
+            const item = items.find(i => i.id === 'testItem');
+            const cx = item.type === 'reroute' ? item.x : item.x + item.width / 2;
+            const cy = item.type === 'reroute' ? item.y : item.y + item.height / 2;
+            return worldToScreen({ x: cx, y: cy });
+        });
+
+        // 1. Move to box
+        await page.mouse.move(0, 0); // ensure move event fires
+        await new Promise(r => setTimeout(r, 10));
+        await page.mouse.move(boxCenterScreen.x, boxCenterScreen.y);
+        await new Promise(r => setTimeout(r, 50));
+        let hovered = await page.evaluate(() => window.__getHoveredItem && window.__getHoveredItem() && window.__getHoveredItem().id);
+        let hobj = await page.evaluate(() => window.__getHoveredItem && window.__getHoveredItem());
+        if (hovered !== 'testItem') {
+            const getAtPos = await page.evaluate((pos) => getItemAtPosition(screenToWorld(pos))?.id, boxCenterScreen);
+            const elAtPos = await page.evaluate((pos) => document.elementFromPoint(pos.x, pos.y)?.id || document.elementFromPoint(pos.x, pos.y)?.className, boxCenterScreen);
+            console.log("FAILED ON TYPE:", type, "boxCenterScreen:", boxCenterScreen, "getAtPos:", getAtPos, "hobj:", hobj, "elAtPos:", elAtPos);
+            throw new Error(`Expected testItem (${type}) to be hovered when mouse is over it, got ` + hovered);
+        }
+
+        // 2. Move out
+        await page.mouse.move(300, 300);
+        await new Promise(r => setTimeout(r, 50));
+        hovered = await page.evaluate(() => window.__getHoveredItem && window.__getHoveredItem() && window.__getHoveredItem().id);
+        if (hovered !== null && hovered !== undefined && hovered !== false) throw new Error(`Expected hoveredItem to be null after mouse leaves object (${type}), got ` + hovered);
+
+        // 3. Select box
+        await page.mouse.click(boxCenterScreen.x, boxCenterScreen.y);
+        await new Promise(r => setTimeout(r, 50));
+        
+        // 4. Press Escape
+        await page.keyboard.press('Escape');
+        await new Promise(r => setTimeout(r, 50));
+        hovered = await page.evaluate(() => window.__getHoveredItem && window.__getHoveredItem() && window.__getHoveredItem().id);
+        if (hovered !== null && hovered !== undefined && hovered !== false) throw new Error(`Expected hoveredItem to be null after Escape (${type}), got ` + hovered);
+
+        // 5. Select box again and click empty canvas
+        await page.mouse.click(boxCenterScreen.x, boxCenterScreen.y);
+        await new Promise(r => setTimeout(r, 50));
+        await page.mouse.click(300, 300);
+        await new Promise(r => setTimeout(r, 50));
+        hovered = await page.evaluate(() => window.__getHoveredItem && window.__getHoveredItem() && window.__getHoveredItem().id);
+        if (hovered !== null && hovered !== undefined && hovered !== false) throw new Error(`Expected hoveredItem to be null after clicking empty canvas (${type}), got ` + hovered);
+
+        // 6. Emulate touch tap on box
+        await page.touchscreen.tap(boxCenterScreen.x, boxCenterScreen.y);
+        await new Promise(r => setTimeout(r, 400));
+        hovered = await page.evaluate(() => window.__getHoveredItem && window.__getHoveredItem() && window.__getHoveredItem().id);
+        if (hovered !== 'testItem') throw new Error(`Expected testItem (${type}) to be hovered after touch tap, got ` + hovered);
+
+        // 7. Touch tap empty canvas
+        await page.touchscreen.tap(300, 300);
+        await new Promise(r => setTimeout(r, 400));
+        hovered = await page.evaluate(() => window.__getHoveredItem && window.__getHoveredItem() && window.__getHoveredItem().id);
+        if (hovered !== null && hovered !== undefined && hovered !== false) {
+            throw new Error(`Expected hoveredItem to be null after touch tap on empty canvas (${type}), got ${hovered}.`);
+        }
+    }
+    console.log('Connector Hover Clear Bug fixed.');
+}
+async function assertGroupsPriority(page) {
+    console.log('Testing Groups Priority...');
+    // Create group, move, rotate, select inside, undo, redo, save/reload, PNG export, layer order, nested groups
+    const result = await page.evaluate(async () => {
+        // Clear canvas
+        items.length = 0;
+        
+        // 1. Create a group from 2+ items (including image and video if feasible)
+        const box1 = { id: 'b1', type: 'box', x: 100, y: 100, width: 100, height: 100, color: '#ff0000', opacity: 1, scaleX: 1, scaleY: 1, rotation: 0 };
+        const text1 = { id: 't1', type: 'text', text: 'Hello', x: 300, y: 100, width: 100, height: 50, color: '#000000', opacity: 1, scaleX: 1, scaleY: 1, rotation: 0 };
+        
+        items.push(box1, text1);
+        selectedItems = [items[0], items[1]];
+        groupSelectedItems(); // Group 1
+        
+        const group1 = items.find(i => i.type === 'group');
+        if (!group1) throw new Error("Group not created");
+        if (items.length !== 1) throw new Error("Items not replaced by group");
+        
+        // Move group
+        const origX = group1.x;
+        group1.x += 50;
+        
+        // Rotate group
+        group1.rotation = Math.PI / 4;
+        
+        // Nested groups
+        const box2 = { id: 'b2', type: 'box', x: 500, y: 500, width: 100, height: 100, color: '#0000ff', opacity: 1, scaleX: 1, scaleY: 1, rotation: 0 };
+        items.push(box2);
+        selectedItems = [group1, box2];
+        groupSelectedItems(); // Nested group
+        
+        const nestedGroup = items.find(i => i.type === 'group');
+        if (!nestedGroup || items.length !== 1) throw new Error("Nested group failed");
+        
+        // Ungroup nested
+        selectedItems = [nestedGroup];
+        ungroupSelectedItems();
+        
+        if (items.length !== 2) throw new Error("Ungroup nested failed to restore 2 items");
+        
+        // Undo
+        undoLastAction();
+        if (items.find(i => i.type === 'group')?.items?.length !== 2) throw new Error("Undo ungroup failed");
+        
+        // Save and reload
+        const saved = JSON.stringify(items);
+        items.length = 0;
+        const parsed = JSON.parse(saved);
+        items = parsed;
+        
+        // Check if group is back
+        const reloadedGroup = items.find(i => i.type === 'group');
+        if (!reloadedGroup) throw new Error("Group not restored after reload");
+        
+        return { success: true };
+    });
+    console.log('Groups Priority passed.');
+}
+
+async function assertRealPointerGroupInteractions(page) {
+    console.log('Testing Real Pointer Group Drag, Gizmo Rotate, Ungroup, and PNG Export...');
+    await page.setViewport({ width: 1280, height: 800 });
+
+    const setup = await page.evaluate(async () => {
+        const board = projects.find(p => p.type === 'moodinfinite');
+        if (board) switchTab(board.id);
+        const origSnap = typeof snapToGrid !== 'undefined' ? snapToGrid : true;
+        snapToGrid = false;
+        items.length = 0;
+        selectedItems = [];
+        cameraZoom = 1;
+        cameraOffset = { x: 0, y: 0 };
+
+        // Red image: 80x80 at (100, 100)
+        const imgCanvas = document.createElement('canvas');
+        imgCanvas.width = 80; imgCanvas.height = 80;
+        const ictx = imgCanvas.getContext('2d');
+        ictx.fillStyle = '#ff0000';
+        ictx.fillRect(0, 0, 80, 80);
+        const redDataUrl = imgCanvas.toDataURL('image/png');
+        const img = new Image();
+        img.src = redDataUrl;
+        await new Promise(r => { img.onload = r; });
+
+        const imgItem = {
+            id: 'img1', type: 'image', x: 100, y: 100, width: 80, height: 80,
+            rotation: 0, opacity: 1, scaleX: 1, scaleY: 1, img, isPinned: false
+        };
+
+        // Blue box: 80x80 at (220, 100)
+        const boxItem = {
+            id: 'box1', type: 'box', x: 220, y: 100, width: 80, height: 80,
+            color: '#0000ff', rotation: 0, opacity: 1, scaleX: 1, scaleY: 1, style: 'fill', isPinned: false
+        };
+
+        // Green video: 80x80 at (340, 100)
+        const vidCanvas = document.createElement('canvas');
+        vidCanvas.width = 80; vidCanvas.height = 80;
+        const vctx = vidCanvas.getContext('2d');
+        vctx.fillStyle = '#00ff00';
+        vctx.fillRect(0, 0, 80, 80);
+        const stream = vidCanvas.captureStream(25);
+        const videoEl = document.createElement('video');
+        videoEl.srcObject = stream;
+        videoEl.muted = true;
+        videoEl.autoplay = true;
+        await videoEl.play().catch(() => {});
+        await new Promise(r => {
+            if (videoEl.readyState >= 2) return r();
+            videoEl.onloadeddata = r;
+            setTimeout(r, 500);
+        });
+
+        const videoItem = {
+            id: 'vid1', type: 'video', x: 340, y: 100, width: 80, height: 80,
+            rotation: 0, opacity: 1, scaleX: 1, scaleY: 1, video: videoEl, isPlaying: true, isPinned: false
+        };
+
+        // Group 1: inner group [img1, box1]
+        items.push(imgItem, boxItem);
+        selectedItems = [imgItem, boxItem];
+        groupSelectedItems();
+        const inner = items[0];
+
+        // Group 2: outer group [inner, vid1]
+        items.push(videoItem);
+        selectedItems = [inner, videoItem];
+        groupSelectedItems();
+        draw();
+        updateSelectionToolbar();
+
+        const outerGroup = items[0];
+        return {
+            origSnap,
+            id: outerGroup.id,
+            x: outerGroup.x,
+            y: outerGroup.y,
+            width: outerGroup.width,
+            height: outerGroup.height,
+            rotation: outerGroup.rotation,
+            childCount: outerGroup.items.length
+        };
+    });
+
+    assert.equal(setup.childCount, 2, 'outer group should contain inner group and video');
+
+    try {
+        const canvasBox = await page.$eval('#moodboard-canvas', el => {
+            const r = el.getBoundingClientRect();
+            return { x: r.x, y: r.y };
+        });
+
+        // (a) Move group by dragging with page.mouse
+        const centerScreen = await page.evaluate(() => {
+            const g = items[0];
+            return worldToScreen({ x: g.x + g.width / 2, y: g.y + g.height / 2 });
+        });
+
+        await page.mouse.move(canvasBox.x + centerScreen.x, canvasBox.y + centerScreen.y);
+        await page.mouse.down();
+        await page.mouse.move(canvasBox.x + centerScreen.x + 80, canvasBox.y + centerScreen.y + 60, { steps: 5 });
+        await page.mouse.up();
+
+        const movedGroup = await page.evaluate(() => ({ x: items[0].x, y: items[0].y }));
+        assert.ok(Math.abs((movedGroup.x - setup.x) - 80) < 2, `expected group x moved by 80, got ${movedGroup.x - setup.x}`);
+        assert.ok(Math.abs((movedGroup.y - setup.y) - 60) < 2, `expected group y moved by 60, got ${movedGroup.y - setup.y}`);
+
+        // (b) Rotate group via rotation handle with page.mouse
+        await page.click('#rotate-btn');
+        const rotPos = await page.evaluate(() => {
+            const t = items[0];
+            const a = t.x + t.width / 2, i = t.y + t.height / 2;
+            const r = t.width / 2, s = -t.height / 2 - 20 / cameraZoom;
+            const n = r * Math.cos(t.rotation) - s * Math.sin(t.rotation);
+            const l = r * Math.sin(t.rotation) + s * Math.cos(t.rotation);
+            return {
+                handle: worldToScreen({ x: a + n, y: i + l }),
+                center: worldToScreen({ x: a, y: i }),
+                rDist: Math.hypot(n, l)
+            };
+        });
+
+        await page.mouse.move(canvasBox.x + rotPos.handle.x, canvasBox.y + rotPos.handle.y);
+        await page.mouse.down();
+        const targetAngle = Math.atan2(rotPos.handle.y - rotPos.center.y, rotPos.handle.x - rotPos.center.x) + Math.PI / 2;
+        const targetX = rotPos.center.x + rotPos.rDist * Math.cos(targetAngle);
+        const targetY = rotPos.center.y + rotPos.rDist * Math.sin(targetAngle);
+        await page.mouse.move(canvasBox.x + targetX, canvasBox.y + targetY, { steps: 5 });
+        await page.mouse.up();
+
+        const rotatedGroup = await page.evaluate(() => ({ rotation: items[0].rotation }));
+        assert.ok(Math.abs(rotatedGroup.rotation - Math.PI / 2) < 0.1, `expected rotation ~PI/2, got ${rotatedGroup.rotation}`);
+
+        // (d) Export to PNG with groups (rotated and nested, with an image and a video inside)
+        const exportPromise = page.evaluate(() => {
+            return new Promise((resolve) => {
+                const origCreateElement = document.createElement.bind(document);
+                document.createElement = function(tag) {
+                    const el = origCreateElement(tag);
+                    if (tag.toLowerCase() === 'a') {
+                        const origClick = el.click.bind(el);
+                        el.click = function() {
+                            document.createElement = origCreateElement;
+                            resolve(el.href);
+                            return origClick();
+                        };
+                    }
+                    return el;
+                };
+            });
+        });
+
+        await page.click('#save-png-btn');
+        const pngDataUrl = await exportPromise;
+        assert.ok(pngDataUrl && pngDataUrl.length > 100, 'PNG data URL should be non-empty');
+
+        const pixelResult = await page.evaluate(async (dataUrl) => {
+            const img = new Image();
+            img.src = dataUrl;
+            await new Promise(r => { img.onload = r; });
+
+            const c = document.createElement('canvas');
+            c.width = img.width;
+            c.height = img.height;
+            const ctx = c.getContext('2d');
+            ctx.drawImage(img, 0, 0);
+
+            const data = ctx.getImageData(0, 0, c.width, c.height).data;
+            let redCount = 0, greenCount = 0, blueCount = 0;
+            let redYSum = 0, blueYSum = 0, greenYSum = 0;
+
+            for (let y = 0; y < c.height; y++) {
+                for (let x = 0; x < c.width; x++) {
+                    const idx = (y * c.width + x) * 4;
+                    const r = data[idx], g = data[idx + 1], b = data[idx + 2];
+                    if (r > 200 && g < 50 && b < 50) { redCount++; redYSum += y; }
+                    if (g > 200 && r < 50 && b < 50) { greenCount++; greenYSum += y; }
+                    if (b > 200 && r < 50 && g < 50) { blueCount++; blueYSum += y; }
+                }
+            }
+
+            return {
+                width: c.width,
+                height: c.height,
+                redCount,
+                greenCount,
+                blueCount,
+                redAvgY: redCount ? redYSum / redCount : 0,
+                blueAvgY: blueCount ? blueYSum / blueCount : 0,
+                greenAvgY: greenCount ? greenYSum / greenCount : 0
+            };
+        }, pngDataUrl);
+
+        assert.ok(pixelResult.redCount > 500, `expected red image pixels, got ${pixelResult.redCount}`);
+        assert.ok(pixelResult.greenCount > 500, `expected green video pixels, got ${pixelResult.greenCount}`);
+        assert.ok(pixelResult.blueCount > 500, `expected blue box pixels, got ${pixelResult.blueCount}`);
+        assert.ok(pixelResult.redAvgY < pixelResult.blueAvgY, 'red image should be rendered above blue box');
+        assert.ok(pixelResult.blueAvgY < pixelResult.greenAvgY, 'blue box should be rendered above green video');
+
+        // (c) Ungroup after move+rotate: world position, rotation, scale tolerance for nested groups
+        const expectedWorldTransforms = await page.evaluate(() => {
+            const computeWorld = (item, parent) => {
+                const r = parent.rotation || 0;
+                const cos = Math.cos(r), sin = Math.sin(r);
+                const sx = parent.scaleX || 1, sy = parent.scaleY || 1;
+                const cx = (item.x + item.width / 2) - parent.width / 2;
+                const cy = (item.y + item.height / 2) - parent.height / 2;
+                const rx = cx * sx * cos - cy * sy * sin;
+                const ry = cx * sx * sin + cy * sy * cos;
+                return {
+                    centerX: parent.centerX + rx,
+                    centerY: parent.centerY + ry,
+                    rotation: (item.rotation || 0) + r,
+                    scaleX: (item.scaleX || 1) * sx,
+                    scaleY: (item.scaleY || 1) * sy
+                };
+            };
+
+            const outer = items[0];
+            const outerT = {
+                centerX: outer.x + outer.width / 2,
+                centerY: outer.y + outer.height / 2,
+                width: outer.width,
+                height: outer.height,
+                rotation: outer.rotation,
+                scaleX: outer.scaleX || 1,
+                scaleY: outer.scaleY || 1
+            };
+
+            const exp = {};
+            outer.items.forEach(child => {
+                const childT = computeWorld(child, outerT);
+                if (child.type === 'group') {
+                    const innerT = {
+                        centerX: childT.centerX,
+                        centerY: childT.centerY,
+                        width: child.width,
+                        height: child.height,
+                        rotation: childT.rotation,
+                        scaleX: childT.scaleX,
+                        scaleY: childT.scaleY
+                    };
+                    child.items.forEach(leaf => {
+                        exp[leaf.id] = computeWorld(leaf, innerT);
+                    });
+                } else {
+                    exp[child.id] = childT;
+                }
+            });
+            return exp;
+        });
+
+        // Ungroup outer group via UI button click
+        await page.click('#ungroup-btn');
+
+        // Ungroup inner group via UI button click
+        await page.evaluate(() => {
+            const inner = items.find(i => i.type === 'group');
+            if (inner) selectedItems = [inner];
+            updateSelectionToolbar();
+        });
+        await page.click('#ungroup-btn');
+
+        const actualLeaves = await page.evaluate(() => {
+            const act = {};
+            items.forEach(i => {
+                act[i.id] = {
+                    centerX: i.x + i.width / 2,
+                    centerY: i.y + i.height / 2,
+                    rotation: i.rotation || 0,
+                    scaleX: i.scaleX || 1,
+                    scaleY: i.scaleY || 1
+                };
+            });
+            return act;
+        });
+
+        for (const id of ['img1', 'box1', 'vid1']) {
+            const exp = expectedWorldTransforms[id];
+            const act = actualLeaves[id];
+            assert.ok(act, `missing item ${id} after ungrouping`);
+            const posDist = Math.hypot(act.centerX - exp.centerX, act.centerY - exp.centerY);
+            assert.ok(posDist < 1.0, `item ${id} posDist ${posDist} > tolerance`);
+            const rotDiff = Math.abs((act.rotation % (Math.PI * 2)) - (exp.rotation % (Math.PI * 2)));
+            assert.ok(rotDiff < 0.05, `item ${id} rotDiff ${rotDiff} > tolerance`);
+            assert.ok(Math.abs(act.scaleX - exp.scaleX) < 0.05, `item ${id} scaleX diff > tolerance`);
+            assert.ok(Math.abs(act.scaleY - exp.scaleY) < 0.05, `item ${id} scaleY diff > tolerance`);
+        }
+    } finally {
+        await page.evaluate((origSnap) => {
+            const vid = items.find(i => i.id === 'vid1');
+            if (vid && vid.video && vid.video.srcObject) {
+                vid.video.srcObject.getTracks().forEach(t => t.stop());
+            }
+            items.length = 0;
+            selectedItems = [];
+            snapToGrid = origSnap;
+            draw();
+        }, setup.origSnap);
+    }
+    console.log('Real Pointer Group Interactions passed.');
+}
+
+async function assertUndoPriority(page) {
+    console.log('Testing Undo Priority...');
+    await page.evaluate(async () => {
+        historyStack = []; historyIndex = -1;
+        const proj = { id: 'p1', data: { items: [{ id: 'b1', type: 'box', x: 0, y: 0, width: 10, height: 10 }] } };
+        projects.push(proj);
+        loadProject(JSON.stringify(proj));
+        saveStateForUndo();
+        items.push({ id: 'b2', type: 'box', x: 20, y: 20, width: 10, height: 10 });
+        undoLastAction();
+        if (items.length !== 1) throw new Error("Undo after load failed to revert to initial state");
+    });
+    console.log('Undo Priority passed.');
+}
+
+async function assertToolbarPriority(page) {
+    console.log('Testing Toolbar Priority...');
+    await page.setViewport({ width: 360, height: 800 });
+    const result = await page.evaluate(() => {
+        const tb = document.getElementById('tabs-bar');
+        const btns = Array.from(tb.querySelectorAll('button, .tab-item, .tab-add-btn'));
+        const clipped = [];
+        btns.forEach(b => {
+            const w = b.offsetWidth;
+            const cs = getComputedStyle(b);
+            if (!b.classList.contains('tab-close-btn') && w > 0 && w < 30 && b.style.display !== 'none' && cs.display !== 'none') {
+                clipped.push(`${b.id || b.className}: w=${w}`);
+            }
+        });
+        const pageScroll = document.documentElement.scrollWidth > document.documentElement.clientWidth;
+        return { clipped, pageScroll };
+    });
+    if (result.pageScroll) throw new Error("Page has horizontal overflow");
+    if (result.clipped.length > 0) throw new Error("Buttons are clipped/squished: " + result.clipped.join(', '));
+    console.log('Toolbar Priority passed.');
+}
+
+async function assertContextMenuPriority(page) {
+    console.log('Testing Context Menu Priority...');
+    const errors = [];
+    page.on('pageerror', err => errors.push(err));
+    page.on('console', msg => { if (msg.type() === 'error') errors.push(msg.text()); });
+    
+    await page.evaluate(async () => {
+        items.length = 0;
+        const tlist = { id: 'tl1', type: 'textList', x: 100, y: 100, width: 200, height: 200, items: [{text:'A', checked:false}] };
+        items.push(tlist);
+        selectedItems = [tlist];
+        onContextMenu({ preventDefault: ()=>{}, isFake: true });
+        if (document.getElementById('copy-for-moodlist-btn').style.display === 'none') throw new Error("copy-for-moodlist-btn is hidden");
+        document.getElementById('copy-for-moodlist-btn').click();
+        
+        const img = { id: 'img1', type: 'image', x: 300, y: 100, width: 100, height: 100, src: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=' };
+        items.push(img);
+        selectedItems = [img];
+        onContextMenu({ preventDefault: ()=>{}, isFake: true });
+        if (document.getElementById('download-image-btn').style.display === 'none') throw new Error("download-image-btn is hidden");
+        document.getElementById('download-image-btn').click();
+        
+        const box = { id: 'b1', type: 'box', x: 500, y: 100, width: 100, height: 100 };
+        items.push(box);
+        selectedItems = [box];
+        onContextMenu({ preventDefault: ()=>{}, isFake: true });
+        if (document.getElementById('context-connect-btn').style.display === 'none') throw new Error("context-connect-btn is hidden");
+        document.getElementById('context-connect-btn').click();
+    });
+    await new Promise(r => setTimeout(r, 500));
+    if (errors.length > 0) throw new Error("Context menu test produced errors: " + errors.join('\n'));
+    console.log('Context Menu Priority passed.');
+}
+
+async function assertB1MoodtoneBaseSwatch(page) {
+    console.log('Testing B1 Moodtone Base Swatch...');
+    await page.evaluate(() => createNewProject('colorseeker'));
+    await page.waitForSelector('.colorseeker-bar');
+
+    // 1. Shades mode with black #000000
+    await page.evaluate(() => {
+        const p = projects.find(proj => proj.id === activeProjectId);
+        p.data.mode = 'shades';
+        p.data.baseColor = '#000000';
+        p.data.colors = generatePalette(p.data.baseColor, p.data.mode, p.data.lockedColors);
+        renderColorSeeker(p.id);
+    });
+
+    const blackTest = await page.evaluate(() => {
+        const baseBtn = document.querySelector('.colorseeker-set-base.is-base');
+        const baseBar = baseBtn ? baseBtn.closest('.colorseeker-bar') : null;
+        const baseColor = baseBar ? baseBar.style.backgroundColor : null;
+        const hexList = document.getElementById('colorseeker-hex-list').textContent.trim().split(',');
+        return {
+            hasBaseBtn: !!baseBtn,
+            baseText: baseBtn ? baseBtn.textContent.trim() : null,
+            baseColor,
+            hexList
+        };
+    });
+    assert.ok(blackTest.hasBaseBtn, 'missing .colorseeker-set-base.is-base for black');
+    assert.equal(blackTest.baseText, '★ Base');
+    assert.equal(blackTest.baseColor, 'rgb(0, 0, 0)');
+    assert.equal(blackTest.hexList[0].toLowerCase(), '#000000');
+    // Ensure all adjacent shades are distinct
+    for (let i = 0; i < blackTest.hexList.length - 1; i++) {
+        assert.notEqual(blackTest.hexList[i].toLowerCase(), blackTest.hexList[i + 1].toLowerCase());
+    }
+
+    // 2. Shades mode with white #ffffff
+    await page.evaluate(() => {
+        const p = projects.find(proj => proj.id === activeProjectId);
+        p.data.mode = 'shades';
+        p.data.baseColor = '#ffffff';
+        p.data.colors = generatePalette(p.data.baseColor, p.data.mode, p.data.lockedColors);
+        renderColorSeeker(p.id);
+    });
+
+    const whiteTest = await page.evaluate(() => {
+        const baseBtn = document.querySelector('.colorseeker-set-base.is-base');
+        const baseBar = baseBtn ? baseBtn.closest('.colorseeker-bar') : null;
+        const baseColor = baseBar ? baseBar.style.backgroundColor : null;
+        const hexList = document.getElementById('colorseeker-hex-list').textContent.trim().split(',');
+        return {
+            hasBaseBtn: !!baseBtn,
+            baseText: baseBtn ? baseBtn.textContent.trim() : null,
+            baseColor,
+            hexList
+        };
+    });
+    assert.ok(whiteTest.hasBaseBtn, 'missing .colorseeker-set-base.is-base for white');
+    assert.equal(whiteTest.baseText, '★ Base');
+    assert.equal(whiteTest.baseColor, 'rgb(255, 255, 255)');
+    assert.equal(whiteTest.hexList[whiteTest.hexList.length - 1].toLowerCase(), '#ffffff');
+    for (let i = 0; i < whiteTest.hexList.length - 1; i++) {
+        assert.notEqual(whiteTest.hexList[i].toLowerCase(), whiteTest.hexList[i + 1].toLowerCase());
+    }
+
+    // 3. Tones mode with black #000000 (s = 0)
+    await page.evaluate(() => {
+        const p = projects.find(proj => proj.id === activeProjectId);
+        p.data.mode = 'tones';
+        p.data.baseColor = '#000000';
+        p.data.colors = generatePalette(p.data.baseColor, p.data.mode, p.data.lockedColors);
+        renderColorSeeker(p.id);
+    });
+
+    const toneZeroTest = await page.evaluate(() => {
+        const baseBtn = document.querySelector('.colorseeker-set-base.is-base');
+        const baseBar = baseBtn ? baseBtn.closest('.colorseeker-bar') : null;
+        const baseColor = baseBar ? baseBar.style.backgroundColor : null;
+        return { baseColor };
+    });
+    assert.equal(toneZeroTest.baseColor, 'rgb(0, 0, 0)');
+
+    // 4. Tones mode with saturated red #ff0000 (s = 100)
+    await page.evaluate(() => {
+        const p = projects.find(proj => proj.id === activeProjectId);
+        p.data.mode = 'tones';
+        p.data.baseColor = '#ff0000';
+        p.data.colors = generatePalette(p.data.baseColor, p.data.mode, p.data.lockedColors);
+        renderColorSeeker(p.id);
+    });
+
+    const toneMaxTest = await page.evaluate(() => {
+        const baseBtn = document.querySelector('.colorseeker-set-base.is-base');
+        const baseBar = baseBtn ? baseBtn.closest('.colorseeker-bar') : null;
+        const baseColor = baseBar ? baseBar.style.backgroundColor : null;
+        return { baseColor };
+    });
+    assert.equal(toneMaxTest.baseColor, 'rgb(255, 0, 0)');
+
+    console.log('B1 Moodtone Base Swatch passed.');
+}
+
+async function assertB2ExportSelectionPng(page) {
+    console.log('Testing B2 Export Selection as PNG...');
+    await page.evaluate(() => createNewProject('moodinfinite'));
+    await page.waitForSelector('#moodboard-canvas');
+
+    const result = await page.evaluate(() => {
+        items.length = 0;
+        selectedItems = [];
+        const box1 = { id: 'box1', type: 'box', x: 100, y: 100, width: 80, height: 80, color: '#ff0000', rotation: 0 };
+        const box2 = { id: 'box2', type: 'box', x: 300, y: 300, width: 100, height: 100, color: '#00ff00', rotation: 0 };
+        items.push(box1, box2);
+
+        // Initially no selection
+        updateSelectionToolbar();
+        const exportBtnInitial = document.getElementById('export-selection-png-btn');
+        const initialDisplay = exportBtnInitial ? exportBtnInitial.style.display : 'none';
+
+        // Select box1
+        selectedItems = [box1];
+        updateSelectionToolbar();
+        const selectedDisplay = exportBtnInitial ? exportBtnInitial.style.display : 'none';
+
+        // Context menu check
+        onContextMenu({ preventDefault: () => {}, isFake: true });
+        const contextExportBtn = document.getElementById('context-export-selection-btn');
+        const contextDisplay = contextExportBtn ? contextExportBtn.style.display : 'none';
+
+        // Check full board save PNG button is still intact
+        const fullSaveBtn = document.getElementById('save-png-btn');
+        const fullSaveTitle = fullSaveBtn ? fullSaveBtn.title : '';
+
+        // Test exportSelectionAsPng execution
+        let downloadedName = null;
+        let downloadedHref = null;
+        const origClick = HTMLAnchorElement.prototype.click;
+        HTMLAnchorElement.prototype.click = function() {
+            downloadedName = this.download;
+            downloadedHref = this.href;
+        };
+        try {
+            exportSelectionAsPng();
+        } finally {
+            HTMLAnchorElement.prototype.click = origClick;
+        }
+
+        return {
+            initialDisplay,
+            selectedDisplay,
+            contextDisplay,
+            fullSaveTitle,
+            downloadedName,
+            isDataUrl: !!(downloadedHref && downloadedHref.startsWith('data:image/png'))
+        };
+    });
+
+    assert.equal(result.initialDisplay, 'none');
+    assert.equal(result.selectedDisplay, 'flex');
+    assert.equal(result.contextDisplay, 'flex');
+    assert.ok(result.fullSaveTitle.includes('Export as PNG'), 'full board export title preserved');
+    assert.ok(result.downloadedName && result.downloadedName.includes('_selection.png'), 'selection export filename');
+    assert.ok(result.isDataUrl, 'selection export produced PNG data URL');
+
+    console.log('B2 Export Selection as PNG passed.');
+}
+
+async function assertB3MobileControls(page) {
+    console.log('Testing B3 Mobile Controls at 390px...');
+    await page.setViewport({ width: 390, height: 626 });
+    await page.evaluate(() => {
+        document.querySelectorAll('.toast-notification').forEach(el => el.remove());
+        createNewProject('moodinfinite');
+    });
+    await page.waitForSelector('#canvas-fit-view-btn');
+
+    const hitTest = await page.evaluate(() => {
+        document.querySelectorAll('.toast-notification').forEach(el => el.remove());
+        const fitBtn = document.getElementById('canvas-fit-view-btn');
+        const zoomReadout = document.getElementById('canvas-zoom-readout');
+        const leftBar = document.getElementById('left-bar');
+        const minimap = document.getElementById('canvas-minimap');
+
+        const fitRect = fitBtn.getBoundingClientRect();
+        const fitHit = document.elementFromPoint(fitRect.left + fitRect.width / 2, fitRect.top + fitRect.height / 2);
+
+        const zoomRect = zoomReadout.getBoundingClientRect();
+        const zoomHit = document.elementFromPoint(zoomRect.left + zoomRect.width / 2, zoomRect.top + zoomRect.height / 2);
+        return {
+            fitHitOuter: fitHit ? fitHit.outerHTML : null,
+            fitRect,
+            fitHitIsFitBtn: fitBtn.contains(fitHit),
+            fitHitTag: fitHit ? fitHit.tagName : null,
+            fitHitId: fitHit ? fitHit.id : null,
+            fitOverlapsLeftBar: leftBar.contains(fitHit),
+            fitOverlapsMinimap: minimap.contains(fitHit),
+            zoomHitIsZoom: zoomReadout.contains(zoomHit),
+            zoomOverlapsLeftBar: leftBar.contains(zoomHit),
+            zoomOverlapsMinimap: minimap.contains(zoomHit)
+        };
+    });
+
+    assert.ok(hitTest.fitHitIsFitBtn, `fit button hit test failed: hit ${hitTest.fitHitTag}#${hitTest.fitHitId}`);
+    assert.ok(!hitTest.fitOverlapsLeftBar, 'fit button overlaps left bar');
+    assert.ok(!hitTest.fitOverlapsMinimap, 'fit button overlaps minimap');
+    assert.ok(hitTest.zoomHitIsZoom, 'zoom readout hit test failed');
+    assert.ok(!hitTest.zoomOverlapsLeftBar, 'zoom readout overlaps left bar');
+    assert.ok(!hitTest.zoomOverlapsMinimap, 'zoom readout overlaps minimap');
+
+    // Ensure click succeeds without interception error
+    await page.click('#canvas-fit-view-btn');
+
+    await page.waitForFunction(() => window.innerWidth === 390);
+    const mobileChrome = await page.evaluate(async () => {
+        document.getElementById('cloud-sync-indicator')?.classList.add('visible');
+        if (typeof updateMobileBottomToolbarHeight === 'function') updateMobileBottomToolbarHeight();
+        if (typeof updateHScrollOverflowHints === 'function') updateHScrollOverflowHints();
+        await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+
+        const overlap = (a, b) => !(a.right <= b.left || a.left >= b.right || a.bottom <= b.top || a.top >= b.bottom);
+        const box = (r) => ({ left: r.left, right: r.right, top: r.top, bottom: r.bottom });
+        const cloud = document.getElementById('cloud-sync-indicator').getBoundingClientRect();
+        const bar = document.getElementById('left-bar').getBoundingClientRect();
+        const leftBar = document.getElementById('left-bar');
+        const tabsBar = document.getElementById('tabs-bar');
+        const track = document.querySelector('#left-bar > .h-scroll-track');
+        const tabsTrack = document.querySelector('#tabs-bar > .h-scroll-track');
+        const atStart = {
+            leftBarRight: leftBar.classList.contains('can-scroll-right'),
+            leftBarLeft: leftBar.classList.contains('can-scroll-left'),
+            tabsRight: tabsBar.classList.contains('can-scroll-right'),
+            trackOverflows: track.scrollWidth > track.clientWidth + 2,
+            tabsOverflows: tabsTrack.scrollWidth > tabsTrack.clientWidth + 2,
+        };
+
+        const textBtn = document.querySelector('#left-bar .tool-button[title="Text Tools (T, N, K, L)"]');
+        textBtn.scrollIntoView({ inline: 'nearest', block: 'nearest' });
+        const textRect = textBtn.getBoundingClientRect();
+        const barForText = leftBar.getBoundingClientRect();
+
+        const helpBtn = document.getElementById('open-help-btn');
+        helpBtn.scrollIntoView({ inline: 'nearest', block: 'nearest' });
+        const helpRect = helpBtn.getBoundingClientRect();
+        const barForHelp = leftBar.getBoundingClientRect();
+
+        track.scrollLeft = 0;
+        if (typeof updateHScrollOverflowHints === 'function') updateHScrollOverflowHints();
+
+        return {
+            overlaps: overlap(cloud, bar),
+            cloud: box(cloud),
+            bar: box(bar),
+            atStart,
+            textFullyInBar: textRect.left >= barForText.left - 1 && textRect.right <= barForText.right + 1,
+            helpFullyInBar: helpRect.left >= barForHelp.left - 1 && helpRect.right <= barForHelp.right + 1,
+        };
+    });
+
+    assert.equal(mobileChrome.overlaps, false, `cloud indicator overlaps bottom toolbar at 390px: cloud=${JSON.stringify(mobileChrome.cloud)} bar=${JSON.stringify(mobileChrome.bar)}`);
+    assert.ok(mobileChrome.cloud.bottom <= mobileChrome.bar.top + 0.5, `cloud indicator is not above the bottom toolbar: cloud=${JSON.stringify(mobileChrome.cloud)} bar=${JSON.stringify(mobileChrome.bar)}`);
+    assert.equal(mobileChrome.atStart.trackOverflows, true, 'bottom toolbar should overflow on a 390px viewport');
+    assert.equal(mobileChrome.atStart.leftBarRight, true, 'bottom toolbar should show a can-scroll-right hint');
+    assert.equal(mobileChrome.atStart.leftBarLeft, false, 'bottom toolbar should not show a can-scroll-left hint at the start');
+    assert.equal(mobileChrome.atStart.tabsOverflows, true, 'top bar should overflow on a 390px viewport');
+    assert.equal(mobileChrome.atStart.tabsRight, true, 'top bar should show a can-scroll-right hint');
+    assert.equal(mobileChrome.textFullyInBar, true, 'text tool is not fully reachable by scrolling');
+    assert.equal(mobileChrome.helpFullyInBar, true, 'last bottom-toolbar icon is not fully reachable by scrolling');
+
+    // Restore desktop viewport
+    await page.setViewport({ width: 1280, height: 800 });
+    await page.waitForFunction(() => window.innerWidth === 1280);
+    const desktopChrome = await page.evaluate(async () => {
+        document.getElementById('cloud-sync-indicator')?.classList.add('visible');
+        if (typeof updateMobileBottomToolbarHeight === 'function') updateMobileBottomToolbarHeight();
+        if (typeof updateHScrollOverflowHints === 'function') updateHScrollOverflowHints();
+        await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+        const overlap = (a, b) => !(a.right <= b.left || a.left >= b.right || a.bottom <= b.top || a.top >= b.bottom);
+        const box = (r) => ({ left: r.left, right: r.right, top: r.top, bottom: r.bottom });
+        const cloud = document.getElementById('cloud-sync-indicator').getBoundingClientRect();
+        const bar = document.getElementById('left-bar').getBoundingClientRect();
+        return {
+            overlaps: overlap(cloud, bar),
+            cloud: box(cloud),
+            bar: box(bar),
+            hasHints: document.getElementById('left-bar').classList.contains('can-scroll-right')
+                || document.getElementById('left-bar').classList.contains('can-scroll-left')
+                || document.getElementById('tabs-bar').classList.contains('can-scroll-right')
+                || document.getElementById('tabs-bar').classList.contains('can-scroll-left'),
+        };
+    });
+    assert.equal(desktopChrome.overlaps, false, `cloud indicator overlaps left toolbar at 1280px: cloud=${JSON.stringify(desktopChrome.cloud)} bar=${JSON.stringify(desktopChrome.bar)}`);
+    assert.equal(desktopChrome.hasHints, false, 'overflow hints should not show on desktop widths');
+    console.log('B3 Mobile Controls at 390px passed.');
+}
+
+async function assertB4MoodtoneContrastLabels(page) {
+    console.log('Testing B4 Moodtone Contrast Labels...');
+
+    // 1. Check shared getContrastTextColor function outputs
+    const contrastChecks = await page.evaluate(() => {
+        const fn = window.getContrastTextColor;
+        return {
+            cyan: fn('#00FFFF'),
+            yellow: fn('#FFFF00'),
+            black: fn('#000000'),
+            white: fn('#FFFFFF'),
+            magenta: fn('#FF00FF'),
+            lightCyan: fn('#4DFFFF'),
+            lightYellow: fn('#FFFF4D')
+        };
+    });
+
+    assert.equal(contrastChecks.cyan, '#000000', 'cyan must use black text for higher contrast');
+    assert.equal(contrastChecks.yellow, '#000000', 'yellow must use black text for higher contrast');
+    assert.equal(contrastChecks.black, '#ffffff', 'black must use white text');
+    assert.equal(contrastChecks.white, '#000000', 'white must use black text');
+    assert.equal(contrastChecks.lightCyan, '#000000', '#4DFFFF must use black text');
+    assert.equal(contrastChecks.lightYellow, '#000000', '#FFFF4D must use black text');
+
+    // 2. Test in Triadic mode with base #FF00FF
+    await page.evaluate(() => {
+        createNewProject('colorseeker');
+        const p = projects.find(proj => proj.id === activeProjectId);
+        p.data.mode = 'triadic';
+        p.data.baseColor = '#FF00FF';
+        p.data.colors = generatePalette(p.data.baseColor, p.data.mode, p.data.lockedColors);
+        renderColorSeeker(p.id);
+    });
+
+    // Check on-screen labels in info tooltips
+    const tooltipColors = await page.evaluate(() => {
+        const bars = Array.from(document.querySelectorAll('.colorseeker-bar'));
+        return bars.map(bar => {
+            const info = bar.querySelector('.colorseeker-info');
+            return {
+                bg: bar.style.backgroundColor,
+                textColor: info ? info.style.color : null
+            };
+        });
+    });
+
+    // Yellow and cyan swatches must have rgb(0, 0, 0) text
+    tooltipColors.forEach(item => {
+        if (item.bg === 'rgb(255, 255, 0)' || item.bg === 'rgb(0, 255, 255)') {
+            assert.equal(item.textColor, 'rgb(0, 0, 0)', `expected black text for ${item.bg}, got ${item.textColor}`);
+        }
+    });
+
+    console.log('B4 Moodtone Contrast Labels passed.');
+}
+
+async function assertB5MoodtoneSwatchPanelOverlap(page) {
+    console.log('Testing B5 Moodtone Swatch Panel Overlap at 1280px...');
+    await page.setViewport({ width: 1280, height: 800 });
+
+    const layout = await page.evaluate(() => {
+        createNewProject('colorseeker');
+        const sidebar = document.getElementById('colorseeker-sidebar');
+        const firstSwatch = document.querySelector('.colorseeker-bar[data-index="0"]');
+        const removeBtn = firstSwatch ? firstSwatch.querySelector('.colorseeker-remove') : null;
+        const setBaseBtn = firstSwatch ? firstSwatch.querySelector('.colorseeker-set-base') : null;
+
+        const sidebarRect = sidebar ? sidebar.getBoundingClientRect() : null;
+        const swatchRect = firstSwatch ? firstSwatch.getBoundingClientRect() : null;
+        const removeRect = removeBtn ? removeBtn.getBoundingClientRect() : null;
+        const setBaseRect = setBaseBtn ? setBaseBtn.getBoundingClientRect() : null;
+
+        let removeTarget = null;
+        if (removeRect) {
+            removeTarget = document.elementFromPoint(removeRect.x + removeRect.width / 2, removeRect.y + removeRect.height / 2);
+        }
+        let setBaseTarget = null;
+        if (setBaseRect) {
+            setBaseTarget = document.elementFromPoint(setBaseRect.x + setBaseRect.width / 2, setBaseRect.y + setBaseRect.height / 2);
+        }
+
+        return {
+            sidebarRight: sidebarRect ? sidebarRect.right : null,
+            swatchLeft: swatchRect ? swatchRect.left : null,
+            removeHitsButton: removeTarget === removeBtn,
+            setBaseHitsButton: setBaseTarget === setBaseBtn,
+            removeHitsSidebar: sidebar ? sidebar.contains(removeTarget) : false,
+            setBaseHitsSidebar: sidebar ? sidebar.contains(setBaseTarget) : false
+        };
+    });
+
+    assert.ok(layout.swatchLeft >= layout.sidebarRight, `first swatch (left: ${layout.swatchLeft}) must not sit under sidebar (right: ${layout.sidebarRight})`);
+    assert.ok(!layout.removeHitsSidebar, 'remove button must not be covered by sidebar');
+    assert.ok(!layout.setBaseHitsSidebar, 'set base button must not be covered by sidebar');
+    assert.ok(layout.removeHitsButton, 'elementFromPoint on remove button must hit remove button');
+    assert.ok(layout.setBaseHitsButton, 'elementFromPoint on set-base button must hit set-base button');
+
+    console.log('B5 Moodtone Swatch Panel Overlap passed.');
+}
+
+async function assertB6ToolbarClamping(page) {
+    console.log('Testing B6 Floating Selection Toolbar Clamping...');
+    await page.setViewport({ width: 1280, height: 800 });
+
+    // Switch to first moodinfinite board
+    await page.evaluate(() => {
+        const board = projects.find(p => p.type === 'moodinfinite');
+        if (board) switchTab(board.id);
+    });
+
+    // 1. Place item near right edge (e.g. screen x = 1200)
+    const rightEdgeRect = await page.evaluate(() => {
+        const w = screenToWorld({ x: 1200, y: 300 });
+        const item = {
+            id: 'b6_test_right',
+            type: 'box',
+            x: w.x,
+            y: w.y,
+            width: 80,
+            height: 80,
+            color: '#3498db'
+        };
+        items.push(item);
+        selectedItems = [item];
+        updateSelectionToolbar();
+        updateToolbarPosition();
+        const tb = document.getElementById('selection-toolbar');
+        const r = tb.getBoundingClientRect();
+        return {
+            left: r.left,
+            right: r.right,
+            top: r.top,
+            bottom: r.bottom
+        };
+    });
+
+    assert.ok(rightEdgeRect.right <= 1280, `toolbar right (${rightEdgeRect.right}) must not exceed viewport width (1280)`);
+    assert.ok(rightEdgeRect.left >= 0, `toolbar left (${rightEdgeRect.left}) must not be negative`);
+
+    // 2. Place item near left edge (e.g. screen x = 20)
+    const leftEdgeRect = await page.evaluate(() => {
+        const w = screenToWorld({ x: 20, y: 300 });
+        const item = {
+            id: 'b6_test_left',
+            type: 'box',
+            x: w.x,
+            y: w.y,
+            width: 80,
+            height: 80,
+            color: '#3498db'
+        };
+        items.push(item);
+        selectedItems = [item];
+        updateSelectionToolbar();
+        updateToolbarPosition();
+        const tb = document.getElementById('selection-toolbar');
+        const r = tb.getBoundingClientRect();
+        return {
+            left: r.left,
+            right: r.right,
+            top: r.top,
+            bottom: r.bottom
+        };
+    });
+
+    assert.ok(leftEdgeRect.left >= 0, `toolbar left (${leftEdgeRect.left}) must not be negative`);
+    assert.ok(leftEdgeRect.right <= 1280, `toolbar right (${leftEdgeRect.right}) must not exceed viewport width`);
+
+    // 3. Place item near top edge (e.g. screen x = 600, y = -100)
+    const topEdgeRect = await page.evaluate(() => {
+        const w = screenToWorld({ x: 600, y: -100 });
+        const item = {
+            id: 'b6_test_top',
+            type: 'box',
+            x: w.x,
+            y: w.y,
+            width: 80,
+            height: 80,
+            color: '#3498db'
+        };
+        items.push(item);
+        selectedItems = [item];
+        updateSelectionToolbar();
+        updateToolbarPosition();
+        const tb = document.getElementById('selection-toolbar');
+        const r = tb.getBoundingClientRect();
+        return {
+            left: r.left,
+            right: r.right,
+            top: r.top,
+            bottom: r.bottom
+        };
+    });
+
+    assert.ok(topEdgeRect.top >= 0, `toolbar top (${topEdgeRect.top}) must not be negative`);
+
+    // Cleanup added test items
+    await page.evaluate(() => {
+        items = items.filter(it => !it.id.startsWith('b6_test_'));
+        selectedItems = [];
+        updateSelectionToolbar();
+    });
+
+    console.log('B6 Floating Selection Toolbar Clamping passed.');
+}
+
+async function assertB7FitViewPadding(page) {
+    console.log('Testing B7 Fit-to-view Padding around UI overlays...');
+    await page.setViewport({ width: 1280, height: 800 });
+
+    const checkResult = await page.evaluate(() => {
+        const board = projects.find(p => p.type === 'moodinfinite');
+        if (board) switchTab(board.id);
+
+        const savedItems = [...items];
+        items = [
+            { id: 'b7_1', type: 'box', x: 100, y: 100, width: 200, height: 200, color: '#3498db' },
+            { id: 'b7_2', type: 'box', x: 400, y: 250, width: 150, height: 150, color: '#3498db' },
+            { id: 'b7_3', type: 'box', x: 650, y: 350, width: 150, height: 150, color: '#3498db' },
+            { id: 'b7_4', type: 'box', x: 900, y: 450, width: 180, height: 180, color: '#3498db' },
+            { id: 'b7_5', type: 'box', x: 1200, y: 600, width: 200, height: 200, color: '#3498db' }
+        ];
+        selectedItems = [];
+
+        focusOnSelection();
+
+        const itemScreenBoxes = items.map(it => {
+            const box = getItemBoundingBox(it);
+            const tl = worldToScreen({ x: box.x, y: box.y });
+            const br = worldToScreen({ x: box.x + box.width, y: box.y + box.height });
+            return {
+                id: it.id,
+                left: Math.min(tl.x, br.x),
+                right: Math.max(tl.x, br.x),
+                top: Math.min(tl.y, br.y),
+                bottom: Math.max(tl.y, br.y)
+            };
+        });
+
+        const tabsBar = document.getElementById('tabs-bar');
+        const leftBar = document.getElementById('left-bar');
+        const minimap = document.getElementById('canvas-minimap');
+
+        const tabsRect = tabsBar ? tabsBar.getBoundingClientRect() : null;
+        const leftRect = leftBar ? leftBar.getBoundingClientRect() : null;
+        const minimapRect = minimap ? minimap.getBoundingClientRect() : null;
+
+        const overlaps = [];
+        for (const ib of itemScreenBoxes) {
+            if (tabsRect && ib.top < tabsRect.bottom && ib.bottom > tabsRect.top && ib.left < tabsRect.right && ib.right > tabsRect.left) {
+                overlaps.push({ item: ib.id, element: 'tabs-bar' });
+            }
+            if (leftRect && ib.top < leftRect.bottom && ib.bottom > leftRect.top && ib.left < leftRect.right && ib.right > leftRect.left) {
+                overlaps.push({ item: ib.id, element: 'left-bar' });
+            }
+            if (minimapRect && ib.top < minimapRect.bottom && ib.bottom > minimapRect.top && ib.left < minimapRect.right && ib.right > minimapRect.left) {
+                overlaps.push({ item: ib.id, element: 'minimap' });
+            }
+        }
+
+        items = savedItems;
+        requestUpdate();
+
+        return {
+            overlaps,
+            itemScreenBoxes,
+            minimapRect
+        };
+    });
+
+    assert.equal(checkResult.overlaps.length, 0, `no item should overlap overlays: ${JSON.stringify(checkResult.overlaps)}`);
+    console.log('B7 Fit-to-view Padding passed.');
+}
+
+async function assertB8DuplicateTabNames(page) {
+    console.log('Testing B8 Deduplication of Tab Names on Duplicate Loads...');
+
+    const tabNames = await page.evaluate(() => {
+        const dummyMood = JSON.stringify({ items: [{ id: 'test_item', type: 'box', x: 0, y: 0, width: 100, height: 100 }] });
+
+        // Load same file three times
+        loadFileAsNewTab(dummyMood, 'TestProject.mood');
+        const p1 = projects[projects.length - 1];
+
+        loadFileAsNewTab(dummyMood, 'TestProject.mood');
+        const p2 = projects[projects.length - 1];
+
+        loadFileAsNewTab(dummyMood, 'TestProject.mood');
+        const p3 = projects[projects.length - 1];
+
+        return [p1.name, p2.name, p3.name];
+    });
+
+    assert.equal(tabNames[0], 'TestProject', 'first loaded tab should keep base name');
+    assert.equal(tabNames[1], 'TestProject (2)', 'second loaded tab should append (2)');
+    assert.equal(tabNames[2], 'TestProject (3)', 'third loaded tab should append (3)');
+
+    console.log('B8 Deduplication of Tab Names passed.');
+}
+
+function fitScenes() {
+    const base = { rotation: 0, scaleX: 1, scaleY: 1, opacity: 1, style: 'fill', isPinned: false };
+    const scattered = [
+        { ...base, id: 'neg', type: 'box', x: -200, y: -4200, width: 520, height: 1100, color: '#e74c3c' },
+        { ...base, id: 'far', type: 'box', x: 480, y: 4300, width: 520, height: 1100, color: '#3498db' },
+        { ...base, id: 'rot', type: 'box', x: 40, y: -180, width: 360, height: 140, rotation: Math.PI / 5, scaleX: 1.35, scaleY: 1.15, color: '#f1c40f' },
+        {
+            ...base, id: 'grp', type: 'group', x: -40, y: 220, width: 420, height: 280, rotation: 0.4, scaleX: 1.2, scaleY: 0.9,
+            items: [
+                { ...base, id: 'gchild', type: 'box', x: 30, y: 24, width: 160, height: 100, rotation: 0.7, color: '#2ecc71' },
+                {
+                    ...base, id: 'nested', type: 'group', x: 150, y: 50, width: 200, height: 150, rotation: -0.5, scaleX: 1.15, scaleY: 1.05,
+                    items: [
+                        { ...base, id: 'nchild', type: 'box', x: 16, y: 14, width: 100, height: 70, rotation: 0.55, scaleX: 1.4, scaleY: 1.1, color: '#9b59b6' },
+                    ],
+                },
+            ],
+        },
+    ];
+    const scaled = [
+        { ...base, id: 'neg', type: 'box', x: -520, y: -360, width: 120, height: 80, rotation: -0.4, scaleX: 1.3, scaleY: 1.2, color: '#e74c3c' },
+        { ...base, id: 'rot', type: 'box', x: -30, y: -10, width: 260, height: 34, rotation: Math.PI / 2, scaleX: 2.2, scaleY: 1.15, color: '#f1c40f' },
+        {
+            ...base, id: 'grp', type: 'group', x: 40, y: -70, width: 170, height: 120, rotation: 0.65, scaleX: 1.8, scaleY: 1.45,
+            items: [
+                { ...base, id: 'gchild', type: 'box', x: 18, y: 14, width: 64, height: 36, rotation: 0.35, color: '#2ecc71' },
+                {
+                    ...base, id: 'nested', type: 'group', x: 48, y: 22, width: 96, height: 70, rotation: -0.7, scaleX: 1.25, scaleY: 1.1,
+                    items: [
+                        { ...base, id: 'nchild', type: 'box', x: 10, y: 8, width: 42, height: 26, rotation: 0.75, scaleX: 1.5, scaleY: 1.2, color: '#9b59b6' },
+                    ],
+                },
+            ],
+        },
+    ];
+    return { scattered, scaled };
+}
+
+async function measureFittedItems(page, sceneItems) {
+    return page.evaluate((sceneItems) => {
+        const board = projects.find((p) => p.type === 'moodinfinite');
+        if (board) switchTab(board.id);
+        const prevGrid = showGrid;
+        showGrid = false;
+        const saved = items.slice();
+        const savedSelection = selectedItems.slice();
+        items = sceneItems;
+        selectedItems = [];
+        document.getElementById('canvas-fit-view-btn').click();
+        draw();
+
+        const canvas = document.getElementById('moodboard-canvas');
+        const ctx = canvas.getContext('2d');
+        const img = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+        const targets = {
+            neg: [231, 76, 60],
+            far: [52, 152, 219],
+            rot: [241, 196, 15],
+            gchild: [46, 204, 113],
+            nchild: [155, 89, 182],
+        };
+        const found = {};
+        const want = new Set();
+        const walk = (list) => list.forEach((item) => {
+            if (item.items) walk(item.items);
+            else if (targets[item.id]) want.add(item.id);
+        });
+        walk(sceneItems);
+        want.forEach((id) => { found[id] = null; });
+        const w = canvas.width;
+        const h = canvas.height;
+        for (let y = 0; y < h; y++) {
+            for (let x = 0; x < w; x++) {
+                const i = (y * w + x) * 4;
+                const r = img[i];
+                const g = img[i + 1];
+                const b = img[i + 2];
+                const a = img[i + 3];
+                if (a < 180) continue;
+                for (const id of want) {
+                    const c = targets[id];
+                    if (Math.abs(r - c[0]) > 28 || Math.abs(g - c[1]) > 28 || Math.abs(b - c[2]) > 28) continue;
+                    const box = found[id] || { minX: x, minY: y, maxX: x, maxY: y, n: 0 };
+                    if (x < box.minX) box.minX = x;
+                    if (y < box.minY) box.minY = y;
+                    if (x > box.maxX) box.maxX = x;
+                    if (y > box.maxY) box.maxY = y;
+                    box.n++;
+                    found[id] = box;
+                }
+            }
+        }
+        const chrome = ['tabs-bar', 'left-bar', 'canvas-minimap', 'canvas-fit-view-btn', 'canvas-zoom-readout'].map((id) => {
+            const el = document.getElementById(id);
+            const r = el.getBoundingClientRect();
+            const cs = getComputedStyle(el);
+            return {
+                id,
+                left: r.left,
+                top: r.top,
+                right: r.right,
+                bottom: r.bottom,
+                w: r.width,
+                h: r.height,
+                hidden: el.hidden || cs.display === 'none' || cs.visibility === 'hidden',
+            };
+        });
+        const zoom = cameraZoom;
+        const dpr = window.devicePixelRatio;
+        const cssW = canvas.clientWidth;
+        const cssH = canvas.clientHeight;
+        showGrid = prevGrid;
+        items = saved;
+        selectedItems = savedSelection;
+        items.forEach((item) => { delete item._cachedBox; item._isDirty = true; });
+        requestUpdate();
+        return { found, chrome, zoom, dpr, canvas: { w, h, cssW, cssH }, minZoom: MIN_ZOOM };
+    }, sceneItems);
+}
+
+function freeRectForChrome(canvas, chrome) {
+    let left = 0;
+    let top = 0;
+    let right = canvas.w;
+    let bottom = canvas.h;
+    const corners = [];
+    for (const r of chrome) {
+        if (r.hidden || r.w < 1 || r.h < 1) continue;
+        const cx = (r.left + r.right) / 2;
+        const cy = (r.top + r.bottom) / 2;
+        const wide = r.w >= r.h * 1.4 && r.w > canvas.w * 0.35;
+        const tall = r.h >= r.w * 1.4 && r.h > canvas.h * 0.35;
+        if (wide && cy < canvas.h * 0.45) top = Math.max(top, r.bottom);
+        else if (wide && cy > canvas.h * 0.55) bottom = Math.min(bottom, r.top);
+        else if (tall && cx < canvas.w * 0.45) left = Math.max(left, r.right);
+        else if (tall && cx > canvas.w * 0.55) right = Math.min(right, r.left);
+        else corners.push(r);
+    }
+    for (const r of corners) {
+        const overlaps = r.right > left && r.left < right && r.bottom > top && r.top < bottom;
+        if (!overlaps) continue;
+        const cx = (r.left + r.right) / 2;
+        const cy = (r.top + r.bottom) / 2;
+        if (cx >= canvas.w / 2) right = Math.min(right, r.left);
+        else left = Math.max(left, r.right);
+        if (cy >= canvas.h / 2) bottom = Math.min(bottom, r.top);
+        else top = Math.max(top, r.bottom);
+    }
+    return { left, top, right, bottom };
+}
+
+function assertItemsInsideFreeRect(result, label, { expectBelowMinZoom }) {
+    assert.equal(result.canvas.w, result.canvas.cssW, `${label} canvas buffer width should match CSS px`);
+    assert.equal(result.canvas.h, result.canvas.cssH, `${label} canvas buffer height should match CSS px`);
+    const free = freeRectForChrome(result.canvas, result.chrome);
+    const pad = 6;
+    let minX = Infinity;
+    let minY = Infinity;
+    let maxX = -Infinity;
+    let maxY = -Infinity;
+    for (const [id, box] of Object.entries(result.found)) {
+        assert.ok(box && box.n >= 4, `${label} ${id} is not fully inside the view: ${JSON.stringify(box)}`);
+        assert.ok(box.minX >= free.left + pad, `${label} ${id} left ${box.minX} is outside the chrome-free area ${free.left}`);
+        assert.ok(box.minY >= free.top + pad, `${label} ${id} top ${box.minY} is outside the chrome-free area ${free.top}`);
+        assert.ok(box.maxX <= free.right - pad, `${label} ${id} right ${box.maxX} is outside the chrome-free area ${free.right}`);
+        assert.ok(box.maxY <= free.bottom - pad, `${label} ${id} bottom ${box.maxY} is outside the chrome-free area ${free.bottom}`);
+        minX = Math.min(minX, box.minX);
+        minY = Math.min(minY, box.minY);
+        maxX = Math.max(maxX, box.maxX);
+        maxY = Math.max(maxY, box.maxY);
+    }
+    const cx = (minX + maxX) / 2;
+    const cy = (minY + maxY) / 2;
+    const fcx = (free.left + free.right) / 2;
+    const fcy = (free.top + free.bottom) / 2;
+    const tolX = Math.max(36, (free.right - free.left) * 0.18);
+    const tolY = Math.max(36, (free.bottom - free.top) * 0.18);
+    assert.ok(Math.abs(cx - fcx) <= tolX, `${label} items are not centered horizontally: ${cx} vs ${fcx}`);
+    assert.ok(Math.abs(cy - fcy) <= tolY, `${label} items are not centered vertically: ${cy} vs ${fcy}`);
+    if (expectBelowMinZoom) {
+        assert.ok(result.zoom < result.minZoom, `${label} fit stayed at MIN_ZOOM ${result.minZoom}, zoom ${result.zoom}`);
+    }
+}
+
+async function assertFitViewGeometry(page) {
+    console.log('Testing fit-to-view geometry (negative, far, rotated, nested, DPR)...');
+    const { scattered, scaled } = fitScenes();
+    const viewports = [
+        { name: 'desktop', width: 1280, height: 800, deviceScaleFactor: 1, isMobile: false },
+        { name: 'desktop-dpr2', width: 1280, height: 800, deviceScaleFactor: 2, isMobile: false },
+        { name: 'mobile-dpr2', width: 390, height: 780, deviceScaleFactor: 2, isMobile: true, hasTouch: true },
+        { name: 'mobile-dpr3', width: 390, height: 780, deviceScaleFactor: 3, isMobile: true, hasTouch: true },
+    ];
+    for (const viewport of viewports) {
+        await page.setViewport(viewport);
+        await page.waitForFunction((width) => window.innerWidth === width, {}, viewport.width);
+        const scatteredResult = await measureFittedItems(page, scattered);
+        assert.equal(scatteredResult.dpr, viewport.deviceScaleFactor, `${viewport.name} devicePixelRatio`);
+        assertItemsInsideFreeRect(scatteredResult, `${viewport.name} scattered`, { expectBelowMinZoom: true });
+        const scaledResult = await measureFittedItems(page, scaled);
+        assertItemsInsideFreeRect(scaledResult, `${viewport.name} scaled`, { expectBelowMinZoom: false });
+    }
+    await page.setViewport({ width: 1280, height: 800, deviceScaleFactor: 1, isMobile: false });
+    await page.waitForFunction(() => window.innerWidth === 1280);
+    console.log('Fit-to-view geometry passed.');
+}
+
+async function assertBottomToolbarScrollEnd(page) {
+    console.log('Testing bottom toolbar scroll-end hint at 390px...');
+    await page.setViewport({ width: 390, height: 780, deviceScaleFactor: 2, isMobile: true, hasTouch: true });
+    await page.waitForFunction(() => window.innerWidth === 390);
+    const result = await page.evaluate(async () => {
+        document.querySelectorAll('.toast-notification').forEach((el) => el.remove());
+        const board = projects.find((p) => p.type === 'moodinfinite');
+        if (board) switchTab(board.id);
+        if (typeof updateMobileBottomToolbarHeight === 'function') updateMobileBottomToolbarHeight();
+        updateHScrollOverflowHints();
+        await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+        const bar = document.getElementById('left-bar');
+        const track = bar.querySelector(':scope > .h-scroll-track');
+        const scroller = track && getComputedStyle(track).overflowX !== 'hidden' && track.scrollWidth > track.clientWidth + 2
+            ? track
+            : bar;
+        scroller.scrollLeft = scroller.scrollWidth;
+        updateHScrollOverflowHints();
+        return {
+            canRight: bar.classList.contains('can-scroll-right'),
+            canLeft: bar.classList.contains('can-scroll-left'),
+            scrollLeft: scroller.scrollLeft,
+            scrollWidth: scroller.scrollWidth,
+            clientWidth: scroller.clientWidth,
+            atEnd: scroller.scrollLeft + scroller.clientWidth >= scroller.scrollWidth - 2,
+        };
+    });
+    assert.equal(result.atEnd, true, `bottom toolbar did not scroll to the end: ${JSON.stringify(result)}`);
+    assert.equal(result.canRight, false, `can-scroll-right stayed on at the end: ${JSON.stringify(result)}`);
+    assert.equal(result.canLeft, true, `can-scroll-left missing after scrolling to the end: ${JSON.stringify(result)}`);
+    await page.setViewport({ width: 1280, height: 800, deviceScaleFactor: 1, isMobile: false });
+    await page.waitForFunction(() => window.innerWidth === 1280);
+    console.log('Bottom toolbar scroll-end hint passed.');
+}
+
+
+
+

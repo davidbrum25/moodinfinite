@@ -55,6 +55,7 @@ function renderMoodlistView(project) {
                 <iconify-icon icon="lucide:list-check" width="20" height="20"
                     style="color:var(--switch-bg-checked);"></iconify-icon>
                 <span class="ml-top-title">Moodlist</span>
+                <span class="ml-cards-count-badge" id="ml-cards-count">0 cards</span>
             </div>
             <div class="ml-top-bar-right">
                 <div class="ml-search-wrap">
@@ -103,7 +104,7 @@ function renderMoodlistView(project) {
                     </div>
                 </div>
                 <div class="ml-add-preview-img" style="display:none">
-                    <img class="ml-add-img" src="" alt="">
+                    <img class="ml-add-img" src="" alt="Card image preview">
                     <button class="ml-remove-img-btn" title="Remove image">
                         <iconify-icon icon="lucide:x" width="14" height="14"></iconify-icon>
                     </button>
@@ -272,6 +273,12 @@ function _wireAddPanel(panel, project, onSave) {
 /* ─── RENDER CARDS ──────────────────────────────────────────────────────── */
 function renderMoodlistCards(project, grid) {
     const container = document.getElementById('moodlist-container');
+    const countBadge = container?.querySelector('#ml-cards-count');
+    if (countBadge) {
+        const total = (project.data.cards || []).length;
+        countBadge.textContent = `${total} card${total === 1 ? '' : 's'}`;
+    }
+
     const searchInput = container?.querySelector('.ml-search');
     const showPinnedToggle = container?.querySelector('.ml-show-pinned');
 
@@ -388,7 +395,7 @@ function _buildCard(card, project, grid) {
     // Image section
     const imgHtml = card.image ? `
         <div class="ml-card-img-wrap">
-            <img src="${card.image}" class="ml-card-img" alt="">
+            <img src="${card.image}" class="ml-card-img" alt="${_escapeAttr(card.title || 'Card image')}">
         </div>
     ` : '';
 
@@ -403,10 +410,19 @@ function _buildCard(card, project, grid) {
         ? `<iconify-icon icon="lucide:pin" width="14" height="14" style="color:var(--switch-bg-checked)"></iconify-icon>`
         : `<iconify-icon icon="lucide:pin" width="14" height="14"></iconify-icon>`;
 
+    const totalItems = (card.items || []).length;
+    const doneItems = (card.items || []).filter(i => i.checked).length;
+    const progressBadge = totalItems > 0
+        ? `<span class="ml-card-progress-badge${doneItems === totalItems ? ' is-complete' : ''}" title="${doneItems} of ${totalItems} completed">${doneItems}/${totalItems}</span>`
+        : '';
+
     el.innerHTML = `
         ${imgHtml}
         <div class="ml-card-body">
-            ${card.title ? `<div class="ml-card-title" contenteditable="true" spellcheck="false">${_escapeHtml(card.title)}</div>` : `<div class="ml-card-title empty" contenteditable="true" spellcheck="false" data-placeholder="Title…"></div>`}
+            <div class="ml-card-header-row">
+                ${card.title ? `<div class="ml-card-title" contenteditable="true" spellcheck="false">${_escapeHtml(card.title)}</div>` : `<div class="ml-card-title empty" contenteditable="true" spellcheck="false" data-placeholder="Title…"></div>`}
+                ${progressBadge}
+            </div>
             <div class="ml-card-items">${itemsHtml}</div>
             <div class="ml-card-add-item">
                 <iconify-icon icon="lucide:plus" width="13" height="13"></iconify-icon>
@@ -426,6 +442,12 @@ function _buildCard(card, project, grid) {
                     </button>
                     <div class="ml-color-picker" style="display:none"></div>
                 </div>
+                <button class="ml-card-btn ml-card-check-all-btn" title="Toggle all items">
+                    <iconify-icon icon="lucide:check-check" width="14" height="14"></iconify-icon>
+                </button>
+                <button class="ml-card-btn ml-card-duplicate-btn" title="Duplicate card">
+                    <iconify-icon icon="lucide:copy-plus" width="14" height="14"></iconify-icon>
+                </button>
             </div>
             <button class="ml-card-btn ml-card-delete-btn" title="Delete card">
                 <iconify-icon icon="lucide:trash-2" width="14" height="14"></iconify-icon>
@@ -552,11 +574,35 @@ function _wireCard(el, card, project, grid) {
         });
     });
 
+    // Toggle all items
+    el.querySelector('.ml-card-check-all-btn')?.addEventListener('click', () => {
+        const items = card.items || [];
+        if (!items.length) return;
+        const allChecked = items.every(i => i.checked);
+        items.forEach(i => i.checked = !allChecked);
+        scheduleAutoSave();
+        renderMoodlistCards(project, grid);
+    });
+
     // Pin toggle
     el.querySelector('.ml-pin-btn').addEventListener('click', () => {
         card.pinned = !card.pinned;
         scheduleAutoSave();
         renderMoodlistCards(project, grid);
+    });
+
+    // Duplicate card
+    el.querySelector('.ml-card-duplicate-btn')?.addEventListener('click', () => {
+        const target = _activeMoodlistProject() || project;
+        if (!target.data.cards) target.data.cards = [];
+        const idx = target.data.cards.findIndex(c => c.id === card.id);
+        const clone = JSON.parse(JSON.stringify(card));
+        clone.id = mlId();
+        clone.title = card.title ? `${card.title} (Copy)` : 'Copy';
+        (clone.items || []).forEach(it => { it.id = mlId(); });
+        target.data.cards.splice(idx >= 0 ? idx + 1 : 0, 0, clone);
+        scheduleAutoSave();
+        renderMoodlistCards(target, grid);
     });
 
     // Delete card
