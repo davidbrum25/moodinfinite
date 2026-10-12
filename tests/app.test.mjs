@@ -2221,6 +2221,7 @@ try {
     await assertFitViewGeometry(page);
     await assertBottomToolbarScrollEnd(page);
     await assertNonCanvasRound1(page);
+    await assertShellCanvasFixes(page);
 
     const lateErrors = pageErrors.filter(isFirstParty);
     assert.deepEqual(lateErrors, [], `first-party errors:\n${lateErrors.join('\n')}`);
@@ -3782,6 +3783,675 @@ async function assertBottomToolbarScrollEnd(page) {
     await page.setViewport({ width: 1280, height: 800, deviceScaleFactor: 1, isMobile: false });
     await page.waitForFunction(() => window.innerWidth === 1280);
     console.log('Bottom toolbar scroll-end hint passed.');
+}
+
+function boxItem(id, x, y, width = 80, height = 50) {
+    return {
+        id, type: 'box', color: '#429eff', x, y, width, height,
+        rotation: 0, isPinned: false, style: 'fill', opacity: 1, scaleX: 1, scaleY: 1,
+    };
+}
+
+async function storedTabRows(page) {
+    return page.evaluate(async () => {
+        const stored = await window.localforage.getItem('moodinfinite_projects');
+        return (stored || []).map((p) => ({ id: p.id, name: p.name }));
+    });
+}
+
+async function waitForStored(page, accept, timeout = 6000) {
+    const start = Date.now();
+    let last = null;
+    while (Date.now() - start < timeout) {
+        last = await storedTabRows(page);
+        if (accept(last)) return last;
+        await wait(200);
+    }
+    return last;
+}
+
+async function pressEditingKeys(page) {
+    await page.keyboard.press('t');
+    await page.keyboard.press('Delete');
+    await page.keyboard.press('Backspace');
+    await page.keyboard.press('b');
+    await page.keyboard.down('Control');
+    try {
+        await page.keyboard.press('z');
+    } finally {
+        await page.keyboard.up('Control');
+    }
+}
+
+async function assertShellCanvasFixes(page) {
+    console.log('Testing shell and canvas fixes...');
+    const errors = [];
+    const onError = (err) => errors.push(String(err && err.stack || err));
+    page.on('pageerror', onError);
+    try {
+        await page.setViewport({ width: 1280, height: 800, deviceScaleFactor: 1, isMobile: false, hasTouch: false });
+        await page.waitForFunction(() => window.innerWidth === 1280 && window.projects && window.projects.length > 0 && typeof resetBoard === 'function');
+
+        const cleared = await page.evaluate(() => {
+            const board = projects.find((p) => p.type === 'moodinfinite');
+            switchTab(board.id);
+            items.length = 0;
+            items.push({
+                id: 'doomed', type: 'box', color: '#429eff', x: 12, y: 12, width: 80, height: 50,
+                rotation: 0, isPinned: false, style: 'fill', opacity: 1, scaleX: 1, scaleY: 1,
+            });
+            saveStateForUndo();
+            resetBoard();
+            const afterReset = items.length;
+            const projectCount = board.data.items.length;
+            const doomed = board.data.items.some((item) => item.id === 'doomed');
+            let other = projects.find((p) => p.id !== board.id);
+            if (!other) {
+                createNewProject('moodprompt');
+                other = projects.find((p) => p.id === activeProjectId);
+            }
+            switchTab(other.id);
+            switchTab(board.id);
+            return {
+                afterReset,
+                projectCount,
+                doomed,
+                afterRoundTrip: items.length,
+                sameArray: items === board.data.items,
+            };
+        });
+        assert.equal(cleared.afterReset, 0, 'resetBoard left canvas items');
+        assert.equal(cleared.projectCount, 0, 'resetBoard left project items');
+        assert.equal(cleared.doomed, false);
+        assert.equal(cleared.afterRoundTrip, 0, 'cleared items came back after a tab round trip');
+        assert.equal(cleared.sameArray, true);
+
+        const fileJson = JSON.stringify({
+            items: [boxItem('loaded-box', 10, 20, 80, 60)],
+            cameraOffset: { x: 111, y: 222 },
+            cameraZoom: 1.5,
+            canvasBackgroundColor: '#0d0d0d',
+            accentColor: '#429eff',
+            gridColor: '#f9f8f6',
+        });
+        const loaded = await page.evaluate((json) => {
+            createNewProject('moodprompt');
+            const promptId = activeProjectId;
+            loadFileAsNewTab(json, 'LoadedShell.mood');
+            const loadedId = activeProjectId;
+            const active = projects.find((p) => p.id === loadedId);
+            const read = () => ({
+                zoom: (0, eval)('cameraZoom'),
+                cam: (0, eval)('cameraOffset'),
+                canvas: document.getElementById('moodinfinite-container').style.display,
+                prompt: document.getElementById('moodprompt-container').style.display,
+                hasItem: items.some((item) => item.id === 'loaded-box'),
+            });
+            const shown = read();
+            switchTab(promptId);
+            switchTab(loadedId);
+            return {
+                promptId,
+                loadedId,
+                type: active.type,
+                name: active.name,
+                promptType: projects.find((p) => p.id === promptId).type,
+                shown,
+                roundTrip: read(),
+            };
+        }, fileJson);
+        assert.equal(loaded.type, 'moodinfinite');
+        assert.ok(loaded.name.startsWith('LoadedShell'), loaded.name);
+        assert.equal(loaded.promptType, 'moodprompt');
+        assert.equal(loaded.shown.canvas, 'block', 'opened file did not show the canvas');
+        assert.equal(loaded.shown.prompt, 'none', 'prompt view stayed visible after opening a board file');
+        assert.equal(loaded.shown.zoom, 1.5);
+        assert.deepEqual(loaded.shown.cam, { x: 111, y: 222 });
+        assert.equal(loaded.shown.hasItem, true);
+        assert.equal(loaded.roundTrip.zoom, 1.5);
+        assert.deepEqual(loaded.roundTrip.cam, { x: 111, y: 222 });
+
+        const reloaded = await page.evaluate(async () => {
+            createNewProject('moodprompt');
+            const project = projects.find((p) => p.id === activeProjectId);
+            project.data.prompts = [{
+                id: 'old', title: 'Old Title', platform: 'midjourney', mediaType: 'image',
+                image1: null, image2: null, text: 'old', tags: [],
+            }];
+            renderMoodpromptView(project);
+            const zip = new window.JSZip();
+            zip.file('data.json', JSON.stringify({
+                prompts: [{
+                    id: 'cloud', title: 'From Cloud', platform: 'midjourney', mediaType: 'image',
+                    image1: null, image2: null, text: 'new', tags: [],
+                }],
+                canvasBackgroundColor: '#111111',
+            }));
+            const blob = await zip.generateAsync({ type: 'blob' });
+            const ok = await reloadCurrentProjectFromBlob(blob);
+            return {
+                ok,
+                title: document.querySelector('.prompt-title-input') && document.querySelector('.prompt-title-input').value,
+                prompt: document.getElementById('moodprompt-container').style.display,
+                canvas: document.getElementById('moodinfinite-container').style.display,
+            };
+        });
+        assert.equal(reloaded.ok, true);
+        assert.equal(reloaded.title, 'From Cloud', 'cloud reload did not refresh the open board');
+        assert.notEqual(reloaded.prompt, 'none');
+        assert.equal(reloaded.canvas, 'none');
+
+        const note = await page.evaluate(() => {
+            const board = projects.find((p) => p.type === 'moodinfinite');
+            switchTab(board.id);
+            items.length = 0;
+            items.push({
+                id: 'note-1', type: 'text', title: 'Old title', text: 'Old body',
+                x: 80, y: 80, width: 220, height: 180, fontSize: 16, rotation: 0,
+                isPinned: false, opacity: 1, fontFamily: 'Nunito', color: '#429eff', scaleX: 1, scaleY: 1,
+            });
+            saveStateForUndo();
+            editText(items[0]);
+            return document.getElementById('note-editor-overlay').style.display;
+        });
+        assert.equal(note, 'flex');
+        await wait(40);
+        await page.evaluate(() => {
+            document.getElementById('note-title-input').value = 'New title';
+            document.getElementById('note-body-input').value = 'New body';
+        });
+        await page.keyboard.down('Control');
+        await page.keyboard.press('Enter');
+        await page.keyboard.up('Control');
+        const noteUndo = await page.evaluate(() => ({
+            focus: document.activeElement && document.activeElement.id,
+            editing: (0, eval)('currentlyEditingText'),
+        }));
+        assert.ok(noteUndo.focus !== 'note-title-input' && noteUndo.focus !== 'note-body-input', `note focus stayed in ${noteUndo.focus}`);
+        assert.ok(!noteUndo.editing, `note edit still open: ${noteUndo.focus}`);
+        await page.keyboard.down('Control');
+        await page.keyboard.press('z');
+        await page.keyboard.up('Control');
+        const noteRestored = await page.evaluate(() => {
+            const item = items[0];
+            return {
+                count: items.length,
+                title: item && item.title,
+                text: item && item.text,
+                hidden: item && item.isHidden === true,
+                overlay: document.getElementById('note-editor-overlay').style.display,
+            };
+        });
+        assert.equal(noteRestored.count, 1);
+        assert.equal(noteRestored.title, 'Old title');
+        assert.equal(noteRestored.text, 'Old body');
+        assert.equal(noteRestored.hidden, false, 'undo hid the note');
+        assert.equal(noteRestored.overlay, 'none');
+        await page.keyboard.down('Control');
+        await page.keyboard.down('Shift');
+        try {
+            await page.keyboard.press('z');
+        } finally {
+            await page.keyboard.up('Shift');
+            await page.keyboard.up('Control');
+        }
+        const noteRedone = await page.evaluate(() => ({
+            title: items[0] && items[0].title,
+            hidden: items[0] && items[0].isHidden === true,
+        }));
+        assert.equal(noteRedone.title, 'New title');
+        assert.equal(noteRedone.hidden, false);
+
+        await page.evaluate(() => {
+            if ((0, eval)('currentlyEditingText')) cancelNoteEditing();
+            const board = projects.find((p) => p.type === 'moodinfinite');
+            switchTab(board.id);
+            items.length = 0;
+            saveStateForUndo();
+            setCurrentTool('comment');
+        });
+        const canvasBox = await (await page.$('#moodboard-canvas')).boundingBox();
+        assert.ok(canvasBox && canvasBox.width > 200, 'canvas was not visible for the comment edit');
+        const commentAt = { x: canvasBox.x + canvasBox.width / 2, y: canvasBox.y + Math.min(canvasBox.height / 2, 280) };
+        await page.mouse.move(commentAt.x, commentAt.y);
+        await page.mouse.down();
+        await page.mouse.up();
+        await page.waitForFunction(() => {
+            const editor = document.getElementById('text-editor');
+            return editor && editor.style.display === 'block';
+        });
+        await page.focus('#text-editor');
+        await page.keyboard.type('Hello note');
+        await page.keyboard.down('Control');
+        await page.keyboard.press('Enter');
+        await page.keyboard.up('Control');
+        const commentCommitted = await page.evaluate(() => {
+            const item = items.find((entry) => entry.type === 'comment');
+            return {
+                text: item && item.text,
+                tool: (0, eval)('currentTool'),
+                focus: document.activeElement && document.activeElement.id,
+            };
+        });
+        assert.equal(commentCommitted.text, 'Hello note');
+        assert.notEqual(commentCommitted.focus, 'text-editor');
+        await page.keyboard.down('Control');
+        await page.keyboard.press('z');
+        await page.keyboard.up('Control');
+        const commentUndone = await page.evaluate(() => {
+            const item = items.find((entry) => entry.type === 'comment');
+            return {
+                text: item && item.text,
+                hidden: !item || item.isHidden === true,
+                editor: document.getElementById('text-editor').style.display,
+                tool: (0, eval)('currentTool'),
+            };
+        });
+        assert.equal(commentUndone.text, 'Note...', `comment undo text ${commentUndone.text}`);
+        assert.equal(commentUndone.hidden, false, 'undo hid the comment');
+        assert.notEqual(commentUndone.editor, 'block');
+        assert.equal(commentUndone.tool, commentCommitted.tool);
+
+        const grouped = await page.evaluate(() => {
+            const board = projects.find((p) => p.type === 'moodinfinite');
+            switchTab(board.id);
+            items.length = 0;
+            items.push(
+                { id: 'ga', type: 'box', color: '#429eff', x: 10, y: 20, width: 50, height: 40, rotation: 0, isPinned: false, style: 'fill', opacity: 1, scaleX: 1, scaleY: 1 },
+                { id: 'gb', type: 'box', color: '#429eff', x: 80, y: 30, width: 50, height: 40, rotation: 0, isPinned: false, style: 'fill', opacity: 1, scaleX: 1, scaleY: 1 },
+            );
+            saveStateForUndo();
+            (0, eval)('selectedItems = items.slice()');
+            groupSelectedItems();
+            const groupedOk = items.length === 1 && items[0].type === 'group';
+            undoLastAction();
+            const undone = items.map((item) => ({ id: item.id, type: item.type, x: item.x, y: item.y }));
+            redoLastAction();
+            const redone = items.length === 1 && items[0].type === 'group' && items[0].items.length === 2;
+            items.length = 0;
+            items.push(
+                { id: 'ca', type: 'box', color: '#429eff', x: 0, y: 0, width: 80, height: 40, rotation: 0, isPinned: false, style: 'fill', opacity: 1, scaleX: 1, scaleY: 1 },
+                { id: 'cb', type: 'box', color: '#429eff', x: 220, y: 10, width: 80, height: 40, rotation: 0, isPinned: false, style: 'fill', opacity: 1, scaleX: 1, scaleY: 1 },
+            );
+            saveStateForUndo();
+            createSimpleConnector(items[0], items[1]);
+            const connected = items.some((item) => item.type === 'connector');
+            undoLastAction();
+            const disconnected = items.some((item) => item.type === 'connector');
+            redoLastAction();
+            const reconnected = items.some((item) => item.type === 'connector');
+            return { groupedOk, undone, redone, connected, disconnected, reconnected };
+        });
+        assert.equal(grouped.groupedOk, true);
+        assert.deepEqual(grouped.undone.map((item) => item.id).sort(), ['ga', 'gb']);
+        assert.equal(grouped.undone.find((item) => item.id === 'ga').x, 10);
+        assert.equal(grouped.undone.find((item) => item.id === 'gb').x, 80);
+        assert.equal(grouped.redone, true, 'redo did not restore the group');
+        assert.equal(grouped.connected, true);
+        assert.equal(grouped.disconnected, false, 'undo left the connector');
+        assert.equal(grouped.reconnected, true, 'redo did not restore the connector');
+
+        await page.evaluate(() => {
+            setCurrentTool('box');
+            createNewProject('moodprompt');
+            const project = projects.find((p) => p.id === activeProjectId);
+            project.data.prompts = [{
+                id: 'keys', title: 'Keys', platform: 'midjourney', mediaType: 'image',
+                image1: null, image2: null, text: 'body', tags: [],
+            }];
+            renderMoodpromptView(project);
+            (0, eval)('clipboard = [{ id: "paste-src", type: "box", x: 30, y: 30, width: 24, height: 24, rotation: 0, opacity: 1, scaleX: 1, scaleY: 1 }]');
+        });
+        const pasteTarget = await page.$('.prompt-text-area');
+        assert.ok(pasteTarget, 'prompt text area missing');
+        await pasteTarget.click();
+        const pastedInField = await page.evaluate(() => {
+            const before = items.length;
+            const area = document.querySelector('.prompt-text-area');
+            area.focus();
+            area.dispatchEvent(new ClipboardEvent('paste', { bubbles: true, cancelable: true }));
+            return { before, after: items.length, active: document.activeElement && document.activeElement.className };
+        });
+        assert.equal(pastedInField.after, pastedInField.before, 'paste while a prompt field was focused added a canvas item');
+        const guarded = await page.evaluate(() => ({
+            tool: (0, eval)('currentTool'),
+            count: items.length,
+            index: (0, eval)('historyIndex'),
+        }));
+        await pressEditingKeys(page);
+        const promptKeys = await page.evaluate(() => ({
+            tool: (0, eval)('currentTool'),
+            count: items.length,
+            index: (0, eval)('historyIndex'),
+        }));
+        assert.equal(promptKeys.tool, guarded.tool, 'tool shortcut fired in a prompt field');
+        assert.equal(promptKeys.count, guarded.count, 'delete shortcut fired in a prompt field');
+        assert.equal(promptKeys.index, guarded.index, 'undo shortcut fired in a prompt field');
+
+        await page.evaluate(() => {
+            createNewProject('moodlist');
+            const project = projects.find((p) => p.id === activeProjectId);
+            project.data.cards = [{ id: 'card-keys', title: 'List keys', color: '', pinned: false, image: null, items: [{ id: 'row1', text: 'a', checked: false }] }];
+            renderMoodlistView(project);
+        });
+        await page.click('.ml-card-title');
+        const listBefore = await page.evaluate(() => ({
+            tool: (0, eval)('currentTool'),
+            count: items.length,
+            index: (0, eval)('historyIndex'),
+            editable: document.activeElement && document.activeElement.isContentEditable,
+        }));
+        assert.equal(listBefore.editable, true, 'moodlist title was not focused');
+        await pressEditingKeys(page);
+        const listAfter = await page.evaluate(() => ({
+            tool: (0, eval)('currentTool'),
+            count: items.length,
+            index: (0, eval)('historyIndex'),
+        }));
+        assert.equal(listAfter.tool, listBefore.tool, 'tool shortcut fired in a moodlist title');
+        assert.equal(listAfter.count, listBefore.count);
+        assert.equal(listAfter.index, listBefore.index);
+
+        await page.evaluate(() => {
+            const board = projects.find((p) => p.type === 'moodinfinite');
+            switchTab(board.id);
+            items.length = 0;
+            items.push({
+                id: 'note-keys', type: 'text', title: 'Keep', text: 'Keep body',
+                x: 40, y: 40, width: 220, height: 180, fontSize: 16, rotation: 0,
+                isPinned: false, opacity: 1, fontFamily: 'Nunito', color: '#429eff', scaleX: 1, scaleY: 1,
+            });
+            editText(items[0]);
+        });
+        await wait(40);
+        await page.focus('#note-body-input');
+        const noteBefore = await page.evaluate(() => ({
+            tool: (0, eval)('currentTool'),
+            count: items.length,
+            index: (0, eval)('historyIndex'),
+        }));
+        await pressEditingKeys(page);
+        const noteKeys = await page.evaluate(() => ({
+            tool: (0, eval)('currentTool'),
+            count: items.length,
+            index: (0, eval)('historyIndex'),
+        }));
+        assert.equal(noteKeys.tool, noteBefore.tool, 'tool shortcut fired in the note editor');
+        assert.equal(noteKeys.count, noteBefore.count);
+        assert.equal(noteKeys.index, noteBefore.index);
+        await page.keyboard.press('Escape');
+
+        await page.evaluate(() => {
+            document.querySelectorAll('#context-menu, #tab-context-menu, #mobile-tabs-popup').forEach((el) => { el.style.display = 'none'; });
+            const tab = document.querySelector('#tabs-list .tab-item.active');
+            const nameEl = tab.querySelector('.tab-name');
+            const input = tab.querySelector('.tab-name-input');
+            nameEl.style.display = 'none';
+            input.style.display = 'inline';
+            input.focus();
+            input.select();
+        });
+        const renameBefore = await page.evaluate(() => ({
+            tool: (0, eval)('currentTool'),
+            count: items.length,
+            index: (0, eval)('historyIndex'),
+            tag: document.activeElement && document.activeElement.className,
+        }));
+        assert.ok(String(renameBefore.tag).includes('tab-name-input'), `tab rename field was not focused (${renameBefore.tag})`);
+        await pressEditingKeys(page);
+        const renameKeys = await page.evaluate(() => ({
+            tool: (0, eval)('currentTool'),
+            count: items.length,
+            index: (0, eval)('historyIndex'),
+        }));
+        assert.equal(renameKeys.tool, renameBefore.tool, 'tool shortcut fired while renaming a tab');
+        assert.equal(renameKeys.count, renameBefore.count);
+        assert.equal(renameKeys.index, renameBefore.index);
+        await page.keyboard.press('Escape');
+
+        await page.evaluate(() => {
+            if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
+            setCurrentTool(null);
+        });
+        await page.keyboard.press('t');
+        const bareTool = await page.evaluate(() => (0, eval)('currentTool'));
+        assert.equal(bareTool, 'text', 'tool shortcut did not run when focus was outside a text field');
+        await page.evaluate(() => setCurrentTool(null));
+
+        const outsidePaste = await page.evaluate(() => {
+            const board = projects.find((p) => p.type === 'moodinfinite');
+            switchTab(board.id);
+            if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
+            saveStateForUndo();
+            (0, eval)('clipboard = [{ id: "paste-src", type: "box", x: 30, y: 30, width: 24, height: 24, rotation: 0, opacity: 1, scaleX: 1, scaleY: 1 }]');
+            const before = items.length;
+            const data = new DataTransfer();
+            data.setData('text/plain', 'plain');
+            window.dispatchEvent(new ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData: data }));
+            const after = items.length;
+            undoLastAction();
+            return { before, after, undone: items.length };
+        });
+        assert.equal(outsidePaste.after, outsidePaste.before + 1, 'paste outside a text field did not add the copied item');
+        assert.equal(outsidePaste.undone, outsidePaste.before);
+
+        const uniqueName = `Persist ${Date.now()}`;
+        const renameId = await page.evaluate(async (name) => {
+            projects.forEach((p) => { p.pinned = false; });
+            renderTabs();
+            (0, eval)('clearTimeout(autoSaveTimeout); autoSaveTimeout = null');
+            await saveToBrowser();
+            const tab = document.querySelector('#tabs-list .tab-item.active');
+            const nameEl = tab.querySelector('.tab-name');
+            const input = tab.querySelector('.tab-name-input');
+            nameEl.style.display = 'none';
+            input.style.display = 'inline';
+            input.focus();
+            input.value = name;
+            input.select();
+            return Number(tab.dataset.id);
+        }, uniqueName);
+        await page.keyboard.press('Enter');
+        const renamedNow = await page.evaluate((id) => projects.find((p) => p.id === id).name, renameId);
+        assert.equal(renamedNow, uniqueName, 'rename input did not commit');
+        const renamedStored = await waitForStored(page, (rows) => rows.some((row) => row.id === renameId && row.name === uniqueName));
+        assert.ok(
+            renamedStored && renamedStored.some((row) => row.id === renameId && row.name === uniqueName),
+            `renamed tab was not saved: ${(renamedStored || []).map((row) => row.name).join(', ')}`,
+        );
+
+        const orderChange = await page.evaluate(() => {
+            (0, eval)('clearTimeout(autoSaveTimeout); autoSaveTimeout = null');
+            const before = projects.map((p) => p.id);
+            const list = document.getElementById('tabs-list');
+            const tabs = [...list.querySelectorAll('.tab-item')];
+            const moved = tabs[tabs.length - 1];
+            list.insertBefore(moved, tabs[0]);
+            const data = new DataTransfer();
+            data.setData('text/plain', moved.dataset.id);
+            list.dispatchEvent(new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer: data }));
+            const after = projects.map((p) => p.id);
+            return { before, after };
+        });
+        assert.notDeepEqual(orderChange.after, orderChange.before, 'tab drop did not reorder projects');
+        const storedOrder = await waitForStored(page, (rows) => rows.map((row) => row.id).join(',') === orderChange.after.join(','));
+        assert.deepEqual((storedOrder || []).map((row) => row.id), orderChange.after, 'reordered tabs were not saved');
+
+        const duplicated = await page.evaluate(() => {
+            const board = projects.find((p) => p.type === 'moodinfinite');
+            switchTab(board.id);
+            board.name = 'Dup Canvas';
+            items.length = 0;
+            items.push({ id: 'marker', type: 'box', color: '#429eff', x: 5, y: 6, width: 40, height: 30, rotation: 0, isPinned: false, opacity: 1, scaleX: 1, scaleY: 1 });
+            renderTabs();
+            const tab = document.querySelector(`#tabs-list .tab-item[data-id="${board.id}"]`);
+            tab.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, clientX: 180, clientY: 24 }));
+            const labels = [...document.querySelectorAll('#tab-context-menu .menu-label')].map((el) => el.textContent);
+            document.getElementById('duplicate-tab-btn').click();
+            const copy = projects.find((p) => p.id === activeProjectId);
+            const source = projects.find((p) => p.id === board.id);
+            copy.data.items[0].x = 999;
+            createNewProject('moodlist');
+            const list = projects.find((p) => p.id === activeProjectId);
+            list.name = 'Dup List';
+            list.data.cards = [{ id: 'c1', title: 'Original Card', color: '', pinned: false, image: null, items: [] }];
+            const listCopyId = duplicateProject(list.id);
+            const listCopy = projects.find((p) => p.id === listCopyId);
+            listCopy.data.cards[0].title = 'Changed';
+            return {
+                labels,
+                sourceId: source.id,
+                copyId: copy.id,
+                copyName: copy.name,
+                sourceX: source.data.items[0].x,
+                copyX: copy.data.items[0].x,
+                listTitle: list.data.cards[0].title,
+                listCopyTitle: listCopy.data.cards[0].title,
+                listCopyId,
+            };
+        });
+        assert.ok(duplicated.labels.includes('Duplicate'));
+        assert.notEqual(duplicated.copyId, duplicated.sourceId);
+        assert.ok(duplicated.copyName.startsWith('Dup Canvas'), duplicated.copyName);
+        assert.equal(duplicated.sourceX, 5, 'editing the copy changed the source board');
+        assert.equal(duplicated.copyX, 999);
+        assert.equal(duplicated.listTitle, 'Original Card');
+        assert.equal(duplicated.listCopyTitle, 'Changed');
+        assert.notEqual(duplicated.listCopyId, null);
+
+        await page.setViewport({ width: 390, height: 844, deviceScaleFactor: 1, isMobile: true, hasTouch: true });
+        await page.waitForFunction(() => window.innerWidth === 390 && window.projects && window.projects.length > 0 && typeof switchTab === 'function');
+        await page.evaluate(() => {
+            const types = ['moodinfinite', 'moodprompt', 'colorseeker', 'storyflow', 'moodgantt', 'moodlist'];
+            types.forEach((type) => {
+                if (!projects.some((p) => p.type === type)) createNewProject(type);
+            });
+            const board = projects.find((p) => p.type === 'moodinfinite');
+            switchTab(board.id);
+            board.name = 'Mobile Dup';
+            items.length = 0;
+            items.push({
+                id: 'msrc', type: 'box', color: '#429eff', x: 5, y: 6, width: 40, height: 30,
+                rotation: 0, isPinned: false, opacity: 1, scaleX: 1, scaleY: 1,
+            });
+            if (typeof syncCanvasChrome === 'function') syncCanvasChrome();
+            renderTabs();
+        });
+        await page.click('#mobile-tabs-btn');
+        const mobile = await page.evaluate(() => {
+            const expected = {
+                moodinfinite: 'lucide:image',
+                colorseeker: 'lucide:swatch-book',
+                storyflow: 'lucide:clapperboard',
+                moodgantt: 'lucide:gantt-chart',
+                moodlist: 'lucide:list-check',
+                moodprompt: 'lucide:pen-tool',
+            };
+            const box = (el) => {
+                const rect = el.getBoundingClientRect();
+                return { w: rect.width, h: rect.height, id: el.id || el.getAttribute('aria-label') || el.className };
+            };
+            const icons = [...document.querySelectorAll('#mobile-tabs-popup .mobile-tab-item')].map((row) => ({
+                type: row.dataset.type,
+                icon: row.querySelector('.mobile-tab-icon iconify-icon') && row.querySelector('.mobile-tab-icon iconify-icon').getAttribute('icon'),
+            }));
+            const adds = [...document.querySelectorAll('#tabs-bar .tab-add-btn')].filter((el) => el.offsetParent !== null);
+            return {
+                icons,
+                expected,
+                adds: adds.map(box),
+                closes: [...document.querySelectorAll('#mobile-tabs-popup .tab-close-btn')].map(box),
+                dups: [...document.querySelectorAll('#mobile-tabs-popup .mobile-tab-dup-btn')].map(box),
+                overflow: document.documentElement.scrollWidth > window.innerWidth + 1,
+            };
+        });
+        assert.ok(mobile.icons.length >= 6, `popup rows ${mobile.icons.length}`);
+        for (const row of mobile.icons) {
+            assert.equal(row.icon, mobile.expected[row.type], `icon for ${row.type}`);
+        }
+        assert.equal(mobile.overflow, false, 'mobile page overflowed horizontally');
+        for (const control of [...mobile.adds, ...mobile.closes, ...mobile.dups]) {
+            assert.ok(control.w >= 44 && control.h >= 44, `tap target under 44px: ${JSON.stringify(control)}`);
+        }
+        await page.focus('#mobile-tabs-popup .tab-close-btn');
+        await page.keyboard.press('Escape');
+        const escaped = await page.evaluate(() => ({
+            id: document.activeElement && document.activeElement.id,
+            popup: document.getElementById('mobile-tabs-popup').style.display,
+        }));
+        assert.equal(escaped.popup, 'none');
+        assert.equal(escaped.id, 'mobile-tabs-btn', `Escape left focus on ${escaped.id}`);
+
+        const touchStart = await page.evaluate(() => {
+            const board = projects.find((p) => p.type === 'moodinfinite');
+            switchTab(board.id);
+            document.querySelectorAll('.toast-notification').forEach((el) => el.remove());
+            window.dispatchEvent(new Event('resize'));
+            if (typeof resizeCanvas === 'function') resizeCanvas();
+            (0, eval)('snapToGrid = false');
+            (0, eval)('cameraZoom = 1');
+            (0, eval)('currentTool = null');
+            (0, eval)('selectedItems = []');
+            (0, eval)('lastTap = 0');
+            const canvas = document.getElementById('moodboard-canvas');
+            const mid = screenToWorld({ x: canvas.clientWidth / 2, y: Math.min(canvas.clientHeight * 0.3, 220) });
+            items.length = 0;
+            items.push({
+                id: 'dragme', type: 'box', color: '#429eff',
+                x: mid.x - 60, y: mid.y - 40, width: 120, height: 80,
+                rotation: 0, isPinned: false, style: 'fill', opacity: 1, scaleX: 1, scaleY: 1,
+            });
+            if (typeof syncCanvasChrome === 'function') syncCanvasChrome();
+            const screen = worldToScreen({ x: mid.x, y: mid.y });
+            const rect = canvas.getBoundingClientRect();
+            return { x: rect.left + screen.x, y: rect.top + screen.y, itemX: items[0].x, itemY: items[0].y };
+        });
+        await page.touchscreen.touchStart(touchStart.x, touchStart.y);
+        await wait(40);
+        await page.touchscreen.touchMove(touchStart.x + 40, touchStart.y + 16);
+        await wait(40);
+        await page.touchscreen.touchMove(touchStart.x + 80, touchStart.y + 36);
+        await wait(40);
+        await page.touchscreen.touchEnd();
+        const touchEnd = await page.evaluate(() => ({ x: items[0].x, y: items[0].y, id: items[0].id }));
+        assert.equal(touchEnd.id, 'dragme');
+        assert.ok(
+            Math.hypot(touchEnd.x - touchStart.itemX, touchEnd.y - touchStart.itemY) > 20,
+            `touch drag did not move the box from ${touchStart.itemX},${touchStart.itemY} to ${touchEnd.x},${touchEnd.y}`,
+        );
+
+        await page.click('#mobile-tabs-btn');
+        const mobileDup = await page.evaluate(() => {
+            const source = projects.find((p) => p.name === 'Mobile Dup');
+            const before = projects.length;
+            const sourceX = source.data.items[0].x;
+            const row = [...document.querySelectorAll('#mobile-tabs-popup .mobile-tab-item')]
+                .find((el) => el.querySelector('.mobile-tab-name').textContent === 'Mobile Dup');
+            row.querySelector('.mobile-tab-dup-btn').click();
+            const copy = projects.find((p) => p.id === activeProjectId);
+            copy.data.items[0].x = 1234;
+            return {
+                before,
+                after: projects.length,
+                sourceX: projects.find((p) => p.id === source.id).data.items[0].x,
+                copyX: copy.data.items[0].x,
+                same: copy.id === source.id,
+                kept: sourceX,
+            };
+        });
+        assert.equal(mobileDup.after, mobileDup.before + 1, 'mobile duplicate button did not add a board');
+        assert.equal(mobileDup.same, false);
+        assert.equal(mobileDup.sourceX, mobileDup.kept, 'mobile duplicate shared items with the source');
+
+        assert.deepEqual(errors.filter(isFirstParty), [], `first-party errors:\n${errors.filter(isFirstParty).join('\n')}`);
+    } finally {
+        page.off('pageerror', onError);
+        await page.keyboard.up('Control').catch(() => {});
+        await page.keyboard.up('Shift').catch(() => {});
+        await page.setViewport({ width: 1280, height: 800, deviceScaleFactor: 1, isMobile: false, hasTouch: false });
+        await page.waitForFunction(() => window.innerWidth === 1280);
+    }
+    console.log('Shell and canvas fixes passed.');
 }
 
 

@@ -61,6 +61,11 @@ function storageReplacer(key, val) {
     return val;
 }
 
+function historyReplacer(key, val) {
+    if (key === 'isHidden') return undefined;
+    return storageReplacer(key, val);
+}
+
 function serializeItems(itemArray) {
     return itemArray.map(t => {
         const e = { ...t };
@@ -361,10 +366,13 @@ function createNewProject(type) {
     switchTab(newId);
 }
 
-function switchTab(projectId) {
-    if (activeProjectId === projectId) return;
+function switchTab(projectId, options) {
+    const force = !!(options && options.force);
+    if (activeProjectId === projectId && !force) return;
 
-    if (activeProjectId) {
+    // A same-id refresh already wrote the incoming board. Copying globals
+    // here would put the previous board's items and camera back.
+    if (activeProjectId && activeProjectId !== projectId) {
         const currentProject = projects.find(p => p.id === activeProjectId);
         if (currentProject && currentProject.type === 'moodinfinite') {
             currentProject.data.items = items;
@@ -574,7 +582,34 @@ function updateTabName(projectId, newName) {
         if (project.type === 'moodinfinite' && project.id === activeProjectId) {
             currentProjectName = newName;
         }
+        scheduleAutoSave();
     }
+}
+
+function duplicateProject(projectId) {
+    const source = projects.find(p => p.id.toString() === String(projectId));
+    if (!source || !source.data) return null;
+    if (source.type === 'moodinfinite' && source.id === activeProjectId) {
+        source.data.items = items;
+        source.data.cameraOffset = cameraOffset;
+        source.data.cameraZoom = cameraZoom;
+        source.data.historyStack = historyStack;
+        source.data.historyIndex = historyIndex;
+    }
+    const copy = JSON.parse(JSON.stringify(source, storageReplacer));
+    if (copy.type === 'moodinfinite' && source.data.items) {
+        copy.data.items = JSON.parse(JSON.stringify(serializeItems(source.data.items), storageReplacer));
+        restoreImages(copy.data.items);
+    }
+    copy.id = nextProjectId();
+    copy.name = getDeduplicatedTabName(source.name);
+    copy.pinned = false;
+    const idx = projects.findIndex(p => p.id === source.id);
+    projects.splice(idx + 1, 0, copy);
+    renderTabs();
+    switchTab(copy.id);
+    showToast('Board duplicated.');
+    return copy.id;
 }
 
 function renderTabs() {
@@ -1431,21 +1466,39 @@ function renderMobileTabsPopup() {
         const item = document.createElement('div');
         item.className = 'mobile-tab-item';
         item.classList.toggle('active', project.id === activeProjectId);
+        item.dataset.type = project.type;
 
-        const icon = project.type === 'moodinfinite'
-            ? `<iconify-icon icon="lucide:image" width="16" height="16"></iconify-icon>`
-            : `<iconify-icon icon="lucide:pen-tool" width="16" height="16"></iconify-icon>`;
+        const iconName = project.type === 'moodinfinite' ? 'lucide:image'
+            : project.type === 'colorseeker' ? 'lucide:swatch-book'
+            : project.type === 'storyflow' ? 'lucide:clapperboard'
+            : project.type === 'moodgantt' ? 'lucide:gantt-chart'
+            : project.type === 'moodlist' ? 'lucide:list-check'
+            : 'lucide:pen-tool';
 
         const nameSpan = document.createElement('span');
+        nameSpan.className = 'mobile-tab-name';
         nameSpan.textContent = project.name;
 
         const iconSpan = document.createElement('span');
-        iconSpan.innerHTML = icon;
+        iconSpan.className = 'mobile-tab-icon';
+        iconSpan.innerHTML = `<iconify-icon icon="${iconName}" width="16" height="16"></iconify-icon>`;
+
+        const dupBtn = document.createElement('button');
+        dupBtn.type = 'button';
+        dupBtn.className = 'mobile-tab-dup-btn';
+        dupBtn.title = 'Duplicate';
+        dupBtn.setAttribute('aria-label', 'Duplicate');
+        dupBtn.innerHTML = '<iconify-icon icon="lucide:copy-plus" width="16" height="16"></iconify-icon>';
+        dupBtn.onclick = (e) => {
+            e.stopPropagation();
+            duplicateProject(project.id);
+            renderMobileTabsPopup();
+            mobileTabsPopup.style.display = 'block';
+        };
 
         const deleteBtn = document.createElement('button');
         deleteBtn.className = 'tab-close-btn';
         deleteBtn.innerHTML = '&times;';
-        deleteBtn.style.marginLeft = 'auto';
         deleteBtn.onclick = (e) => {
             e.stopPropagation();
             closeTab(project.id, e);
@@ -1454,6 +1507,7 @@ function renderMobileTabsPopup() {
 
         item.appendChild(iconSpan);
         item.appendChild(nameSpan);
+        item.appendChild(dupBtn);
         item.appendChild(deleteBtn);
 
         item.onclick = () => {
@@ -1820,7 +1874,8 @@ function setupEventListeners() {
             if (!a.pinned && b.pinned) return 1;
             return 0;
         });
-        renderTabs(); 
+        renderTabs();
+        scheduleAutoSave();
     });
     tabsList.addEventListener('wheel', e => { if (tabsList.scrollWidth <= tabsList.clientWidth || e.deltaY === 0) return; e.preventDefault(); tabsList.scrollLeft += e.deltaY; });
     tabsList.addEventListener('dblclick', e => { if (e.target === tabsList) createNewProject('moodinfinite'); });
@@ -1851,6 +1906,12 @@ function setupEventListeners() {
             }
         }
         tabContextMenu.style.display = 'none'
+    });
+    const duplicateTabBtn = document.getElementById('duplicate-tab-btn');
+    if (duplicateTabBtn) duplicateTabBtn.addEventListener('click', () => {
+        const id = tabContextMenu.dataset.tabId;
+        if (id) duplicateProject(id);
+        tabContextMenu.style.display = 'none';
     });
     if (closeContextTabBtn) closeContextTabBtn.addEventListener('click', () => {
         const e = tabContextMenu.dataset.tabId;
@@ -2113,6 +2174,7 @@ canvas.addEventListener('mouseleave', clearHoverStates);
         }
         if (mobileTabsPopup && mobileTabsPopup.style.display === 'block') {
             mobileTabsPopup.style.display = 'none';
+            if (mobileTabsBtn) mobileTabsBtn.focus();
             closed = true;
         }
         if (palettePanel && palettePanel.classList.contains('open')) {
@@ -5355,7 +5417,20 @@ function onContextMenu(e) {
     showAndPositionMenu(contextMenu, e)
 }
 function confirmNewBoard() { if (items.length > 0) { showConfirmationModal() } else { resetBoard() } }
-function resetBoard() { const e = projects.find(e => e.id === activeProjectId); if (!e) return; e.data.items = []; e.data.cameraOffset = { x: window.innerWidth / 2, y: (window.innerHeight - 48) / 2 }; e.data.cameraZoom = 1; e.data.historyStack = []; e.data.historyIndex = -1; e.data.canvasBackgroundColor = '#0d0d0d'; e.data.accentColor = '#429eff'; e.data.gridColor = '#f9f8f6'; switchTab(activeProjectId); saveStateForUndo() }
+function resetBoard() {
+    const e = projects.find(e => e.id === activeProjectId);
+    if (!e) return;
+    e.data.items = [];
+    e.data.cameraOffset = { x: window.innerWidth / 2, y: (window.innerHeight - 48) / 2 };
+    e.data.cameraZoom = 1;
+    e.data.historyStack = [];
+    e.data.historyIndex = -1;
+    e.data.canvasBackgroundColor = '#0d0d0d';
+    e.data.accentColor = '#429eff';
+    e.data.gridColor = '#f9f8f6';
+    switchTab(activeProjectId, { force: true });
+    saveStateForUndo();
+}
 function showConfirmationModal() { confirmationModalOverlay.style.display = 'flex' }
 function hideConfirmationModal() { confirmationModalOverlay.style.display = 'none' }
 function boardPlainText(project) {
@@ -5868,7 +5943,7 @@ function loadProject(e) {
         items = o.data.items;
         o.data.historyStack = []; o.data.historyIndex = -1;
         historyStack = []; historyIndex = -1;
-        switchTab(activeProjectId); updateUIColors(); saveStateForUndo(); showToast("Project loaded successfully.");
+        switchTab(activeProjectId, { force: true }); updateUIColors(); saveStateForUndo(); showToast("Project loaded successfully.");
 
 
     } catch (e) { console.error("Failed to load project:", e); showToast("Failed to load project. Invalid file.", "error") }
@@ -6008,7 +6083,7 @@ window.reloadCurrentProjectFromBlob = async function(blob) {
             // General reload for other types
             activeProject.data = { ...activeProject.data, ...data };
             if (activeProjectId === activeProject.id) {
-                switchTab(activeProjectId); // Full refresh
+                switchTab(activeProjectId, { force: true });
             }
         }
         return true;
@@ -6022,7 +6097,22 @@ function handleImageUpload(e) { if (!e.target.files) return; const t = screenToW
 function handleVideoUpload(e) { if (!e.target.files) return; const t = screenToWorld({ x: canvas.width / 2, y: canvas.height / 2 }); processVideoFiles(e.target.files, t); videoInput.value = '' }
 function handleProjectUpload(e) { const t = e.target.files[0]; if (!t) return; loadFileFromObject(t); projectInput.value = '' }
 
+function isTextEntryTarget(el) {
+    if (!el) return false;
+    const tag = el.tagName;
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return true;
+    return !!el.isContentEditable;
+}
+
 function handlePaste(e) {
+    const focus = document.activeElement;
+    if (isTextEntryTarget(focus)) {
+        const activeProject = projects.find(p => p.id === activeProjectId);
+        const inListField = activeProject && activeProject.type === 'moodlist'
+            && focus.closest && focus.closest('#moodlist-container')
+            && focus.matches('input, textarea');
+        if (!inListField) return;
+    }
     const text = e.clipboardData.getData('text');
     if (text) {
         try {
@@ -6971,6 +7061,8 @@ function cancelNoteEditing() {
         currentlyEditingText = null;
     }
     noteEditorOverlay.style.display = 'none';
+    if (noteTitleInput && document.activeElement === noteTitleInput) noteTitleInput.blur();
+    if (noteBodyInput && document.activeElement === noteBodyInput) noteBodyInput.blur();
 }
 
 function finishNoteEditing() {
@@ -6987,6 +7079,8 @@ function finishNoteEditing() {
     }
     noteEditorOverlay.style.display = 'none';
     updateSelectionToolbar();
+    if (noteTitleInput && document.activeElement === noteTitleInput) noteTitleInput.blur();
+    if (noteBodyInput && document.activeElement === noteBodyInput) noteBodyInput.blur();
 }
 
 function updateNoteDimensions(item) {
@@ -7034,28 +7128,63 @@ function updateNoteDimensions(item) {
     testCtx.restore();
     item.height = Math.max(120, totalH + 60); // Generous safety margin
 }
-function finishEditingText() { if (currentlyEditingText) { if (currentlyEditingText.type === 'text') return; currentlyEditingText.text = textEditor.value.trim() || (currentlyEditingText.type === 'comment' ? "Note..." : "Type..."); const e = currentlyEditingText; if (e.type === 'comment') { updateCommentDimensions(e); } else if (currentlyEditingText.type === 'textList') {
-        const lines = textEditor.value.split('\n');
-        let items = [];
-        let title = "";
-        const oldItems = currentlyEditingText.items || [];
-        lines.forEach((line, idx) => {
-            if (idx === 0 && line.startsWith('# ')) {
-                title = line.substring(2).trim();
-            } else if (line.trim() !== "") {
-                const indentMatch = line.match(/^(-+)/);
-                const indentStr = indentMatch ? indentMatch[0] : "";
-                const indent = indentStr.length;
-                const text = line.substring(indentStr.length).trim();
-                const oldItem = oldItems.find(oi => oi.text === text);
-                items.push({ text: text, completed: oldItem ? oldItem.completed : false, indent: indent });
+let finishingTextEdit = false;
+function finishEditingText() {
+    if (finishingTextEdit) return;
+    finishingTextEdit = true;
+    try {
+        if (currentlyEditingText) {
+            if (currentlyEditingText.type === 'text') {
+                finishNoteEditing();
+                return;
             }
-        });
-        if (items.length === 0 && !title) items.push({ text: "Item 1", completed: false, indent: 0 });
-        currentlyEditingText.items = items;
-        currentlyEditingText.title = title;
-        updateTextListDimensions(currentlyEditingText);
-    } else { const t = e.fontStyle || 'normal', o = e.fontWeight || 'bold', a = e.fontFamily || 'Nunito'; ctx.font = `${t} ${o} ${e.fontSize}px '${a}', sans-serif`; const i = textEditor.value.split('\n'); let r = 0; i.forEach(e => { const t = ctx.measureText(e); if (t.width > r) r = t.width }); e.width = r + 20; e.height = textEditor.scrollHeight / cameraZoom; } currentlyEditingText.isHidden = !1; selectedItems = [currentlyEditingText]; saveStateForUndo(); currentlyEditingText = null } textEditor.style.display = 'none'; textEditor.style.padding = '0'; textEditor.style.lineHeight = 'normal'; }
+            currentlyEditingText.text = textEditor.value.trim() || (currentlyEditingText.type === 'comment' ? "Note..." : "Type...");
+            const e = currentlyEditingText;
+            if (e.type === 'comment') {
+                updateCommentDimensions(e);
+            } else if (e.type === 'textList') {
+                const lines = textEditor.value.split('\n');
+                let listItems = [];
+                let title = "";
+                const oldItems = currentlyEditingText.items || [];
+                lines.forEach((line, idx) => {
+                    if (idx === 0 && line.startsWith('# ')) {
+                        title = line.substring(2).trim();
+                    } else if (line.trim() !== "") {
+                        const indentMatch = line.match(/^(-+)/);
+                        const indentStr = indentMatch ? indentMatch[0] : "";
+                        const indent = indentStr.length;
+                        const text = line.substring(indentStr.length).trim();
+                        const oldItem = oldItems.find(oi => oi.text === text);
+                        listItems.push({ text: text, completed: oldItem ? oldItem.completed : false, indent: indent });
+                    }
+                });
+                if (listItems.length === 0 && !title) listItems.push({ text: "Item 1", completed: false, indent: 0 });
+                currentlyEditingText.items = listItems;
+                currentlyEditingText.title = title;
+                updateTextListDimensions(currentlyEditingText);
+            } else {
+                const t = e.fontStyle || 'normal', o = e.fontWeight || 'bold', a = e.fontFamily || 'Nunito';
+                ctx.font = `${t} ${o} ${e.fontSize}px '${a}', sans-serif`;
+                const i = textEditor.value.split('\n');
+                let r = 0;
+                i.forEach(line => { const measured = ctx.measureText(line); if (measured.width > r) r = measured.width });
+                e.width = r + 20;
+                e.height = textEditor.scrollHeight / cameraZoom;
+            }
+            currentlyEditingText.isHidden = false;
+            selectedItems = [currentlyEditingText];
+            saveStateForUndo();
+            currentlyEditingText = null;
+        }
+        textEditor.style.display = 'none';
+        textEditor.style.padding = '0';
+        textEditor.style.lineHeight = 'normal';
+        if (document.activeElement === textEditor) textEditor.blur();
+    } finally {
+        finishingTextEdit = false;
+    }
+}
 function autoResizeTextEditor() { textEditor.style.height = 'auto'; textEditor.style.height = textEditor.scrollHeight + 'px' }
 function syncActiveMoodboard() {
     const currentProject = projects.find(p => p.id === activeProjectId);
@@ -7067,7 +7196,7 @@ function syncActiveMoodboard() {
 
 function saveStateForUndo() {
     items.forEach(i => { i._isDirty = true; });
-    const e = JSON.stringify(items, storageReplacer);
+    const e = JSON.stringify(items, historyReplacer);
     if (historyIndex < historyStack.length - 1) { historyStack = historyStack.slice(0, historyIndex + 1); }
     if (historyStack.length > 0 && historyStack[historyStack.length - 1] === e) return;
     historyStack.push(e);
@@ -7086,6 +7215,7 @@ function loadStateFromHistory(e) {
         return e.map(e => {
             const t = { ...(e.scaleX !== void 0 ? {} : { scaleX: 1, scaleY: 1 }), ...e };
             delete t._cachedBox;
+            delete t.isHidden;
             t._isDirty = true;
             if (t.type === 'image') {
                 const img = new Image;
@@ -7118,7 +7248,7 @@ function loadStateFromHistory(e) {
 }
 
 function undoLastAction() {
-    const currentState = JSON.stringify(items, storageReplacer);
+    const currentState = JSON.stringify(items, historyReplacer);
     if (historyIndex >= 0 && currentState !== historyStack[historyIndex]) {
         saveStateForUndo();
         if (historyIndex > 0) {

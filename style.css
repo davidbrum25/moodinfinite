@@ -3011,6 +3011,32 @@
             background: rgba(66, 158, 255, 0.1);
         }
 
+        .mobile-tab-item .mobile-tab-icon {
+            display: flex;
+            flex-shrink: 0;
+        }
+
+        .mobile-tab-item .mobile-tab-name {
+            flex: 1;
+            min-width: 0;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .mobile-tab-dup-btn {
+            background: transparent;
+            border: none;
+            color: var(--text-color-light);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            cursor: pointer;
+            padding: 0;
+            border-radius: 0.5rem;
+        }
+
         .mobile-tab-item svg {
             width: 18px;
             height: 18px;
@@ -3028,6 +3054,19 @@
             #mobile-tabs-btn,
             #mobile-context-btn {
                 display: flex;
+            }
+
+            #tabs-bar .tab-add-btn {
+                min-width: 44px;
+                min-height: 44px;
+            }
+
+            #mobile-tabs-popup .tab-close-btn,
+            #mobile-tabs-popup .mobile-tab-dup-btn {
+                width: 44px;
+                height: 44px;
+                min-width: 44px;
+                min-height: 44px;
             }
 
             #left-bar {
