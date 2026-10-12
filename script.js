@@ -8345,9 +8345,8 @@ if (colorseekerCopyHexBtn) {
 
 function colorseekerRandomize(project) {
     if (!project || project.type !== 'colorseeker' || !project.data) return;
-    colorseekerEnsureLocks(project);
     project.data.baseColor = '#' + Math.floor(Math.random() * 16777215).toString(16).padStart(6, '0');
-    project.data.colors = generatePalette(project.data.baseColor, project.data.mode, project.data.lockedColors);
+    colorseekerRegenerate(project);
     saveToBrowser();
     renderColorSeeker(project.id);
     showToast('Palette randomized.');
@@ -8712,6 +8711,22 @@ function colorseekerEnsureLocks(project) {
     if (project.data.lockedColors.length > project.data.colors.length) project.data.lockedColors.length = project.data.colors.length;
 }
 
+function colorseekerRegenerate(project) {
+    if (!project || !project.data) return;
+    if (!Array.isArray(project.data.colors)) project.data.colors = [];
+    colorseekerEnsureLocks(project);
+    const previous = project.data.colors.slice();
+    const locks = project.data.lockedColors.map((entry) => entry || null);
+    const generated = generatePalette(project.data.baseColor, project.data.mode, locks);
+    const colors = generated.slice();
+    for (let i = colors.length; i < previous.length; i++) {
+        colors.push(locks[i] || previous[i]);
+    }
+    project.data.colors = colors;
+    project.data.lockedColors = locks.slice(0, colors.length);
+    while (project.data.lockedColors.length < colors.length) project.data.lockedColors.push(null);
+}
+
 function colorseekerAddSwatch(project) {
     if (!project.data.colors || !project.data.colors.length) {
         project.data.colors = generatePalette(project.data.baseColor, project.data.mode, project.data.lockedColors);
@@ -8851,7 +8866,7 @@ function renderColorSeeker(projectId) {
                 ev.stopPropagation();
                 ev.preventDefault();
                 project.data.baseColor = cHex;
-                project.data.colors = generatePalette(cHex, project.data.mode, project.data.lockedColors);
+                colorseekerRegenerate(project);
                 saveToBrowser();
                 renderColorSeeker(projectId);
                 showToast('Base color set.');
@@ -9045,7 +9060,7 @@ if (colorseekerModeSelect) {
         const project = projects.find(p => p.id === activeProjectId);
         if (project && project.type === 'colorseeker') {
             project.data.mode = e.target.value;
-            project.data.colors = generatePalette(project.data.baseColor, project.data.mode, project.data.lockedColors);
+            colorseekerRegenerate(project);
             saveToBrowser();
             renderColorSeeker(activeProjectId);
         }
@@ -9056,7 +9071,7 @@ if (colorseekerBasePicker) {
         const project = projects.find(p => p.id === activeProjectId);
         if (project && project.type === 'colorseeker') {
             project.data.baseColor = e.target.value;
-            project.data.colors = generatePalette(project.data.baseColor, project.data.mode, project.data.lockedColors);
+            colorseekerRegenerate(project);
             renderColorSeeker(activeProjectId);
         }
     });

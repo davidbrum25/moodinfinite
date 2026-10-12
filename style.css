@@ -6038,15 +6038,33 @@ body.no-blur * {
     #colorseeker-palette {
         flex: 1;
         min-height: 0;
+        min-width: 0;
         padding-left: 0;
+        overflow-x: auto;
+        overflow-y: hidden;
+    }
+    .colorseeker-bar {
+        min-width: 64px;
+    }
+    .colorseeker-bar-bottom-actions {
+        flex-direction: column;
+        gap: 4px;
+        bottom: 0.4rem;
+    }
+    .colorseeker-remove,
+    .colorseeker-set-base {
+        max-width: calc(100% - 8px);
+        overflow: hidden;
     }
     .colorseeker-hex-label {
         display: block;
         position: absolute;
         left: 50%;
-        bottom: 4.6rem;
+        bottom: calc(0.4rem + 44px * 3 + 4px * 2 + 12px);
         transform: translateX(-50%);
         z-index: 4;
+        max-width: calc(100% - 6px);
+        overflow: hidden;
         font: 700 0.72rem/1 Inter, sans-serif;
         letter-spacing: 0.04em;
         pointer-events: none;

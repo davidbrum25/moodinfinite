@@ -2223,6 +2223,7 @@ try {
     await assertNonCanvasRound1(page);
     await assertShellCanvasFixes(page);
     await assertRound3GanttPrompt(page);
+    await assertRound4ListTone(page);
 
     const lateErrors = pageErrors.filter(isFirstParty);
     assert.deepEqual(lateErrors, [], `first-party errors:\n${lateErrors.join('\n')}`);
@@ -4658,6 +4659,162 @@ async function assertRound3GanttPrompt(page) {
     assert.match(prompt.placeholder, /Add Image 1/);
     assert.equal(prompt.text, '{{foo(}} {{a+b}}', 'remove cleared the prompt text');
     console.log('Gantt and prompt round 3 passed.');
+}
+
+async function assertRound4ListTone(page) {
+    console.log('Testing Moodlist and Moodtone round 4...');
+    await page.setViewport({ width: 1280, height: 800, deviceScaleFactor: 1, isMobile: false, hasTouch: false });
+
+    const grip = await page.evaluate(() => {
+        createNewProject('moodlist');
+        const project = projects.find((p) => p.id === activeProjectId);
+        project.data.cards.push({
+            id: 'grip-card',
+            title: 'Grip',
+            pinned: false,
+            color: '',
+            items: [
+                { id: 'grip-a', text: 'One', checked: false },
+                { id: 'grip-b', text: 'Two', checked: false },
+            ],
+        });
+        renderMoodlistView(project);
+        document.querySelector('.ml-drag-handle').click();
+        const afterGrip = project.data.cards[0].items[0].checked;
+        document.querySelector('.ml-card-checkbox').click();
+        return {
+            afterGrip,
+            afterCheck: project.data.cards[0].items[0].checked,
+        };
+    });
+    assert.equal(grip.afterGrip, false, 'clicking the drag grip checked the row');
+    assert.equal(grip.afterCheck, true, 'clicking the checkbox did not check the row');
+
+    const tint = await page.evaluate(() => {
+        const previous = canvasBackgroundColor;
+        createNewProject('moodlist');
+        canvasBackgroundColor = '#ffffff';
+        updateUIColors();
+        const project = projects.find((p) => p.id === activeProjectId);
+        project.data.cards.push({
+            id: 'tint-card',
+            title: 'Tint',
+            pinned: false,
+            color: '#4a1c1c',
+            items: [{ id: 'tint-a', text: 'Row', checked: false }],
+        });
+        renderMoodlistView(project);
+        const card = () => document.querySelector('.ml-card');
+        const titleColor = () => getComputedStyle(card().querySelector('.ml-card-title')).color;
+        document.querySelector('.ml-card-color-btn').click();
+        document.querySelector('.ml-card .ml-swatch.default').click();
+        const cleared = {
+            color: project.data.cards[0].color,
+            tinted: card().classList.contains('ml-tinted'),
+            text: titleColor(),
+            bg: getComputedStyle(card()).backgroundColor,
+        };
+        document.querySelector('.ml-card-color-btn').click();
+        document.querySelector('.ml-card .ml-swatch[data-color="#4a1c1c"]').click();
+        const applied = {
+            color: project.data.cards[0].color,
+            tinted: card().classList.contains('ml-tinted'),
+            text: titleColor(),
+        };
+        canvasBackgroundColor = previous;
+        updateUIColors();
+        return { cleared, applied };
+    });
+    assert.equal(tint.cleared.color, '');
+    assert.equal(tint.cleared.tinted, false, 'clearing a card color left the tinted text colors on');
+    assert.equal(tint.cleared.text, 'rgb(28, 25, 23)', `cleared card text is not dark on white: ${tint.cleared.text} on ${tint.cleared.bg}`);
+    assert.equal(tint.applied.color, '#4a1c1c');
+    assert.equal(tint.applied.tinted, true, 'picking a card color did not mark the card tinted');
+    assert.equal(tint.applied.text, 'rgb(245, 245, 244)', `tinted card text stayed dark: ${tint.applied.text}`);
+
+    const kept = await page.evaluate(() => {
+        createNewProject('colorseeker');
+        const project = projects.find((p) => p.id === activeProjectId);
+        const extra = '#e7c6fb';
+        project.data.colors = project.data.colors.concat(extra);
+        colorseekerEnsureLocks(project);
+        project.data.lockedColors[project.data.colors.length - 1] = extra;
+        const before = {
+            n: project.data.colors.length,
+            last: project.data.colors[project.data.colors.length - 1],
+            head: project.data.colors.slice(0, 5).join(','),
+        };
+        if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
+        document.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', code: 'Space', bubbles: true }));
+        const afterSpace = {
+            n: project.data.colors.length,
+            last: project.data.colors[project.data.colors.length - 1],
+            lock: project.data.lockedColors[project.data.lockedColors.length - 1],
+            head: project.data.colors.slice(0, 5).join(','),
+        };
+        project.data.colors = ['#111111', '#222222', '#333333', '#444444', '#555555', '#666666'];
+        project.data.lockedColors = [null, null, null, null, null, '#666666'];
+        project.data.baseColor = '#333333';
+        project.data.mode = 'shades';
+        const select = document.getElementById('colorseeker-mode-select');
+        select.value = 'triadic';
+        select.dispatchEvent(new Event('change', { bubbles: true }));
+        return {
+            before,
+            afterSpace,
+            afterMode: {
+                n: project.data.colors.length,
+                last: project.data.colors[project.data.colors.length - 1],
+                lock: project.data.lockedColors[5],
+                mode: project.data.mode,
+            },
+        };
+    });
+    assert.equal(kept.afterSpace.n, kept.before.n, 'spacebar dropped an added swatch');
+    assert.equal(kept.afterSpace.last.toLowerCase(), kept.before.last.toLowerCase(), 'spacebar changed the locked extra swatch');
+    assert.equal((kept.afterSpace.lock || '').toLowerCase(), kept.before.last.toLowerCase(), 'spacebar dropped the lock on the extra swatch');
+    assert.notEqual(kept.afterSpace.head, kept.before.head, 'spacebar did not rebuild the harmony');
+    assert.equal(kept.afterMode.mode, 'triadic');
+    assert.equal(kept.afterMode.n, 6, 'changing harmony mode dropped an added swatch');
+    assert.equal(kept.afterMode.last.toLowerCase(), '#666666');
+    assert.equal((kept.afterMode.lock || '').toLowerCase(), '#666666');
+
+    await page.setViewport({ width: 390, height: 844, deviceScaleFactor: 1, isMobile: true, hasTouch: true });
+    const reorder = await page.evaluate(() => {
+        createNewProject('colorseeker');
+        const project = projects.find((p) => p.id === activeProjectId);
+        const before = project.data.colors.slice();
+        const bar = document.querySelector('.colorseeker-bar');
+        const moveRight = bar.querySelector('.colorseeker-move-right');
+        const remove = bar.querySelector('.colorseeker-remove');
+        const removeRect = remove.getBoundingClientRect();
+        const removeHit = document.elementFromPoint(Math.round(removeRect.left + removeRect.width / 2), Math.round(removeRect.top + removeRect.height / 2));
+        const rect = moveRight.getBoundingClientRect();
+        const hit = document.elementFromPoint(Math.round(rect.left + rect.width / 2), Math.round(rect.top + rect.height / 2));
+        const owner = hit && hit.closest('.colorseeker-bar');
+        const onScreen = rect.left >= -1 && rect.right <= window.innerWidth + 1 && rect.top >= -1 && rect.bottom <= window.innerHeight + 1;
+        if (hit && (hit === moveRight || moveRight.contains(hit))) moveRight.click();
+        return {
+            onScreen,
+            owner: owner ? Number(owner.dataset.index) : null,
+            hitMove: !!(hit && (hit === moveRight || moveRight.contains(hit))),
+            after: project.data.colors.slice(),
+            before,
+            scrollW: document.documentElement.scrollWidth,
+            innerW: window.innerWidth,
+            removeHits: !!(removeHit && (removeHit === remove || remove.contains(removeHit))),
+        };
+    });
+    assert.equal(reorder.onScreen, true, `move-right sits outside the phone: ${JSON.stringify(reorder)}`);
+    assert.equal(reorder.hitMove, true, 'move-right is covered by another control');
+    assert.equal(reorder.owner, 0, 'move-right tap lands on a different swatch');
+    assert.equal(reorder.after[0].toLowerCase(), reorder.before[1].toLowerCase(), 'move-right did not swap the first swatch');
+    assert.equal(reorder.after[1].toLowerCase(), reorder.before[0].toLowerCase());
+    assert.ok(reorder.scrollW <= reorder.innerW + 1, `moodtone page scrolls sideways (${reorder.scrollW})`);
+    assert.equal(reorder.removeHits, true, 'remove control is not the tap target');
+
+    await page.setViewport({ width: 1280, height: 800, deviceScaleFactor: 1, isMobile: false, hasTouch: false });
+    console.log('Moodlist and Moodtone round 4 passed.');
 }
 
 

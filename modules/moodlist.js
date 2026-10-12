@@ -495,7 +495,7 @@ function _wireCard(el, card, project, grid) {
         _wireItemIndent(itemEl, item, card, project, grid);
         _wireItemMove(itemEl, item, card, project, grid);
         itemEl.addEventListener('click', (e) => {
-            if (e.target.closest('.ml-card-item-del') || e.target.closest('.ml-item-due') || e.target.closest('.ml-due-wrap') || e.target.closest('.ml-indent-btn') || e.target.closest('.ml-item-move') || e.target.closest('.ml-card-item-text')) return;
+            if (e.target.closest('.ml-card-item-del') || e.target.closest('.ml-item-due') || e.target.closest('.ml-due-wrap') || e.target.closest('.ml-indent-btn') || e.target.closest('.ml-item-move') || e.target.closest('.ml-card-item-text') || e.target.closest('.ml-drag-handle')) return;
             if (item) {
                 item.checked = !item.checked;
                 scheduleAutoSave();
@@ -560,7 +560,7 @@ function _wireCard(el, card, project, grid) {
             _wireItemIndent(row, newItem, card, project, grid);
             _wireItemMove(row, newItem, card, project, grid);
             row.addEventListener('click', (e) => {
-                if (e.target.closest('.ml-card-item-del') || e.target.closest('.ml-item-due') || e.target.closest('.ml-due-wrap') || e.target.closest('.ml-indent-btn') || e.target.closest('.ml-item-move') || e.target.closest('.ml-card-item-text')) return;
+                if (e.target.closest('.ml-card-item-del') || e.target.closest('.ml-item-due') || e.target.closest('.ml-due-wrap') || e.target.closest('.ml-indent-btn') || e.target.closest('.ml-item-move') || e.target.closest('.ml-card-item-text') || e.target.closest('.ml-drag-handle')) return;
                 newItem.checked = !newItem.checked;
                 row.classList.toggle('checked', newItem.checked);
                 row.querySelector('.ml-card-checkbox iconify-icon').setAttribute('icon',
@@ -658,8 +658,9 @@ function _wireCard(el, card, project, grid) {
         e.stopPropagation();
         const swatch = e.target.closest('.ml-swatch');
         if (!swatch) return;
-        card.color = swatch.dataset.color;
+        card.color = swatch.dataset.color || '';
         el.style.background = card.color || '';
+        el.classList.toggle('ml-tinted', !!card.color);
         colorPickerEl.style.display = 'none';
         scheduleAutoSave();
     });
@@ -701,6 +702,9 @@ function _wireDragDrop(container, card, project, grid) {
     };
     container.addEventListener('pointerdown', markHandle);
     container.addEventListener('mousedown', markHandle);
+    container.addEventListener('click', (e) => {
+        if (e.target.closest('.ml-drag-handle')) e.stopPropagation();
+    }, true);
 
     container.addEventListener('dragstart', (e) => {
         if (!pointerOnHandle) { e.preventDefault(); return; }
