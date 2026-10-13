@@ -103,6 +103,32 @@ function wait(ms) {
     return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+// Make elementFromPoint-based tap assertions deterministic: toasts can appear
+// late under CPU load and cover controls, so clear them, wait until none are
+// left, and wait until layout is stable for a few consecutive frames.
+async function settleForHitTest(page) {
+    await page.evaluate(() => {
+        document.querySelectorAll('.toast-notification').forEach((el) => el.remove());
+    });
+    await page.waitForFunction(() => {
+        document.querySelectorAll('.toast-notification').forEach((el) => el.remove());
+        return !document.querySelector('.toast-notification');
+    }, { timeout: 10000 });
+    await page.waitForFunction(() => {
+        const state = window.__hitTestSettle || (window.__hitTestSettle = { sig: null, stable: 0 });
+        const sig = [
+            window.innerWidth, window.innerHeight,
+            document.documentElement.scrollWidth, document.documentElement.scrollHeight,
+            document.querySelectorAll('*').length,
+        ].join('|');
+        state.stable = sig === state.sig ? state.stable + 1 : 0;
+        state.sig = sig;
+        const done = state.stable >= 5 && !document.querySelector('.toast-notification');
+        if (done) delete window.__hitTestSettle;
+        return done;
+    }, { polling: 'raf', timeout: 10000 });
+}
+
 async function exerciseBoardInteractions(page) {
     const canvas = await page.$('#moodboard-canvas');
     const canvasBox = await canvas.boundingBox();
@@ -1475,6 +1501,410 @@ async function assertRound2Upgrades(page) {
     });
 }
 
+async function assertNonCanvasRound1(page) {
+    await page.setViewport({ width: 1280, height: 800 });
+
+    const promptFix = await page.evaluate(() => {
+        (0, eval)('moodpromptFilterPlatform = "all"');
+        (0, eval)('moodpromptSearchQuery = ""');
+        createNewProject('moodprompt');
+        const project = projects.find((p) => p.id === activeProjectId);
+        const blank = (id, title, platform) => ({
+            id, title, platform, mediaType: 'image', image1: null, image2: null, text: title + ' body', tags: [],
+        });
+        project.data.prompts = [
+            blank('keep', 'Keep me', 'midjourney'),
+            blank('drop', 'Drop me', 'sora'),
+        ];
+        renderMoodpromptView(project);
+        const filter = document.querySelector('.moodprompt-top-bar select.bar-input');
+        filter.value = 'sora';
+        filter.dispatchEvent(new Event('change', { bubbles: true }));
+        const visibleBefore = [...document.querySelectorAll('.prompt-title-input')].map((el) => el.value);
+        document.querySelector('.prompt-delete-btn').click();
+        const afterDelete = projects.find((p) => p.id === project.id).data.prompts.map((p) => p.id);
+
+        createNewProject('moodprompt');
+        const board = projects.find((p) => p.id === activeProjectId);
+        board.data.prompts = [
+            blank('a', 'Alpha', 'midjourney'),
+            blank('b', 'Beta', 'sora'),
+            blank('c', 'Gamma', 'sora'),
+        ];
+        (0, eval)('moodpromptFilterPlatform = "all"');
+        renderMoodpromptView(board);
+        const filter2 = document.querySelector('.moodprompt-top-bar select.bar-input');
+        filter2.value = 'sora';
+        filter2.dispatchEvent(new Event('change', { bubbles: true }));
+        const cards = [...document.querySelectorAll('.prompt-card')];
+        const data = new DataTransfer();
+        data.setData('text/plain', 'c');
+        cards[0].dispatchEvent(new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer: data }));
+        const afterDrag = projects.find((p) => p.id === board.id).data.prompts.map((p) => p.id);
+
+        (0, eval)('moodpromptFilterPlatform = "all"');
+        renderMoodpromptView(board);
+        const search = document.querySelector('.moodprompt-top-bar input.bar-input[type="text"]');
+        search.focus();
+        search.value = 'Alpha';
+        search.dispatchEvent(new Event('input', { bubbles: true }));
+        const titleHits = [...document.querySelectorAll('.prompt-title-input')].map((el) => el.value);
+        search.value = 'sora';
+        search.dispatchEvent(new Event('input', { bubbles: true }));
+        const platformHits = [...document.querySelectorAll('.prompt-title-input')].map((el) => el.value).sort();
+        search.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+        const afterEscape = {
+            query: (0, eval)('moodpromptSearchQuery'),
+            value: search.value,
+            count: document.querySelectorAll('.prompt-card').length,
+        };
+
+        let saves = 0;
+        const origSave = scheduleAutoSave;
+        scheduleAutoSave = () => { saves += 1; origSave(); };
+        const card = document.querySelector('.prompt-card');
+        const title = card.querySelector('.prompt-title-input');
+        title.value = 'Alpha Saved';
+        title.dispatchEvent(new Event('input', { bubbles: true }));
+        const platform = card.querySelector('.platform-select');
+        platform.value = 'runway';
+        platform.dispatchEvent(new Event('change', { bubbles: true }));
+        [...card.querySelectorAll('.media-type-btn')].find((btn) => btn.textContent === 'Video').click();
+        const edited = board.data.prompts.find((p) => p.id === 'a');
+        scheduleAutoSave = origSave;
+        return {
+            visibleBefore,
+            afterDelete,
+            afterDrag,
+            titleHits,
+            platformHits,
+            afterEscape,
+            saves,
+            edited: { title: edited.title, platform: edited.platform, mediaType: edited.mediaType },
+            boardId: board.id,
+        };
+    });
+    assert.deepEqual(promptFix.visibleBefore, ['Drop me']);
+    assert.deepEqual(promptFix.afterDelete, ['keep'], 'filtered delete removed the wrong prompt');
+    assert.deepEqual(promptFix.afterDrag, ['a', 'c', 'b'], 'filtered drag reordered the wrong prompt');
+    assert.deepEqual(promptFix.titleHits, ['Alpha']);
+    assert.deepEqual(promptFix.platformHits, ['Beta', 'Gamma']);
+    assert.equal(promptFix.afterEscape.query, '');
+    assert.equal(promptFix.afterEscape.value, '');
+    assert.equal(promptFix.afterEscape.count, 3);
+    assert.ok(promptFix.saves >= 3, `title, platform, and media did not schedule a save (${promptFix.saves})`);
+    assert.deepEqual(promptFix.edited, { title: 'Alpha Saved', platform: 'runway', mediaType: 'video' });
+
+    const promptStored = await page.evaluate(async (boardId) => {
+        await saveToBrowser();
+        const stored = await window.localforage.getItem('moodinfinite_projects');
+        const board = stored.find((p) => p.id === boardId);
+        const prompt = board.data.prompts.find((p) => p.id === 'a');
+        return { title: prompt.title, platform: prompt.platform, mediaType: prompt.mediaType };
+    }, promptFix.boardId);
+    assert.deepEqual(promptStored, { title: 'Alpha Saved', platform: 'runway', mediaType: 'video' });
+
+    await page.evaluate(() => createNewProject('moodlist'));
+    await page.waitForSelector('.ml-add-title');
+    await page.type('.ml-add-title', 'Round1 Keep');
+    await page.type('.ml-item-text', 'One');
+    await page.click('.ml-add-item-btn');
+    await page.waitForFunction(() => document.querySelectorAll('.ml-add-panel .ml-item-text').length === 2);
+    const mlDraft = await page.$$('.ml-add-panel .ml-item-text');
+    await mlDraft[1].type('Two');
+    await page.click('.ml-save-btn');
+    await page.waitForSelector('.ml-card .ml-item-move');
+    const listDesktop = await page.evaluate(() => {
+        const badge = document.getElementById('ml-cards-count').textContent.trim();
+        const due = document.querySelector('.ml-card .ml-item-due').getBoundingClientRect().width;
+        const move = getComputedStyle(document.querySelector('.ml-item-move')).display;
+        document.querySelector('.ml-card-item .ml-item-move[data-dir="1"]').click();
+        const order = [...document.querySelectorAll('.ml-card .ml-card-item-text')].map((el) => el.value);
+        const search = document.querySelector('.ml-search');
+        search.focus();
+        search.value = 'nomatch';
+        search.dispatchEvent(new Event('input', { bubbles: true }));
+        const filtered = document.getElementById('ml-cards-count').textContent.trim();
+        search.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+        const title = document.querySelector('.ml-card-title');
+        title.textContent = 'Round1 Kept';
+        title.dispatchEvent(new Event('blur', { bubbles: true }));
+        return {
+            badge,
+            due,
+            move,
+            order,
+            filtered,
+            afterEscape: document.getElementById('ml-cards-count').textContent.trim(),
+            search: document.querySelector('.ml-search').value,
+            title: projects.find((p) => p.id === activeProjectId).data.cards[0].title,
+        };
+    });
+    assert.equal(listDesktop.badge, '1 card');
+    assert.ok(listDesktop.due < 40, `desktop due control grew: ${listDesktop.due}`);
+    assert.equal(listDesktop.move, 'none');
+    assert.deepEqual(listDesktop.order, ['Two', 'One']);
+    assert.match(listDesktop.filtered, /of/);
+    assert.equal(listDesktop.afterEscape, '1 card');
+    assert.equal(listDesktop.search, '');
+    assert.equal(listDesktop.title, 'Round1 Kept');
+    const listStored = await page.evaluate(async () => {
+        await saveToBrowser();
+        const stored = await window.localforage.getItem('moodinfinite_projects');
+        const board = stored.find((p) => p.id === activeProjectId);
+        return board.data.cards[0].title;
+    });
+    assert.equal(listStored, 'Round1 Kept');
+
+    const ganttFix = await page.evaluate(() => {
+        createNewProject('moodgantt');
+        const project = projects.find((p) => p.id === activeProjectId);
+        ganttAddGroup(project);
+        const group = project.data.groups[0];
+        ganttAddTask(project, group.id);
+        const task = group.tasks[0];
+        task.status = 'done';
+        task.name = 'Ship it';
+        group.collapsed = true;
+        renderGanttView(project);
+        const collapsed = {
+            tasks: document.querySelector('#gantt-stat-tasks span').textContent.trim(),
+            done: document.getElementById('gantt-done-pct').textContent.trim(),
+            rows: document.querySelectorAll('.gantt-task-sidebar-row').length,
+        };
+        group.collapsed = false;
+        renderGanttView(project);
+        const row = document.querySelector('.gantt-task-sidebar-row');
+        row.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+        const opened = document.getElementById('gantt-detail-panel').classList.contains('open');
+        const end = document.getElementById('gantt-detail-end');
+        end.value = '2000-01-01';
+        end.dispatchEvent(new Event('change', { bubbles: true }));
+        const snapped = {
+            end: task.endDate,
+            start: task.startDate,
+            input: document.getElementById('gantt-detail-end').value,
+        };
+        if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
+        document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+        const closed = !document.getElementById('gantt-detail-panel').classList.contains('open');
+        project.data.viewStartDate = '2020-01-01';
+        project.data.viewEndDate = '2020-06-01';
+        ganttJumpToToday(project);
+        return {
+            collapsed,
+            opened,
+            snapped,
+            closed,
+            viewStart: project.data.viewStartDate,
+            id: project.id,
+        };
+    });
+    assert.equal(ganttFix.collapsed.tasks, '1 Task');
+    assert.equal(ganttFix.collapsed.done, '100% Done');
+    assert.equal(ganttFix.collapsed.rows, 0);
+    assert.equal(ganttFix.opened, true, 'Enter on a task row did not open the detail panel');
+    assert.equal(ganttFix.snapped.end, ganttFix.snapped.start, 'end date before start was kept');
+    assert.equal(ganttFix.snapped.input, ganttFix.snapped.start);
+    assert.equal(ganttFix.closed, true, 'Escape did not close the gantt detail panel');
+    assert.notEqual(ganttFix.viewStart, '2020-01-01');
+    const ganttStored = await page.evaluate(async (id) => {
+        await saveToBrowser();
+        const stored = await window.localforage.getItem('moodinfinite_projects');
+        return stored.find((p) => p.id === id).data.viewStartDate;
+    }, ganttFix.id);
+    assert.equal(ganttStored, ganttFix.viewStart);
+
+    const exported = await page.evaluate(async () => {
+        window.__downloads = [];
+        const origClick = HTMLAnchorElement.prototype.click;
+        const origRevoke = URL.revokeObjectURL;
+        URL.revokeObjectURL = () => {};
+        HTMLAnchorElement.prototype.click = function () {
+            window.__downloads.push({ download: this.download || '', href: this.href || '' });
+        };
+        const readZip = async () => {
+            const href = window.__downloads.at(-1) && window.__downloads.at(-1).href;
+            const buf = await (await fetch(href)).arrayBuffer();
+            const zip = await window.JSZip.loadAsync(buf);
+            const name = Object.keys(zip.files).find((entry) => entry.endsWith('data.json'));
+            return name ? JSON.parse(await zip.files[name].async('string')) : null;
+        };
+        saveProject();
+        for (let i = 0; i < 80 && !window.__downloads.length; i++) {
+            await new Promise((resolve) => setTimeout(resolve, 25));
+        }
+        const ganttData = await readZip();
+        window.__downloads = [];
+        const tone = projects.find((p) => p.type === 'colorseeker');
+        switchTab(tone.id);
+        saveProject();
+        for (let i = 0; i < 80 && !window.__downloads.length; i++) {
+            await new Promise((resolve) => setTimeout(resolve, 25));
+        }
+        const toneData = await readZip();
+        const list = projects.find((p) => p.data && p.data.cards && p.data.cards.some((card) => card.title === 'Round1 Kept'));
+        switchTab(list.id);
+        window.__downloads = [];
+        saveAsPng();
+        const png = window.__downloads.at(-1) ? window.__downloads.at(-1).href : '';
+        let copyError = '';
+        try { await copyToClipboard(); } catch (err) { copyError = String(err); }
+        const prints = {};
+        const origPrint = window.print;
+        window.print = () => {
+            window.__printed = document.getElementById('print-board-type').textContent;
+            window.dispatchEvent(new Event('afterprint'));
+        };
+        prepareAndPrint();
+        prints.list = window.__printed;
+        switchTab(projects.find((p) => p.id === ganttFixId(projects)).id);
+        prepareAndPrint();
+        prints.gantt = window.__printed;
+        window.print = origPrint;
+        HTMLAnchorElement.prototype.click = origClick;
+        URL.revokeObjectURL = origRevoke;
+        const loaded = [];
+        loadFileAsNewTab(JSON.stringify({ groups: [{ id: 'g', name: 'Imported', tasks: [] }] }), 'plan.json');
+        loaded.push(projects.at(-1).type);
+        loadFileAsNewTab(JSON.stringify({ baseColor: '#112233', mode: 'shades', colors: ['#112233', '#000000'] }), 'tone.json');
+        loaded.push(projects.at(-1).type);
+        return {
+            ganttGroups: Array.isArray(ganttData && ganttData.groups),
+            toneBase: toneData && toneData.baseColor,
+            toneColors: Array.isArray(toneData && toneData.colors),
+            png: png.slice(0, 15),
+            copyError,
+            prints,
+            loaded,
+        };
+        function ganttFixId(listProjects) {
+            return listProjects.find((p) => p.type === 'moodgantt' && p.data.groups && p.data.groups[0] && p.data.groups[0].tasks && p.data.groups[0].tasks[0] && p.data.groups[0].tasks[0].name === 'Ship it').id;
+        }
+    });
+    assert.equal(exported.ganttGroups, true, 'moodgantt export zip had no groups');
+    assert.ok(exported.toneBase, 'moodtone export zip had no base color');
+    assert.equal(exported.toneColors, true);
+    assert.equal(exported.png, 'data:image/png;');
+    assert.equal(exported.copyError, '');
+    assert.equal(exported.prints.list, 'Moodlist');
+    assert.equal(exported.prints.gantt, 'Moodgantt');
+    assert.deepEqual(exported.loaded, ['moodgantt', 'colorseeker']);
+
+    const toneKeys = await page.evaluate(() => {
+        createNewProject('colorseeker');
+        const project = projects.find((p) => p.id === activeProjectId);
+        const before = project.data.colors.slice();
+        window.__moveLogs = [];
+        const orig = console.log;
+        console.log = (...args) => {
+            const text = args.map((part) => String(part)).join(' ');
+            if (text.includes('Moving swatch')) window.__moveLogs.push(text);
+            orig.apply(console, args);
+        };
+        document.querySelector('.colorseeker-move-right').click();
+        const afterClick = project.data.colors.slice();
+        console.log = orig;
+        if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
+        const again = projects.find((p) => p.id === activeProjectId);
+        const left = again.data.colors.slice();
+        window._colorseekerFocusedIndex = 0;
+        document.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
+        return {
+            logs: window.__moveLogs,
+            clicked: before[0] !== afterClick[0] && afterClick[1] === before[0],
+            arrow: again.data.colors[1] === left[0] && again.data.colors[0] === left[1],
+        };
+    });
+    assert.deepEqual(toneKeys.logs, []);
+    assert.equal(toneKeys.clicked, true);
+    assert.equal(toneKeys.arrow, true, 'ArrowRight did not move the focused swatch');
+
+    await page.setViewport({ width: 390, height: 844 });
+    await page.evaluate(() => {
+        const tone = projects.find((p) => p.type === 'colorseeker');
+        switchTab(tone.id);
+    });
+    await settleForHitTest(page);
+    const mobile = await page.evaluate(() => {
+        const box = (el) => el ? el.getBoundingClientRect() : null;
+        const list = projects.find((p) => p.data && p.data.cards && p.data.cards.some((card) => card.title === 'Round1 Kept'));
+        switchTab(list.id);
+        const footer = getComputedStyle(document.querySelector('.ml-card-footer')).opacity;
+        const addItem = getComputedStyle(document.querySelector('.ml-card-add-item')).opacity;
+        const del = getComputedStyle(document.querySelector('.ml-card-item-del')).opacity;
+        const move = document.querySelector('.ml-item-move');
+        const moveBox = box(move);
+        const saveBox = box(document.querySelector('.ml-save-btn'));
+        const gantt = projects.find((p) => p.type === 'moodgantt' && p.data.groups && p.data.groups[0] && p.data.groups[0].tasks[0] && p.data.groups[0].tasks[0].name === 'Ship it');
+        switchTab(gantt.id);
+        const addTask = getComputedStyle(document.querySelector('.gantt-group-add-task-btn')).opacity;
+        const ganttScroll = document.getElementById('gantt-container').scrollWidth <= document.getElementById('gantt-container').clientWidth + 1;
+        const pageScroll = document.documentElement.scrollWidth <= window.innerWidth + 1;
+        const prompt = projects.find((p) => p.type === 'moodprompt' && p.data.prompts && p.data.prompts.some((row) => row.id === 'a'));
+        switchTab(prompt.id);
+        const row = document.querySelector('.prompt-content-row');
+        const promptScroll = document.getElementById('moodprompt-container').scrollWidth <= document.getElementById('moodprompt-container').clientWidth + 1;
+        const tone = projects.find((p) => p.type === 'colorseeker');
+        switchTab(tone.id);
+        const swatch = document.querySelector('.colorseeker-bar');
+        const remove = swatch.querySelector('.colorseeker-remove');
+        const removeBox = box(remove);
+        document.querySelectorAll('.toast-notification').forEach((el) => el.remove());
+        const hit = document.elementFromPoint(removeBox.x + removeBox.width / 2, removeBox.y + removeBox.height / 2);
+        const sidebar = document.getElementById('colorseeker-sidebar');
+        const label = swatch.querySelector('.colorseeker-hex-label');
+        const labelStyle = getComputedStyle(label);
+        const probe = document.createElement('div');
+        probe.style.color = getContrastTextColor(label.textContent);
+        document.body.appendChild(probe);
+        const labelMatch = labelStyle.color === getComputedStyle(probe).color;
+        probe.remove();
+        return {
+            footer, addItem, del,
+            moveH: moveBox.height,
+            moveDisplay: getComputedStyle(move).display,
+            saveH: saveBox.height,
+            addTask, ganttScroll, pageScroll,
+            promptDir: getComputedStyle(row).flexDirection,
+            promptScroll,
+            removeHits: !!hit && (remove === hit || remove.contains(hit)),
+            removeCovered: !!(hit && sidebar.contains(hit)),
+            hit: hit ? `${hit.id || hit.tagName}.${hit.className || ''}` : 'none',
+            removeTop: Math.round(removeBox.top),
+            removeH: Math.round(removeBox.height),
+            labelOn: labelStyle.display !== 'none',
+            labelMatch,
+            container: getComputedStyle(document.getElementById('colorseeker-container')).display,
+        };
+    });
+    assert.equal(mobile.footer, '1');
+    assert.equal(mobile.addItem, '1');
+    assert.equal(mobile.del, '1');
+    assert.equal(mobile.moveDisplay, 'flex');
+    assert.ok(mobile.moveH >= 44, `moodlist move button is ${mobile.moveH}px`);
+    assert.ok(mobile.saveH >= 44, `moodlist save button is ${mobile.saveH}px`);
+    assert.notEqual(mobile.addTask, '0');
+    assert.equal(mobile.ganttScroll, true, 'moodgantt is wider than the phone');
+    assert.equal(mobile.pageScroll, true, 'the page scrolls sideways on a phone');
+    assert.equal(mobile.promptDir, 'column');
+    assert.equal(mobile.promptScroll, true, 'moodprompt is wider than the phone');
+    assert.equal(mobile.removeCovered, false, `moodtone sidebar covers the first swatch (${mobile.hit} top ${mobile.removeTop})`);
+    assert.equal(mobile.removeHits, true, `tap on the swatch remove control misses the button (${mobile.hit} top ${mobile.removeTop} h ${mobile.removeH})`);
+    assert.equal(mobile.labelOn, true);
+    assert.equal(mobile.labelMatch, true, 'hex label contrast does not match the swatch');
+    assert.equal(mobile.container, 'flex');
+
+    await page.setViewport({ width: 1280, height: 800 });
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await page.waitForFunction(() => window.projects && window.projects.some((p) => p.data && p.data.cards && p.data.cards.some((card) => card.title === 'Round1 Kept')), { timeout: 15000 });
+    const reloaded = await page.evaluate(() => {
+        const board = projects.find((p) => p.data && p.data.cards && p.data.cards.some((card) => card.title === 'Round1 Kept'));
+        return board.data.cards[0].items.map((item) => item.text);
+    });
+    assert.deepEqual(reloaded, ['Two', 'One']);
+}
+
 const server = startServer();
 const pageErrors = [];
 try {
@@ -1496,10 +1926,31 @@ try {
     const page = await browser.newPage();
     const consoleLines = [];
     page.on('pageerror', (err) => pageErrors.push(String(err && err.stack || err)));
-    page.on('console', (msg) => consoleLines.push(`${msg.type()}: ${msg.text()}`));
+    page.on('console', (msg) => {
+        const text = `${msg.type()}: ${msg.text()}`;
+        consoleLines.push(text);
+        if (text.includes('SWITCH')) console.log(text);
+    });
     await page.setViewport({ width: 1280, height: 800 });
     await page.goto(`http://127.0.0.1:${PORT}/`, { waitUntil: 'domcontentloaded', timeout: 30000 });
     await page.waitForFunction(() => window.projects && window.projects.length > 0 && typeof draw === 'function' && typeof renderMoodlistView === 'function', { timeout: 15000 });
+    await page.evaluate(() => {
+        const orig = switchTab;
+        switchTab = function (id, options) {
+            const project = projects.find((entry) => entry.id === id);
+            const stack = (new Error()).stack.split('\n').slice(2, 8).map((line) => line.trim());
+            const suspicious = stack.join(' ').match(/setTimeout|localforage|executeTabSwitch|HTMLButtonElement|clickTimeout/);
+            if (suspicious) {
+                console.log('SWITCH', JSON.stringify({
+                    to: project && project.type,
+                    name: project && project.name,
+                    from: activeProjectId,
+                    stack,
+                }));
+            }
+            return orig.call(this, id, options);
+        };
+    });
 
     const firstParty = pageErrors.filter(isFirstParty);
     assert.deepEqual(firstParty, [], `first-party boot errors:\n${firstParty.join('\n')}`);
@@ -1822,6 +2273,14 @@ try {
     await assertB8DuplicateTabNames(page);
     await assertFitViewGeometry(page);
     await assertBottomToolbarScrollEnd(page);
+    await assertNonCanvasRound1(page);
+    await assertShellCanvasFixes(page);
+    await assertRound3GanttPrompt(page);
+    await assertRound4ListTone(page);
+    await assertRound5NoteTabCommit(page);
+    await assertRound5TextAlign(page);
+    await assertRound5RerouteDelete(page);
+    await assertToolCreationHistory(page);
 
     const lateErrors = pageErrors.filter(isFirstParty);
     assert.deepEqual(lateErrors, [], `first-party errors:\n${lateErrors.join('\n')}`);
@@ -2604,6 +3063,7 @@ async function assertB3MobileControls(page) {
         createNewProject('moodinfinite');
     });
     await page.waitForSelector('#canvas-fit-view-btn');
+    await settleForHitTest(page);
 
     const hitTest = await page.evaluate(() => {
         document.querySelectorAll('.toast-notification').forEach(el => el.remove());
@@ -2784,8 +3244,19 @@ async function assertB5MoodtoneSwatchPanelOverlap(page) {
     console.log('Testing B5 Moodtone Swatch Panel Overlap at 1280px...');
     await page.setViewport({ width: 1280, height: 800 });
 
-    const layout = await page.evaluate(() => {
+    await page.evaluate(() => {
         createNewProject('colorseeker');
+    });
+    await page.waitForFunction(() => {
+        const project = projects.find((p) => p.id === activeProjectId);
+        return !!(project && project.type === 'colorseeker' && project.data.colors
+            && document.querySelectorAll('.colorseeker-bar').length === project.data.colors.length
+            && document.querySelector('.colorseeker-bar[data-index="0"] .colorseeker-remove'));
+    });
+    await settleForHitTest(page);
+
+    const layout = await page.evaluate(() => {
+        document.querySelectorAll('.toast-notification').forEach((el) => el.remove());
         const sidebar = document.getElementById('colorseeker-sidebar');
         const firstSwatch = document.querySelector('.colorseeker-bar[data-index="0"]');
         const removeBtn = firstSwatch ? firstSwatch.querySelector('.colorseeker-remove') : null;
@@ -3144,33 +3615,88 @@ async function measureFittedItems(page, sceneItems) {
     }, sceneItems);
 }
 
+// Mirrors computeFitSafeRect's edge choice. GAP and MIN match script.js and
+// are used only to decide which single side a corner widget reserves. The
+// returned rect is the chrome-free area itself (no extra padding).
 function freeRectForChrome(canvas, chrome) {
+    const GAP = 20;
+    const MIN = 32;
+    const viewW = canvas.w;
+    const viewH = canvas.h;
+    let padLeft = MIN;
+    let padRight = MIN;
+    let padTop = MIN;
+    let padBottom = MIN;
     let left = 0;
     let top = 0;
-    let right = canvas.w;
-    let bottom = canvas.h;
+    let right = viewW;
+    let bottom = viewH;
     const corners = [];
     for (const r of chrome) {
         if (r.hidden || r.w < 1 || r.h < 1) continue;
         const cx = (r.left + r.right) / 2;
         const cy = (r.top + r.bottom) / 2;
-        const wide = r.w >= r.h * 1.4 && r.w > canvas.w * 0.35;
-        const tall = r.h >= r.w * 1.4 && r.h > canvas.h * 0.35;
-        if (wide && cy < canvas.h * 0.45) top = Math.max(top, r.bottom);
-        else if (wide && cy > canvas.h * 0.55) bottom = Math.min(bottom, r.top);
-        else if (tall && cx < canvas.w * 0.45) left = Math.max(left, r.right);
-        else if (tall && cx > canvas.w * 0.55) right = Math.min(right, r.left);
-        else corners.push(r);
+        const wide = r.w >= r.h * 1.4 && r.w > viewW * 0.35;
+        const tall = r.h >= r.w * 1.4 && r.h > viewH * 0.35;
+        if (wide && cy < viewH * 0.45) {
+            padTop = Math.max(padTop, r.bottom + GAP);
+            top = Math.max(top, r.bottom);
+        } else if (wide && cy > viewH * 0.55) {
+            padBottom = Math.max(padBottom, viewH - r.top + GAP);
+            bottom = Math.min(bottom, r.top);
+        } else if (tall && cx < viewW * 0.45) {
+            padLeft = Math.max(padLeft, r.right + GAP);
+            left = Math.max(left, r.right);
+        } else if (tall && cx > viewW * 0.55) {
+            padRight = Math.max(padRight, viewW - r.left + GAP);
+            right = Math.min(right, r.left);
+        } else {
+            corners.push(r);
+        }
     }
+    corners.sort((a, b) => (b.w * b.h) - (a.w * a.h));
     for (const r of corners) {
-        const overlaps = r.right > left && r.left < right && r.bottom > top && r.top < bottom;
+        const safeLeft = padLeft;
+        const safeTop = padTop;
+        const safeRight = viewW - padRight;
+        const safeBottom = viewH - padBottom;
+        const overlaps = r.right > safeLeft && r.left < safeRight && r.bottom > safeTop && r.top < safeBottom;
         if (!overlaps) continue;
         const cx = (r.left + r.right) / 2;
         const cy = (r.top + r.bottom) / 2;
-        if (cx >= canvas.w / 2) right = Math.min(right, r.left);
-        else left = Math.max(left, r.right);
-        if (cy >= canvas.h / 2) bottom = Math.min(bottom, r.top);
-        else top = Math.max(top, r.bottom);
+        const freeW = Math.max(0, safeRight - safeLeft);
+        const freeH = Math.max(0, safeBottom - safeTop);
+        if (cy >= viewH * 0.5) {
+            const nextRight = Math.max(padRight, viewW - r.left + GAP);
+            const nextBottom = Math.max(padBottom, viewH - r.top + GAP);
+            const wasteRight = (nextRight - padRight) * freeH;
+            const wasteBottom = (nextBottom - padBottom) * freeW;
+            if (wasteBottom <= wasteRight) {
+                padBottom = nextBottom;
+                bottom = Math.min(bottom, r.top);
+            } else {
+                padRight = nextRight;
+                right = Math.min(right, r.left);
+            }
+        } else {
+            const nextTop = Math.max(padTop, r.bottom + GAP);
+            const growRight = cx >= viewW / 2;
+            const nextSide = growRight
+                ? Math.max(padRight, viewW - r.left + GAP)
+                : Math.max(padLeft, r.right + GAP);
+            const wasteSide = (nextSide - (growRight ? padRight : padLeft)) * freeH;
+            const wasteTop = (nextTop - padTop) * freeW;
+            if (wasteTop <= wasteSide) {
+                padTop = nextTop;
+                top = Math.max(top, r.bottom);
+            } else if (growRight) {
+                padRight = nextSide;
+                right = Math.min(right, r.left);
+            } else {
+                padLeft = nextSide;
+                left = Math.max(left, r.right);
+            }
+        }
     }
     return { left, top, right, bottom };
 }
@@ -3208,6 +3734,44 @@ function assertItemsInsideFreeRect(result, label, { expectBelowMinZoom }) {
     }
 }
 
+function assertScatteredFillsFreeArea(result, label) {
+    const free = freeRectForChrome(result.canvas, result.chrome);
+    const freeW = free.right - free.left;
+    const freeH = free.bottom - free.top;
+    let minX = Infinity;
+    let minY = Infinity;
+    let maxX = -Infinity;
+    let maxY = -Infinity;
+    for (const [id, box] of Object.entries(result.found)) {
+        assert.ok(box && box.n >= 4, `${label} ${id} is not fully inside the view: ${JSON.stringify(box)}`);
+        assert.ok(box.minX >= free.left, `${label} ${id} left ${box.minX} is outside the free area ${free.left}`);
+        assert.ok(box.minY >= free.top, `${label} ${id} top ${box.minY} is outside the free area ${free.top}`);
+        assert.ok(box.maxX <= free.right, `${label} ${id} right ${box.maxX} is outside the free area ${free.right}`);
+        assert.ok(box.maxY <= free.bottom, `${label} ${id} bottom ${box.maxY} is outside the free area ${free.bottom}`);
+        minX = Math.min(minX, box.minX);
+        minY = Math.min(minY, box.minY);
+        maxX = Math.max(maxX, box.maxX);
+        maxY = Math.max(maxY, box.maxY);
+    }
+    const cx = (minX + maxX) / 2;
+    const cy = (minY + maxY) / 2;
+    const fcx = (free.left + free.right) / 2;
+    const fcy = (free.top + free.bottom) / 2;
+    const contentW = maxX - minX;
+    const contentH = maxY - minY;
+    const fillX = contentW / freeW;
+    const fillY = contentH / freeH;
+    assert.ok(Math.abs(cx - fcx) <= 10, `${label} content center x ${cx} is more than 10px from free center ${fcx} (zoom ${result.zoom}, free ${JSON.stringify(free)})`);
+    if (fillY <= fillX) {
+        assert.ok(Math.abs(cy - fcy) <= 10, `${label} content center y ${cy} is more than 10px from free center ${fcy} on the non-limiting axis`);
+    }
+    const limitingFill = Math.max(fillX, fillY);
+    assert.ok(limitingFill >= 0.8, `${label} content fills ${limitingFill} of the limiting free-area side (content ${contentW}x${contentH}, free ${freeW}x${freeH}, zoom ${result.zoom})`);
+    if (result.canvas.w <= 500) {
+        assert.ok(Math.abs(fcx - result.canvas.w / 2) <= 10, `${label} bottom chrome reserved a side inset; free center ${fcx} vs ${result.canvas.w / 2}`);
+    }
+}
+
 async function assertFitViewGeometry(page) {
     console.log('Testing fit-to-view geometry (negative, far, rotated, nested, DPR)...');
     const { scattered, scaled } = fitScenes();
@@ -3225,6 +3789,44 @@ async function assertFitViewGeometry(page) {
         assertItemsInsideFreeRect(scatteredResult, `${viewport.name} scattered`, { expectBelowMinZoom: true });
         const scaledResult = await measureFittedItems(page, scaled);
         assertItemsInsideFreeRect(scaledResult, `${viewport.name} scaled`, { expectBelowMinZoom: false });
+    }
+    const strictViewports = [
+        { name: 'mobile-844-dpr1', width: 390, height: 844, deviceScaleFactor: 1, isMobile: true, hasTouch: true },
+        { name: 'mobile-844-dpr3', width: 390, height: 844, deviceScaleFactor: 3, isMobile: true, hasTouch: true },
+        { name: 'desktop-1280', width: 1280, height: 800, deviceScaleFactor: 1, isMobile: false },
+    ];
+    for (const viewport of strictViewports) {
+        await page.setViewport(viewport);
+        await page.waitForFunction((width, height) => window.innerWidth === width && window.innerHeight === height, {}, viewport.width, viewport.height);
+        // resizeCanvas() ignores non-board tabs, so make sure the board is active first.
+        await page.evaluate(() => {
+            const board = projects.find((p) => p.type === 'moodinfinite');
+            if (board && activeProjectId !== board.id) switchTab(board.id);
+            window.dispatchEvent(new Event('resize'));
+            if (typeof resizeCanvas === 'function') resizeCanvas();
+        });
+        // Wait on the actual layout state instead of a fixed delay: the canvas buffer
+        // must equal the content area and the viewport, with the DPR applied.
+        await page.waitForFunction((width, height, dpr) => {
+            const cv = document.getElementById('moodboard-canvas');
+            const area = document.getElementById('content-area');
+            if (!cv || !area || window.devicePixelRatio !== dpr) return false;
+            if (cv.width !== area.clientWidth || cv.height !== area.clientHeight) {
+                if (typeof resizeCanvas === 'function') resizeCanvas();
+                return false;
+            }
+            return cv.clientWidth === width && cv.clientHeight === height
+                && cv.width === cv.clientWidth && cv.height === cv.clientHeight;
+        }, { timeout: 10000 }, viewport.width, viewport.height, viewport.deviceScaleFactor);
+        await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+        const scatteredResult = await measureFittedItems(page, scattered);
+        assert.equal(scatteredResult.canvas.cssW, viewport.width, `${viewport.name} canvas CSS width`);
+        assert.equal(scatteredResult.canvas.cssH, viewport.height, `${viewport.name} canvas CSS height`);
+        assert.equal(scatteredResult.dpr, viewport.deviceScaleFactor, `${viewport.name} devicePixelRatio`);
+        assert.equal(scatteredResult.canvas.w, scatteredResult.canvas.cssW, `${viewport.name} canvas buffer width should match CSS px`);
+        assert.equal(scatteredResult.canvas.h, scatteredResult.canvas.cssH, `${viewport.name} canvas buffer height should match CSS px`);
+        assert.ok(scatteredResult.zoom < scatteredResult.minZoom, `${viewport.name} fit stayed at MIN_ZOOM ${scatteredResult.minZoom}, zoom ${scatteredResult.zoom}`);
+        assertScatteredFillsFreeArea(scatteredResult, `${viewport.name} scattered`);
     }
     await page.setViewport({ width: 1280, height: 800, deviceScaleFactor: 1, isMobile: false });
     await page.waitForFunction(() => window.innerWidth === 1280);
@@ -3266,6 +3868,1533 @@ async function assertBottomToolbarScrollEnd(page) {
     console.log('Bottom toolbar scroll-end hint passed.');
 }
 
+function boxItem(id, x, y, width = 80, height = 50) {
+    return {
+        id, type: 'box', color: '#429eff', x, y, width, height,
+        rotation: 0, isPinned: false, style: 'fill', opacity: 1, scaleX: 1, scaleY: 1,
+    };
+}
 
+async function storedTabRows(page) {
+    return page.evaluate(async () => {
+        const stored = await window.localforage.getItem('moodinfinite_projects');
+        return (stored || []).map((p) => ({ id: p.id, name: p.name }));
+    });
+}
 
+async function waitForStored(page, accept, timeout = 6000) {
+    const start = Date.now();
+    let last = null;
+    while (Date.now() - start < timeout) {
+        last = await storedTabRows(page);
+        if (accept(last)) return last;
+        await wait(200);
+    }
+    return last;
+}
 
+async function pressEditingKeys(page) {
+    await page.keyboard.press('t');
+    await page.keyboard.press('Delete');
+    await page.keyboard.press('Backspace');
+    await page.keyboard.press('b');
+    await page.keyboard.down('Control');
+    try {
+        await page.keyboard.press('z');
+    } finally {
+        await page.keyboard.up('Control');
+    }
+}
+
+async function assertShellCanvasFixes(page) {
+    console.log('Testing shell and canvas fixes...');
+    const errors = [];
+    const onError = (err) => errors.push(String(err && err.stack || err));
+    page.on('pageerror', onError);
+    try {
+        await page.setViewport({ width: 1280, height: 800, deviceScaleFactor: 1, isMobile: false, hasTouch: false });
+        await page.waitForFunction(() => window.innerWidth === 1280 && window.projects && window.projects.length > 0 && typeof resetBoard === 'function');
+
+        const cleared = await page.evaluate(() => {
+            const board = projects.find((p) => p.type === 'moodinfinite');
+            switchTab(board.id);
+            items.length = 0;
+            items.push({
+                id: 'doomed', type: 'box', color: '#429eff', x: 12, y: 12, width: 80, height: 50,
+                rotation: 0, isPinned: false, style: 'fill', opacity: 1, scaleX: 1, scaleY: 1,
+            });
+            saveStateForUndo();
+            resetBoard();
+            const afterReset = items.length;
+            const projectCount = board.data.items.length;
+            const doomed = board.data.items.some((item) => item.id === 'doomed');
+            let other = projects.find((p) => p.id !== board.id);
+            if (!other) {
+                createNewProject('moodprompt');
+                other = projects.find((p) => p.id === activeProjectId);
+            }
+            switchTab(other.id);
+            switchTab(board.id);
+            return {
+                afterReset,
+                projectCount,
+                doomed,
+                afterRoundTrip: items.length,
+                sameArray: items === board.data.items,
+            };
+        });
+        assert.equal(cleared.afterReset, 0, 'resetBoard left canvas items');
+        assert.equal(cleared.projectCount, 0, 'resetBoard left project items');
+        assert.equal(cleared.doomed, false);
+        assert.equal(cleared.afterRoundTrip, 0, 'cleared items came back after a tab round trip');
+        assert.equal(cleared.sameArray, true);
+
+        const fileJson = JSON.stringify({
+            items: [boxItem('loaded-box', 10, 20, 80, 60)],
+            cameraOffset: { x: 111, y: 222 },
+            cameraZoom: 1.5,
+            canvasBackgroundColor: '#0d0d0d',
+            accentColor: '#429eff',
+            gridColor: '#f9f8f6',
+        });
+        const loaded = await page.evaluate((json) => {
+            createNewProject('moodprompt');
+            const promptId = activeProjectId;
+            loadFileAsNewTab(json, 'LoadedShell.mood');
+            const loadedId = activeProjectId;
+            const active = projects.find((p) => p.id === loadedId);
+            const read = () => ({
+                zoom: (0, eval)('cameraZoom'),
+                cam: (0, eval)('cameraOffset'),
+                canvas: document.getElementById('moodinfinite-container').style.display,
+                prompt: document.getElementById('moodprompt-container').style.display,
+                hasItem: items.some((item) => item.id === 'loaded-box'),
+            });
+            const shown = read();
+            switchTab(promptId);
+            switchTab(loadedId);
+            return {
+                promptId,
+                loadedId,
+                type: active.type,
+                name: active.name,
+                promptType: projects.find((p) => p.id === promptId).type,
+                shown,
+                roundTrip: read(),
+            };
+        }, fileJson);
+        assert.equal(loaded.type, 'moodinfinite');
+        assert.ok(loaded.name.startsWith('LoadedShell'), loaded.name);
+        assert.equal(loaded.promptType, 'moodprompt');
+        assert.equal(loaded.shown.canvas, 'block', 'opened file did not show the canvas');
+        assert.equal(loaded.shown.prompt, 'none', 'prompt view stayed visible after opening a board file');
+        assert.equal(loaded.shown.zoom, 1.5);
+        assert.deepEqual(loaded.shown.cam, { x: 111, y: 222 });
+        assert.equal(loaded.shown.hasItem, true);
+        assert.equal(loaded.roundTrip.zoom, 1.5);
+        assert.deepEqual(loaded.roundTrip.cam, { x: 111, y: 222 });
+
+        const reloaded = await page.evaluate(async () => {
+            createNewProject('moodprompt');
+            const project = projects.find((p) => p.id === activeProjectId);
+            project.data.prompts = [{
+                id: 'old', title: 'Old Title', platform: 'midjourney', mediaType: 'image',
+                image1: null, image2: null, text: 'old', tags: [],
+            }];
+            renderMoodpromptView(project);
+            const zip = new window.JSZip();
+            zip.file('data.json', JSON.stringify({
+                prompts: [{
+                    id: 'cloud', title: 'From Cloud', platform: 'midjourney', mediaType: 'image',
+                    image1: null, image2: null, text: 'new', tags: [],
+                }],
+                canvasBackgroundColor: '#111111',
+            }));
+            const blob = await zip.generateAsync({ type: 'blob' });
+            const ok = await reloadCurrentProjectFromBlob(blob);
+            return {
+                ok,
+                title: document.querySelector('.prompt-title-input') && document.querySelector('.prompt-title-input').value,
+                prompt: document.getElementById('moodprompt-container').style.display,
+                canvas: document.getElementById('moodinfinite-container').style.display,
+            };
+        });
+        assert.equal(reloaded.ok, true);
+        assert.equal(reloaded.title, 'From Cloud', 'cloud reload did not refresh the open board');
+        assert.notEqual(reloaded.prompt, 'none');
+        assert.equal(reloaded.canvas, 'none');
+
+        const note = await page.evaluate(() => {
+            const board = projects.find((p) => p.type === 'moodinfinite');
+            switchTab(board.id);
+            items.length = 0;
+            items.push({
+                id: 'note-1', type: 'text', title: 'Old title', text: 'Old body',
+                x: 80, y: 80, width: 220, height: 180, fontSize: 16, rotation: 0,
+                isPinned: false, opacity: 1, fontFamily: 'Nunito', color: '#429eff', scaleX: 1, scaleY: 1,
+            });
+            saveStateForUndo();
+            editText(items[0]);
+            return document.getElementById('note-editor-overlay').style.display;
+        });
+        assert.equal(note, 'flex');
+        await wait(40);
+        await page.evaluate(() => {
+            document.getElementById('note-title-input').value = 'New title';
+            document.getElementById('note-body-input').value = 'New body';
+        });
+        await page.keyboard.down('Control');
+        await page.keyboard.press('Enter');
+        await page.keyboard.up('Control');
+        const noteUndo = await page.evaluate(() => ({
+            focus: document.activeElement && document.activeElement.id,
+            editing: (0, eval)('currentlyEditingText'),
+        }));
+        assert.ok(noteUndo.focus !== 'note-title-input' && noteUndo.focus !== 'note-body-input', `note focus stayed in ${noteUndo.focus}`);
+        assert.ok(!noteUndo.editing, `note edit still open: ${noteUndo.focus}`);
+        await page.keyboard.down('Control');
+        await page.keyboard.press('z');
+        await page.keyboard.up('Control');
+        const noteRestored = await page.evaluate(() => {
+            const item = items[0];
+            return {
+                count: items.length,
+                title: item && item.title,
+                text: item && item.text,
+                hidden: item && item.isHidden === true,
+                overlay: document.getElementById('note-editor-overlay').style.display,
+            };
+        });
+        assert.equal(noteRestored.count, 1);
+        assert.equal(noteRestored.title, 'Old title');
+        assert.equal(noteRestored.text, 'Old body');
+        assert.equal(noteRestored.hidden, false, 'undo hid the note');
+        assert.equal(noteRestored.overlay, 'none');
+        await page.keyboard.down('Control');
+        await page.keyboard.down('Shift');
+        try {
+            await page.keyboard.press('z');
+        } finally {
+            await page.keyboard.up('Shift');
+            await page.keyboard.up('Control');
+        }
+        const noteRedone = await page.evaluate(() => ({
+            title: items[0] && items[0].title,
+            hidden: items[0] && items[0].isHidden === true,
+        }));
+        assert.equal(noteRedone.title, 'New title');
+        assert.equal(noteRedone.hidden, false);
+
+        await page.evaluate(() => {
+            if ((0, eval)('currentlyEditingText')) cancelNoteEditing();
+            const board = projects.find((p) => p.type === 'moodinfinite');
+            switchTab(board.id);
+            items.length = 0;
+            saveStateForUndo();
+            setCurrentTool('comment');
+        });
+        const canvasBox = await (await page.$('#moodboard-canvas')).boundingBox();
+        assert.ok(canvasBox && canvasBox.width > 200, 'canvas was not visible for the comment edit');
+        const commentAt = { x: canvasBox.x + canvasBox.width / 2, y: canvasBox.y + Math.min(canvasBox.height / 2, 280) };
+        await page.mouse.move(commentAt.x, commentAt.y);
+        await page.mouse.down();
+        await page.mouse.up();
+        await page.waitForFunction(() => {
+            const editor = document.getElementById('text-editor');
+            return editor && editor.style.display === 'block';
+        });
+        await page.focus('#text-editor');
+        await page.keyboard.type('Hello note');
+        await page.keyboard.down('Control');
+        await page.keyboard.press('Enter');
+        await page.keyboard.up('Control');
+        const commentCommitted = await page.evaluate(() => {
+            const item = items.find((entry) => entry.type === 'comment');
+            return {
+                text: item && item.text,
+                tool: (0, eval)('currentTool'),
+                focus: document.activeElement && document.activeElement.id,
+            };
+        });
+        assert.equal(commentCommitted.text, 'Hello note');
+        assert.notEqual(commentCommitted.focus, 'text-editor');
+        await page.keyboard.down('Control');
+        await page.keyboard.press('z');
+        await page.keyboard.up('Control');
+        const commentUndone = await page.evaluate(() => {
+            const item = items.find((entry) => entry.type === 'comment');
+            return {
+                text: item && item.text,
+                hidden: !item || item.isHidden === true,
+                editor: document.getElementById('text-editor').style.display,
+                tool: (0, eval)('currentTool'),
+            };
+        });
+        assert.equal(commentUndone.text, 'Note...', `comment undo text ${commentUndone.text}`);
+        assert.equal(commentUndone.hidden, false, 'undo hid the comment');
+        assert.notEqual(commentUndone.editor, 'block');
+        assert.equal(commentUndone.tool, commentCommitted.tool);
+
+        const grouped = await page.evaluate(() => {
+            const board = projects.find((p) => p.type === 'moodinfinite');
+            switchTab(board.id);
+            items.length = 0;
+            items.push(
+                { id: 'ga', type: 'box', color: '#429eff', x: 10, y: 20, width: 50, height: 40, rotation: 0, isPinned: false, style: 'fill', opacity: 1, scaleX: 1, scaleY: 1 },
+                { id: 'gb', type: 'box', color: '#429eff', x: 80, y: 30, width: 50, height: 40, rotation: 0, isPinned: false, style: 'fill', opacity: 1, scaleX: 1, scaleY: 1 },
+            );
+            saveStateForUndo();
+            (0, eval)('selectedItems = items.slice()');
+            groupSelectedItems();
+            const groupedOk = items.length === 1 && items[0].type === 'group';
+            undoLastAction();
+            const undone = items.map((item) => ({ id: item.id, type: item.type, x: item.x, y: item.y }));
+            redoLastAction();
+            const redone = items.length === 1 && items[0].type === 'group' && items[0].items.length === 2;
+            items.length = 0;
+            items.push(
+                { id: 'ca', type: 'box', color: '#429eff', x: 0, y: 0, width: 80, height: 40, rotation: 0, isPinned: false, style: 'fill', opacity: 1, scaleX: 1, scaleY: 1 },
+                { id: 'cb', type: 'box', color: '#429eff', x: 220, y: 10, width: 80, height: 40, rotation: 0, isPinned: false, style: 'fill', opacity: 1, scaleX: 1, scaleY: 1 },
+            );
+            saveStateForUndo();
+            createSimpleConnector(items[0], items[1]);
+            const connected = items.some((item) => item.type === 'connector');
+            undoLastAction();
+            const disconnected = items.some((item) => item.type === 'connector');
+            redoLastAction();
+            const reconnected = items.some((item) => item.type === 'connector');
+            return { groupedOk, undone, redone, connected, disconnected, reconnected };
+        });
+        assert.equal(grouped.groupedOk, true);
+        assert.deepEqual(grouped.undone.map((item) => item.id).sort(), ['ga', 'gb']);
+        assert.equal(grouped.undone.find((item) => item.id === 'ga').x, 10);
+        assert.equal(grouped.undone.find((item) => item.id === 'gb').x, 80);
+        assert.equal(grouped.redone, true, 'redo did not restore the group');
+        assert.equal(grouped.connected, true);
+        assert.equal(grouped.disconnected, false, 'undo left the connector');
+        assert.equal(grouped.reconnected, true, 'redo did not restore the connector');
+
+        await page.evaluate(() => {
+            setCurrentTool('box');
+            createNewProject('moodprompt');
+            const project = projects.find((p) => p.id === activeProjectId);
+            project.data.prompts = [{
+                id: 'keys', title: 'Keys', platform: 'midjourney', mediaType: 'image',
+                image1: null, image2: null, text: 'body', tags: [],
+            }];
+            renderMoodpromptView(project);
+            (0, eval)('clipboard = [{ id: "paste-src", type: "box", x: 30, y: 30, width: 24, height: 24, rotation: 0, opacity: 1, scaleX: 1, scaleY: 1 }]');
+        });
+        const pasteTarget = await page.$('.prompt-text-area');
+        assert.ok(pasteTarget, 'prompt text area missing');
+        await pasteTarget.click();
+        const pastedInField = await page.evaluate(() => {
+            const before = items.length;
+            const area = document.querySelector('.prompt-text-area');
+            area.focus();
+            area.dispatchEvent(new ClipboardEvent('paste', { bubbles: true, cancelable: true }));
+            return { before, after: items.length, active: document.activeElement && document.activeElement.className };
+        });
+        assert.equal(pastedInField.after, pastedInField.before, 'paste while a prompt field was focused added a canvas item');
+        const guarded = await page.evaluate(() => ({
+            tool: (0, eval)('currentTool'),
+            count: items.length,
+            index: (0, eval)('historyIndex'),
+        }));
+        await pressEditingKeys(page);
+        const promptKeys = await page.evaluate(() => ({
+            tool: (0, eval)('currentTool'),
+            count: items.length,
+            index: (0, eval)('historyIndex'),
+        }));
+        assert.equal(promptKeys.tool, guarded.tool, 'tool shortcut fired in a prompt field');
+        assert.equal(promptKeys.count, guarded.count, 'delete shortcut fired in a prompt field');
+        assert.equal(promptKeys.index, guarded.index, 'undo shortcut fired in a prompt field');
+
+        await page.evaluate(() => {
+            createNewProject('moodlist');
+            const project = projects.find((p) => p.id === activeProjectId);
+            project.data.cards = [{ id: 'card-keys', title: 'List keys', color: '', pinned: false, image: null, items: [{ id: 'row1', text: 'a', checked: false }] }];
+            renderMoodlistView(project);
+        });
+        await page.click('.ml-card-title');
+        const listBefore = await page.evaluate(() => ({
+            tool: (0, eval)('currentTool'),
+            count: items.length,
+            index: (0, eval)('historyIndex'),
+            editable: document.activeElement && document.activeElement.isContentEditable,
+        }));
+        assert.equal(listBefore.editable, true, 'moodlist title was not focused');
+        await pressEditingKeys(page);
+        const listAfter = await page.evaluate(() => ({
+            tool: (0, eval)('currentTool'),
+            count: items.length,
+            index: (0, eval)('historyIndex'),
+        }));
+        assert.equal(listAfter.tool, listBefore.tool, 'tool shortcut fired in a moodlist title');
+        assert.equal(listAfter.count, listBefore.count);
+        assert.equal(listAfter.index, listBefore.index);
+
+        await page.evaluate(() => {
+            const board = projects.find((p) => p.type === 'moodinfinite');
+            switchTab(board.id);
+            items.length = 0;
+            items.push({
+                id: 'note-keys', type: 'text', title: 'Keep', text: 'Keep body',
+                x: 40, y: 40, width: 220, height: 180, fontSize: 16, rotation: 0,
+                isPinned: false, opacity: 1, fontFamily: 'Nunito', color: '#429eff', scaleX: 1, scaleY: 1,
+            });
+            editText(items[0]);
+        });
+        await wait(40);
+        await page.focus('#note-body-input');
+        const noteBefore = await page.evaluate(() => ({
+            tool: (0, eval)('currentTool'),
+            count: items.length,
+            index: (0, eval)('historyIndex'),
+        }));
+        await pressEditingKeys(page);
+        const noteKeys = await page.evaluate(() => ({
+            tool: (0, eval)('currentTool'),
+            count: items.length,
+            index: (0, eval)('historyIndex'),
+        }));
+        assert.equal(noteKeys.tool, noteBefore.tool, 'tool shortcut fired in the note editor');
+        assert.equal(noteKeys.count, noteBefore.count);
+        assert.equal(noteKeys.index, noteBefore.index);
+        await page.keyboard.press('Escape');
+
+        await page.evaluate(() => {
+            document.querySelectorAll('#context-menu, #tab-context-menu, #mobile-tabs-popup').forEach((el) => { el.style.display = 'none'; });
+            const tab = document.querySelector('#tabs-list .tab-item.active');
+            const nameEl = tab.querySelector('.tab-name');
+            const input = tab.querySelector('.tab-name-input');
+            nameEl.style.display = 'none';
+            input.style.display = 'inline';
+            input.focus();
+            input.select();
+        });
+        const renameBefore = await page.evaluate(() => ({
+            tool: (0, eval)('currentTool'),
+            count: items.length,
+            index: (0, eval)('historyIndex'),
+            tag: document.activeElement && document.activeElement.className,
+        }));
+        assert.ok(String(renameBefore.tag).includes('tab-name-input'), `tab rename field was not focused (${renameBefore.tag})`);
+        await pressEditingKeys(page);
+        const renameKeys = await page.evaluate(() => ({
+            tool: (0, eval)('currentTool'),
+            count: items.length,
+            index: (0, eval)('historyIndex'),
+        }));
+        assert.equal(renameKeys.tool, renameBefore.tool, 'tool shortcut fired while renaming a tab');
+        assert.equal(renameKeys.count, renameBefore.count);
+        assert.equal(renameKeys.index, renameBefore.index);
+        await page.keyboard.press('Escape');
+
+        await page.evaluate(() => {
+            if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
+            setCurrentTool(null);
+        });
+        await page.keyboard.press('t');
+        const bareTool = await page.evaluate(() => (0, eval)('currentTool'));
+        assert.equal(bareTool, 'text', 'tool shortcut did not run when focus was outside a text field');
+        await page.evaluate(() => setCurrentTool(null));
+
+        const outsidePaste = await page.evaluate(() => {
+            const board = projects.find((p) => p.type === 'moodinfinite');
+            switchTab(board.id);
+            if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
+            saveStateForUndo();
+            (0, eval)('clipboard = [{ id: "paste-src", type: "box", x: 30, y: 30, width: 24, height: 24, rotation: 0, opacity: 1, scaleX: 1, scaleY: 1 }]');
+            const before = items.length;
+            const data = new DataTransfer();
+            data.setData('text/plain', 'plain');
+            window.dispatchEvent(new ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData: data }));
+            const after = items.length;
+            undoLastAction();
+            return { before, after, undone: items.length };
+        });
+        assert.equal(outsidePaste.after, outsidePaste.before + 1, 'paste outside a text field did not add the copied item');
+        assert.equal(outsidePaste.undone, outsidePaste.before);
+
+        const uniqueName = `Persist ${Date.now()}`;
+        const renameId = await page.evaluate(async (name) => {
+            projects.forEach((p) => { p.pinned = false; });
+            renderTabs();
+            (0, eval)('clearTimeout(autoSaveTimeout); autoSaveTimeout = null');
+            await saveToBrowser();
+            const tab = document.querySelector('#tabs-list .tab-item.active');
+            const nameEl = tab.querySelector('.tab-name');
+            const input = tab.querySelector('.tab-name-input');
+            nameEl.style.display = 'none';
+            input.style.display = 'inline';
+            input.focus();
+            input.value = name;
+            input.select();
+            return Number(tab.dataset.id);
+        }, uniqueName);
+        await page.keyboard.press('Enter');
+        const renamedNow = await page.evaluate((id) => projects.find((p) => p.id === id).name, renameId);
+        assert.equal(renamedNow, uniqueName, 'rename input did not commit');
+        const renamedStored = await waitForStored(page, (rows) => rows.some((row) => row.id === renameId && row.name === uniqueName));
+        assert.ok(
+            renamedStored && renamedStored.some((row) => row.id === renameId && row.name === uniqueName),
+            `renamed tab was not saved: ${(renamedStored || []).map((row) => row.name).join(', ')}`,
+        );
+
+        const orderChange = await page.evaluate(() => {
+            (0, eval)('clearTimeout(autoSaveTimeout); autoSaveTimeout = null');
+            const before = projects.map((p) => p.id);
+            const list = document.getElementById('tabs-list');
+            const tabs = [...list.querySelectorAll('.tab-item')];
+            const moved = tabs[tabs.length - 1];
+            list.insertBefore(moved, tabs[0]);
+            const data = new DataTransfer();
+            data.setData('text/plain', moved.dataset.id);
+            list.dispatchEvent(new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer: data }));
+            const after = projects.map((p) => p.id);
+            return { before, after };
+        });
+        assert.notDeepEqual(orderChange.after, orderChange.before, 'tab drop did not reorder projects');
+        const storedOrder = await waitForStored(page, (rows) => rows.map((row) => row.id).join(',') === orderChange.after.join(','));
+        assert.deepEqual((storedOrder || []).map((row) => row.id), orderChange.after, 'reordered tabs were not saved');
+
+        const duplicated = await page.evaluate(() => {
+            const board = projects.find((p) => p.type === 'moodinfinite');
+            switchTab(board.id);
+            board.name = 'Dup Canvas';
+            items.length = 0;
+            items.push({ id: 'marker', type: 'box', color: '#429eff', x: 5, y: 6, width: 40, height: 30, rotation: 0, isPinned: false, opacity: 1, scaleX: 1, scaleY: 1 });
+            renderTabs();
+            const tab = document.querySelector(`#tabs-list .tab-item[data-id="${board.id}"]`);
+            tab.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, clientX: 180, clientY: 24 }));
+            const labels = [...document.querySelectorAll('#tab-context-menu .menu-label')].map((el) => el.textContent);
+            document.getElementById('duplicate-tab-btn').click();
+            const copy = projects.find((p) => p.id === activeProjectId);
+            const source = projects.find((p) => p.id === board.id);
+            copy.data.items[0].x = 999;
+            createNewProject('moodlist');
+            const list = projects.find((p) => p.id === activeProjectId);
+            list.name = 'Dup List';
+            list.data.cards = [{ id: 'c1', title: 'Original Card', color: '', pinned: false, image: null, items: [] }];
+            const listCopyId = duplicateProject(list.id);
+            const listCopy = projects.find((p) => p.id === listCopyId);
+            listCopy.data.cards[0].title = 'Changed';
+            return {
+                labels,
+                sourceId: source.id,
+                copyId: copy.id,
+                copyName: copy.name,
+                sourceX: source.data.items[0].x,
+                copyX: copy.data.items[0].x,
+                listTitle: list.data.cards[0].title,
+                listCopyTitle: listCopy.data.cards[0].title,
+                listCopyId,
+            };
+        });
+        assert.ok(duplicated.labels.includes('Duplicate'));
+        assert.notEqual(duplicated.copyId, duplicated.sourceId);
+        assert.ok(duplicated.copyName.startsWith('Dup Canvas'), duplicated.copyName);
+        assert.equal(duplicated.sourceX, 5, 'editing the copy changed the source board');
+        assert.equal(duplicated.copyX, 999);
+        assert.equal(duplicated.listTitle, 'Original Card');
+        assert.equal(duplicated.listCopyTitle, 'Changed');
+        assert.notEqual(duplicated.listCopyId, null);
+
+        await page.setViewport({ width: 390, height: 844, deviceScaleFactor: 1, isMobile: true, hasTouch: true });
+        await page.waitForFunction(() => window.innerWidth === 390 && window.projects && window.projects.length > 0 && typeof switchTab === 'function');
+        await page.evaluate(() => {
+            const types = ['moodinfinite', 'moodprompt', 'colorseeker', 'storyflow', 'moodgantt', 'moodlist'];
+            types.forEach((type) => {
+                if (!projects.some((p) => p.type === type)) createNewProject(type);
+            });
+            const board = projects.find((p) => p.type === 'moodinfinite');
+            switchTab(board.id);
+            board.name = 'Mobile Dup';
+            items.length = 0;
+            items.push({
+                id: 'msrc', type: 'box', color: '#429eff', x: 5, y: 6, width: 40, height: 30,
+                rotation: 0, isPinned: false, opacity: 1, scaleX: 1, scaleY: 1,
+            });
+            if (typeof syncCanvasChrome === 'function') syncCanvasChrome();
+            renderTabs();
+        });
+        await page.click('#mobile-tabs-btn');
+        const mobile = await page.evaluate(() => {
+            const expected = {
+                moodinfinite: 'lucide:image',
+                colorseeker: 'lucide:swatch-book',
+                storyflow: 'lucide:clapperboard',
+                moodgantt: 'lucide:gantt-chart',
+                moodlist: 'lucide:list-check',
+                moodprompt: 'lucide:pen-tool',
+            };
+            const box = (el) => {
+                const rect = el.getBoundingClientRect();
+                return { w: rect.width, h: rect.height, id: el.id || el.getAttribute('aria-label') || el.className };
+            };
+            const icons = [...document.querySelectorAll('#mobile-tabs-popup .mobile-tab-item')].map((row) => ({
+                type: row.dataset.type,
+                icon: row.querySelector('.mobile-tab-icon iconify-icon') && row.querySelector('.mobile-tab-icon iconify-icon').getAttribute('icon'),
+            }));
+            const adds = [...document.querySelectorAll('#tabs-bar .tab-add-btn')].filter((el) => el.offsetParent !== null);
+            return {
+                icons,
+                expected,
+                adds: adds.map(box),
+                closes: [...document.querySelectorAll('#mobile-tabs-popup .tab-close-btn')].map(box),
+                dups: [...document.querySelectorAll('#mobile-tabs-popup .mobile-tab-dup-btn')].map(box),
+                overflow: document.documentElement.scrollWidth > window.innerWidth + 1,
+            };
+        });
+        assert.ok(mobile.icons.length >= 6, `popup rows ${mobile.icons.length}`);
+        for (const row of mobile.icons) {
+            assert.equal(row.icon, mobile.expected[row.type], `icon for ${row.type}`);
+        }
+        assert.equal(mobile.overflow, false, 'mobile page overflowed horizontally');
+        for (const control of [...mobile.adds, ...mobile.closes, ...mobile.dups]) {
+            assert.ok(control.w >= 44 && control.h >= 44, `tap target under 44px: ${JSON.stringify(control)}`);
+        }
+        await page.focus('#mobile-tabs-popup .tab-close-btn');
+        await page.keyboard.press('Escape');
+        const escaped = await page.evaluate(() => ({
+            id: document.activeElement && document.activeElement.id,
+            popup: document.getElementById('mobile-tabs-popup').style.display,
+        }));
+        assert.equal(escaped.popup, 'none');
+        assert.equal(escaped.id, 'mobile-tabs-btn', `Escape left focus on ${escaped.id}`);
+
+        const touchStart = await page.evaluate(() => {
+            const board = projects.find((p) => p.type === 'moodinfinite');
+            switchTab(board.id);
+            document.querySelectorAll('.toast-notification').forEach((el) => el.remove());
+            window.dispatchEvent(new Event('resize'));
+            if (typeof resizeCanvas === 'function') resizeCanvas();
+            (0, eval)('snapToGrid = false');
+            (0, eval)('cameraZoom = 1');
+            (0, eval)('currentTool = null');
+            (0, eval)('selectedItems = []');
+            (0, eval)('lastTap = 0');
+            const canvas = document.getElementById('moodboard-canvas');
+            const mid = screenToWorld({ x: canvas.clientWidth / 2, y: Math.min(canvas.clientHeight * 0.3, 220) });
+            items.length = 0;
+            items.push({
+                id: 'dragme', type: 'box', color: '#429eff',
+                x: mid.x - 60, y: mid.y - 40, width: 120, height: 80,
+                rotation: 0, isPinned: false, style: 'fill', opacity: 1, scaleX: 1, scaleY: 1,
+            });
+            if (typeof syncCanvasChrome === 'function') syncCanvasChrome();
+            const screen = worldToScreen({ x: mid.x, y: mid.y });
+            const rect = canvas.getBoundingClientRect();
+            return { x: rect.left + screen.x, y: rect.top + screen.y, itemX: items[0].x, itemY: items[0].y };
+        });
+        await page.touchscreen.touchStart(touchStart.x, touchStart.y);
+        await wait(40);
+        await page.touchscreen.touchMove(touchStart.x + 40, touchStart.y + 16);
+        await wait(40);
+        await page.touchscreen.touchMove(touchStart.x + 80, touchStart.y + 36);
+        await wait(40);
+        await page.touchscreen.touchEnd();
+        const touchEnd = await page.evaluate(() => ({ x: items[0].x, y: items[0].y, id: items[0].id }));
+        assert.equal(touchEnd.id, 'dragme');
+        assert.ok(
+            Math.hypot(touchEnd.x - touchStart.itemX, touchEnd.y - touchStart.itemY) > 20,
+            `touch drag did not move the box from ${touchStart.itemX},${touchStart.itemY} to ${touchEnd.x},${touchEnd.y}`,
+        );
+
+        await page.click('#mobile-tabs-btn');
+        const mobileDup = await page.evaluate(() => {
+            const source = projects.find((p) => p.name === 'Mobile Dup');
+            const before = projects.length;
+            const sourceX = source.data.items[0].x;
+            const row = [...document.querySelectorAll('#mobile-tabs-popup .mobile-tab-item')]
+                .find((el) => el.querySelector('.mobile-tab-name').textContent === 'Mobile Dup');
+            row.querySelector('.mobile-tab-dup-btn').click();
+            const copy = projects.find((p) => p.id === activeProjectId);
+            copy.data.items[0].x = 1234;
+            return {
+                before,
+                after: projects.length,
+                sourceX: projects.find((p) => p.id === source.id).data.items[0].x,
+                copyX: copy.data.items[0].x,
+                same: copy.id === source.id,
+                kept: sourceX,
+            };
+        });
+        assert.equal(mobileDup.after, mobileDup.before + 1, 'mobile duplicate button did not add a board');
+        assert.equal(mobileDup.same, false);
+        assert.equal(mobileDup.sourceX, mobileDup.kept, 'mobile duplicate shared items with the source');
+
+        assert.deepEqual(errors.filter(isFirstParty), [], `first-party errors:\n${errors.filter(isFirstParty).join('\n')}`);
+    } finally {
+        page.off('pageerror', onError);
+        await page.keyboard.up('Control').catch(() => {});
+        await page.keyboard.up('Shift').catch(() => {});
+        await page.setViewport({ width: 1280, height: 800, deviceScaleFactor: 1, isMobile: false, hasTouch: false });
+        await page.waitForFunction(() => window.innerWidth === 1280);
+    }
+    console.log('Shell and canvas fixes passed.');
+}
+
+async function assertRound3GanttPrompt(page) {
+    console.log('Testing gantt drag, today line, month boundaries, and prompt slots...');
+    await page.setViewport({ width: 1280, height: 800, deviceScaleFactor: 1, isMobile: false, hasTouch: false });
+    await page.waitForFunction(() => window.innerWidth === 1280);
+
+    const drag = await page.evaluate(() => {
+        createNewProject('moodgantt');
+        const project = projects.find((p) => p.id === activeProjectId);
+        project.data.zoomLevel = 'month';
+        project.data.zoomScale = 1;
+        project.data.viewStartDate = '2026-02-01';
+        project.data.viewEndDate = '2026-06-01';
+        project.data.groups = [{
+            id: 'g', name: 'Plan', color: '#429eff', collapsed: false,
+            tasks: [
+                { id: 'before', name: 'Before', startDate: '2026-01-10', endDate: '2026-02-20', progress: 0, status: '', assignee: '', notes: '', dependsOn: '' },
+                { id: 'short', name: 'Short', startDate: '2026-03-03', endDate: '2026-03-03', progress: 0, status: '', assignee: '', notes: '', dependsOn: '' },
+            ],
+        }];
+        renderGanttView(project);
+        document.getElementById('gantt-timeline').scrollLeft = 0;
+        return project.id;
+    });
+    const beforeBox = await page.$eval('.gantt-bar[data-task-id="before"]', (bar) => {
+        const rect = bar.getBoundingClientRect();
+        return { x: rect.x, y: rect.y, w: rect.width, h: rect.height };
+    });
+    await page.mouse.move(beforeBox.x + 24, beforeBox.y + beforeBox.h / 2);
+    await page.mouse.down();
+    await page.mouse.move(beforeBox.x + 24 + 40, beforeBox.y + beforeBox.h / 2, { steps: 6 });
+    await page.mouse.up();
+    const afterDrag = await page.evaluate((id) => {
+        const task = projects.find((p) => p.id === id).data.groups[0].tasks.find((t) => t.id === 'before');
+        return { start: task.startDate, end: task.endDate };
+    }, drag);
+    assert.equal(afterDrag.start, '2026-01-19', `clamped bar drag jumped the start to ${afterDrag.start}`);
+    assert.equal(afterDrag.end, '2026-03-01', `clamped bar drag changed the length: ${afterDrag.end}`);
+
+    const handle = await page.$eval('.gantt-bar[data-task-id="short"] .gantt-bar-handle-right', (el) => {
+        el.scrollIntoView({ block: 'center', inline: 'center' });
+        const rect = el.getBoundingClientRect();
+        return { x: rect.x, y: rect.y, w: rect.width, h: rect.height };
+    });
+    await page.mouse.move(handle.x + handle.w / 2, handle.y + handle.h / 2);
+    await page.mouse.down();
+    await page.mouse.move(handle.x + handle.w / 2 + 120, handle.y + handle.h / 2, { steps: 6 });
+    await page.mouse.up();
+    const afterResize = await page.evaluate((id) => {
+        const task = projects.find((p) => p.id === id).data.groups[0].tasks.find((t) => t.id === 'short');
+        return { start: task.startDate, end: task.endDate };
+    }, drag);
+    assert.equal(afterResize.start, '2026-03-03', `resize moved the start: ${afterResize.start}`);
+    assert.equal(afterResize.end, '2026-04-03', `short bar resize wrote ${afterResize.end}`);
+
+    const today = await page.evaluate((id) => {
+        const project = projects.find((p) => p.id === id);
+        project.data.zoomLevel = 'month';
+        project.data.viewStartDate = '2025-12-01';
+        project.data.viewEndDate = '2026-01-15';
+        renderGanttView(project);
+        const outside = document.querySelector('.gantt-today-line');
+        const todayDate = ganttToday();
+        project.data.viewStartDate = ganttFormatDate(new Date(todayDate.getFullYear(), todayDate.getMonth(), 1));
+        project.data.viewEndDate = ganttFormatDate(ganttAddDays(todayDate, 5));
+        project.data.zoomLevel = 'month';
+        renderGanttView(project);
+        const line = document.querySelector('.gantt-today-line');
+        const cols = ganttGetColumns(project.data.viewStartDate, project.data.viewEndDate, 'month');
+        const days = new Date(todayDate.getFullYear(), todayDate.getMonth() + 1, 0).getDate();
+        return {
+            outside: !!outside,
+            inside: line ? parseFloat(line.style.left) : null,
+            height: line ? line.getBoundingClientRect().height : 0,
+            columns: cols.length,
+            expected: ((todayDate.getDate() - 1) / days) * 120,
+        };
+    }, drag);
+    assert.equal(today.outside, false, 'today line was drawn on a range that does not include today');
+    assert.equal(today.columns, 1, `expected one month column, got ${today.columns}`);
+    assert.ok(Math.abs(today.inside - today.expected) < 1.5, `today line at ${today.inside}px, expected ${today.expected}`);
+    assert.ok(today.height > 20, `today line has no height (${today.height})`);
+
+    const shifted = await page.evaluate((id) => {
+        const months = {
+            jan: ganttFormatDate(ganttAddMonths(ganttParseDate('2026-01-31'), 1)),
+            back: ganttFormatDate(ganttAddMonths(ganttParseDate('2026-03-31'), -1)),
+            leap: ganttFormatDate(ganttAddMonths(ganttParseDate('2024-01-31'), 1)),
+            dec: ganttFormatDate(ganttAddMonths(ganttParseDate('2025-12-31'), 2)),
+        };
+        const project = projects.find((p) => p.id === id);
+        project.data.zoomLevel = 'month';
+        project.data.viewStartDate = '2026-01-31';
+        project.data.viewEndDate = '2026-06-30';
+        renderGanttView(project);
+        document.getElementById('gantt-next-btn').click();
+        const monthStart = project.data.viewStartDate;
+        project.data.zoomLevel = 'quarter';
+        project.data.viewStartDate = '2026-01-15';
+        project.data.viewEndDate = '2026-06-15';
+        renderGanttView(project);
+        const beforeHeader = document.querySelector('.gantt-col-header').innerText.replace(/\s+/g, ' ');
+        document.getElementById('gantt-next-btn').click();
+        const quarterStart = project.data.viewStartDate;
+        const afterHeader = document.querySelector('.gantt-col-header').innerText.replace(/\s+/g, ' ');
+        project.data.groups[0].collapsed = false;
+        renderGanttView(project);
+        const openRows = document.querySelectorAll('.gantt-task-sidebar-row').length;
+        document.querySelector('.gantt-group-collapse-btn').click();
+        const collapsedRows = document.querySelectorAll('.gantt-task-sidebar-row').length;
+        document.querySelector('.gantt-group-collapse-btn').click();
+        return { months, monthStart, beforeHeader, quarterStart, afterHeader, openRows, collapsedRows, reopened: document.querySelectorAll('.gantt-task-sidebar-row').length };
+    }, drag);
+    assert.equal(shifted.months.jan, '2026-02-28');
+    assert.equal(shifted.months.back, '2026-02-28');
+    assert.equal(shifted.months.leap, '2024-02-29');
+    assert.equal(shifted.months.dec, '2026-02-28');
+    assert.equal(shifted.monthStart, '2026-04-30', `month next from the 31st landed on ${shifted.monthStart}`);
+    assert.equal(shifted.quarterStart, '2026-07-15', `quarter next landed on ${shifted.quarterStart}`);
+    assert.match(shifted.beforeHeader, /Q1/);
+    assert.match(shifted.afterHeader, /Q3/);
+    assert.ok(shifted.openRows > 0, 'group had no task rows');
+    assert.equal(shifted.collapsedRows, 0, 'collapse left task rows open');
+    assert.equal(shifted.reopened, shifted.openRows, 'expand did not restore the task rows');
+
+    await page.evaluate(() => saveToBrowser());
+    await page.setViewport({ width: 390, height: 844, deviceScaleFactor: 1, isMobile: true, hasTouch: true });
+    await page.waitForFunction(() => window.innerWidth === 390 && window.projects && typeof renderGanttView === 'function');
+    const touch = await page.evaluate(() => {
+        createNewProject('moodgantt');
+        const project = projects.find((p) => p.id === activeProjectId);
+        project.data.zoomLevel = 'day';
+        project.data.zoomScale = 1;
+        project.data.viewStartDate = '2026-10-10';
+        project.data.viewEndDate = '2026-10-24';
+        project.data.groups = [{
+            id: 'g', name: 'Plan', color: '#429eff', collapsed: false,
+            tasks: [{ id: 'touch', name: 'Touch', startDate: '2026-10-12', endDate: '2026-10-14', progress: 0, status: '', assignee: '', notes: '', dependsOn: '' }],
+        }];
+        renderGanttView(project);
+        const timeline = document.getElementById('gantt-timeline');
+        const bar = document.querySelector('.gantt-bar[data-task-id="touch"]');
+        const goal = timeline.getBoundingClientRect().left + 16;
+        timeline.scrollLeft += bar.getBoundingClientRect().left - goal;
+        const rect = bar.getBoundingClientRect();
+        return { id: project.id, x: rect.x, y: rect.y, w: rect.width, h: rect.height };
+    });
+    await page.touchscreen.touchStart(touch.x + 30, touch.y + touch.h / 2);
+    await wait(40);
+    await page.touchscreen.touchMove(touch.x + 30 + 60, touch.y + touch.h / 2);
+    await wait(40);
+    await page.touchscreen.touchEnd();
+    const touchDates = await page.evaluate((id) => {
+        const task = projects.find((p) => p.id === id).data.groups[0].tasks.find((t) => t.id === 'touch');
+        return { start: task.startDate, end: task.endDate };
+    }, touch.id);
+    assert.equal(touchDates.start, '2026-10-13', `touch drag left the start at ${touchDates.start}`);
+    assert.equal(touchDates.end, '2026-10-15', `touch drag left the end at ${touchDates.end}`);
+
+    await page.setViewport({ width: 1280, height: 800, deviceScaleFactor: 1, isMobile: false, hasTouch: false });
+    await page.waitForFunction(() => window.innerWidth === 1280 && typeof createNewProject === 'function' && window.projects);
+    const prompt = await page.evaluate(() => {
+        createNewProject('moodprompt');
+        const project = projects.find((p) => p.id === activeProjectId);
+        project.data.variables = { 'a+b': 'boom', 'foo(': 'x' };
+        project.data.prompts = [{
+            id: 'p1', title: 'Hero', platform: 'midjourney', mediaType: 'image',
+            image1: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
+            image2: null,
+            text: '{{foo(}} {{a+b}}',
+            tags: [],
+        }];
+        renderMoodpromptView(project);
+        const writes = [];
+        navigator.clipboard.writeText = (text) => {
+            writes.push(String(text));
+            return Promise.resolve();
+        };
+        document.querySelector('.prompt-copy-btn').click();
+        document.querySelector('.platform-select').value = 'kling';
+        document.querySelector('.platform-select').dispatchEvent(new Event('change', { bubbles: true }));
+        const beforeRemove = {
+            image: project.data.prompts[0].image1 ? 'set' : 'empty',
+            remove: document.querySelectorAll('.remove-btn').length,
+            platform: project.data.prompts[0].platform,
+            copied: writes[0] || '',
+        };
+        document.querySelector('.remove-btn').click();
+        return {
+            beforeRemove,
+            image: project.data.prompts[0].image1,
+            placeholder: document.querySelector('.image-upload-slot .placeholder') ? document.querySelector('.image-upload-slot .placeholder').textContent : '',
+            text: project.data.prompts[0].text,
+            id: project.id,
+        };
+    });
+    assert.equal(prompt.beforeRemove.copied, 'x boom', `copy wrote ${prompt.beforeRemove.copied}`);
+    assert.equal(prompt.beforeRemove.platform, 'kling');
+    assert.equal(prompt.beforeRemove.image, 'set');
+    assert.equal(prompt.beforeRemove.remove, 1);
+    assert.equal(prompt.image, null, 'remove left the image data in place');
+    assert.match(prompt.placeholder, /Add Image 1/);
+    assert.equal(prompt.text, '{{foo(}} {{a+b}}', 'remove cleared the prompt text');
+    console.log('Gantt and prompt round 3 passed.');
+}
+
+async function assertRound4ListTone(page) {
+    console.log('Testing Moodlist and Moodtone round 4...');
+    await page.setViewport({ width: 1280, height: 800, deviceScaleFactor: 1, isMobile: false, hasTouch: false });
+
+    const grip = await page.evaluate(() => {
+        createNewProject('moodlist');
+        const project = projects.find((p) => p.id === activeProjectId);
+        project.data.cards.push({
+            id: 'grip-card',
+            title: 'Grip',
+            pinned: false,
+            color: '',
+            items: [
+                { id: 'grip-a', text: 'One', checked: false },
+                { id: 'grip-b', text: 'Two', checked: false },
+            ],
+        });
+        renderMoodlistView(project);
+        document.querySelector('.ml-drag-handle').click();
+        const afterGrip = project.data.cards[0].items[0].checked;
+        document.querySelector('.ml-card-checkbox').click();
+        return {
+            afterGrip,
+            afterCheck: project.data.cards[0].items[0].checked,
+        };
+    });
+    assert.equal(grip.afterGrip, false, 'clicking the drag grip checked the row');
+    assert.equal(grip.afterCheck, true, 'clicking the checkbox did not check the row');
+
+    const tint = await page.evaluate(() => {
+        const previous = canvasBackgroundColor;
+        createNewProject('moodlist');
+        canvasBackgroundColor = '#ffffff';
+        updateUIColors();
+        const project = projects.find((p) => p.id === activeProjectId);
+        project.data.cards.push({
+            id: 'tint-card',
+            title: 'Tint',
+            pinned: false,
+            color: '#4a1c1c',
+            items: [{ id: 'tint-a', text: 'Row', checked: false }],
+        });
+        renderMoodlistView(project);
+        const card = () => document.querySelector('.ml-card');
+        const titleColor = () => getComputedStyle(card().querySelector('.ml-card-title')).color;
+        document.querySelector('.ml-card-color-btn').click();
+        document.querySelector('.ml-card .ml-swatch.default').click();
+        const cleared = {
+            color: project.data.cards[0].color,
+            tinted: card().classList.contains('ml-tinted'),
+            text: titleColor(),
+            bg: getComputedStyle(card()).backgroundColor,
+        };
+        document.querySelector('.ml-card-color-btn').click();
+        document.querySelector('.ml-card .ml-swatch[data-color="#4a1c1c"]').click();
+        const applied = {
+            color: project.data.cards[0].color,
+            tinted: card().classList.contains('ml-tinted'),
+            text: titleColor(),
+        };
+        canvasBackgroundColor = previous;
+        updateUIColors();
+        return { cleared, applied };
+    });
+    assert.equal(tint.cleared.color, '');
+    assert.equal(tint.cleared.tinted, false, 'clearing a card color left the tinted text colors on');
+    assert.equal(tint.cleared.text, 'rgb(28, 25, 23)', `cleared card text is not dark on white: ${tint.cleared.text} on ${tint.cleared.bg}`);
+    assert.equal(tint.applied.color, '#4a1c1c');
+    assert.equal(tint.applied.tinted, true, 'picking a card color did not mark the card tinted');
+    assert.equal(tint.applied.text, 'rgb(245, 245, 244)', `tinted card text stayed dark: ${tint.applied.text}`);
+
+    const kept = await page.evaluate(() => {
+        createNewProject('colorseeker');
+        const project = projects.find((p) => p.id === activeProjectId);
+        const extra = '#e7c6fb';
+        project.data.colors = project.data.colors.concat(extra);
+        colorseekerEnsureLocks(project);
+        project.data.lockedColors[project.data.colors.length - 1] = extra;
+        const before = {
+            n: project.data.colors.length,
+            last: project.data.colors[project.data.colors.length - 1],
+            head: project.data.colors.slice(0, 5).join(','),
+        };
+        if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
+        document.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', code: 'Space', bubbles: true }));
+        const afterSpace = {
+            n: project.data.colors.length,
+            last: project.data.colors[project.data.colors.length - 1],
+            lock: project.data.lockedColors[project.data.lockedColors.length - 1],
+            head: project.data.colors.slice(0, 5).join(','),
+        };
+        project.data.colors = ['#111111', '#222222', '#333333', '#444444', '#555555', '#666666'];
+        project.data.lockedColors = [null, null, null, null, null, '#666666'];
+        project.data.baseColor = '#333333';
+        project.data.mode = 'shades';
+        const select = document.getElementById('colorseeker-mode-select');
+        select.value = 'triadic';
+        select.dispatchEvent(new Event('change', { bubbles: true }));
+        return {
+            before,
+            afterSpace,
+            afterMode: {
+                n: project.data.colors.length,
+                last: project.data.colors[project.data.colors.length - 1],
+                lock: project.data.lockedColors[5],
+                mode: project.data.mode,
+            },
+        };
+    });
+    assert.equal(kept.afterSpace.n, kept.before.n, 'spacebar dropped an added swatch');
+    assert.equal(kept.afterSpace.last.toLowerCase(), kept.before.last.toLowerCase(), 'spacebar changed the locked extra swatch');
+    assert.equal((kept.afterSpace.lock || '').toLowerCase(), kept.before.last.toLowerCase(), 'spacebar dropped the lock on the extra swatch');
+    assert.notEqual(kept.afterSpace.head, kept.before.head, 'spacebar did not rebuild the harmony');
+    assert.equal(kept.afterMode.mode, 'triadic');
+    assert.equal(kept.afterMode.n, 6, 'changing harmony mode dropped an added swatch');
+    assert.equal(kept.afterMode.last.toLowerCase(), '#666666');
+    assert.equal((kept.afterMode.lock || '').toLowerCase(), '#666666');
+
+    await page.setViewport({ width: 390, height: 844, deviceScaleFactor: 1, isMobile: true, hasTouch: true });
+    await settleForHitTest(page);
+    const reorder = await page.evaluate(() => {
+        createNewProject('colorseeker');
+        document.querySelectorAll('.toast-notification').forEach((el) => el.remove());
+        const project = projects.find((p) => p.id === activeProjectId);
+        const before = project.data.colors.slice();
+        const bar = document.querySelector('.colorseeker-bar');
+        const moveRight = bar.querySelector('.colorseeker-move-right');
+        const remove = bar.querySelector('.colorseeker-remove');
+        const removeRect = remove.getBoundingClientRect();
+        const removeHit = document.elementFromPoint(Math.round(removeRect.left + removeRect.width / 2), Math.round(removeRect.top + removeRect.height / 2));
+        const rect = moveRight.getBoundingClientRect();
+        const hit = document.elementFromPoint(Math.round(rect.left + rect.width / 2), Math.round(rect.top + rect.height / 2));
+        const owner = hit && hit.closest('.colorseeker-bar');
+        const onScreen = rect.left >= -1 && rect.right <= window.innerWidth + 1 && rect.top >= -1 && rect.bottom <= window.innerHeight + 1;
+        if (hit && (hit === moveRight || moveRight.contains(hit))) moveRight.click();
+        return {
+            onScreen,
+            owner: owner ? Number(owner.dataset.index) : null,
+            hitMove: !!(hit && (hit === moveRight || moveRight.contains(hit))),
+            after: project.data.colors.slice(),
+            before,
+            scrollW: document.documentElement.scrollWidth,
+            innerW: window.innerWidth,
+            removeHits: !!(removeHit && (removeHit === remove || remove.contains(removeHit))),
+        };
+    });
+    assert.equal(reorder.onScreen, true, `move-right sits outside the phone: ${JSON.stringify(reorder)}`);
+    assert.equal(reorder.hitMove, true, 'move-right is covered by another control');
+    assert.equal(reorder.owner, 0, 'move-right tap lands on a different swatch');
+    assert.equal(reorder.after[0].toLowerCase(), reorder.before[1].toLowerCase(), 'move-right did not swap the first swatch');
+    assert.equal(reorder.after[1].toLowerCase(), reorder.before[0].toLowerCase());
+    assert.ok(reorder.scrollW <= reorder.innerW + 1, `moodtone page scrolls sideways (${reorder.scrollW})`);
+    assert.equal(reorder.removeHits, true, 'remove control is not the tap target');
+
+    await page.setViewport({ width: 1280, height: 800, deviceScaleFactor: 1, isMobile: false, hasTouch: false });
+    console.log('Moodlist and Moodtone round 4 passed.');
+}
+
+async function assertRound5NoteTabCommit(page) {
+    console.log('Testing note commit across tab switch...');
+    await page.setViewport({ width: 1280, height: 800, deviceScaleFactor: 1, isMobile: false, hasTouch: false });
+
+    const committed = await page.evaluate(() => {
+        createNewProject('moodinfinite');
+        const boardId = activeProjectId;
+        items.length = 0;
+        items.push({
+            id: 'keep-note', type: 'text', title: 'T', text: 'One',
+            x: 40, y: 40, width: 280, height: 180, fontSize: 16, rotation: 0,
+            isPinned: false, opacity: 1, fontFamily: 'Nunito', color: '#429eff',
+            bgColor: '#ffffff', scaleX: 1, scaleY: 1,
+        });
+        items.push({
+            id: 'keep-comment', type: 'comment', text: 'Note...',
+            x: 360, y: 40, width: 160, height: 80, fontSize: 16, rotation: 0,
+            isPinned: false, opacity: 1, fontFamily: 'Nunito', textAlign: 'left',
+            fontWeight: 'bold', fontStyle: 'normal', color: '#f5e6c8', scaleX: 1, scaleY: 1, icon: 'none',
+        });
+        editText(items[0]);
+        document.getElementById('note-title-input').value = 'Kept';
+        document.getElementById('note-body-input').value = 'Line one\nLine two';
+        const before = {
+            hidden: items[0].isHidden === true,
+            overlay: document.getElementById('note-editor-overlay').style.display,
+            editing: !!(0, eval)('currentlyEditingText'),
+        };
+        createNewProject('moodprompt');
+        switchTab(boardId);
+        editText(items[1]);
+        document.getElementById('text-editor').value = 'Hi\nThere';
+        createNewProject('moodprompt');
+        switchTab(boardId);
+        const note = items.find((item) => item.id === 'keep-note');
+        const comment = items.find((item) => item.id === 'keep-comment');
+        const stored = JSON.parse(JSON.stringify({ isHidden: true, text: 'x' }, storageReplacer));
+        return {
+            before,
+            title: note && note.title,
+            text: note && note.text,
+            hidden: !!(note && note.isHidden),
+            overlay: document.getElementById('note-editor-overlay').style.display,
+            editor: document.getElementById('text-editor').style.display,
+            editing: !!(0, eval)('currentlyEditingText'),
+            comment: comment && comment.text,
+            commentHidden: !!(comment && comment.isHidden),
+            storedHidden: Object.prototype.hasOwnProperty.call(stored, 'isHidden'),
+        };
+    });
+    assert.equal(committed.before.hidden, true);
+    assert.equal(committed.before.overlay, 'flex');
+    assert.equal(committed.before.editing, true);
+    assert.equal(committed.title, 'Kept');
+    assert.equal(committed.text, 'Line one\nLine two');
+    assert.equal(committed.hidden, false, 'note stayed hidden after the tab round trip');
+    assert.equal(committed.overlay, 'none');
+    assert.equal(committed.editing, false);
+    assert.equal(committed.comment, 'Hi\nThere');
+    assert.equal(committed.commentHidden, false, 'comment stayed hidden after the tab round trip');
+    assert.notEqual(committed.editor, 'block');
+    assert.equal(committed.storedHidden, false, 'storage kept isHidden');
+
+    await page.setViewport({ width: 390, height: 844, deviceScaleFactor: 1, isMobile: true, hasTouch: true });
+    const phone = await page.evaluate(() => {
+        createNewProject('moodinfinite');
+        const boardId = activeProjectId;
+        items.length = 0;
+        items.push({
+            id: 'phone-note', type: 'text', title: 'T', text: 'One',
+            x: 20, y: 20, width: 220, height: 180, fontSize: 16, rotation: 0,
+            isPinned: false, opacity: 1, fontFamily: 'Nunito', color: '#429eff',
+            bgColor: '#ffffff', scaleX: 1, scaleY: 1,
+        });
+        editText(items[0]);
+        document.getElementById('note-title-input').value = 'Phone';
+        document.getElementById('note-body-input').value = 'Line one\nLine two';
+        createNewProject('moodprompt');
+        switchTab(boardId);
+        const note = items.find((item) => item.id === 'phone-note');
+        const done = document.getElementById('confirm-note-btn');
+        const rect = done ? done.getBoundingClientRect() : null;
+        return {
+            title: note && note.title,
+            text: note && note.text,
+            hidden: !!(note && note.isHidden),
+            overlay: document.getElementById('note-editor-overlay').style.display,
+            scrollW: document.documentElement.scrollWidth,
+            innerW: window.innerWidth,
+            doneW: rect ? rect.width : 0,
+            doneH: rect ? rect.height : 0,
+        };
+    });
+    assert.equal(phone.title, 'Phone');
+    assert.equal(phone.text, 'Line one\nLine two');
+    assert.equal(phone.hidden, false, 'phone note stayed hidden');
+    assert.equal(phone.overlay, 'none', 'note editor stayed open on the phone');
+    assert.ok(phone.scrollW <= phone.innerW + 1, `note tab switch overflowed (${phone.scrollW})`);
+    await page.setViewport({ width: 1280, height: 800, deviceScaleFactor: 1, isMobile: false, hasTouch: false });
+    console.log('Note commit across tab switch passed.');
+}
+
+// Forces a draw of the active board and reports where the text landed. Waits on real
+// state (active board, settled canvas, item.textAlign) and on two animation frames so
+// the pixel read never races the app's own render loop.
+async function captureAlignPaint(page, id, expectedAlign) {
+    await page.waitForFunction((itemId, align) => {
+        const project = projects.find((entry) => entry.id === activeProjectId);
+        const area = document.getElementById('content-area');
+        const item = items.find((entry) => entry.id === itemId);
+        return !!project && project.type === 'moodinfinite'
+            && document.body.contains(canvas)
+            && canvas.width > 0 && area && canvas.width === area.clientWidth
+            && !!item && item.textAlign === align;
+    }, { timeout: 10000 }, id, expectedAlign);
+    return page.evaluate(async (itemId) => {
+        const nextFrames = () => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+        await nextFrames();
+        const item = items.find((entry) => entry.id === itemId);
+        const liveCtx = document.getElementById('moodboard-canvas').getContext('2d');
+        const calls = [];
+        const orig = liveCtx.fillText;
+        liveCtx.fillText = function (text, x, y, maxW) {
+            calls.push({ text: String(text), x: Math.round(x), y: Math.round(y) });
+            return orig.call(this, text, x, y, maxW);
+        };
+        try {
+            draw();
+        } finally {
+            liveCtx.fillText = orig;
+        }
+        await nextFrames();
+        const darkest = (worldX, worldY) => {
+            const s = worldToScreen({ x: worldX, y: worldY });
+            const data = liveCtx.getImageData(Math.round(s.x), Math.round(s.y), 40, 22).data;
+            let min = 255;
+            for (let i = 0; i < data.length; i += 4) min = Math.min(min, data[i], data[i + 1], data[i + 2]);
+            return { min, sx: Math.round(s.x), sy: Math.round(s.y) };
+        };
+        return {
+            align: item.textAlign,
+            calls,
+            titleCall: calls.find((call) => call.text === item.title) || null,
+            left: darkest(item.x + 14, item.y + 36),
+            right: darkest(item.x + item.width - 54, item.y + 36),
+        };
+    }, id);
+}
+
+async function assertRound5TextAlign(page) {
+    console.log('Testing text alignment...');
+    await page.setViewport({ width: 1280, height: 800, deviceScaleFactor: 1, isMobile: false, hasTouch: false });
+    await page.waitForFunction(() => window.innerWidth === 1280 && window.innerHeight === 800);
+    await page.evaluate(() => { createNewProject('moodinfinite'); });
+    await page.waitForFunction(() => {
+        const project = projects.find((entry) => entry.id === activeProjectId);
+        const area = document.getElementById('content-area');
+        if (project && project.type === 'moodinfinite') resizeCanvas();
+        return !!project && project.type === 'moodinfinite' && area && area.clientWidth === 1280
+            && canvas.width === area.clientWidth && canvas.height === area.clientHeight;
+    }, { timeout: 10000 });
+    await page.evaluate(() => {
+        (0, eval)('cameraZoom = 1');
+        (0, eval)('cameraOffset = { x: canvas.width / 2, y: canvas.height / 2 }');
+        (0, eval)('showDropShadow = false');
+        (0, eval)('showGrid = false');
+        items.length = 0;
+        items.push({
+            id: 'align-note', type: 'text', title: 'Hi', text: 'Go',
+            x: -200, y: -90, width: 400, height: 180, fontSize: 16, rotation: 0,
+            isPinned: false, opacity: 1, fontFamily: 'Nunito', color: '#429eff',
+            bgColor: '#ffffff', textAlign: 'left', scaleX: 1, scaleY: 1,
+        });
+        (0, eval)('selectedItems = [items[0]]');
+        updateSelectionToolbar();
+        draw();
+    });
+    const shown = await page.evaluate(() => {
+        const btn = document.getElementById('text-align-right-btn');
+        const comment = {
+            id: 'align-comment', type: 'comment', text: 'Hi\nThere',
+            x: -180, y: 120, width: 220, height: 80, fontSize: 16, rotation: 0,
+            isPinned: false, opacity: 1, fontFamily: 'Nunito', textAlign: 'left',
+            fontWeight: 'bold', fontStyle: 'normal', color: '#f5e6c8', scaleX: 1, scaleY: 1, icon: 'none',
+        };
+        items.push(comment);
+        (0, eval)('selectedItems = [items.find((item) => item.id === "align-comment")]');
+        updateSelectionToolbar();
+        const commentDisplay = getComputedStyle(document.getElementById('text-align-right-btn')).display;
+        const list = {
+            id: 'align-list', type: 'textList', title: 'Tasks', text: 'Milk',
+            items: [{ text: 'Milk', completed: false, indent: 0 }],
+            x: -180, y: 220, width: 280, height: 120, fontSize: 18, rotation: 0,
+            isPinned: false, opacity: 1, fontFamily: 'Nunito', textAlign: 'left',
+            fontWeight: 'bold', fontStyle: 'normal', color: '#f5e6c8', scaleX: 1, scaleY: 1,
+        };
+        items.push(list);
+        (0, eval)('selectedItems = [items.find((item) => item.id === "align-list")]');
+        updateSelectionToolbar();
+        const listDisplay = getComputedStyle(document.getElementById('text-align-center-btn')).display;
+        const padding = 15;
+        const rowH = list.fontSize * 1.5;
+        const checkboxSize = list.fontSize * 1.1;
+        const handleSize = list.fontSize * 0.8;
+        let rowY = padding + rowH * 1.2 + 10;
+        const cbX = padding + handleSize + 8;
+        const cbY = rowY + (rowH - checkboxSize) / 2;
+        const hitPoint = { x: list.x + cbX + 4, y: list.y + cbY + 4 };
+        const hitBefore = getCheckboxHitIndex(list, hitPoint);
+        document.getElementById('text-align-right-btn').click();
+        const hitAfter = getCheckboxHitIndex(list, hitPoint);
+        (0, eval)('selectedItems = [items.find((item) => item.id === "align-note")]');
+        updateSelectionToolbar();
+        return {
+            note: getComputedStyle(btn).display,
+            comment: commentDisplay,
+            list: listDisplay,
+            listAlign: list.textAlign,
+            hitBefore,
+            hitAfter,
+        };
+    });
+    assert.notEqual(shown.note, 'none', 'note align button stayed hidden');
+    assert.notEqual(shown.comment, 'none', 'comment align button stayed hidden');
+    assert.notEqual(shown.list, 'none', 'list align button stayed hidden');
+    assert.equal(shown.listAlign, 'right');
+    assert.equal(shown.hitBefore, 0, 'checkbox hit missed before align');
+    assert.equal(shown.hitAfter, 0, 'align moved the checkbox hit target');
+
+    await page.evaluate(() => {
+        document.querySelectorAll('.toast-notification').forEach((el) => el.remove());
+        document.getElementById('text-align-right-btn').click();
+    });
+    const right = await captureAlignPaint(page, 'align-note', 'right');
+    assert.equal(right.align, 'right');
+    assert.ok(right.titleCall, `title fillText was not captured during the forced draw (${JSON.stringify(right.calls)})`);
+    assert.ok(right.titleCall.x > 0, `right align drew the title at local x ${right.titleCall.x}, expected the right half`);
+    assert.ok(right.right.min < 120, `right align did not paint the right side (${JSON.stringify(right)})`);
+    assert.ok(right.left.min > 180, `right align still painted the left side (${right.left.min})`);
+
+    await page.evaluate(() => {
+        document.querySelectorAll('.toast-notification').forEach((el) => el.remove());
+        document.getElementById('text-align-left-btn').click();
+    });
+    const left = await captureAlignPaint(page, 'align-note', 'left');
+    assert.equal(left.align, 'left');
+    assert.ok(left.titleCall, `title fillText was not captured during the forced draw (${JSON.stringify(left.calls)})`);
+    assert.ok(left.titleCall.x < -150, `left align drew the title at local x ${left.titleCall.x}, expected the left edge`);
+    assert.ok(left.left.min < 120, `left align did not paint the left side (${left.left.min})`);
+    assert.ok(left.right.min > 180, `left align still painted the right side (${left.right.min})`);
+
+    await page.setViewport({ width: 390, height: 844, deviceScaleFactor: 1, isMobile: true, hasTouch: true });
+    const phone = await page.evaluate(() => {
+        createNewProject('moodinfinite');
+        items.length = 0;
+        items.push({
+            id: 'align-note', type: 'text', title: 'Hi', text: 'Go',
+            x: 20, y: 20, width: 220, height: 140, fontSize: 16, rotation: 0,
+            isPinned: false, opacity: 1, fontFamily: 'Nunito', color: '#429eff',
+            bgColor: '#ffffff', textAlign: 'left', scaleX: 1, scaleY: 1,
+        });
+        (0, eval)('selectedItems = [items[0]]');
+        updateSelectionToolbar();
+        const btn = document.getElementById('text-align-right-btn');
+        const rect = btn.getBoundingClientRect();
+        return {
+            display: getComputedStyle(btn).display,
+            w: rect.width,
+            h: rect.height,
+            scrollW: document.documentElement.scrollWidth,
+            innerW: window.innerWidth,
+        };
+    });
+    assert.notEqual(phone.display, 'none', 'phone align button stayed hidden');
+    assert.ok(phone.w > 8 && phone.h > 8, `phone align button has no box (${phone.w}x${phone.h})`);
+    assert.ok(phone.scrollW <= phone.innerW + 1, `align toolbar overflowed (${phone.scrollW})`);
+    await page.setViewport({ width: 1280, height: 800, deviceScaleFactor: 1, isMobile: false, hasTouch: false });
+    console.log('Text alignment passed.');
+}
+
+async function assertRound5RerouteDelete(page) {
+    console.log('Testing reroute delete...');
+    await page.setViewport({ width: 1280, height: 800, deviceScaleFactor: 1, isMobile: false, hasTouch: false });
+    const result = await page.evaluate(() => {
+        createNewProject('moodinfinite');
+        (0, eval)('cameraZoom = 1');
+        (0, eval)('cameraOffset = { x: canvas.width / 2, y: canvas.height / 2 }');
+        items.length = 0;
+        const box = (id, x) => ({
+            id, type: 'box', color: '#429eff', x, y: 80, width: 80, height: 60,
+            rotation: 0, isPinned: false, style: 'fill', opacity: 1, scaleX: 1, scaleY: 1,
+        });
+        items.push(box('box-a', 40), box('box-b', 360));
+        createSimpleConnector(items[0], items[1]);
+        draw();
+        const conn = items.find((item) => item.type === 'connector');
+        let spot = null;
+        let best = 0;
+        const route = conn && conn.route ? conn.route : [];
+        for (let i = 0; i < route.length - 1; i++) {
+            const len = Math.hypot(route[i + 1].x - route[i].x, route[i + 1].y - route[i].y);
+            if (len > best) {
+                best = len;
+                spot = { x: (route[i].x + route[i + 1].x) / 2, y: (route[i].y + route[i + 1].y) / 2 };
+            }
+        }
+        const screen = spot ? worldToScreen(spot) : { x: 0, y: 0 };
+        const rect = document.getElementById('moodboard-canvas').getBoundingClientRect();
+        onDoubleClick({ clientX: rect.left + screen.x, clientY: rect.top + screen.y });
+        const reroute = items.find((item) => item.type === 'reroute');
+        const outgoing = items.find((item) => item.type === 'connector' && reroute && item.sourceId === reroute.id);
+        if (outgoing) outgoing.label = 'via';
+        const split = {
+            reroutes: items.filter((item) => item.type === 'reroute').length,
+            connectors: items.filter((item) => item.type === 'connector').length,
+        };
+        (0, eval)('selectedItems = items.filter((item) => item.type === "reroute").slice(0, 1)');
+        deleteSelectedItems();
+        draw();
+        const joined = items.filter((item) => item.type === 'connector');
+        const startBefore = joined[0] ? joined[0].computedStartX : null;
+        const source = items.find((item) => item.id === 'box-a');
+        source.x += 80;
+        draw();
+        const moved = items.find((item) => item.type === 'connector');
+        (0, eval)('selectedItems = [items.find((item) => item.id === "box-a")]');
+        deleteSelectedItems();
+        const afterSource = {
+            connectors: items.filter((item) => item.type === 'connector').length,
+            keptTarget: items.some((item) => item.id === 'box-b'),
+        };
+
+        items.length = 0;
+        items.push(box('box-a', 40), box('box-b', 420));
+        items.push(
+            { id: 'r1', type: 'reroute', x: 180, y: 110, width: 0, height: 0, color: '#429eff', isPinned: false },
+            { id: 'r2', type: 'reroute', x: 280, y: 110, width: 0, height: 0, color: '#429eff', isPinned: false },
+            { id: 'c1', type: 'connector', sourceId: 'box-a', sourcePort: 'right', targetId: 'r1', targetPort: 'left', color: '#429eff' },
+            { id: 'c2', type: 'connector', sourceId: 'r1', sourcePort: 'right', targetId: 'r2', targetPort: 'left', color: '#429eff', label: 'mid' },
+            { id: 'c3', type: 'connector', sourceId: 'r2', sourcePort: 'right', targetId: 'box-b', targetPort: 'left', color: '#429eff', label: 'end' },
+        );
+        (0, eval)('selectedItems = items.filter((item) => item.type === "reroute")');
+        deleteSelectedItems();
+        const chain = items.filter((item) => item.type === 'connector');
+
+        items.length = 0;
+        items.push(box('box-a', 40), box('box-b', 420));
+        items.push(
+            { id: 'r1', type: 'reroute', x: 180, y: 110, width: 0, height: 0, color: '#429eff', isPinned: false },
+            { id: 'c-in', type: 'connector', sourceId: 'box-a', sourcePort: 'right', targetId: 'r1', targetPort: 'left', color: '#429eff' },
+            { id: 'c-out', type: 'connector', sourceId: 'r1', sourcePort: 'right', targetId: 'box-b', targetPort: 'left', color: '#429eff' },
+        );
+        (0, eval)('selectedItems = items.filter((item) => item.id === "r1" || item.id === "c-out")');
+        deleteSelectedItems();
+        return {
+            split,
+            joined: joined.map((item) => ({ sourceId: item.sourceId, targetId: item.targetId, label: item.label || '' })),
+            delta: moved && startBefore != null ? moved.computedStartX - startBefore : null,
+            afterSource,
+            chain: chain.map((item) => ({ sourceId: item.sourceId, targetId: item.targetId, label: item.label || '' })),
+            explicit: items.filter((item) => item.type === 'connector').length,
+        };
+    });
+    assert.equal(result.split.reroutes, 1, `double-click did not insert a reroute (${JSON.stringify(result.split)})`);
+    assert.equal(result.split.connectors, 2, 'double-click did not split the connector');
+    assert.equal(result.joined.length, 1, 'deleting the reroute dropped the connection');
+    assert.equal(result.joined[0].sourceId, 'box-a');
+    assert.equal(result.joined[0].targetId, 'box-b');
+    assert.equal(result.joined[0].label, 'via');
+    assert.ok(Math.abs(result.delta - 80) < 0.5, `moving the source detached the connector (${result.delta})`);
+    assert.equal(result.afterSource.connectors, 0, 'deleting the source left a connector');
+    assert.equal(result.afterSource.keptTarget, true);
+    assert.equal(result.chain.length, 1, 'deleting two reroutes dropped the chain');
+    assert.equal(result.chain[0].sourceId, 'box-a');
+    assert.equal(result.chain[0].targetId, 'box-b');
+    assert.equal(result.chain[0].label, 'mid');
+    assert.equal(result.explicit, 0, 'deleting a connector with its reroute rejoined through it');
+
+    await page.setViewport({ width: 390, height: 844, deviceScaleFactor: 1, isMobile: true, hasTouch: true });
+    const phone = await page.evaluate(() => {
+        createNewProject('moodinfinite');
+        items.length = 0;
+        const box = (id, x) => ({
+            id, type: 'box', color: '#429eff', x, y: 40, width: 70, height: 50,
+            rotation: 0, isPinned: false, style: 'fill', opacity: 1, scaleX: 1, scaleY: 1,
+        });
+        items.push(box('box-a', 10), box('box-b', 220));
+        items.push({ id: 'r1', type: 'reroute', x: 120, y: 65, width: 0, height: 0, color: '#429eff', isPinned: false });
+        items.push(
+            { id: 'c1', type: 'connector', sourceId: 'box-a', sourcePort: 'right', targetId: 'r1', targetPort: 'left', color: '#429eff' },
+            { id: 'c2', type: 'connector', sourceId: 'r1', sourcePort: 'right', targetId: 'box-b', targetPort: 'left', color: '#429eff', label: 'via' },
+        );
+        (0, eval)('selectedItems = [items.find((item) => item.id === "r1")]');
+        deleteSelectedItems();
+        const left = items.filter((item) => item.type === 'connector');
+        return {
+            n: left.length,
+            sourceId: left[0] && left[0].sourceId,
+            targetId: left[0] && left[0].targetId,
+            label: left[0] && left[0].label,
+            scrollW: document.documentElement.scrollWidth,
+            innerW: window.innerWidth,
+        };
+    });
+    assert.equal(phone.n, 1);
+    assert.equal(phone.sourceId, 'box-a');
+    assert.equal(phone.targetId, 'box-b');
+    assert.equal(phone.label, 'via');
+    assert.ok(phone.scrollW <= phone.innerW + 1, `reroute delete overflowed (${phone.scrollW})`);
+    await page.setViewport({ width: 1280, height: 800, deviceScaleFactor: 1, isMobile: false, hasTouch: false });
+    console.log('Reroute delete passed.');
+}
+
+// A click on a creation tool must not leave history steps or ghost items behind,
+// and a drag-created item must be removed by a single Ctrl+Z.
+async function assertToolCreationHistory(page) {
+    console.log('Testing tool creation history...');
+    await page.setViewport({ width: 1280, height: 800, deviceScaleFactor: 1, isMobile: false, hasTouch: false });
+    await page.waitForFunction(() => window.innerWidth === 1280 && window.innerHeight === 800);
+    await page.evaluate(() => { createNewProject('moodinfinite'); });
+    await page.waitForFunction(() => {
+        const project = projects.find((entry) => entry.id === activeProjectId);
+        const area = document.getElementById('content-area');
+        if (project && project.type === 'moodinfinite') resizeCanvas();
+        return !!project && project.type === 'moodinfinite' && area && area.clientWidth === 1280
+            && canvas.width === area.clientWidth && canvas.height === area.clientHeight;
+    }, { timeout: 10000 });
+    await page.evaluate(() => {
+        (0, eval)('cameraZoom = 1');
+        (0, eval)('cameraOffset = { x: canvas.width / 2, y: canvas.height / 2 }');
+        items.length = 0;
+        selectedItems = [];
+        saveStateForUndo();
+        updateSelectionToolbar();
+    });
+    const canvasBox = await (await page.$('#moodboard-canvas')).boundingBox();
+    const cx = canvasBox.x + canvasBox.width / 2;
+    const cy = canvasBox.y + canvasBox.height / 2;
+    const snapshot = () => page.evaluate(() => ({
+        steps: historyStack.length,
+        index: historyIndex,
+        count: items.length,
+        types: items.map((item) => item.type),
+    }));
+    const undoOnce = async () => {
+        await page.evaluate(() => { if (document.activeElement) document.activeElement.blur(); });
+        await page.keyboard.down('Control');
+        await page.keyboard.press('z');
+        await page.keyboard.up('Control');
+    };
+
+    for (const tool of ['box', 'circle', 'grid', 'arrow', 'measure']) {
+        await page.evaluate((name) => { items.length = 0; selectedItems = []; saveStateForUndo(); setCurrentTool(name); }, tool);
+        const base = await snapshot();
+
+        await page.mouse.move(cx - 60, cy - 40);
+        await page.mouse.down();
+        await page.mouse.up();
+        const afterClick = await page.evaluate(() => ({ steps: historyStack.length, count: items.length }));
+        assert.equal(afterClick.steps, base.steps, `${tool}: a click without drag added history steps`);
+        assert.equal(afterClick.count, 0, `${tool}: a click without drag left an item behind`);
+        await undoOnce();
+        await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+        const afterClickUndo = await snapshot();
+        assert.equal(afterClickUndo.count, 0, `${tool}: undo after a click showed a ghost item`);
+
+        await page.evaluate((name) => { items.length = 0; selectedItems = []; saveStateForUndo(); setCurrentTool(name); }, tool);
+        const beforeDrag = await snapshot();
+        await page.mouse.move(cx - 100, cy - 60);
+        await page.mouse.down();
+        await page.mouse.move(cx + 120, cy + 80, { steps: 8 });
+        await page.mouse.up();
+        const afterDrag = await snapshot();
+        assert.equal(afterDrag.count, 1, `${tool}: drag did not create exactly one item (${JSON.stringify(afterDrag)})`);
+        assert.equal(afterDrag.steps, beforeDrag.steps + 1, `${tool}: drag creation should add exactly one history step`);
+        await undoOnce();
+        await page.waitForFunction(() => items.length === 0, { timeout: 5000 }).catch(() => {});
+        const afterUndo = await snapshot();
+        assert.equal(afterUndo.count, 0, `${tool}: the first Ctrl+Z did not remove the drag-created item`);
+        await page.evaluate(() => setCurrentTool(null));
+    }
+
+    // Text is created at a default size on a plain click, so it is one step by design.
+    await page.evaluate(() => { items.length = 0; selectedItems = []; saveStateForUndo(); setCurrentTool('text'); });
+    const textBase = await snapshot();
+    await page.mouse.move(cx - 60, cy - 40);
+    await page.mouse.down();
+    await page.mouse.up();
+    const textAfter = await snapshot();
+    assert.equal(textAfter.count, 1, 'text click should create the default note');
+    assert.equal(textAfter.steps, textBase.steps + 1, 'text click should add exactly one history step');
+    await page.evaluate(() => {
+        if (document.activeElement) document.activeElement.blur();
+        setCurrentTool(null);
+    });
+    await page.setViewport({ width: 1280, height: 800, deviceScaleFactor: 1, isMobile: false, hasTouch: false });
+    console.log('Tool creation history passed.');
+}

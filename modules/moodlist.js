@@ -124,7 +124,17 @@ function renderMoodlistView(project) {
         container.appendChild(grid);
 
         /* ── Search + filter ─────────────────────────────────────────────── */
-        topBar.querySelector('.ml-search').addEventListener('input', () => {
+        const searchField = topBar.querySelector('.ml-search');
+        searchField.addEventListener('input', () => {
+            const current = _activeMoodlistProject();
+            const g = container.querySelector('.ml-grid');
+            if (current && g) renderMoodlistCards(current, g);
+        });
+        searchField.addEventListener('keydown', (e) => {
+            if (e.key !== 'Escape' || !searchField.value) return;
+            e.preventDefault();
+            e.stopPropagation();
+            searchField.value = '';
             const current = _activeMoodlistProject();
             const g = container.querySelector('.ml-grid');
             if (current && g) renderMoodlistCards(current, g);
@@ -141,6 +151,13 @@ function renderMoodlistView(project) {
         if (search) search.value = '';
     }
     container.dataset.mlProjectId = String(project.id);
+    if (!window._mlColorDismiss) {
+        window._mlColorDismiss = true;
+        document.addEventListener('click', (e) => {
+            if (e.target.closest('.ml-color-picker, .ml-color-btn, .ml-card-color-btn')) return;
+            document.querySelectorAll('.ml-color-picker').forEach((picker) => { picker.style.display = 'none'; });
+        });
+    }
 
     renderMoodlistCards(project, grid);
 }
@@ -183,8 +200,6 @@ function _wireAddPanel(panel, project, onSave) {
         addPanel.classList.toggle('ml-tinted', !!pendingColor);
         colorPicker.style.display = 'none';
     });
-    document.addEventListener('click', () => { colorPicker.style.display = 'none'; });
-
     pinBtn.addEventListener('click', () => {
         pendingPinned = !pendingPinned;
         pinBtn.classList.toggle('active', pendingPinned);
@@ -274,10 +289,7 @@ function _wireAddPanel(panel, project, onSave) {
 function renderMoodlistCards(project, grid) {
     const container = document.getElementById('moodlist-container');
     const countBadge = container?.querySelector('#ml-cards-count');
-    if (countBadge) {
-        const total = (project.data.cards || []).length;
-        countBadge.textContent = `${total} card${total === 1 ? '' : 's'}`;
-    }
+    const totalCards = (project.data.cards || []).length;
 
     const searchInput = container?.querySelector('.ml-search');
     const showPinnedToggle = container?.querySelector('.ml-show-pinned');
@@ -301,6 +313,13 @@ function renderMoodlistCards(project, grid) {
     const pinned = cards.filter(c => c.pinned);
     const rest   = cards.filter(c => !c.pinned);
     const ordered = [...pinned, ...rest];
+
+    if (countBadge) {
+        const filtering = !!query || !showPinned;
+        countBadge.textContent = filtering
+            ? `${ordered.length} of ${totalCards}`
+            : `${totalCards} card${totalCards === 1 ? '' : 's'}`;
+    }
 
     grid.innerHTML = '';
 
@@ -353,14 +372,21 @@ function _moodlistItemClass(item, index) {
     return `ml-card-item${item.checked ? ' checked' : ''}${_moodlistIndentOf(item, index) ? ' ml-subtask' : ''}`;
 }
 
-function _moodlistItemInner(item, index) {
+function _moodlistItemInner(item, index, total) {
     const indented = _moodlistIndentOf(item, index) === 1;
+    const count = total || index + 1;
     const indentBtn = index > 0
         ? `<button type="button" class="ml-indent-btn" title="${indented ? 'Outdent' : 'Indent'}">
                 <iconify-icon icon="lucide:${indented ? 'indent-decrease' : 'indent-increase'}" width="13" height="13"></iconify-icon>
            </button>`
         : '';
     return `
+            <button type="button" class="ml-item-move" data-dir="-1" title="Move up" ${index === 0 ? 'disabled' : ''}>
+                <iconify-icon icon="lucide:chevron-up" width="14" height="14"></iconify-icon>
+            </button>
+            <button type="button" class="ml-item-move" data-dir="1" title="Move down" ${index >= count - 1 ? 'disabled' : ''}>
+                <iconify-icon icon="lucide:chevron-down" width="14" height="14"></iconify-icon>
+            </button>
             <span class="ml-drag-handle" title="Drag to reorder">
                 <iconify-icon icon="lucide:grip-vertical" width="14" height="14"></iconify-icon>
             </span>
@@ -402,7 +428,7 @@ function _buildCard(card, project, grid) {
     // Items
     const itemsHtml = card.items.map((item, index) => `
         <div class="${_moodlistItemClass(item, index)}" data-item-id="${item.id}" draggable="true">
-            ${_moodlistItemInner(item, index)}
+            ${_moodlistItemInner(item, index, card.items.length)}
         </div>
     `).join('');
 
@@ -467,8 +493,9 @@ function _wireCard(el, card, project, grid) {
         _wireItemText(itemEl, item);
         _wireItemDue(itemEl, item);
         _wireItemIndent(itemEl, item, card, project, grid);
+        _wireItemMove(itemEl, item, card, project, grid);
         itemEl.addEventListener('click', (e) => {
-            if (e.target.closest('.ml-card-item-del') || e.target.closest('.ml-item-due') || e.target.closest('.ml-due-wrap') || e.target.closest('.ml-indent-btn') || e.target.closest('.ml-card-item-text')) return;
+            if (e.target.closest('.ml-card-item-del') || e.target.closest('.ml-item-due') || e.target.closest('.ml-due-wrap') || e.target.closest('.ml-indent-btn') || e.target.closest('.ml-item-move') || e.target.closest('.ml-card-item-text') || e.target.closest('.ml-drag-handle')) return;
             if (item) {
                 item.checked = !item.checked;
                 scheduleAutoSave();
@@ -527,12 +554,13 @@ function _wireCard(el, card, project, grid) {
             row.className = _moodlistItemClass(newItem, newIndex);
             row.dataset.itemId = newItem.id;
             row.draggable = true;
-            row.innerHTML = _moodlistItemInner(newItem, newIndex);
+            row.innerHTML = _moodlistItemInner(newItem, newIndex, card.items.length);
             _wireItemText(row, newItem);
             _wireItemDue(row, newItem);
             _wireItemIndent(row, newItem, card, project, grid);
+            _wireItemMove(row, newItem, card, project, grid);
             row.addEventListener('click', (e) => {
-                if (e.target.closest('.ml-card-item-del') || e.target.closest('.ml-item-due') || e.target.closest('.ml-due-wrap') || e.target.closest('.ml-indent-btn') || e.target.closest('.ml-card-item-text')) return;
+                if (e.target.closest('.ml-card-item-del') || e.target.closest('.ml-item-due') || e.target.closest('.ml-due-wrap') || e.target.closest('.ml-indent-btn') || e.target.closest('.ml-item-move') || e.target.closest('.ml-card-item-text') || e.target.closest('.ml-drag-handle')) return;
                 newItem.checked = !newItem.checked;
                 row.classList.toggle('checked', newItem.checked);
                 row.querySelector('.ml-card-checkbox iconify-icon').setAttribute('icon',
@@ -630,8 +658,9 @@ function _wireCard(el, card, project, grid) {
         e.stopPropagation();
         const swatch = e.target.closest('.ml-swatch');
         if (!swatch) return;
-        card.color = swatch.dataset.color;
+        card.color = swatch.dataset.color || '';
         el.style.background = card.color || '';
+        el.classList.toggle('ml-tinted', !!card.color);
         colorPickerEl.style.display = 'none';
         scheduleAutoSave();
     });
@@ -658,11 +687,6 @@ function _wireCard(el, card, project, grid) {
         });
     }
 
-    // Dismiss color pickers on outside click
-    document.addEventListener('click', () => {
-        colorPickerEl.style.display = 'none';
-    }, { once: false });
-
     // Drag-to-reorder
     _wireDragDrop(el.querySelector('.ml-card-items'), card, project, grid);
 }
@@ -673,9 +697,14 @@ function _wireDragDrop(container, card, project, grid) {
     let pointerOnHandle = false; // track if mousedown originated on the grip handle
 
     // Must use mousedown (fires before dragstart) to know if drag started from handle
-    container.addEventListener('mousedown', (e) => {
+    const markHandle = (e) => {
         pointerOnHandle = !!e.target.closest('.ml-drag-handle');
-    });
+    };
+    container.addEventListener('pointerdown', markHandle);
+    container.addEventListener('mousedown', markHandle);
+    container.addEventListener('click', (e) => {
+        if (e.target.closest('.ml-drag-handle')) e.stopPropagation();
+    }, true);
 
     container.addEventListener('dragstart', (e) => {
         if (!pointerOnHandle) { e.preventDefault(); return; }
@@ -766,6 +795,26 @@ function _wireItemDue(itemEl, item) {
         item.due = due.value || '';
         paint();
         scheduleAutoSave();
+    });
+}
+
+function _wireItemMove(itemEl, item, card, project, grid) {
+    itemEl.querySelectorAll('.ml-item-move').forEach((btn) => {
+        const stop = (e) => e.stopPropagation();
+        btn.addEventListener('pointerdown', stop);
+        btn.addEventListener('mousedown', stop);
+        btn.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            const dir = Number(btn.dataset.dir);
+            const from = card.items.findIndex((entry) => entry.id === item.id);
+            const to = from + dir;
+            if (from < 0 || to < 0 || to >= card.items.length) return;
+            const [moved] = card.items.splice(from, 1);
+            card.items.splice(to, 0, moved);
+            scheduleAutoSave();
+            renderMoodlistCards(project, grid);
+        });
     });
 }
 

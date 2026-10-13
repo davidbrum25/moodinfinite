@@ -55,10 +55,15 @@ function scheduleAutoSave() {
 }
 
 function storageReplacer(key, val) {
-    if (key === 'img' || key === 'video' || key === '_cachedBox' || key === 'iconImage' || key === '_offscreenCanvas') return undefined;
+    if (key === 'img' || key === 'video' || key === '_cachedBox' || key === 'iconImage' || key === '_offscreenCanvas' || key === 'isHidden') return undefined;
     if (typeof Element !== 'undefined' && val instanceof Element) return undefined;
     if (typeof OffscreenCanvas !== 'undefined' && val instanceof OffscreenCanvas) return undefined;
     return val;
+}
+
+function historyReplacer(key, val) {
+    if (key === 'isHidden') return undefined;
+    return storageReplacer(key, val);
 }
 
 function serializeItems(itemArray) {
@@ -361,10 +366,25 @@ function createNewProject(type) {
     switchTab(newId);
 }
 
-function switchTab(projectId) {
-    if (activeProjectId === projectId) return;
+function switchTab(projectId, options) {
+    const force = !!(options && options.force);
+    if (activeProjectId === projectId && !force) return;
 
-    if (activeProjectId) {
+    // Commit an open note, comment, or list before the board is copied.
+    // Otherwise the item stays isHidden and the in-progress text is dropped.
+    if (currentlyEditingText) {
+        if (items.includes(currentlyEditingText)) {
+            finishEditingText();
+        } else {
+            currentlyEditingText = null;
+            if (noteEditorOverlay) noteEditorOverlay.style.display = 'none';
+            if (textEditor) textEditor.style.display = 'none';
+        }
+    }
+
+    // A same-id refresh already wrote the incoming board. Copying globals
+    // here would put the previous board's items and camera back.
+    if (activeProjectId && activeProjectId !== projectId) {
         const currentProject = projects.find(p => p.id === activeProjectId);
         if (currentProject && currentProject.type === 'moodinfinite') {
             currentProject.data.items = items;
@@ -417,7 +437,7 @@ function switchTab(projectId) {
     } else if (newActiveProject.type === 'colorseeker') {
         moodinfiniteContainer.style.display = 'none';
         moodpromptContainer.style.display = 'none';
-        if (colorseekerContainer) colorseekerContainer.style.display = 'block';
+        if (colorseekerContainer) colorseekerContainer.style.display = '';
         if (storyflowContainer) storyflowContainer.style.display = 'none';
         const storyflowMinimap = document.getElementById('storyflow-minimap');
         if (storyflowMinimap) storyflowMinimap.style.display = 'none';
@@ -574,7 +594,34 @@ function updateTabName(projectId, newName) {
         if (project.type === 'moodinfinite' && project.id === activeProjectId) {
             currentProjectName = newName;
         }
+        scheduleAutoSave();
     }
+}
+
+function duplicateProject(projectId) {
+    const source = projects.find(p => p.id.toString() === String(projectId));
+    if (!source || !source.data) return null;
+    if (source.type === 'moodinfinite' && source.id === activeProjectId) {
+        source.data.items = items;
+        source.data.cameraOffset = cameraOffset;
+        source.data.cameraZoom = cameraZoom;
+        source.data.historyStack = historyStack;
+        source.data.historyIndex = historyIndex;
+    }
+    const copy = JSON.parse(JSON.stringify(source, storageReplacer));
+    if (copy.type === 'moodinfinite' && source.data.items) {
+        copy.data.items = JSON.parse(JSON.stringify(serializeItems(source.data.items), storageReplacer));
+        restoreImages(copy.data.items);
+    }
+    copy.id = nextProjectId();
+    copy.name = getDeduplicatedTabName(source.name);
+    copy.pinned = false;
+    const idx = projects.findIndex(p => p.id === source.id);
+    projects.splice(idx + 1, 0, copy);
+    renderTabs();
+    switchTab(copy.id);
+    showToast('Board duplicated.');
+    return copy.id;
 }
 
 function renderTabs() {
@@ -732,13 +779,18 @@ function openLightbox(src) {
     overlay.style.display = 'flex';
 }
 
+function escapeRegExp(value) {
+    return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 function resolveVariables(text, project) {
-    if (!text || !project.data.variables) return text;
+    if (!text || !project || !project.data || !project.data.variables) return text;
     let resolved = text;
     Object.entries(project.data.variables).forEach(([key, val]) => {
         if (!key) return;
-        const regex = new RegExp(`\\{\\{${key}\\}\\}`, 'g');
-        resolved = resolved.replace(regex, val);
+        const regex = new RegExp(`\\{\\{${escapeRegExp(key)}\\}\\}`, 'g');
+        const replacement = val == null ? '' : String(val);
+        resolved = resolved.replace(regex, () => replacement);
     });
     return resolved;
 }
@@ -907,14 +959,22 @@ function renderMoodpromptView(project) {
         const searchInput = document.createElement('input');
         searchInput.type = 'text';
         searchInput.className = 'bar-input';
-        searchInput.placeholder = 'Search tags...';
+        searchInput.placeholder = 'Search prompts...';
         searchInput.value = moodpromptSearchQuery;
-        searchInput.style.width = '150px';
         searchInput.oninput = (e) => {
             moodpromptSearchQuery = e.target.value.toLowerCase();
             const currentProject = projects.find(p => p.id === activeProjectId) || project;
             renderMoodpromptView(currentProject);
         };
+        searchInput.addEventListener('keydown', (e) => {
+            if (e.key !== 'Escape' || !searchInput.value) return;
+            e.preventDefault();
+            e.stopPropagation();
+            searchInput.value = '';
+            moodpromptSearchQuery = '';
+            const currentProject = projects.find(p => p.id === activeProjectId) || project;
+            renderMoodpromptView(currentProject);
+        });
         searchItem.appendChild(searchInput);
 
         // 4. Prompt Count Badge
@@ -930,18 +990,7 @@ function renderMoodpromptView(project) {
         copyAllBtnItem.innerHTML = `<iconify-icon icon="lucide:copy" width="16" height="16"></iconify-icon> <span>Copy All</span>`;
         copyAllBtnItem.onclick = () => {
             const currentProject = projects.find(p => p.id === activeProjectId) || project;
-            const prompts = currentProject.data.prompts || [];
-            if (!prompts.length) {
-                showToast('No prompts to copy.');
-                return;
-            }
-            const textToCopy = prompts.map((p, i) => `${i + 1}. ${p.title || 'Untitled'}\n${resolveVariables(p.text, currentProject)}`).join('\n\n');
-            try {
-                if (navigator.clipboard && navigator.clipboard.writeText) {
-                    navigator.clipboard.writeText(textToCopy);
-                }
-            } catch (_) {}
-            showToast('All prompts copied to clipboard!');
+            copyBoardPlainText(currentProject);
         };
 
         // 6. Variables Item
@@ -973,26 +1022,34 @@ function renderMoodpromptView(project) {
         promptList.addEventListener('drop', (e) => {
             e.preventDefault();
             const currentProject = projects.find(p => p.id === activeProjectId) || project;
-            const oldIndex = parseInt(e.dataTransfer.getData('text/plain'), 10);
+            const draggedId = e.dataTransfer.getData('text/plain');
             const dropTargetCard = e.target.closest('.prompt-card');
-            if (!dropTargetCard) return;
-
-            const allCards = Array.from(promptList.querySelectorAll('.prompt-card'));
-            const newIndex = allCards.indexOf(dropTargetCard);
-
-            if (oldIndex !== newIndex) {
-                const [movedPrompt] = currentProject.data.prompts.splice(oldIndex, 1);
-                currentProject.data.prompts.splice(newIndex, 0, movedPrompt);
-                renderMoodpromptView(currentProject);
-                saveToBrowser();
+            if (!dropTargetCard || !draggedId) return;
+            const prompts = currentProject.data.prompts;
+            const oldIndex = prompts.findIndex(p => String(p.id) === draggedId);
+            if (oldIndex < 0 || String(prompts[oldIndex].id) === dropTargetCard.dataset.promptId) return;
+            const [movedPrompt] = prompts.splice(oldIndex, 1);
+            const newIndex = prompts.findIndex(p => String(p.id) === dropTargetCard.dataset.promptId);
+            if (newIndex < 0) {
+                prompts.push(movedPrompt);
+            } else {
+                prompts.splice(newIndex, 0, movedPrompt);
             }
+            renderMoodpromptView(currentProject);
+            saveToBrowser();
         });
     }
 
     promptList.innerHTML = '';
     const filteredPrompts = project.data.prompts.filter(p => {
         const matchesPlatform = moodpromptFilterPlatform === 'all' || p.platform === moodpromptFilterPlatform;
-        const matchesSearch = !moodpromptSearchQuery || (p.tags && p.tags.some(t => t.toLowerCase().includes(moodpromptSearchQuery)));
+        const query = moodpromptSearchQuery;
+        const platformName = (platformData[p.platform] && platformData[p.platform].name || '').toLowerCase();
+        const matchesSearch = !query ||
+            (p.title || '').toLowerCase().includes(query) ||
+            (p.text || '').toLowerCase().includes(query) ||
+            platformName.includes(query) ||
+            (p.tags && p.tags.some(t => t.toLowerCase().includes(query)));
         return matchesPlatform && matchesSearch;
     });
 
@@ -1002,6 +1059,7 @@ function renderMoodpromptView(project) {
     }
 
     filteredPrompts.forEach((prompt, index) => {
+        if (!prompt.id) prompt.id = 'group_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7);
         promptList.appendChild(createPromptCard(project, prompt, index));
     });
 
@@ -1039,8 +1097,9 @@ function createPromptCard(project, prompt, index) {
     const card = document.createElement('div');
     card.className = 'prompt-card';
     card.draggable = true;
+    card.dataset.promptId = String(prompt.id);
 
-    card.addEventListener('dragstart', (e) => { e.dataTransfer.setData('text/plain', index); card.classList.add('dragging'); });
+    card.addEventListener('dragstart', (e) => { e.dataTransfer.setData('text/plain', String(prompt.id)); card.classList.add('dragging'); });
     card.addEventListener('dragend', () => { card.classList.remove('dragging'); });
 
     const header = document.createElement('div');
@@ -1056,7 +1115,12 @@ function createPromptCard(project, prompt, index) {
     titleInput.type = 'text';
     titleInput.className = 'prompt-title-input';
     titleInput.value = prompt.title;
-    titleInput.onchange = (e) => prompt.title = e.target.value;
+    const rememberTitle = (e) => {
+        prompt.title = e.target.value;
+        scheduleAutoSave();
+    };
+    titleInput.addEventListener('input', rememberTitle);
+    titleInput.addEventListener('change', rememberTitle);
     titleContainer.append(numberSpan, titleInput);
     const controls = document.createElement('div');
     controls.className = 'prompt-controls';
@@ -1073,7 +1137,7 @@ function createPromptCard(project, prompt, index) {
     });
     const updateIcon = () => { if (platformData[platformSelect.value]) { platformSelectWrapper.style.setProperty('--icon-url', `url('data:image/svg+xml;utf8,${encodeURIComponent(platformData[platformSelect.value].icon)}')`); } };
     updateIcon();
-    platformSelect.onchange = (e) => { prompt.platform = e.target.value; updateIcon(); };
+    platformSelect.onchange = (e) => { prompt.platform = e.target.value; updateIcon(); scheduleAutoSave(); };
     platformSelectWrapper.appendChild(platformSelect);
     const mediaToggle = document.createElement('div');
     mediaToggle.className = 'media-type-toggle';
@@ -1088,7 +1152,14 @@ function createPromptCard(project, prompt, index) {
     deleteBtn.className = 'tab-add-btn prompt-delete-btn';
     deleteBtn.title = 'Delete Prompt';
     deleteBtn.innerHTML = `<iconify-icon icon="lucide:trash-2" width="18" height="18"></iconify-icon>`;
-    deleteBtn.onclick = () => { project.data.prompts.splice(index, 1); renderMoodpromptView(project); };
+    deleteBtn.onclick = () => {
+        const currentProject = projects.find(p => p.id === activeProjectId) || project;
+        const idx = currentProject.data.prompts.indexOf(prompt);
+        if (idx < 0) return;
+        currentProject.data.prompts.splice(idx, 1);
+        renderMoodpromptView(currentProject);
+        scheduleAutoSave();
+    };
     
     const previousBtn = document.createElement('button');
     previousBtn.type = 'button';
@@ -1227,15 +1298,16 @@ function createPromptCard(project, prompt, index) {
     promptText.addEventListener('input', updateCounter);
 
     textWrapper.append(promptText, counterBadge, expandBtn);
-    const setMediaType = (type) => {
+    const setMediaType = (type, persist) => {
         prompt.mediaType = type;
         imgBtn.classList.toggle('active', type === 'image');
         vidBtn.classList.toggle('active', type === 'video');
         imgSlot2.style.display = type === 'video' ? 'flex' : 'none';
+        if (persist) scheduleAutoSave();
     };
-    imgBtn.onclick = () => setMediaType('image');
-    vidBtn.onclick = () => setMediaType('video');
-    setMediaType(prompt.mediaType);
+    imgBtn.onclick = () => setMediaType('image', true);
+    vidBtn.onclick = () => setMediaType('video', true);
+    setMediaType(prompt.mediaType, false);
     const tagsWrapper = document.createElement('div');
     tagsWrapper.className = 'prompt-tags-wrapper';
     
@@ -1309,10 +1381,7 @@ function createPromptCard(project, prompt, index) {
 
     body.style.flexDirection = 'column';
     const contentRow = document.createElement('div');
-    contentRow.style.display = 'flex';
-    contentRow.style.gap = '1rem';
-    contentRow.style.flexDirection = 'row';
-    contentRow.style.width = '100%';
+    contentRow.className = 'prompt-content-row';
     contentRow.append(imagesContainer, textWrapper);
     
     body.append(contentRow, tagsWrapper);
@@ -1344,35 +1413,43 @@ function createImageSlot(project, prompt, slotNumber) {
         replaceBtn.innerHTML = '<iconify-icon icon="lucide:refresh-cw"></iconify-icon>';
         replaceBtn.onclick = (e) => {
             e.stopPropagation();
-            promptImageInput.onchange = (ev) => {
-                const file = ev.target.files[0];
-                handleImageFile(file, (dataUrl) => {
-                    prompt[prop] = dataUrl;
-                    renderMoodpromptView(project);
-                    saveToBrowser();
-                });
-            };
-            promptImageInput.click();
+            choosePromptImage((dataUrl) => {
+                prompt[prop] = dataUrl;
+                renderMoodpromptView(project);
+                saveToBrowser();
+            });
+        };
+
+        const removeBtn = document.createElement('button');
+        removeBtn.type = 'button';
+        removeBtn.className = 'slot-action-btn remove-btn';
+        removeBtn.title = 'Remove Image';
+        removeBtn.setAttribute('aria-label', 'Remove Image');
+        removeBtn.innerHTML = '<iconify-icon icon="lucide:trash-2"></iconify-icon>';
+        removeBtn.onclick = (e) => {
+            e.stopPropagation();
+            e.preventDefault();
+            prompt[prop] = null;
+            renderMoodpromptView(project);
+            saveToBrowser();
         };
         
         slot.appendChild(zoomBtn);
         slot.appendChild(replaceBtn);
+        slot.appendChild(removeBtn);
     } else {
         const placeholder = document.createElement('div');
         placeholder.className = 'placeholder';
         placeholder.textContent = `+ Add Image ${slotNumber}`;
         slot.appendChild(placeholder);
     }
-    slot.onclick = () => {
-        promptImageInput.onchange = (e) => {
-            const file = e.target.files[0];
-            handleImageFile(file, (dataUrl) => {
-                prompt[prop] = dataUrl;
-                renderMoodpromptView(project);
-                saveToBrowser();
-            });
-        };
-        promptImageInput.click();
+    slot.onclick = (e) => {
+        if (e.target.closest('.slot-action-btn')) return;
+        choosePromptImage((dataUrl) => {
+            prompt[prop] = dataUrl;
+            renderMoodpromptView(project);
+            saveToBrowser();
+        });
     };
 
     // Drag & Drop
@@ -1403,6 +1480,18 @@ function createImageSlot(project, prompt, slotNumber) {
     return slot;
 }
 
+function choosePromptImage(onData) {
+    if (!promptImageInput) return;
+    promptImageInput.value = '';
+    promptImageInput.onchange = (ev) => {
+        const file = ev.target.files && ev.target.files[0];
+        promptImageInput.value = '';
+        promptImageInput.onchange = null;
+        handleImageFile(file, onData);
+    };
+    promptImageInput.click();
+}
+
 function renderMobileTabsPopup() {
     if (!mobileTabsPopup) return;
     mobileTabsPopup.innerHTML = '';
@@ -1414,21 +1503,39 @@ function renderMobileTabsPopup() {
         const item = document.createElement('div');
         item.className = 'mobile-tab-item';
         item.classList.toggle('active', project.id === activeProjectId);
+        item.dataset.type = project.type;
 
-        const icon = project.type === 'moodinfinite'
-            ? `<iconify-icon icon="lucide:image" width="16" height="16"></iconify-icon>`
-            : `<iconify-icon icon="lucide:pen-tool" width="16" height="16"></iconify-icon>`;
+        const iconName = project.type === 'moodinfinite' ? 'lucide:image'
+            : project.type === 'colorseeker' ? 'lucide:swatch-book'
+            : project.type === 'storyflow' ? 'lucide:clapperboard'
+            : project.type === 'moodgantt' ? 'lucide:gantt-chart'
+            : project.type === 'moodlist' ? 'lucide:list-check'
+            : 'lucide:pen-tool';
 
         const nameSpan = document.createElement('span');
+        nameSpan.className = 'mobile-tab-name';
         nameSpan.textContent = project.name;
 
         const iconSpan = document.createElement('span');
-        iconSpan.innerHTML = icon;
+        iconSpan.className = 'mobile-tab-icon';
+        iconSpan.innerHTML = `<iconify-icon icon="${iconName}" width="16" height="16"></iconify-icon>`;
+
+        const dupBtn = document.createElement('button');
+        dupBtn.type = 'button';
+        dupBtn.className = 'mobile-tab-dup-btn';
+        dupBtn.title = 'Duplicate';
+        dupBtn.setAttribute('aria-label', 'Duplicate');
+        dupBtn.innerHTML = '<iconify-icon icon="lucide:copy-plus" width="16" height="16"></iconify-icon>';
+        dupBtn.onclick = (e) => {
+            e.stopPropagation();
+            duplicateProject(project.id);
+            renderMobileTabsPopup();
+            mobileTabsPopup.style.display = 'block';
+        };
 
         const deleteBtn = document.createElement('button');
         deleteBtn.className = 'tab-close-btn';
         deleteBtn.innerHTML = '&times;';
-        deleteBtn.style.marginLeft = 'auto';
         deleteBtn.onclick = (e) => {
             e.stopPropagation();
             closeTab(project.id, e);
@@ -1437,6 +1544,7 @@ function renderMobileTabsPopup() {
 
         item.appendChild(iconSpan);
         item.appendChild(nameSpan);
+        item.appendChild(dupBtn);
         item.appendChild(deleteBtn);
 
         item.onclick = () => {
@@ -1803,7 +1911,8 @@ function setupEventListeners() {
             if (!a.pinned && b.pinned) return 1;
             return 0;
         });
-        renderTabs(); 
+        renderTabs();
+        scheduleAutoSave();
     });
     tabsList.addEventListener('wheel', e => { if (tabsList.scrollWidth <= tabsList.clientWidth || e.deltaY === 0) return; e.preventDefault(); tabsList.scrollLeft += e.deltaY; });
     tabsList.addEventListener('dblclick', e => { if (e.target === tabsList) createNewProject('moodinfinite'); });
@@ -1834,6 +1943,12 @@ function setupEventListeners() {
             }
         }
         tabContextMenu.style.display = 'none'
+    });
+    const duplicateTabBtn = document.getElementById('duplicate-tab-btn');
+    if (duplicateTabBtn) duplicateTabBtn.addEventListener('click', () => {
+        const id = tabContextMenu.dataset.tabId;
+        if (id) duplicateProject(id);
+        tabContextMenu.style.display = 'none';
     });
     if (closeContextTabBtn) closeContextTabBtn.addEventListener('click', () => {
         const e = tabContextMenu.dataset.tabId;
@@ -2096,6 +2211,7 @@ canvas.addEventListener('mouseleave', clearHoverStates);
         }
         if (mobileTabsPopup && mobileTabsPopup.style.display === 'block') {
             mobileTabsPopup.style.display = 'none';
+            if (mobileTabsBtn) mobileTabsBtn.focus();
             closed = true;
         }
         if (palettePanel && palettePanel.classList.contains('open')) {
@@ -3318,8 +3434,18 @@ function drawTextItem(ctx, item) {
         ctx.textBaseline = 'top';
 
         const titleLines = wrapText(ctx, item.title, item.width - pX * 2);
+        const titleAlign = item.textAlign || 'left';
+        const titleInner = item.width - pX * 2;
         titleLines.forEach(line => {
-            ctx.fillText(line, x + pX, currY);
+            let titleX = x + pX;
+            if (titleAlign === 'center' || titleAlign === 'right') {
+                const titleW = ctx.measureText(line).width;
+                titleX = titleAlign === 'right'
+                    ? x + pX + Math.max(0, titleInner - titleW)
+                    : x + pX + Math.max(0, (titleInner - titleW) / 2);
+            }
+            ctx.textAlign = 'left';
+            ctx.fillText(line, titleX, currY);
             currY += 32; // Slightly more line height for title
         });
         currY += 10;
@@ -3331,8 +3457,9 @@ function drawTextItem(ctx, item) {
 
     const baseSize = item.fontSize || 14;
     const lines = item.text.replace(/\r/g, '').split('\n');
+    const bodyAlign = item.textAlign || 'left';
     lines.forEach(line => {
-        const consumedH = renderMarkdownLine(ctx, line, x + pX, currY, item.width - pX * 2, baseSize, item.fontFamily, textPrimary, textSecondary);
+        const consumedH = renderMarkdownLine(ctx, line, x + pX, currY, item.width - pX * 2, baseSize, item.fontFamily, textPrimary, textSecondary, bodyAlign);
         currY += consumedH;
     });
 
@@ -3351,7 +3478,43 @@ function drawTextItem(ctx, item) {
     ctx.restore();
 }
 
-function renderMarkdownLine(ctx, text, x, y, maxWidth, baseSize, fontFamily, primaryColor, secondaryColor) {
+function measureInlineFormattedText(ctx, text, size, fontFamily, forceBold) {
+    const regex = /(\*\*.*?\*\*|\*.*?\*|`.*?`|[^*`]+|[*`])/g;
+    const matches = text ? text.match(regex) : null;
+    if (!matches) {
+        ctx.font = `${forceBold ? 'bold ' : ''}${size}px '${fontFamily || 'Nunito'}', sans-serif`;
+        return ctx.measureText(text || '').width;
+    }
+    let width = 0;
+    matches.forEach(part => {
+        let isItalic = false;
+        let isBold = forceBold;
+        let isCode = false;
+        let content = part;
+        let currentSize = size;
+        if (part.length >= 4 && part.startsWith('**') && part.endsWith('**')) {
+            isBold = true;
+            content = part.slice(2, -2);
+        } else if (part.length >= 2 && part.startsWith('*') && part.endsWith('*')) {
+            isItalic = true;
+            content = part.slice(1, -1);
+        } else if (part.length >= 2 && part.startsWith('`') && part.endsWith('`')) {
+            isCode = true;
+            currentSize = size * 0.85;
+            content = part.slice(1, -1);
+        }
+        let fontStr = '';
+        if (isItalic) fontStr += 'italic ';
+        if (isBold) fontStr += 'bold ';
+        fontStr += `${currentSize}px `;
+        fontStr += isCode ? "'Source Code Pro', monospace" : `'${fontFamily || 'Nunito'}', sans-serif`;
+        ctx.font = fontStr.trim();
+        width += ctx.measureText(content).width;
+    });
+    return width;
+}
+
+function renderMarkdownLine(ctx, text, x, y, maxWidth, baseSize, fontFamily, primaryColor, secondaryColor, align) {
     let cleanText = text.trimStart();
     let lineScale = 1.0;
     let isHeadingBold = false;
@@ -3394,15 +3557,27 @@ function renderMarkdownLine(ctx, text, x, y, maxWidth, baseSize, fontFamily, pri
     ctx.font = `${weightStr}${finalSize}px '${safeFont}', sans-serif`;
 
     const wrappedLines = wrapText(ctx, cleanText, maxWidth - bulletIndent);
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'top';
 
     wrappedLines.forEach((lineText, lineIdx) => {
-        drawInlineFormattedText(ctx, lineText, x + bulletIndent, y + (lineIdx * lineHeight), finalSize, safeFont, isHeadingBold, color);
+        let drawX = x + bulletIndent;
+        if (align === 'center' || align === 'right') {
+            const lineWidth = measureInlineFormattedText(ctx, lineText, finalSize, safeFont, isHeadingBold);
+            const inner = Math.max(0, maxWidth - bulletIndent);
+            drawX = align === 'right'
+                ? x + bulletIndent + Math.max(0, inner - lineWidth)
+                : x + bulletIndent + Math.max(0, (inner - lineWidth) / 2);
+        }
+        drawInlineFormattedText(ctx, lineText, drawX, y + (lineIdx * lineHeight), finalSize, safeFont, isHeadingBold, color);
     });
 
     return wrappedLines.length * lineHeight;
 }
 
 function drawInlineFormattedText(ctx, text, x, y, size, fontFamily, forceBold, defaultColor) {
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'top';
     const regex = /(\*\*.*?\*\*|\*.*?\*|`.*?`|[^*`]+|[*`])/g;
     const matches = text.match(regex);
     if (!matches) {
@@ -3786,11 +3961,20 @@ function drawTextListItem(e, t) {
     const indentSize = 25;
 
     let currentY = -t.height / 2 + padding;
+    const align = t.textAlign || 'left';
+    const contentLeft = -t.width / 2 + padding;
+    const contentRight = t.width / 2 - padding;
+    const placeText = (text, minX) => {
+        if (align !== 'center' && align !== 'right') return minX;
+        const w = e.measureText(text).width;
+        if (align === 'right') return Math.max(minX, contentRight - w);
+        return Math.max(minX, (contentLeft + contentRight - w) / 2);
+    };
 
     // Draw Title
     if (t.title) {
         e.font = `bold ${t.fontSize * 1.2}px '${s}', sans-serif`;
-        e.fillText(t.title, -t.width / 2 + padding, currentY);
+        e.fillText(t.title, placeText(t.title, contentLeft), currentY);
         currentY += h * 1.2;
         // Divider
         e.strokeStyle = textColor;
@@ -3840,16 +4024,17 @@ function drawTextListItem(e, t) {
             e.stroke();
         }
 
-        // Draw Text
+        // Draw Text. Checkboxes and drag handles stay put so hit tests still match.
         e.save();
         if (item.completed) e.globalAlpha *= 0.5;
-        e.fillText(item.text, cbX + checkboxSize + checkboxMargin, itemY + (h - t.fontSize) / 2);
+        const textX = placeText(item.text, cbX + checkboxSize + checkboxMargin);
+        e.fillText(item.text, textX, itemY + (h - t.fontSize) / 2);
 
         if (item.completed) {
             const metrics = e.measureText(item.text);
             e.beginPath();
-            e.moveTo(cbX + checkboxSize + checkboxMargin, itemY + h / 2);
-            e.lineTo(cbX + checkboxSize + checkboxMargin + metrics.width, itemY + h / 2);
+            e.moveTo(textX, itemY + h / 2);
+            e.lineTo(textX + metrics.width, itemY + h / 2);
             e.stroke();
         }
         e.restore();
@@ -4247,6 +4432,16 @@ function drawConnectorItem(e, renderCtx) {
     }
 
     _ctx.stroke();
+    if (e.label) {
+        const seg = Math.max(0, cleanRoute.length - 2);
+        const p0 = cleanRoute[seg];
+        const p1 = cleanRoute[seg + 1];
+        _ctx.font = `${12 / cameraZoom}px Nunito, sans-serif`;
+        _ctx.fillStyle = e.color || accentColor;
+        _ctx.textAlign = 'center';
+        _ctx.textBaseline = 'bottom';
+        _ctx.fillText(String(e.label), (p0.x + p1.x) / 2, (p0.y + p1.y) / 2 - 8 / cameraZoom);
+    }
     _ctx.restore();
 }
 
@@ -4402,6 +4597,16 @@ function handleKeyDown(e) {
             }
             return;
         }
+        if ((key === 'arrowleft' || key === 'arrowright') && window._colorseekerFocusedIndex !== null && window._colorseekerFocusedIndex !== undefined) {
+            const from = window._colorseekerFocusedIndex;
+            const to = from + (key === 'arrowright' ? 1 : -1);
+            const colors = activeProject.data.colors || [];
+            if (to < 0 || to >= colors.length) return;
+            e.preventDefault();
+            window._colorseekerKeepFocus = to;
+            colorseekerMoveSwatch(activeProject, from, to);
+            return;
+        }
     }
     // Moodgantt global keys intercept
     if (activeProject && activeProject.type === 'moodgantt') {
@@ -4448,6 +4653,16 @@ function handleKeyDown(e) {
 
     if (key === 'escape') {
         e.preventDefault();
+        const deleteOverlay = document.getElementById('delete-group-modal-overlay');
+        if (deleteOverlay && deleteOverlay.style.display === 'flex') {
+            deleteOverlay.style.display = 'none';
+            return;
+        }
+        const ganttPanel = document.getElementById('gantt-detail-panel');
+        if (ganttPanel && ganttPanel.classList.contains('open')) {
+            ganttCloseDetail();
+            return;
+        }
         clearHoverStates();
         if (helpModalOverlay && helpModalOverlay.style.display === 'flex') { helpModalOverlay.style.display = 'none'; return; }
         const sfLightbox = document.getElementById('storyflow-lightbox');
@@ -4798,7 +5013,9 @@ function onMouseDown(e) {
             if (newItem) {
                 addItemToLayeredItems(newItem);
                 selectedItems = [newItem];
-                bringSelectedToFront();
+                // History is recorded once on mouseup. Saving here would push a zero-size
+                // placeholder state that undo later resurrects as a ghost item.
+                reorderSelectedToFront();
                 if (['textList', 'text', 'comment', 'counter'].includes(newItem.type)) {
                     setCurrentTool(null);
                 }
@@ -4916,16 +5133,21 @@ function onMouseUp(e) {
             return;
         }
         if (isDrawing || isMovingItems || isTransforming || isTransformingArrow) {
+            let discardedDrawing = false;
             if (isDrawing) {
                 const e = selectedItems[0];
-                if (e && (e.type === 'box' || e.type === 'circle' || e.type === 'grid') && (Math.abs(e.width) < 10 || Math.abs(e.height) < 10)) {
+                const tooSmallShape = e && (e.type === 'box' || e.type === 'circle' || e.type === 'grid') && (Math.abs(e.width) < 10 || Math.abs(e.height) < 10);
+                const tooShortLine = e && (e.type === 'arrow' || e.type === 'measure') && Math.hypot(e.endX - e.startX, e.endY - e.startY) < 5 / cameraZoom;
+                if (tooSmallShape || tooShortLine) {
                     items = items.filter(t => t.id !== e.id);
                     selectedItems = [];
+                    discardedDrawing = true;
                 } else if (e && (e.type === 'text' || e.type === 'comment')) {
                     editText(e);
                 }
             }
-            saveStateForUndo();
+            // Nothing was created when the click never became a drag, so there is no step to record.
+            if (!discardedDrawing) saveStateForUndo();
             if (isMovingItems || isTransforming || isTransformingArrow) {
                 updateSelectionToolbar(); // Re-open toolbar after movement/transform
             }
@@ -5318,10 +5540,103 @@ function onContextMenu(e) {
     showAndPositionMenu(contextMenu, e)
 }
 function confirmNewBoard() { if (items.length > 0) { showConfirmationModal() } else { resetBoard() } }
-function resetBoard() { const e = projects.find(e => e.id === activeProjectId); if (!e) return; e.data.items = []; e.data.cameraOffset = { x: window.innerWidth / 2, y: (window.innerHeight - 48) / 2 }; e.data.cameraZoom = 1; e.data.historyStack = []; e.data.historyIndex = -1; e.data.canvasBackgroundColor = '#0d0d0d'; e.data.accentColor = '#429eff'; e.data.gridColor = '#f9f8f6'; switchTab(activeProjectId); saveStateForUndo() }
+function resetBoard() {
+    const e = projects.find(e => e.id === activeProjectId);
+    if (!e) return;
+    e.data.items = [];
+    e.data.cameraOffset = { x: window.innerWidth / 2, y: (window.innerHeight - 48) / 2 };
+    e.data.cameraZoom = 1;
+    e.data.historyStack = [];
+    e.data.historyIndex = -1;
+    e.data.canvasBackgroundColor = '#0d0d0d';
+    e.data.accentColor = '#429eff';
+    e.data.gridColor = '#f9f8f6';
+    switchTab(activeProjectId, { force: true });
+    saveStateForUndo();
+}
 function showConfirmationModal() { confirmationModalOverlay.style.display = 'flex' }
 function hideConfirmationModal() { confirmationModalOverlay.style.display = 'none' }
+function boardPlainText(project) {
+    if (!project || !project.data) return '';
+    if (project.type === 'moodprompt') {
+        const prompts = project.data.prompts || [];
+        return prompts.map((p, i) => `${i + 1}. ${p.title || 'Untitled'}\n${resolveVariables(p.text, project)}`).join('\n\n');
+    }
+    if (project.type === 'moodlist') {
+        return (project.data.cards || []).map(card => {
+            const rows = (card.items || []).map(item => `${item.checked ? '[x]' : '[ ]'} ${item.text || ''}${item.due ? ' (' + item.due + ')' : ''}`).join('\n');
+            return `${card.pinned ? 'Pinned: ' : ''}${card.title || 'Untitled'}${rows ? '\n' + rows : ''}`;
+        }).join('\n\n');
+    }
+    if (project.type === 'moodgantt') {
+        return (project.data.groups || []).map(group => {
+            const rows = (group.tasks || []).map(task => `- ${task.name || 'Untitled'} (${task.startDate || ''} to ${task.endDate || ''})${task.status ? ' ' + task.status : ''}`).join('\n');
+            return `${group.name || 'Group'}${rows ? '\n' + rows : ''}`;
+        }).join('\n\n');
+    }
+    return '';
+}
+
+function copyBoardPlainText(project) {
+    const text = boardPlainText(project);
+    if (!text.trim()) {
+        showToast(project && project.type === 'moodprompt' ? 'No prompts to copy.' : 'Board is empty, nothing to copy.', 'error');
+        return;
+    }
+    try {
+        const pending = navigator.clipboard && navigator.clipboard.writeText(text);
+        if (pending && typeof pending.catch === 'function') pending.catch(() => {});
+    } catch (_) {}
+    showToast(project && project.type === 'moodprompt' ? 'All prompts copied to clipboard!' : 'Copied to clipboard.');
+}
+
+function structuredBoardLines(project) {
+    const text = boardPlainText(project);
+    if (!text.trim()) return [];
+    const lines = [project.name || 'Board', ''];
+    text.split('\n').forEach(row => lines.push(row));
+    return lines;
+}
+
+function downloadStructuredBoardPng(project) {
+    const raw = structuredBoardLines(project);
+    if (!raw.length) { showToast("Board is empty, nothing to export.", "error"); return; }
+    const maxChars = 90;
+    const lines = [];
+    raw.forEach(line => {
+        const text = String(line);
+        if (text.length <= maxChars) { lines.push(text); return; }
+        for (let i = 0; i < text.length; i += maxChars) lines.push(text.slice(i, i + maxChars));
+    });
+    const capped = lines.slice(0, 240);
+    if (lines.length > capped.length) capped.push('...');
+    const width = 1400;
+    const lineHeight = 28;
+    const pad = 48;
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = pad * 2 + capped.length * lineHeight;
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#0d0d0d';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = '#e2e8f0';
+    ctx.font = '20px Inter, sans-serif';
+    ctx.textBaseline = 'top';
+    capped.forEach((line, i) => ctx.fillText(line, pad, pad + i * lineHeight));
+    const link = document.createElement('a');
+    link.download = `${project.name || 'board'}.png`;
+    link.href = canvas.toDataURL('image/png');
+    link.click();
+    showToast("Image exported as PNG.");
+}
+
 async function copyToClipboard() {
+    const activeBoard = projects.find(p => p.id === activeProjectId);
+    if (activeBoard && activeBoard.type === 'colorseeker') { colorseekerCopyHex(activeBoard); return; }
+    if (activeBoard && (activeBoard.type === 'moodprompt' || activeBoard.type === 'moodlist' || activeBoard.type === 'moodgantt')) {
+        copyBoardPlainText(activeBoard);
+        return;
+    }
     if (items.length === 0) { showToast("Board is empty, nothing to copy.", "error"); return }
     let e = Infinity, t = Infinity, o = -Infinity, a = -Infinity;
     items.forEach(i => {
@@ -5388,6 +5703,14 @@ function saveAsPng() {
 
     if (activeProject.type === 'storyflow') {
         saveStoryflowAsPdf(activeProject);
+        return;
+    }
+    if (activeProject.type === 'colorseeker') {
+        downloadColorSeekerPalette();
+        return;
+    }
+    if (activeProject.type === 'moodprompt' || activeProject.type === 'moodlist' || activeProject.type === 'moodgantt') {
+        downloadStructuredBoardPng(activeProject);
         return;
     }
 
@@ -5638,7 +5961,7 @@ function saveProject() {
                 showToast("Project exported successfully.");
             });
         });
-    } else if (t.type === 'moodprompt' || t.type === 'storyflow') {
+    } else if (t.type === 'moodprompt' || t.type === 'storyflow' || t.type === 'moodlist' || t.type === 'moodgantt' || t.type === 'colorseeker') {
         eJSON = t.data;
         rootDir.file("data.json", JSON.stringify(eJSON, null, 2));
         zip.generateAsync({ type: "blob" }).then(function (content) {
@@ -5707,6 +6030,24 @@ function loadFileAsNewTab(fileContent, fileName) {
             showToast("Moodlist file loaded successfully.");
             return;
         }
+        if (data.groups && Array.isArray(data.groups)) {
+            const newId = nextProjectId();
+            const newProject = { id: newId, type: 'moodgantt', name: name, data: data };
+            projects.push(newProject);
+            renderTabs();
+            switchTab(newId);
+            showToast("Moodgantt file loaded successfully.");
+            return;
+        }
+        if (data.baseColor && data.mode && Array.isArray(data.colors)) {
+            const newId = nextProjectId();
+            const newProject = { id: newId, type: 'colorseeker', name: name, data: data };
+            projects.push(newProject);
+            renderTabs();
+            switchTab(newId);
+            showToast("Moodtone file loaded successfully.");
+            return;
+        }
         showToast("Failed to load project. Unknown format.", "error");
     } catch (err) {
         console.error("Failed to load project:", err);
@@ -5725,7 +6066,7 @@ function loadProject(e) {
         items = o.data.items;
         o.data.historyStack = []; o.data.historyIndex = -1;
         historyStack = []; historyIndex = -1;
-        switchTab(activeProjectId); updateUIColors(); saveStateForUndo(); showToast("Project loaded successfully.");
+        switchTab(activeProjectId, { force: true }); updateUIColors(); saveStateForUndo(); showToast("Project loaded successfully.");
 
 
     } catch (e) { console.error("Failed to load project:", e); showToast("Failed to load project. Invalid file.", "error") }
@@ -5865,7 +6206,7 @@ window.reloadCurrentProjectFromBlob = async function(blob) {
             // General reload for other types
             activeProject.data = { ...activeProject.data, ...data };
             if (activeProjectId === activeProject.id) {
-                switchTab(activeProjectId); // Full refresh
+                switchTab(activeProjectId, { force: true });
             }
         }
         return true;
@@ -5879,7 +6220,22 @@ function handleImageUpload(e) { if (!e.target.files) return; const t = screenToW
 function handleVideoUpload(e) { if (!e.target.files) return; const t = screenToWorld({ x: canvas.width / 2, y: canvas.height / 2 }); processVideoFiles(e.target.files, t); videoInput.value = '' }
 function handleProjectUpload(e) { const t = e.target.files[0]; if (!t) return; loadFileFromObject(t); projectInput.value = '' }
 
+function isTextEntryTarget(el) {
+    if (!el) return false;
+    const tag = el.tagName;
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return true;
+    return !!el.isContentEditable;
+}
+
 function handlePaste(e) {
+    const focus = document.activeElement;
+    if (isTextEntryTarget(focus)) {
+        const activeProject = projects.find(p => p.id === activeProjectId);
+        const inListField = activeProject && activeProject.type === 'moodlist'
+            && focus.closest && focus.closest('#moodlist-container')
+            && focus.matches('input, textarea');
+        if (!inListField) return;
+    }
     const text = e.clipboardData.getData('text');
     if (text) {
         try {
@@ -6318,7 +6674,41 @@ function duplicateItems() {
     showToast(`${t.length} item${t.length > 1 ? 's' : ''} duplicated.`)
 }
 
-function deleteSelectedItems() { if (selectedItems.length > 0) { const e = new Set(selectedItems.map(e => e.id)); items = items.filter(t => !e.has(t.id)); items = items.filter(t => !(t.type === 'connector' && (e.has(t.sourceId) || e.has(t.targetId)))); selectedItems = []; updateSelectionToolbar(); updateLeftBarState(); saveStateForUndo() } }
+function rejoinConnectorsAround(removedIds) {
+    const original = new Set(removedIds);
+    const connectors = items.filter(i => i.type === 'connector' && !original.has(i.id));
+    connectors.forEach(conn => {
+        if (!conn.targetId || !original.has(conn.targetId)) return;
+        const targetItem = items.find(i => i.id === conn.targetId);
+        if (!targetItem || targetItem.type !== 'reroute') return;
+        let guard = 0;
+        let hopId = conn.targetId;
+        while (hopId && original.has(hopId) && guard < 24) {
+            const hop = items.find(i => i.id === hopId);
+            if (!hop || hop.type !== 'reroute') break;
+            const next = items.find(i => i.type === 'connector' && i.sourceId === hopId && !original.has(i.id));
+            if (!next) break;
+            removedIds.add(next.id);
+            conn.targetId = next.targetId;
+            conn.targetPort = next.targetPort;
+            if (next.label && !conn.label) conn.label = next.label;
+            hopId = next.targetId;
+            guard++;
+        }
+    });
+}
+
+function deleteSelectedItems() {
+    if (selectedItems.length === 0) return;
+    const removedIds = new Set(selectedItems.map(item => item.id));
+    rejoinConnectorsAround(removedIds);
+    items = items.filter(item => !removedIds.has(item.id));
+    items = items.filter(item => !(item.type === 'connector' && (removedIds.has(item.sourceId) || removedIds.has(item.targetId))));
+    selectedItems = [];
+    updateSelectionToolbar();
+    updateLeftBarState();
+    saveStateForUndo();
+}
 function addItemToLayeredItems(item) {
     if (item.type === 'comment') {
         items.push(item);
@@ -6332,8 +6722,8 @@ function addItemToLayeredItems(item) {
     }
 }
 
-function bringSelectedToFront() {
-    if (selectedItems.length === 0) return;
+function reorderSelectedToFront() {
+    if (selectedItems.length === 0) return false;
     const ids = new Set(selectedItems.map(e => e.id));
     const selected = items.filter(t => ids.has(t.id));
     const others = items.filter(t => !ids.has(t.id));
@@ -6342,6 +6732,11 @@ function bringSelectedToFront() {
     const selectedRegular = selected.filter(s => s.type !== 'comment');
     const selectedComments = selected.filter(s => s.type === 'comment');
     items = [...otherRegular, ...selectedRegular, ...otherComments, ...selectedComments];
+    return true;
+}
+
+function bringSelectedToFront() {
+    if (!reorderSelectedToFront()) return;
     saveStateForUndo();
 }
 
@@ -6674,12 +7069,13 @@ function updateSelectionToolbar() {
             const e = selectedItems[0];
             fontFamilySelect.value = e.fontFamily || 'Nunito';
             [textAlignLeftBtn, textAlignCenterBtn, textAlignRightBtn].forEach(el => {
+                if (!el) return;
                 el.classList.remove('active');
-                el.style.display = (isComment || isTextList || selectedItems[0].type === 'text') ? 'none' : 'flex';
+                el.style.display = 'flex';
             });
-            if (e.textAlign === 'left') textAlignLeftBtn.classList.add('active');
-            else if (e.textAlign === 'right') textAlignRightBtn.classList.add('active');
-            else textAlignCenterBtn.classList.add('active');
+            if (e.textAlign === 'right' && textAlignRightBtn) textAlignRightBtn.classList.add('active');
+            else if (e.textAlign === 'center' && textAlignCenterBtn) textAlignCenterBtn.classList.add('active');
+            else if (textAlignLeftBtn) textAlignLeftBtn.classList.add('active');
             textStyleBoldBtn.classList.toggle('active', e.fontWeight === 'bold');
             textStyleItalicBtn.classList.toggle('active', e.fontStyle === 'italic');
             textStyleBoldBtn.style.display = (isTextList || selectedItems[0].type === 'text') ? 'none' : 'flex';
@@ -6828,6 +7224,8 @@ function cancelNoteEditing() {
         currentlyEditingText = null;
     }
     noteEditorOverlay.style.display = 'none';
+    if (noteTitleInput && document.activeElement === noteTitleInput) noteTitleInput.blur();
+    if (noteBodyInput && document.activeElement === noteBodyInput) noteBodyInput.blur();
 }
 
 function finishNoteEditing() {
@@ -6844,6 +7242,8 @@ function finishNoteEditing() {
     }
     noteEditorOverlay.style.display = 'none';
     updateSelectionToolbar();
+    if (noteTitleInput && document.activeElement === noteTitleInput) noteTitleInput.blur();
+    if (noteBodyInput && document.activeElement === noteBodyInput) noteBodyInput.blur();
 }
 
 function updateNoteDimensions(item) {
@@ -6891,28 +7291,63 @@ function updateNoteDimensions(item) {
     testCtx.restore();
     item.height = Math.max(120, totalH + 60); // Generous safety margin
 }
-function finishEditingText() { if (currentlyEditingText) { if (currentlyEditingText.type === 'text') return; currentlyEditingText.text = textEditor.value.trim() || (currentlyEditingText.type === 'comment' ? "Note..." : "Type..."); const e = currentlyEditingText; if (e.type === 'comment') { updateCommentDimensions(e); } else if (currentlyEditingText.type === 'textList') {
-        const lines = textEditor.value.split('\n');
-        let items = [];
-        let title = "";
-        const oldItems = currentlyEditingText.items || [];
-        lines.forEach((line, idx) => {
-            if (idx === 0 && line.startsWith('# ')) {
-                title = line.substring(2).trim();
-            } else if (line.trim() !== "") {
-                const indentMatch = line.match(/^(-+)/);
-                const indentStr = indentMatch ? indentMatch[0] : "";
-                const indent = indentStr.length;
-                const text = line.substring(indentStr.length).trim();
-                const oldItem = oldItems.find(oi => oi.text === text);
-                items.push({ text: text, completed: oldItem ? oldItem.completed : false, indent: indent });
+let finishingTextEdit = false;
+function finishEditingText() {
+    if (finishingTextEdit) return;
+    finishingTextEdit = true;
+    try {
+        if (currentlyEditingText) {
+            if (currentlyEditingText.type === 'text') {
+                finishNoteEditing();
+                return;
             }
-        });
-        if (items.length === 0 && !title) items.push({ text: "Item 1", completed: false, indent: 0 });
-        currentlyEditingText.items = items;
-        currentlyEditingText.title = title;
-        updateTextListDimensions(currentlyEditingText);
-    } else { const t = e.fontStyle || 'normal', o = e.fontWeight || 'bold', a = e.fontFamily || 'Nunito'; ctx.font = `${t} ${o} ${e.fontSize}px '${a}', sans-serif`; const i = textEditor.value.split('\n'); let r = 0; i.forEach(e => { const t = ctx.measureText(e); if (t.width > r) r = t.width }); e.width = r + 20; e.height = textEditor.scrollHeight / cameraZoom; } currentlyEditingText.isHidden = !1; selectedItems = [currentlyEditingText]; saveStateForUndo(); currentlyEditingText = null } textEditor.style.display = 'none'; textEditor.style.padding = '0'; textEditor.style.lineHeight = 'normal'; }
+            currentlyEditingText.text = textEditor.value.trim() || (currentlyEditingText.type === 'comment' ? "Note..." : "Type...");
+            const e = currentlyEditingText;
+            if (e.type === 'comment') {
+                updateCommentDimensions(e);
+            } else if (e.type === 'textList') {
+                const lines = textEditor.value.split('\n');
+                let listItems = [];
+                let title = "";
+                const oldItems = currentlyEditingText.items || [];
+                lines.forEach((line, idx) => {
+                    if (idx === 0 && line.startsWith('# ')) {
+                        title = line.substring(2).trim();
+                    } else if (line.trim() !== "") {
+                        const indentMatch = line.match(/^(-+)/);
+                        const indentStr = indentMatch ? indentMatch[0] : "";
+                        const indent = indentStr.length;
+                        const text = line.substring(indentStr.length).trim();
+                        const oldItem = oldItems.find(oi => oi.text === text);
+                        listItems.push({ text: text, completed: oldItem ? oldItem.completed : false, indent: indent });
+                    }
+                });
+                if (listItems.length === 0 && !title) listItems.push({ text: "Item 1", completed: false, indent: 0 });
+                currentlyEditingText.items = listItems;
+                currentlyEditingText.title = title;
+                updateTextListDimensions(currentlyEditingText);
+            } else {
+                const t = e.fontStyle || 'normal', o = e.fontWeight || 'bold', a = e.fontFamily || 'Nunito';
+                ctx.font = `${t} ${o} ${e.fontSize}px '${a}', sans-serif`;
+                const i = textEditor.value.split('\n');
+                let r = 0;
+                i.forEach(line => { const measured = ctx.measureText(line); if (measured.width > r) r = measured.width });
+                e.width = r + 20;
+                e.height = textEditor.scrollHeight / cameraZoom;
+            }
+            currentlyEditingText.isHidden = false;
+            selectedItems = [currentlyEditingText];
+            saveStateForUndo();
+            currentlyEditingText = null;
+        }
+        textEditor.style.display = 'none';
+        textEditor.style.padding = '0';
+        textEditor.style.lineHeight = 'normal';
+        if (document.activeElement === textEditor) textEditor.blur();
+    } finally {
+        finishingTextEdit = false;
+    }
+}
 function autoResizeTextEditor() { textEditor.style.height = 'auto'; textEditor.style.height = textEditor.scrollHeight + 'px' }
 function syncActiveMoodboard() {
     const currentProject = projects.find(p => p.id === activeProjectId);
@@ -6924,7 +7359,7 @@ function syncActiveMoodboard() {
 
 function saveStateForUndo() {
     items.forEach(i => { i._isDirty = true; });
-    const e = JSON.stringify(items, storageReplacer);
+    const e = JSON.stringify(items, historyReplacer);
     if (historyIndex < historyStack.length - 1) { historyStack = historyStack.slice(0, historyIndex + 1); }
     if (historyStack.length > 0 && historyStack[historyStack.length - 1] === e) return;
     historyStack.push(e);
@@ -6943,6 +7378,7 @@ function loadStateFromHistory(e) {
         return e.map(e => {
             const t = { ...(e.scaleX !== void 0 ? {} : { scaleX: 1, scaleY: 1 }), ...e };
             delete t._cachedBox;
+            delete t.isHidden;
             t._isDirty = true;
             if (t.type === 'image') {
                 const img = new Image;
@@ -6975,7 +7411,7 @@ function loadStateFromHistory(e) {
 }
 
 function undoLastAction() {
-    const currentState = JSON.stringify(items, storageReplacer);
+    const currentState = JSON.stringify(items, historyReplacer);
     if (historyIndex >= 0 && currentState !== historyStack[historyIndex]) {
         saveStateForUndo();
         if (historyIndex > 0) {
@@ -7455,12 +7891,17 @@ function computeFitSafeRect() {
         const cy = (r.top + r.bottom) / 2;
         const wide = r.width >= r.height * 1.4 && r.width > viewW * 0.35;
         const tall = r.height >= r.width * 1.4 && r.height > viewH * 0.35;
+        // A wide bottom toolbar only shortens the bottom edge. It must not
+        // also become a left or right inset (that shoved the board sideways).
         if (wide && cy < viewH * 0.45) { padTop = Math.max(padTop, r.bottom + GAP); return; }
         if (wide && cy > viewH * 0.55) { padBottom = Math.max(padBottom, viewH - r.top + GAP); return; }
         if (tall && cx < viewW * 0.45) { padLeft = Math.max(padLeft, r.right + GAP); return; }
         if (tall && cx > viewW * 0.55) { padRight = Math.max(padRight, viewW - r.left + GAP); return; }
         corners.push(r);
     });
+    // Largest corner first so the minimap claims its strip before a button
+    // that already sits inside that strip can reserve a second edge.
+    corners.sort((a, b) => (b.width * b.height) - (a.width * a.height));
     corners.forEach(r => {
         const safeLeft = padLeft, safeTop = padTop;
         const safeRight = viewW - padRight, safeBottom = viewH - padBottom;
@@ -7468,10 +7909,31 @@ function computeFitSafeRect() {
         if (!overlaps) return;
         const cx = (r.left + r.right) / 2;
         const cy = (r.top + r.bottom) / 2;
-        if (cx >= viewW / 2) padRight = Math.max(padRight, viewW - r.left + GAP);
-        else padLeft = Math.max(padLeft, r.right + GAP);
-        if (cy >= viewH / 2) padBottom = Math.max(padBottom, viewH - r.top + GAP);
-        else padTop = Math.max(padTop, r.bottom + GAP);
+        const freeW = Math.max(0, safeRight - safeLeft);
+        const freeH = Math.max(0, safeBottom - safeTop);
+        // Bottom-corner chrome (minimap, fit, zoom) reserves one edge only.
+        // A full right column and a full bottom band together over-shrink the
+        // board and slide it left. Pick whichever single side removes less area.
+        // Never the left edge: only the tall desktop toolbar is a left inset.
+        if (cy >= viewH * 0.5) {
+            const nextRight = Math.max(padRight, viewW - r.left + GAP);
+            const nextBottom = Math.max(padBottom, viewH - r.top + GAP);
+            const wasteRight = (nextRight - padRight) * freeH;
+            const wasteBottom = (nextBottom - padBottom) * freeW;
+            if (wasteBottom <= wasteRight) padBottom = nextBottom;
+            else padRight = nextRight;
+            return;
+        }
+        const nextTop = Math.max(padTop, r.bottom + GAP);
+        const growRight = cx >= viewW / 2;
+        const nextSide = growRight
+            ? Math.max(padRight, viewW - r.left + GAP)
+            : Math.max(padLeft, r.right + GAP);
+        const wasteSide = (nextSide - (growRight ? padRight : padLeft)) * freeH;
+        const wasteTop = (nextTop - padTop) * freeW;
+        if (wasteTop <= wasteSide) padTop = nextTop;
+        else if (growRight) padRight = nextSide;
+        else padLeft = nextSide;
     });
     const minW = Math.min(64, viewW);
     const minH = Math.min(64, viewH);
@@ -8021,9 +8483,8 @@ if (colorseekerCopyHexBtn) {
 
 function colorseekerRandomize(project) {
     if (!project || project.type !== 'colorseeker' || !project.data) return;
-    colorseekerEnsureLocks(project);
     project.data.baseColor = '#' + Math.floor(Math.random() * 16777215).toString(16).padStart(6, '0');
-    project.data.colors = generatePalette(project.data.baseColor, project.data.mode, project.data.lockedColors);
+    colorseekerRegenerate(project);
     saveToBrowser();
     renderColorSeeker(project.id);
     showToast('Palette randomized.');
@@ -8388,6 +8849,22 @@ function colorseekerEnsureLocks(project) {
     if (project.data.lockedColors.length > project.data.colors.length) project.data.lockedColors.length = project.data.colors.length;
 }
 
+function colorseekerRegenerate(project) {
+    if (!project || !project.data) return;
+    if (!Array.isArray(project.data.colors)) project.data.colors = [];
+    colorseekerEnsureLocks(project);
+    const previous = project.data.colors.slice();
+    const locks = project.data.lockedColors.map((entry) => entry || null);
+    const generated = generatePalette(project.data.baseColor, project.data.mode, locks);
+    const colors = generated.slice();
+    for (let i = colors.length; i < previous.length; i++) {
+        colors.push(locks[i] || previous[i]);
+    }
+    project.data.colors = colors;
+    project.data.lockedColors = locks.slice(0, colors.length);
+    while (project.data.lockedColors.length < colors.length) project.data.lockedColors.push(null);
+}
+
 function colorseekerAddSwatch(project) {
     if (!project.data.colors || !project.data.colors.length) {
         project.data.colors = generatePalette(project.data.baseColor, project.data.mode, project.data.lockedColors);
@@ -8412,7 +8889,10 @@ function colorseekerRemoveSwatch(project, index) {
 function colorseekerMoveSwatch(project, from, to) {
     colorseekerEnsureLocks(project);
     const colors = project.data.colors;
-    if (!colors || from === to || from < 0 || to < 0 || from >= colors.length || to >= colors.length) return;
+    if (!colors || from === to || from < 0 || to < 0 || from >= colors.length || to >= colors.length) {
+        window._colorseekerKeepFocus = null;
+        return;
+    }
     const [color] = colors.splice(from, 1);
     const [lock] = project.data.lockedColors.splice(from, 1);
     colors.splice(to, 0, color);
@@ -8446,6 +8926,9 @@ function renderColorSeeker(projectId) {
     if (!project || project.type !== 'colorseeker') return;
 
     if (!project.data.lockedColors) project.data.lockedColors = [];
+
+    const keepFocus = Number.isInteger(window._colorseekerKeepFocus) ? window._colorseekerKeepFocus : null;
+    window._colorseekerKeepFocus = null;
 
     if (colorseekerModeSelect) colorseekerModeSelect.value = project.data.mode || 'shades';
     if (colorseekerBasePicker) colorseekerBasePicker.value = project.data.baseColor || '#ffffff';
@@ -8521,7 +9004,7 @@ function renderColorSeeker(projectId) {
                 ev.stopPropagation();
                 ev.preventDefault();
                 project.data.baseColor = cHex;
-                project.data.colors = generatePalette(cHex, project.data.mode, project.data.lockedColors);
+                colorseekerRegenerate(project);
                 saveToBrowser();
                 renderColorSeeker(projectId);
                 showToast('Base color set.');
@@ -8608,13 +9091,22 @@ function renderColorSeeker(projectId) {
             moveRightBtn.addEventListener('click', (ev) => {
                 ev.stopPropagation();
                 ev.preventDefault();
-                console.log('Moving swatch', i, i + 1); colorseekerMoveSwatch(project, i, i + 1);
+                colorseekerMoveSwatch(project, i, i + 1);
             });
             bottomActions.appendChild(moveRightBtn);
 
             bar.appendChild(bottomActions);
 
             // Hover effects
+            const hexLabel = document.createElement('div');
+            hexLabel.className = 'colorseeker-hex-label';
+            hexLabel.textContent = cHex.toUpperCase();
+            hexLabel.style.color = getContrastTextColor(cHex);
+            bar.appendChild(hexLabel);
+
+            bar.addEventListener('pointerdown', () => {
+                window._colorseekerFocusedIndex = i;
+            });
             bar.addEventListener('mouseenter', () => {
                 bar.style.flex = '1.5';
                 info.style.opacity = '1';
@@ -8666,6 +9158,7 @@ function renderColorSeeker(projectId) {
                 }
             });
 
+            if (keepFocus === i) window._colorseekerFocusedIndex = i;
             colorseekerPalette.appendChild(bar);
         });
     }
@@ -8705,7 +9198,7 @@ if (colorseekerModeSelect) {
         const project = projects.find(p => p.id === activeProjectId);
         if (project && project.type === 'colorseeker') {
             project.data.mode = e.target.value;
-            project.data.colors = generatePalette(project.data.baseColor, project.data.mode, project.data.lockedColors);
+            colorseekerRegenerate(project);
             saveToBrowser();
             renderColorSeeker(activeProjectId);
         }
@@ -8716,7 +9209,7 @@ if (colorseekerBasePicker) {
         const project = projects.find(p => p.id === activeProjectId);
         if (project && project.type === 'colorseeker') {
             project.data.baseColor = e.target.value;
-            project.data.colors = generatePalette(project.data.baseColor, project.data.mode, project.data.lockedColors);
+            colorseekerRegenerate(project);
             renderColorSeeker(activeProjectId);
         }
     });
@@ -8733,8 +9226,8 @@ if (colorseekerHexList) {
                 .then(() => {
                     showToast('Copied palette to clipboard!');
                 })
-                .catch(err => {
-                    console.error('Could not copy palette: ', err);
+                .catch(() => {
+                    showToast('Could not copy the palette.', 'error');
                 });
         }
     });
@@ -10161,7 +10654,9 @@ function prepareAndPrint() {
                 activeProject.type === 'moodinfinite' ? 'Moodinfinite' : 
                 activeProject.type === 'moodprompt' ? 'Moodprompt' : 
                 activeProject.type === 'storyflow' ? 'Moodflow' : 
-                activeProject.type === 'colorseeker' ? 'Moodtone' : 'Board';
+                activeProject.type === 'colorseeker' ? 'Moodtone' :
+                activeProject.type === 'moodgantt' ? 'Moodgantt' :
+                activeProject.type === 'moodlist' ? 'Moodlist' : 'Board';
         }
         if (dateEl) dateEl.textContent = new Date().toLocaleDateString();
 
@@ -10222,7 +10717,26 @@ function ganttFormatDate(date) {
 }
 function ganttToday() { const t=new Date(); return new Date(t.getFullYear(),t.getMonth(),t.getDate()); }
 function ganttAddDays(date, n) { const d=new Date(date); d.setDate(d.getDate()+n); return d; }
-function ganttAddMonths(date, n) { const d=new Date(date); d.setMonth(d.getMonth()+n); return d; }
+function ganttAddMonths(date, n) {
+    const months = Math.trunc(Number(n) || 0);
+    const target = new Date(date.getFullYear(), date.getMonth() + months, 1);
+    const last = new Date(target.getFullYear(), target.getMonth() + 1, 0).getDate();
+    target.setDate(Math.min(date.getDate(), last));
+    return target;
+}
+function ganttColumnEnd(col, next, zoom) {
+    if (next) return next;
+    if (zoom === 'day') return ganttAddDays(col, 1);
+    if (zoom === 'week') return ganttAddDays(col, 7);
+    if (zoom === 'month') return new Date(col.getFullYear(), col.getMonth() + 1, 1);
+    return new Date(col.getFullYear(), col.getMonth() + 3, 1);
+}
+function ganttRoundToDay(date) {
+    const day = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+    const next = ganttAddDays(day, 1);
+    const half = (next.getTime() - day.getTime()) / 2;
+    return date.getTime() - day.getTime() >= half ? next : day;
+}
 function ganttWeekNum(date) {
     const d=new Date(Date.UTC(date.getFullYear(),date.getMonth(),date.getDate()));
     d.setUTCDate(d.getUTCDate()+4-(d.getUTCDay()||7));
@@ -10258,50 +10772,52 @@ function ganttGetColumns(viewStartStr, viewEndStr, zoom) {
     return cols;
 }
 
-function ganttColOffset(date, cols, colWidth) {
+function ganttColOffset(date, cols, colWidth, zoom) {
+    if (!cols.length || !(colWidth > 0)) return 0;
     const ts = date.getTime();
-    let diffDays = 7;
-    if (cols.length > 1) {
-        const diffMs = cols[1].getTime() - cols[0].getTime();
-        if (diffMs <= GANTT_MS_DAY * 1.5) diffDays = 1;
-        else if (diffMs <= GANTT_MS_DAY * 7.5) diffDays = 7;
-        else if (diffMs <= GANTT_MS_DAY * 32) diffDays = 30;
-        else diffDays = 90;
+    const firstEnd = ganttColumnEnd(cols[0], cols[1] || null, zoom);
+    const firstSpan = firstEnd.getTime() - cols[0].getTime();
+    if (ts < cols[0].getTime()) {
+        if (firstSpan <= 0) return 0;
+        return ((ts - cols[0].getTime()) / firstSpan) * colWidth;
     }
-    
     for (let i = 0; i < cols.length; i++) {
-        const colEnd = i < cols.length-1 ? cols[i+1] : ganttAddDays(cols[i], diffDays);
+        const colEnd = ganttColumnEnd(cols[i], cols[i + 1] || null, zoom);
         if (ts < colEnd.getTime()) {
-            const fraction = (ts - cols[i].getTime()) / (colEnd.getTime() - cols[i].getTime());
+            const span = colEnd.getTime() - cols[i].getTime();
+            const fraction = span > 0 ? (ts - cols[i].getTime()) / span : 0;
             return (i + fraction) * colWidth;
         }
     }
-    return cols.length * colWidth;
+    const last = cols.length - 1;
+    const lastEnd = ganttColumnEnd(cols[last], null, zoom);
+    const lastSpan = Math.max(1, lastEnd.getTime() - cols[last].getTime());
+    return (last + (ts - cols[last].getTime()) / lastSpan) * colWidth;
 }
 
 function ganttPixelToDate(pixelLeft, cols, colWidth, zoom) {
-    if (pixelLeft < 0) pixelLeft = 0;
-    let currentLeft = 0;
-    const diffDays = zoom === 'day' ? 1 : (zoom === 'week' ? 7 : (zoom === 'month' ? 30 : 90));
-    for (let i = 0; i < cols.length; i++) {
-        const nextDate = i < cols.length - 1 ? cols[i+1] : ganttAddDays(cols[i], diffDays);
-        if (pixelLeft >= currentLeft && pixelLeft < currentLeft + colWidth) {
-            const fraction = (pixelLeft - currentLeft) / colWidth;
-            return new Date(cols[i].getTime() + fraction * (nextDate.getTime() - cols[i].getTime()));
-        } else if (pixelLeft >= currentLeft + colWidth && i === cols.length - 1) {
-            const fraction = (pixelLeft - currentLeft) / colWidth;
-            return new Date(cols[i].getTime() + fraction * (nextDate.getTime() - cols[i].getTime()));
-        }
-        currentLeft += colWidth;
+    if (!cols.length || !(colWidth > 0)) return ganttToday();
+    if (pixelLeft < 0) {
+        const span = ganttColumnEnd(cols[0], cols[1] || null, zoom).getTime() - cols[0].getTime();
+        return new Date(cols[0].getTime() + (pixelLeft / colWidth) * span);
     }
-    return cols[0] || ganttToday();
+    const index = Math.min(cols.length - 1, Math.floor(pixelLeft / colWidth));
+    const colEnd = ganttColumnEnd(cols[index], index < cols.length - 1 ? cols[index + 1] : null, zoom);
+    const span = colEnd.getTime() - cols[index].getTime();
+    const into = pixelLeft - index * colWidth;
+    return new Date(cols[index].getTime() + (into / colWidth) * span);
 }
 
-function ganttBarPixels(task, cols, colWidth) {
+function ganttBarPixels(task, cols, colWidth, zoom) {
+    if (!cols.length) return null;
     const start = ganttParseDate(task.startDate);
     const end   = ganttAddDays(ganttParseDate(task.endDate), 1);
-    const left  = Math.max(0, ganttColOffset(start, cols, colWidth));
-    const right = ganttColOffset(end, cols, colWidth);
+    const rawLeft = ganttColOffset(start, cols, colWidth, zoom);
+    const rawRight = ganttColOffset(end, cols, colWidth, zoom);
+    const total = cols.length * colWidth;
+    if (rawRight <= 0 || rawLeft >= total) return null;
+    const left = Math.max(0, rawLeft);
+    const right = Math.min(total, rawRight);
     return { left, width: Math.max(colWidth * 0.4, right - left - 2) };
 }
 
@@ -10358,8 +10874,8 @@ function renderGanttView(project) {
     rowsArea.style.width = totalW + 'px';
 
     // Today line
-    const todayOffset = ganttColOffset(today, cols, colWidth);
-    if (todayOffset >= 0 && todayOffset <= totalW) {
+    const todayOffset = ganttColOffset(today, cols, colWidth, zoom);
+    if (todayOffset >= 0 && todayOffset < totalW) {
         const todayLine = document.createElement('div');
         todayLine.className = 'gantt-today-line';
         todayLine.style.left = todayOffset + 'px';
@@ -10369,6 +10885,16 @@ function renderGanttView(project) {
     const groups = project.data.groups || [];
     let totalTasks = 0, doneTasks = 0, blockedTasks = 0;
     let nextDeadline = null;
+
+    groups.forEach(group => {
+        (group.tasks || []).forEach(task => {
+            totalTasks++;
+            if (task.status === 'done') doneTasks++;
+            if (task.status === 'blocked') blockedTasks++;
+            const taskEnd = ganttParseDate(task.endDate);
+            if (taskEnd >= today && (!nextDeadline || taskEnd < nextDeadline)) nextDeadline = taskEnd;
+        });
+    });
 
     groups.forEach(group => {
         let groupColor = group.color;
@@ -10541,14 +11067,16 @@ function renderGanttView(project) {
             const ends   = group.tasks.map(t => ganttParseDate(t.endDate).getTime());
             const gStart = new Date(Math.min(...starts));
             const gEnd   = ganttAddDays(new Date(Math.max(...ends)), 1);
-            const gl = ganttColOffset(gStart, cols, colWidth);
-            const gr = ganttColOffset(gEnd, cols, colWidth);
-            if (gr > gl) {
+            const gl = ganttColOffset(gStart, cols, colWidth, zoom);
+            const gr = ganttColOffset(gEnd, cols, colWidth, zoom);
+            const visibleLeft = Math.max(0, gl);
+            const visibleRight = Math.min(totalW, gr);
+            if (visibleRight > visibleLeft) {
                 const sumBar = document.createElement('div');
                 sumBar.className = 'gantt-group-summary-bar';
                 sumBar.dataset.groupId = group.id;
-                sumBar.style.left  = gl + 'px';
-                sumBar.style.width = (gr - gl - 2) + 'px';
+                sumBar.style.left  = visibleLeft + 'px';
+                sumBar.style.width = (visibleRight - visibleLeft - 2) + 'px';
                 sumBar.style.background = groupColor;
                 gTrack.appendChild(sumBar);
             }
@@ -10558,12 +11086,6 @@ function renderGanttView(project) {
         // ── Tasks ──
         if (!group.collapsed) {
             (group.tasks || []).forEach(task => {
-                totalTasks++;
-                if (task.status === 'done') doneTasks++;
-                if (task.status === 'blocked') blockedTasks++;
-                const taskEnd = ganttParseDate(task.endDate);
-                if (taskEnd >= today && (!nextDeadline || taskEnd < nextDeadline)) nextDeadline = taskEnd;
-
                 // Sidebar task row
                 const tSide = document.createElement('div');
                 tSide.className = 'gantt-task-sidebar-row';
@@ -10677,13 +11199,24 @@ function renderGanttView(project) {
                 };
                 
                 tSide.append(statusDot, tLbl, delBtn);
+                tSide.tabIndex = 0;
                 tSide.onclick = () => ganttOpenDetail(project, group.id, task.id);
+                tSide.addEventListener('keydown', (e) => {
+                    if (e.key !== 'Enter') return;
+                    e.preventDefault();
+                    ganttOpenDetail(project, group.id, task.id);
+                });
                 sidebarBody.appendChild(tSide);
 
                 // Timeline task track + bar
                 const tTrack = document.createElement('div');
                 tTrack.className = 'gantt-task-track';
-                const { left, width } = ganttBarPixels(task, cols, colWidth);
+                const geom = ganttBarPixels(task, cols, colWidth, zoom);
+                if (!geom) {
+                    rowsArea.appendChild(tTrack);
+                    return;
+                }
+                const { left, width } = geom;
                 const barColor = ganttStatusColor(task, groupColor);
                 const textColor = getContrastColor(barColor.startsWith('#') ? barColor : '#429eff');
                 const bar = document.createElement('div');
@@ -10732,107 +11265,83 @@ function renderGanttView(project) {
                 rightHandle.className = 'gantt-bar-handle-right';
                 bar.append(leftHandle, rightHandle);
 
+                const startAnchor = ganttColOffset(ganttParseDate(task.startDate), cols, colWidth, zoom);
+                const endAnchor = ganttColOffset(ganttAddDays(ganttParseDate(task.endDate), 1), cols, colWidth, zoom);
+                const trackPointer = (startEvent, onMove, onUp) => {
+                    if (startEvent.pointerType === 'mouse' && startEvent.button !== 0) return;
+                    startEvent.stopPropagation();
+                    startEvent.preventDefault();
+                    const originX = startEvent.clientX;
+                    let lastDelta = 0;
+                    const move = (ev) => {
+                        lastDelta = ev.clientX - originX;
+                        onMove(lastDelta);
+                    };
+                    const up = (ev) => {
+                        document.removeEventListener('pointermove', move);
+                        document.removeEventListener('pointerup', up);
+                        document.removeEventListener('pointercancel', up);
+                        const delta = ev.type === 'pointercancel' ? lastDelta : ev.clientX - originX;
+                        onUp(delta);
+                    };
+                    document.addEventListener('pointermove', move);
+                    document.addEventListener('pointerup', up);
+                    document.addEventListener('pointercancel', up);
+                };
+
                 const setupHandleDrag = (handle, isLeft) => {
-                    handle.onmousedown = (e) => {
-                        if (e.button !== 0) return;
-                        e.stopPropagation();
-                        let isDraggingHandle = true;
-                        const startX = e.clientX;
+                    handle.onpointerdown = (e) => {
                         const initialLeft = left;
                         const initialWidth = width;
-                        
-                        const mousemove = (ev) => {
-                            if (!isDraggingHandle) return;
-                            const delta = ev.clientX - startX;
+                        trackPointer(e, (delta) => {
                             if (isLeft) {
                                 const newWidth = Math.max(10, initialWidth - delta);
                                 const newLeft = initialLeft + (initialWidth - newWidth);
                                 bar.style.left = newLeft + 'px';
                                 bar.style.width = newWidth + 'px';
                             } else {
-                                const newWidth = Math.max(10, initialWidth + delta);
-                                bar.style.width = newWidth + 'px';
+                                bar.style.width = Math.max(10, initialWidth + delta) + 'px';
                             }
-                        };
-                        
-                        const mouseup = (ev) => {
-                            if (!isDraggingHandle) return;
-                            isDraggingHandle = false;
-                            document.removeEventListener('mousemove', mousemove);
-                            document.removeEventListener('mouseup', mouseup);
-                            
-                            const deltaX = ev.clientX - startX;
+                        }, (deltaX) => {
                             if (isLeft) {
                                 const previousStart = task.startDate;
-                                const newLeft = initialLeft + deltaX;
-                                const foundDate = ganttPixelToDate(newLeft, cols, colWidth, zoom);
+                                const foundDate = ganttRoundToDay(ganttPixelToDate(startAnchor + deltaX, cols, colWidth, zoom));
                                 task.startDate = ganttFormatDate(foundDate);
                                 if (ganttParseDate(task.startDate) > ganttParseDate(task.endDate)) task.startDate = task.endDate;
                                 const daysShift = Math.round((ganttParseDate(task.startDate).getTime() - ganttParseDate(previousStart).getTime()) / GANTT_MS_DAY);
                                 if (daysShift) ganttPushDependents(project, task.id, daysShift);
                             } else {
-                                const newRight = initialLeft + initialWidth + deltaX;
-                                const foundDate = ganttPixelToDate(newRight, cols, colWidth, zoom);
+                                const foundDate = ganttRoundToDay(ganttPixelToDate(endAnchor + deltaX, cols, colWidth, zoom));
                                 task.endDate = ganttFormatDate(ganttAddDays(foundDate, -1));
                                 if (ganttParseDate(task.endDate) < ganttParseDate(task.startDate)) task.endDate = task.startDate;
                             }
-                            
                             renderGanttView(project);
                             scheduleAutoSave();
-                        };
-                        document.addEventListener('mousemove', mousemove);
-                        document.addEventListener('mouseup', mouseup);
+                        });
                     };
                 };
                 
                 setupHandleDrag(leftHandle, true);
                 setupHandleDrag(rightHandle, false);
                 
-                // Task Dragging Logic
-                let isDraggingTask = false;
-                let startLeft = 0;
-                let startX = 0;
-                bar.onmousedown = (e) => {
-                    if (e.button !== 0) return;
-                    e.stopPropagation();
-                    isDraggingTask = true;
-                    startLeft = left;
-                    startX = e.clientX;
-                    
-                    const mousemove = (ev) => {
-                        if (!isDraggingTask) return;
-                        const delta = ev.clientX - startX;
-                        bar.style.left = Math.max(0, startLeft + delta) + 'px';
-                    };
-                    const mouseup = (ev) => {
-                        if (!isDraggingTask) return;
-                        isDraggingTask = false;
-                        document.removeEventListener('mousemove', mousemove);
-                        document.removeEventListener('mouseup', mouseup);
-                        
-                        const deltaLeft = ev.clientX - startX;
+                bar.onpointerdown = (e) => {
+                    if (e.target.closest('.gantt-bar-handle-left, .gantt-bar-handle-right')) return;
+                    trackPointer(e, (delta) => {
+                        bar.style.left = Math.max(0, left + delta) + 'px';
+                    }, (deltaLeft) => {
                         if (Math.abs(deltaLeft) < 5) {
                             ganttOpenDetail(project, group.id, task.id);
                             bar.style.left = left + 'px';
                             return;
                         }
-                        
-                        // Calculate new date
-                        const newLeft = Math.max(0, startLeft + deltaLeft);
-                        const foundDate = ganttPixelToDate(newLeft, cols, colWidth, zoom);
-                        
-                        const msShift = foundDate.getTime() - ganttParseDate(task.startDate).getTime();
-                        const daysShift = Math.round(msShift / GANTT_MS_DAY);
-                        
+                        const foundDate = ganttRoundToDay(ganttPixelToDate(startAnchor + deltaLeft, cols, colWidth, zoom));
+                        const daysShift = Math.round((foundDate.getTime() - ganttParseDate(task.startDate).getTime()) / GANTT_MS_DAY);
                         task.startDate = ganttFormatDate(ganttAddDays(ganttParseDate(task.startDate), daysShift));
                         task.endDate = ganttFormatDate(ganttAddDays(ganttParseDate(task.endDate), daysShift));
-                        ganttPushDependents(project, task.id, daysShift);
-                        
+                        if (daysShift) ganttPushDependents(project, task.id, daysShift);
                         renderGanttView(project);
                         scheduleAutoSave();
-                    };
-                    document.addEventListener('mousemove', mousemove);
-                    document.addEventListener('mouseup', mouseup);
+                    });
                 };
                 
                 tTrack.appendChild(bar);
@@ -11122,8 +11631,14 @@ function ganttSyncDetailToTask() {
     if (!task) return;
     const previousStart = ganttParseDate(task.startDate);
     task.name      = document.getElementById('gantt-detail-name').value;
-    task.startDate = document.getElementById('gantt-detail-start').value || task.startDate;
-    task.endDate   = document.getElementById('gantt-detail-end').value || task.endDate;
+    const startInput = document.getElementById('gantt-detail-start');
+    const endInput = document.getElementById('gantt-detail-end');
+    task.startDate = (startInput && startInput.value) || task.startDate;
+    task.endDate   = (endInput && endInput.value) || task.endDate;
+    if (ganttParseDate(task.endDate) < ganttParseDate(task.startDate)) {
+        task.endDate = task.startDate;
+        if (endInput) endInput.value = task.endDate;
+    }
     const dependsEl = document.getElementById('gantt-detail-depends');
     task.dependsOn = dependsEl && dependsEl.value && dependsEl.value !== String(task.id) ? dependsEl.value : '';
     const daysShift = Math.round((ganttParseDate(task.startDate).getTime() - previousStart.getTime()) / GANTT_MS_DAY);
@@ -11198,15 +11713,24 @@ function ganttDuplicateTask() {
 function ganttShiftView(project, direction) {
     const zoom = project.data.zoomLevel || 'week';
     const steps = { day: 7, week: 4, month: 3, quarter: 2 };
-    const n = steps[zoom] * direction;
-    if (zoom === 'day' || zoom === 'week') {
-        const days = zoom === 'day' ? n : n * 7;
-        project.data.viewStartDate = ganttFormatDate(ganttAddDays(ganttParseDate(project.data.viewStartDate), days));
-        project.data.viewEndDate   = ganttFormatDate(ganttAddDays(ganttParseDate(project.data.viewEndDate),   days));
+    const n = (steps[zoom] || 1) * direction;
+    let start = ganttParseDate(project.data.viewStartDate);
+    let end = ganttParseDate(project.data.viewEndDate);
+    if (zoom === 'day') {
+        start = ganttAddDays(start, n);
+        end = ganttAddDays(end, n);
+    } else if (zoom === 'week') {
+        start = ganttAddDays(start, n * 7);
+        end = ganttAddDays(end, n * 7);
+    } else if (zoom === 'quarter') {
+        start = ganttAddMonths(start, n * 3);
+        end = ganttAddMonths(end, n * 3);
     } else {
-        project.data.viewStartDate = ganttFormatDate(ganttAddMonths(ganttParseDate(project.data.viewStartDate), n));
-        project.data.viewEndDate   = ganttFormatDate(ganttAddMonths(ganttParseDate(project.data.viewEndDate),   n));
+        start = ganttAddMonths(start, n);
+        end = ganttAddMonths(end, n);
     }
+    project.data.viewStartDate = ganttFormatDate(start);
+    project.data.viewEndDate = ganttFormatDate(end);
     renderGanttView(project);
     scheduleAutoSave();
 }
@@ -11224,11 +11748,12 @@ function ganttJumpToToday(project) {
         project.data.viewEndDate   = ganttFormatDate(ganttAddMonths(today,  half));
     }
     renderGanttView(project);
+    scheduleAutoSave();
     // Scroll to today
     setTimeout(() => {
         const cols     = ganttGetColumns(project.data.viewStartDate, project.data.viewEndDate, zoom);
         const colWidth = GANTT_ZOOM[zoom].colWidth;
-        const offset   = ganttColOffset(today, cols, colWidth);
+        const offset   = ganttColOffset(today, cols, colWidth, zoom);
         const timeline = document.getElementById('gantt-timeline');
         if (timeline) timeline.scrollLeft = Math.max(0, offset - timeline.clientWidth / 2);
     }, 50);
