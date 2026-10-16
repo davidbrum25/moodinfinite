@@ -1110,6 +1110,7 @@
         .story-image-slot {
             width: 100%;
             aspect-ratio: 16 / 9;
+            flex-shrink: 0;
             background: rgba(0, 0, 0, 0.3);
             border: 2px dashed var(--border-color);
             border-radius: 0.75rem;
@@ -1262,9 +1263,9 @@
         }
 
         .story-meta-grid {
-            display: flex;
-            flex-direction: column;
-            gap: 0.75rem;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px 12px;
         }
 
         .story-meta-item {
@@ -1362,6 +1363,10 @@
             background: var(--bg-ui-hover);
             color: var(--text-color);
             cursor: pointer;
+        }
+
+        .story-print-status {
+            display: none;
         }
 
         .story-card-actions {
@@ -3665,7 +3670,10 @@
             .story-drag-handle, .story-image-overlay, .selection-tool-btn,
             .story-card-actions, .prompt-controls, .platform-select-wrapper,
             .media-type-toggle, .story-duration-slider,
-            #storyflow-scroll-start-btn, #storyflow-add-frame-btn {
+            #storyflow-scroll-start-btn, #storyflow-add-frame-btn,
+            #storyflow-stats-bar, #storyflow-fullscreen, #storyflow-script-view,
+            .story-manage-artists, .story-card-duplicate-btn,
+            .story-card-move-left-btn, .story-card-move-right-btn {
                 display: none !important;
             }
 
@@ -3810,6 +3818,203 @@
             @page {
                 size: A4 portrait;
                 margin: 10mm;
+            }
+
+            /* Moodflow print: light export theme, square corners, every frame on its own flow. */
+            body[data-print-tab="storyflow"] {
+                background: #F8F6F0 !important;
+                color: #121110 !important;
+                font-family: 'Plus Jakarta Sans', 'Segoe UI', Arial, sans-serif !important;
+            }
+
+            body[data-print-tab="storyflow"] #print-header {
+                background: #F8F6F0 !important;
+                color: #121110 !important;
+                border-bottom: 4px solid #D4A359 !important;
+                margin: 0 0 16px !important;
+                padding: 0 0 8px !important;
+            }
+
+            body[data-print-tab="storyflow"] #print-header h1,
+            body[data-print-tab="storyflow"] #print-project-name {
+                color: #121110 !important;
+                font-family: 'Outfit', 'Segoe UI', Arial, sans-serif !important;
+                font-weight: 900 !important;
+            }
+
+            body[data-print-tab="storyflow"] #print-project-meta {
+                color: #5C5548 !important;
+                border-bottom: 0 !important;
+                margin: 8px 0 0 !important;
+                padding: 0 !important;
+            }
+
+            body[data-print-tab="storyflow"] #content-area,
+            body[data-print-tab="storyflow"] #storyflow-container,
+            body[data-print-tab="storyflow"] #storyflow-stage,
+            body[data-print-tab="storyflow"] #storyflow-scroll-area,
+            body[data-print-tab="storyflow"] .storyflow-list {
+                position: static !important;
+                display: block !important;
+                height: auto !important;
+                min-height: 0 !important;
+                max-height: none !important;
+                overflow: visible !important;
+                inset: auto !important;
+                top: auto !important;
+                right: auto !important;
+                bottom: auto !important;
+                left: auto !important;
+                flex: none !important;
+                transform: none !important;
+                width: 100% !important;
+                padding: 0 !important;
+                margin: 0 !important;
+                background: #F8F6F0 !important;
+                content-visibility: visible !important;
+            }
+
+            body[data-print-tab="storyflow"] .storyflow-list {
+                display: flex !important;
+                flex-direction: row !important;
+                flex-wrap: wrap !important;
+                align-items: stretch !important;
+                gap: 8px !important;
+            }
+
+            body[data-print-tab="storyflow"] .story-card {
+                content-visibility: visible !important;
+                contain: none !important;
+                contain-intrinsic-size: auto !important;
+                flex: 0 0 calc(50% - 8px) !important;
+                width: calc(50% - 8px) !important;
+                height: auto !important;
+                min-height: 0 !important;
+                max-height: none !important;
+                margin: 0 0 8px !important;
+                padding: 12px !important;
+                break-inside: avoid !important;
+                page-break-inside: avoid !important;
+                border-radius: 0 !important;
+                box-shadow: none !important;
+                background: #F8F6F0 !important;
+                border: 1px solid #121110 !important;
+                color: #121110 !important;
+                overflow: visible !important;
+            }
+
+            body[data-print-tab="storyflow"] .story-card:nth-child(2n + 3) {
+                break-before: page !important;
+                page-break-before: always !important;
+            }
+
+            body[data-print-tab="storyflow"] .story-card-index {
+                color: #7A5C22 !important;
+                background: transparent !important;
+                border-radius: 0 !important;
+                padding: 0 !important;
+                font-family: 'Outfit', 'Segoe UI', Arial, sans-serif !important;
+                font-weight: 900 !important;
+                font-size: 24px !important;
+            }
+
+            body[data-print-tab="storyflow"] .story-image-slot,
+            body[data-print-tab="storyflow"] .story-image-slot img,
+            body[data-print-tab="storyflow"] .story-sketch {
+                border-radius: 0 !important;
+                box-shadow: none !important;
+            }
+
+            body[data-print-tab="storyflow"] .story-image-slot img {
+                opacity: 1 !important;
+            }
+
+            body[data-print-tab="storyflow"] .story-image-slot {
+                border: 1px solid #121110 !important;
+                background: #EFEBE0 !important;
+                max-height: none !important;
+            }
+
+            body[data-print-tab="storyflow"] .story-title-input,
+            body[data-print-tab="storyflow"] .story-desc-area,
+            body[data-print-tab="storyflow"] .story-meta-input,
+            body[data-print-tab="storyflow"] .story-duration-value,
+            body[data-print-tab="storyflow"] .story-meta-label {
+                background: transparent !important;
+                color: #121110 !important;
+                border-radius: 0 !important;
+                box-shadow: none !important;
+            }
+
+            body[data-print-tab="storyflow"] .story-meta-label {
+                color: #5C5548 !important;
+            }
+
+            body[data-print-tab="storyflow"] .story-title-input {
+                border: 0 !important;
+                border-bottom: 1px solid #121110 !important;
+                font-family: 'Outfit', 'Segoe UI', Arial, sans-serif !important;
+                font-weight: 700 !important;
+            }
+
+            body[data-print-tab="storyflow"] .story-desc-area {
+                border: 0 !important;
+                min-height: 48px !important;
+                overflow: visible !important;
+            }
+
+            body[data-print-tab="storyflow"] .story-meta-grid > .story-meta-item:last-child {
+                grid-column: 1 / -1 !important;
+            }
+
+            body[data-print-tab="storyflow"] input.story-meta-input {
+                overflow: visible !important;
+                text-overflow: clip !important;
+            }
+
+            body[data-print-tab="storyflow"] .story-duration-container {
+                background: transparent !important;
+                border: 0 !important;
+                border-radius: 0 !important;
+                padding: 0 !important;
+            }
+
+            body[data-print-tab="storyflow"] .story-title-input::placeholder,
+            body[data-print-tab="storyflow"] .story-desc-area::placeholder,
+            body[data-print-tab="storyflow"] .story-meta-input::placeholder {
+                color: #5C5548 !important;
+                opacity: 1 !important;
+            }
+
+            body[data-print-tab="storyflow"] .story-print-status {
+                display: inline-block !important;
+                align-self: flex-start !important;
+                width: auto !important;
+                margin: 0 !important;
+                padding: 4px 8px !important;
+                border: 2px solid #5C5548 !important;
+                border-radius: 0 !important;
+                background: transparent !important;
+                color: #5C5548 !important;
+                font-family: 'Outfit', 'Segoe UI', Arial, sans-serif !important;
+                font-weight: 700 !important;
+                font-size: 12px !important;
+                line-height: 16px !important;
+                letter-spacing: 0.06em !important;
+                text-transform: uppercase !important;
+                box-shadow: none !important;
+            }
+
+            body[data-print-tab="storyflow"] .story-print-status[data-status="approved"] {
+                background: #D4A359 !important;
+                border-color: #D4A359 !important;
+                color: #121110 !important;
+            }
+
+            body[data-print-tab="storyflow"] .story-print-status[data-status="wip"] {
+                background: transparent !important;
+                border-color: #1C6A96 !important;
+                color: #121110 !important;
             }
         }
 

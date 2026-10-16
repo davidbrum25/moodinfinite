@@ -1,0 +1,12 @@
+{
+  "name": "Spot Verano 30s",
+  "workers": ["Lucía Fernández", "Mateo Ríos"],
+  "frames": [
+    { "title": "Apertura en la costa", "description": "Plano abierto del muelle al amanecer.\nEntra la voz en off: \"Hacer pie con lo propio\".", "image": "@gradient:0", "sketch": [{ "color": "#ff4d6a", "points": [{ "x": 0.1, "y": 0.2 }, { "x": 0.5, "y": 0.5 }, { "x": 0.9, "y": 0.3 }] }],
+      "meta": { "duration": "5s", "camera": "Wide Shot", "audio": "Voz en off + oleaje", "artist": "Lucía Fernández", "status": "approved" } },
+    { "title": "Detalle de las manos", "description": "Primer plano de las manos atando la soga <b>sin</b> cortar.", "image": "@gradient:1", "sketch": [],
+      "meta": { "duration": "3s", "camera": "Close Up", "audio": "Nudos y cuerda, sin música", "artist": "Mateo Ríos", "status": "wip" } },
+    { "title": "", "description": "", "image": null, "sketch": [],
+      "meta": { "duration": "2s", "camera": "", "audio": "", "artist": "", "status": null } }
+  ]
+}
