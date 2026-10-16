@@ -9943,7 +9943,12 @@ function createStoryCard(project, frame, index) {
     artistRow.append(artistSelect, artistManage);
     artistItem.append(artistLbl, artistRow);
 
-    metaGrid.append(durationItem, cameraItem, artistItem);
+    metaGrid.append(durationItem, cameraItem, artistItem, createMetaItem('Audio', 'audio'));
+
+    const printStatus = document.createElement('p');
+    printStatus.className = 'story-print-status';
+    printStatus.dataset.status = getMoodflowStatusKey(frame);
+    printStatus.textContent = getMoodflowStatusLabel(frame);
 
     const actions = document.createElement('div');
     actions.className = 'story-card-actions';
@@ -9984,7 +9989,7 @@ function createStoryCard(project, frame, index) {
     
     actions.append(togglesContainer, deleteBtn);
 
-    card.append(header, imageSlot, titleInput, descArea, metaGrid, actions);
+    card.append(header, imageSlot, titleInput, descArea, metaGrid, printStatus, actions);
     return card;
 }
 
@@ -10320,72 +10325,463 @@ function renderAssetGrid(imagesSet, callback) {
         });
     }
 }
+// --- MOODFLOW EXPORTS (sheet HTML, PDF, print) ---
+// Shared export theme. Dark is the default for the sheet; light is used for print and for PDF pages.
+// Gold text on light backgrounds uses goldText (#7A5C22); #D4A359 is only a rule or fill there.
+// Cobalt is only used for borders and links on the dark background, and its darker variant on light.
+const MOODFLOW_EXPORT_THEME = Object.freeze({
+    dark: Object.freeze({ bg: '#121110', surface: '#24201B', text: '#F4F1EA', muted: '#B8AFA0', gold: '#D4A359', goldText: '#D4A359', cobalt: '#2589BD', onGold: '#121110' }),
+    light: Object.freeze({ bg: '#F8F6F0', surface: '#EFEBE0', text: '#121110', muted: '#5C5548', gold: '#D4A359', goldText: '#7A5C22', cobalt: '#1C6A96', onGold: '#121110' }),
+    sketchColor: '#ff4d6a',
+    fontsHref: 'https://fonts.googleapis.com/css2?family=Outfit:wght@700;900&family=Plus+Jakarta+Sans:wght@400;500;700&display=swap',
+    headingStack: "'Outfit', 'Segoe UI', Arial, sans-serif",
+    bodyStack: "'Plus Jakarta Sans', 'Segoe UI', Arial, sans-serif",
+});
+
+const MOODFLOW_STATUS_LABELS = Object.freeze({ approved: 'Approved', wip: 'WIP', none: 'Not started' });
+const MOODFLOW_EMPTY_VALUE = 'Not set';
+
+function escapeExportHtml(value) {
+    return String(value == null ? '' : value)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
+function getMoodflowStatusKey(frame) {
+    const status = frame && frame.meta && frame.meta.status;
+    return status === 'approved' || status === 'wip' ? status : 'none';
+}
+
+function getMoodflowStatusLabel(frame) {
+    return MOODFLOW_STATUS_LABELS[getMoodflowStatusKey(frame)];
+}
+
+// Durations are stored as "5s" by the UI and as "5" by older frames; show both as "5s".
+function formatMoodflowDuration(raw) {
+    const text = String(raw == null ? '' : raw).trim();
+    if (!text) return '';
+    return /^\d+(\.\d+)?$/.test(text) ? text + 's' : text;
+}
+
+function getMoodflowTotalSeconds(frames) {
+    return frames.reduce((sum, frame) => sum + (parseInt(frame && frame.meta && frame.meta.duration, 10) || 0), 0);
+}
+
+function formatMoodflowTotalDuration(totalSeconds) {
+    if (totalSeconds < 60) return totalSeconds + 's';
+    return `${totalSeconds}s (${Math.floor(totalSeconds / 60)}m ${totalSeconds % 60}s)`;
+}
+
+function formatMoodflowExportDate(date) {
+    return (date || new Date()).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+}
+
+// Sketch strokes are stored per frame as [{ color, points: [{ x, y }] }] with x and y in 0..1 of the image slot.
+function getMoodflowSketchStrokes(frame) {
+    const strokes = frame && Array.isArray(frame.sketch) ? frame.sketch : [];
+    const clamp = (n) => Math.min(1, Math.max(0, n));
+    return strokes.map((stroke) => {
+        const points = (stroke && Array.isArray(stroke.points) ? stroke.points : [])
+            .filter((p) => p && Number.isFinite(p.x) && Number.isFinite(p.y))
+            .map((p) => ({ x: clamp(p.x), y: clamp(p.y) }));
+        const color = stroke && typeof stroke.color === 'string' && /^#[0-9a-f]{6}$/i.test(stroke.color) ? stroke.color : MOODFLOW_EXPORT_THEME.sketchColor;
+        return { color, points };
+    }).filter((stroke) => stroke.points.length >= 2);
+}
+
+function buildMoodflowSheetCss() {
+    const d = MOODFLOW_EXPORT_THEME.dark;
+    const l = MOODFLOW_EXPORT_THEME.light;
+    const heading = MOODFLOW_EXPORT_THEME.headingStack;
+    return `
+:root { --bg:${d.bg}; --surface:${d.surface}; --text:${d.text}; --muted:${d.muted}; --gold:${d.gold}; --gold-text:${d.goldText}; --cobalt:${d.cobalt}; --on-gold:${d.onGold}; }
+*, *::before, *::after { box-sizing:border-box; border-radius:0; }
+html { -webkit-text-size-adjust:100%; background:var(--bg); }
+body { margin:0; padding:32px 24px; background:var(--bg); color:var(--text); font-family:${MOODFLOW_EXPORT_THEME.bodyStack}; font-size:14px; line-height:1.5; }
+.sheet-header { padding-bottom:16px; margin-bottom:24px; border-bottom:4px solid var(--gold); }
+.sheet-kicker { margin:0 0 8px; font:700 12px/16px ${heading}; letter-spacing:0.12em; text-transform:uppercase; color:var(--muted); }
+.sheet-header h1 { margin:0 0 16px; font:900 32px/1.1 ${heading}; overflow-wrap:anywhere; }
+.sheet-meta { display:flex; flex-wrap:wrap; gap:8px 32px; margin:0; }
+.sheet-meta dt { font:700 12px/16px ${heading}; letter-spacing:0.08em; text-transform:uppercase; color:var(--muted); }
+.sheet-meta dd { margin:0; font:700 16px/24px ${heading}; }
+.sheet-meta dd.key { color:var(--gold-text); }
+.table-wrap { overflow-x:auto; border:1px solid var(--surface); }
+.table-wrap:focus-visible { outline:2px solid var(--cobalt); outline-offset:2px; }
+table { border-collapse:collapse; width:100%; min-width:960px; }
+caption { position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; }
+thead th { padding:12px 16px; background:var(--surface); color:var(--text); font:700 12px/16px ${heading}; letter-spacing:0.08em; text-transform:uppercase; text-align:left; white-space:nowrap; }
+tbody th, tbody td { padding:16px; vertical-align:top; text-align:left; border-bottom:1px solid var(--surface); }
+tbody tr:last-child th, tbody tr:last-child td { border-bottom:0; }
+tbody th.col-index { width:56px; font:900 24px/1 ${heading}; color:var(--gold-text); }
+.frame-title { font:700 16px/24px ${heading}; min-width:128px; max-width:200px; overflow-wrap:anywhere; }
+.notes { min-width:240px; max-width:360px; line-height:1.6; overflow-wrap:anywhere; }
+.nowrap { white-space:nowrap; }
+.col-text { min-width:104px; overflow-wrap:anywhere; }
+.muted { color:var(--muted); }
+.visual { position:relative; width:192px; aspect-ratio:16 / 9; background:var(--surface); overflow:hidden; border-radius:0; }
+.visual img { display:block; width:100%; height:100%; object-fit:cover; border-radius:0; }
+.visual .sketch { position:absolute; left:0; top:0; width:100%; height:100%; }
+.visual .placeholder { display:flex; align-items:center; justify-content:center; width:100%; height:100%; color:var(--muted); font-size:12px; border-radius:0; }
+.status { display:inline-block; padding:4px 8px; border:2px solid var(--muted); font:700 12px/16px ${heading}; letter-spacing:0.06em; text-transform:uppercase; white-space:nowrap; border-radius:0; }
+.status-approved { background:var(--gold); border-color:var(--gold); color:var(--on-gold); }
+.status-wip { border-color:var(--cobalt); color:var(--text); }
+.status-none { border-color:var(--muted); color:var(--muted); }
+.sheet-footer { margin-top:32px; padding-top:16px; border-top:1px solid var(--surface); color:var(--muted); font-size:12px; }
+@media (max-width:700px) {
+  body { padding:16px; }
+  .sheet-header h1 { font-size:24px; }
+  table { min-width:0; }
+  thead { position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); }
+  table, tbody, tr, th, td { display:block; }
+  .col-text { min-width:0; }
+  tbody tr { display:grid; gap:12px; padding:16px; border-bottom:1px solid var(--surface); }
+  tbody th, tbody td { padding:0; border:0; }
+  tbody th.col-index { width:auto; }
+  td[data-label]::before { content:attr(data-label); display:block; margin-bottom:4px; font:700 12px/16px ${heading}; letter-spacing:0.08em; text-transform:uppercase; color:var(--muted); }
+  .frame-title, .notes { min-width:0; max-width:none; }
+  .visual { width:100%; max-width:320px; }
+}
+@media print {
+  :root { --bg:${l.bg}; --surface:${l.surface}; --text:${l.text}; --muted:${l.muted}; --gold-text:${l.goldText}; --cobalt:${l.cobalt}; --on-gold:${l.onGold}; }
+  * { -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+  body { padding:0; }
+  .table-wrap { overflow:visible; border:0; }
+  table { min-width:0; }
+  thead { display:table-header-group; }
+  tr { break-inside:avoid; page-break-inside:avoid; }
+  @page { size:A4 landscape; margin:12mm; }
+}
+`;
+}
+
+function buildMoodflowSheetRow(frame, index) {
+    const n = index + 1;
+    const meta = (frame && frame.meta) || {};
+    const title = String((frame && frame.title) || '');
+    const description = String((frame && frame.description) || '');
+    const value = (text, className) => {
+        const clean = String(text == null ? '' : text).trim();
+        return clean ? escapeExportHtml(clean) : `<span class="muted${className ? ' ' + className : ''}">${MOODFLOW_EMPTY_VALUE}</span>`;
+    };
+
+    const strokes = getMoodflowSketchStrokes(frame);
+    const sketchSvg = strokes.length
+        ? `<svg class="sketch" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true" focusable="false">${strokes.map((stroke) => `<polyline points="${stroke.points.map((p) => `${(p.x * 100).toFixed(2)},${(p.y * 100).toFixed(2)}`).join(' ')}" fill="none" stroke="${stroke.color}" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" /> `).join('')}</svg>`
+        : '';
+    const visualBase = frame && frame.image
+        ? `<img src="${escapeExportHtml(frame.image)}" alt="${escapeExportHtml(title || 'Frame ' + n)}" width="192" height="108">`
+        : '<div class="placeholder">No image</div>';
+
+    const titleCell = title.trim() ? escapeExportHtml(title) : '<span class="muted">Untitled</span>';
+    const notesCell = description.trim() ? escapeExportHtml(description).replace(/\r\n|\r|\n/g, '<br>') : '<span class="muted">No notes</span>';
+    const statusKey = getMoodflowStatusKey(frame);
+
+    return `
+      <tr>
+        <th scope="row" class="col-index" data-label="#">${n}</th>
+        <td class="frame-title" data-label="Frame title">${titleCell}</td>
+        <td data-label="Visual"><div class="visual">${visualBase}${sketchSvg}</div></td>
+        <td class="notes" data-label="Action / Notes">${notesCell}</td>
+        <td class="nowrap" data-label="Duration">${value(formatMoodflowDuration(meta.duration))}</td>
+        <td class="col-text" data-label="Camera">${value(meta.camera)}</td>
+        <td class="col-text" data-label="Artist">${value(meta.artist)}</td>
+        <td class="col-text" data-label="Audio">${value(meta.audio)}</td>
+        <td data-label="Status"><span class="status status-${statusKey}">${MOODFLOW_STATUS_LABELS[statusKey]}</span></td>
+      </tr>`;
+}
+
+// Pure: returns the full HTML document for the Moodflow sheet.
+function buildMoodflowSheetHtml(project, exportDate) {
+    const frames = project && project.data && Array.isArray(project.data.frames) ? project.data.frames : [];
+    const projectName = (project && project.name) || 'Moodflow Export';
+    const dateText = exportDate || formatMoodflowExportDate();
+    const totalText = formatMoodflowTotalDuration(getMoodflowTotalSeconds(frames));
+    const frameCountText = `${frames.length} frame${frames.length === 1 ? '' : 's'}`;
+    const safeName = escapeExportHtml(projectName);
+
+    return `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>${safeName} (Moodflow sheet)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="${MOODFLOW_EXPORT_THEME.fontsHref}">
+<style>${buildMoodflowSheetCss()}</style>
+</head>
+<body>
+  <header class="sheet-header">
+    <p class="sheet-kicker">Moodflow</p>
+    <h1>${safeName}</h1>
+    <dl class="sheet-meta">
+      <div><dt>Date</dt><dd>${escapeExportHtml(dateText)}</dd></div>
+      <div><dt>Frames</dt><dd class="key">${escapeExportHtml(frameCountText)}</dd></div>
+      <div><dt>Total duration</dt><dd class="key">${escapeExportHtml(totalText)}</dd></div>
+    </dl>
+  </header>
+  <main>
+    <div class="table-wrap" tabindex="0" role="region" aria-label="Moodflow frames table, scrollable">
+      <table>
+        <caption>Frames of ${safeName}</caption>
+        <thead>
+          <tr>
+            <th scope="col">#</th>
+            <th scope="col">Frame title</th>
+            <th scope="col">Visual</th>
+            <th scope="col">Action / Notes</th>
+            <th scope="col">Duration</th>
+            <th scope="col">Camera</th>
+            <th scope="col">Artist</th>
+            <th scope="col">Audio</th>
+            <th scope="col">Status</th>
+          </tr>
+        </thead>
+        <tbody>${frames.map(buildMoodflowSheetRow).join('')}
+        </tbody>
+      </table>
+    </div>
+  </main>
+  <footer class="sheet-footer">Exported from Moodinfinite</footer>
+</body>
+</html>`;
+}
+
+function moodflowHexToRgb(hex) {
+    const n = parseInt(hex.slice(1), 16);
+    return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+}
+
+// Builds the Moodflow PDF (one frame per page, continued pages for long notes) and returns the jsPDF doc.
+function buildStoryflowPdf(project, exportDate) {
+    const frames = project && project.data && Array.isArray(project.data.frames) ? project.data.frames : [];
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4', compress: false });
+    const T = MOODFLOW_EXPORT_THEME;
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const pageHeight = doc.internal.pageSize.getHeight();
+    const margin = 16;
+    const contentWidth = pageWidth - margin * 2;
+    const headerHeight = 40;
+    const footerY = pageHeight - 8;
+    const projectName = (project && project.name) || 'Moodflow Export';
+    const dateText = exportDate || formatMoodflowExportDate();
+    const totalText = formatMoodflowTotalDuration(getMoodflowTotalSeconds(frames));
+    const frameCountText = `${frames.length} frame${frames.length === 1 ? '' : 's'}`;
+
+    const fill = (hex) => doc.setFillColor(...moodflowHexToRgb(hex));
+    const ink = (hex) => doc.setTextColor(...moodflowHexToRgb(hex));
+    const stroke = (hex) => doc.setDrawColor(...moodflowHexToRgb(hex));
+
+    // Draws a row of differently coloured text segments on one baseline.
+    const textRun = (segments, x, y) => {
+        let cursor = x;
+        segments.forEach(([text, color]) => {
+            ink(color);
+            doc.text(text, cursor, y);
+            cursor += doc.getTextWidth(text);
+        });
+    };
+
+    const drawPageChrome = (index, continued) => {
+        fill(T.light.bg);
+        doc.rect(0, 0, pageWidth, pageHeight, 'F');
+        fill(T.dark.bg);
+        doc.rect(0, 0, pageWidth, headerHeight, 'F');
+        fill(T.dark.gold);
+        doc.rect(0, headerHeight, pageWidth, 1.5, 'F');
+
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(18);
+        const nameLines = doc.splitTextToSize(projectName, contentWidth - 48).slice(0, 2);
+        ink(T.dark.text);
+        doc.text(nameLines, margin, 16, { lineHeightFactor: 1.2 });
+
+        doc.setFontSize(14);
+        ink(T.dark.gold);
+        doc.text(`${String(index + 1).padStart(2, '0')} / ${String(frames.length).padStart(2, '0')}`, pageWidth - margin, 16, { align: 'right' });
+        if (continued) {
+            doc.setFont('helvetica', 'normal');
+            doc.setFontSize(8);
+            ink(T.dark.muted);
+            doc.text('Continued', pageWidth - margin, 22, { align: 'right' });
+        }
+
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(9);
+        const sep = ['    |    ', T.dark.muted];
+        textRun([
+            ['MOODFLOW', T.dark.muted], sep,
+            [dateText, T.dark.text], sep,
+            [frameCountText, T.dark.gold], sep,
+            ['Total ' + totalText, T.dark.gold],
+        ], margin, headerHeight - 8);
+    };
+
+    const drawVisual = (frame, x, y, w, h) => {
+        fill(T.light.surface);
+        doc.rect(x, y, w, h, 'F');
+        let placed = false;
+        if (frame.image) {
+            try {
+                const props = doc.getImageProperties(frame.image);
+                const scale = Math.max(w / props.width, h / props.height);
+                const iw = props.width * scale;
+                const ih = props.height * scale;
+                doc.saveGraphicsState();
+                doc.rect(x, y, w, h, null);
+                doc.clip();
+                doc.discardPath();
+                doc.addImage(frame.image, props.fileType, x + (w - iw) / 2, y + (h - ih) / 2, iw, ih, undefined, 'FAST');
+                doc.restoreGraphicsState();
+                placed = true;
+            } catch (e) {
+                console.error('Could not add image to PDF', e);
+                try { doc.restoreGraphicsState(); } catch (restoreError) { /* no saved state */ }
+            }
+        }
+        if (!placed) {
+            doc.setFont('helvetica', 'normal');
+            doc.setFontSize(9);
+            ink(T.light.muted);
+            doc.text(frame.image ? 'Image could not be exported' : 'No image', x + w / 2, y + h / 2, { align: 'center' });
+        }
+        const strokes = getMoodflowSketchStrokes(frame);
+        if (strokes.length) {
+            doc.setLineCap('round');
+            doc.setLineJoin('round');
+            doc.setLineWidth(w * 0.012);
+            strokes.forEach((s) => {
+                stroke(s.color);
+                const first = s.points[0];
+                const rel = s.points.slice(1).map((p, i) => [(p.x - s.points[i].x) * w, (p.y - s.points[i].y) * h]);
+                doc.lines(rel, x + first.x * w, y + first.y * h, [1, 1], 'S', false);
+            });
+        }
+        stroke(T.light.text);
+        doc.setLineWidth(0.3);
+        doc.rect(x, y, w, h, 'S');
+    };
+
+    // Label above a value; returns the height used.
+    const drawField = (label, text, x, y, width) => {
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(7.5);
+        ink(T.light.muted);
+        doc.text(label.toUpperCase(), x, y);
+        const clean = String(text == null ? '' : text).trim();
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(11);
+        ink(clean ? T.light.text : T.light.muted);
+        const lines = doc.splitTextToSize(clean || MOODFLOW_EMPTY_VALUE, width);
+        doc.text(lines, x, y + 5);
+        return 5 + lines.length * 5;
+    };
+
+    const drawStatusChip = (frame, x, y) => {
+        const key = getMoodflowStatusKey(frame);
+        const label = MOODFLOW_STATUS_LABELS[key];
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(9);
+        const w = doc.getTextWidth(label) + 8;
+        if (key === 'approved') {
+            fill(T.light.gold);
+            doc.rect(x, y, w, 7, 'F');
+            ink(T.light.onGold);
+        } else {
+            stroke(key === 'wip' ? T.light.cobalt : T.light.muted);
+            doc.setLineWidth(0.6);
+            doc.rect(x, y, w, 7, 'S');
+            ink(key === 'wip' ? T.light.text : T.light.muted);
+        }
+        doc.text(label, x + 4, y + 4.9);
+    };
+
+    frames.forEach((frame, index) => {
+        if (index > 0) doc.addPage();
+        const meta = frame.meta || {};
+        drawPageChrome(index, false);
+
+        let y = headerHeight + 16;
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(20);
+        ink(T.light.text);
+        const titleLines = doc.splitTextToSize(frame.title || `Frame ${index + 1}`, contentWidth).slice(0, 3);
+        doc.text(titleLines, margin, y, { lineHeightFactor: 1.2 });
+        y += titleLines.length * 8 + 4;
+
+        const visualHeight = contentWidth * 9 / 16;
+        drawVisual(frame, margin, y, contentWidth, visualHeight);
+        y += visualHeight + 10;
+
+        const colWidth = (contentWidth - 16) / 3;
+        const rowOne = Math.max(
+            drawField('Duration', formatMoodflowDuration(meta.duration), margin, y, colWidth),
+            drawField('Camera', meta.camera, margin + colWidth + 8, y, colWidth),
+            drawField('Artist', meta.artist, margin + (colWidth + 8) * 2, y, colWidth)
+        );
+        y += rowOne + 4;
+        const audioHeight = drawField('Audio', meta.audio, margin, y, colWidth * 2 + 8);
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(7.5);
+        ink(T.light.muted);
+        doc.text('STATUS', margin + (colWidth + 8) * 2, y);
+        drawStatusChip(frame, margin + (colWidth + 8) * 2, y + 2);
+        y += Math.max(audioHeight, 11) + 6;
+
+        stroke(T.light.text);
+        doc.setLineWidth(0.3);
+        doc.line(margin, y, pageWidth - margin, y);
+        y += 8;
+
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(7.5);
+        ink(T.light.muted);
+        doc.text('ACTION / NOTES', margin, y);
+        y += 6;
+
+        const description = String(frame.description || '').trim();
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(11);
+        ink(description ? T.light.text : T.light.muted);
+        const lines = doc.splitTextToSize(description || 'No notes', contentWidth);
+        lines.forEach((line) => {
+            if (y > pageHeight - 20) {
+                doc.addPage();
+                drawPageChrome(index, true);
+                y = headerHeight + 16;
+                doc.setFont('helvetica', 'normal');
+                doc.setFontSize(11);
+                ink(description ? T.light.text : T.light.muted);
+            }
+            doc.text(line, margin, y);
+            y += 5.4;
+        });
+    });
+
+    const pageCount = doc.getNumberOfPages();
+    for (let i = 1; i <= pageCount; i++) {
+        doc.setPage(i);
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(8);
+        ink(T.light.muted);
+        doc.text('Exported from Moodinfinite', margin, footerY);
+        doc.text(`Page ${i} of ${pageCount}`, pageWidth - margin, footerY, { align: 'right' });
+    }
+    return doc;
+}
+
 function saveStoryflowAsPdf(project) {
     if (!project || !project.data || !project.data.frames || project.data.frames.length === 0) {
         showToast("StoryFlow is empty, nothing to export.", "error");
         return;
     }
 
-    const { jsPDF } = window.jspdf;
-    const doc = new jsPDF('p', 'mm', 'a4');
-    const pageWidth = doc.internal.pageSize.getWidth();
-    const pageHeight = doc.internal.pageSize.getHeight();
-    const margin = 20;
-    const contentWidth = pageWidth - (margin * 2);
-
     showToast("Generating PDF...");
-
-    project.data.frames.forEach((frame, index) => {
-        if (index > 0) doc.addPage();
-
-        // Background (optional, matches theme or clean white)
-        // doc.setFillColor(255, 255, 255);
-        // doc.rect(0, 0, pageWidth, pageHeight, 'F');
-
-        // Title
-        doc.setFont("helvetica", "bold");
-        doc.setFontSize(22);
-        doc.setTextColor(40);
-        doc.text(frame.title || `Frame ${index + 1}`, margin, 30);
-
-        // Image Container
-        let nextY = 40;
-        if (frame.image) {
-            try {
-                // For storyboards, we typically want a consistent height for the image
-                const imgHeight = 90; 
-                doc.addImage(frame.image, 'JPEG', margin, nextY, contentWidth, imgHeight, undefined, 'FAST');
-                nextY += imgHeight + 10;
-            } catch (e) {
-                console.error("Could not add image to PDF", e);
-                doc.setFontSize(10);
-                doc.setTextColor(150);
-                doc.text("[Image Error]", margin, nextY + 10);
-                nextY += 20;
-            }
-        }
-
-        // Meta Info (Duration / Camera)
-        doc.setFont("helvetica", "bold");
-        doc.setFontSize(10);
-        doc.setTextColor(100);
-        const metaText = `DURATION: ${frame.meta?.duration || 'N/A'}    |    CAMERA: ${frame.meta?.camera || 'N/A'}`;
-        doc.text(metaText, margin, nextY);
-        nextY += 8;
-
-        // Divider
-        doc.setDrawColor(200);
-        doc.line(margin, nextY, pageWidth - margin, nextY);
-        nextY += 10;
-
-        // Description
-        doc.setFont("helvetica", "normal");
-        doc.setFontSize(12);
-        doc.setTextColor(60);
-        const splitDescription = doc.splitTextToSize(frame.description || 'No description provided.', contentWidth);
-        doc.text(splitDescription, margin, nextY);
-    });
-
+    const doc = buildStoryflowPdf(project);
     const fileName = `${project.name || 'storyflow'}.pdf`;
     doc.save(fileName);
     showToast("StoryFlow exported as PDF.");
@@ -10399,79 +10795,8 @@ function exportMoodflowAsSheet(project) {
 
     showToast('Generating sheet export...');
 
-    const frames = project.data.frames;
     const projectName = project.name || 'Moodflow Export';
-    const exportDate = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
-
-    // Build table rows
-    const rows = frames.map((frame, i) => {
-        const frameNum = i + 1;
-        const title = (frame.title || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-        const description = (frame.description || '').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>');
-        const duration = frame.meta?.duration || '—';
-        const camera = (frame.meta?.camera || '—').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-        const imgCell = frame.image
-            ? `<img src="${frame.image}" alt="Frame ${frameNum}" style="width:180px;height:120px;object-fit:cover;border-radius:4px;display:block;" />`
-            : `<div style="width:180px;height:120px;background:#1a1a2e;border-radius:4px;display:flex;align-items:center;justify-content:center;color:#555;font-size:11px;">No Image</div>`;
-
-        const rowBg = i % 2 === 0 ? '#0f0f1a' : '#12121f';
-        return `
-        <tr style="background:${rowBg};">
-            <td style="text-align:center;font-weight:700;font-size:1.1rem;color:#7c9cff;vertical-align:middle;padding:10px 8px;">${frameNum}</td>
-            <td style="font-weight:600;font-size:0.9rem;color:#e2e8f0;vertical-align:middle;padding:10px 8px;min-width:120px;max-width:180px;word-break:break-word;">${title || '<span style="color:#444">Untitled</span>'}</td>
-            <td style="padding:10px 8px;vertical-align:middle;">${imgCell}</td>
-            <td style="font-size:0.82rem;color:#94a3b8;vertical-align:top;padding:10px 8px;min-width:200px;max-width:300px;line-height:1.6;">${description || '<span style="color:#444">—</span>'}</td>
-            <td style="text-align:center;font-size:0.85rem;color:#64748b;vertical-align:middle;padding:10px 8px;white-space:nowrap;">${duration}</td>
-            <td style="text-align:center;font-size:0.85rem;color:#64748b;vertical-align:middle;padding:10px 8px;white-space:nowrap;">${camera}</td>
-        </tr>`;
-    }).join('');
-
-    const html = `<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>${projectName} — Moodflow Sheet</title>
-<style>
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: 'Inter', 'Segoe UI', Arial, sans-serif; background: #0d0d0d; color: #e2e8f0; padding: 2rem; }
-  .sheet-header { display: flex; align-items: center; gap: 1.2rem; margin-bottom: 0.75rem; }
-  .sheet-header h1 { font-size: 1.5rem; font-weight: 700; color: #fff; }
-  .sheet-meta { font-size: 0.8rem; color: #64748b; margin-bottom: 1.5rem; padding-bottom: 1rem; border-bottom: 1px solid #1e2035; }
-  table { border-collapse: collapse; width: 100%; min-width: 900px; }
-  thead tr { background: #161628 !important; }
-  th { padding: 10px 8px; font-size: 0.72rem; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: #7c9cff; border-bottom: 2px solid #252545; text-align: left; white-space: nowrap; }
-  th:first-child { text-align: center; }
-  td { border-bottom: 1px solid #1a1a2e; vertical-align: middle; }
-  tr:hover td { background: rgba(124, 156, 255, 0.04) !important; }
-  .badge { display: inline-block; padding: 2px 8px; border-radius: 20px; font-size: 0.72rem; font-weight: 600; background: rgba(124,156,255,0.12); color: #7c9cff; }
-  @media print { body { background: #fff; color: #000; } .sheet-header h1 { color: #000; } }
-</style>
-</head>
-<body>
-  <div class="sheet-header">
-    <svg width="28" height="28" viewBox="0 0 28 28" fill="none" xmlns="http://www.w3.org/2000/svg"><rect width="28" height="28" rx="6" fill="#7c9cff" fill-opacity="0.15"/><path d="M7 10h14M7 14h14M7 18h10" stroke="#7c9cff" stroke-width="1.8" stroke-linecap="round"/></svg>
-    <h1>${projectName}</h1>
-    <span class="badge">Moodflow</span>
-  </div>
-  <div class="sheet-meta">Exported on ${exportDate} &nbsp;·&nbsp; ${frames.length} frame${frames.length !== 1 ? 's' : ''} &nbsp;·&nbsp; Moodinfinite</div>
-  <table>
-    <thead>
-      <tr>
-        <th style="width:40px;">#</th>
-        <th>Frame Title</th>
-        <th>Visual</th>
-        <th>Action / Notes</th>
-        <th>Duration</th>
-        <th>Camera</th>
-      </tr>
-    </thead>
-    <tbody>
-      ${rows}
-    </tbody>
-  </table>
-</body>
-</html>`;
+    const html = buildMoodflowSheetHtml(project, formatMoodflowExportDate());
 
     const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
     const url = URL.createObjectURL(blob);
@@ -10662,6 +10987,13 @@ function prepareAndPrint() {
 
         // Stamp the active tab type so CSS print rules only show the correct container
         document.body.dataset.printTab = activeProject.type;
+        if (activeProject.type === 'storyflow') {
+            document.querySelectorAll('#storyflow-scroll-area img[data-src]').forEach((img) => {
+                img.src = img.dataset.src;
+                img.removeAttribute('data-src');
+                img.classList.remove('lazy-load');
+            });
+        }
     }
 
     // Clean up the attribute after the print dialog closes
