@@ -3,7 +3,7 @@
  * undo, and the canvas hot path versus the captured f8023f0 baseline.
  */
 import assert from 'node:assert/strict';
-import { spawn } from 'node:child_process';
+import { spawn, execFileSync } from 'node:child_process';
 import { mkdirSync, readFileSync, existsSync } from 'node:fs';
 import net from 'node:net';
 import path from 'node:path';
@@ -2281,6 +2281,7 @@ try {
     await assertRound5TextAlign(page);
     await assertRound5RerouteDelete(page);
     await assertToolCreationHistory(page);
+    await assertMoodflowExports(page);
 
     const lateErrors = pageErrors.filter(isFirstParty);
     assert.deepEqual(lateErrors, [], `first-party errors:\n${lateErrors.join('\n')}`);
@@ -5397,4 +5398,261 @@ async function assertToolCreationHistory(page) {
     });
     await page.setViewport({ width: 1280, height: 800, deviceScaleFactor: 1, isMobile: false, hasTouch: false });
     console.log('Tool creation history passed.');
+}
+
+function extractPdfText(raw) {
+    let out = '';
+    const re = /<([0-9A-Fa-f\s]*)>|\((?:\\[0-7]{1,3}|\\.|[^\\)])*\)/g;
+    let match;
+    while ((match = re.exec(raw))) {
+        if (match[0][0] === '<') {
+            const hex = match[1].replace(/\s+/g, '');
+            if (hex.length < 4 || hex.length % 4 !== 0) continue;
+            let text = '';
+            for (let i = 0; i < hex.length; i += 4) {
+                const code = parseInt(hex.slice(i, i + 4), 16);
+                if (code) text += String.fromCharCode(code);
+            }
+            out += text + '\n';
+            continue;
+        }
+        const body = match[0].slice(1, -1);
+        let text = '';
+        for (let i = 0; i < body.length; i++) {
+            if (body[i] !== '\\') {
+                text += body[i];
+                continue;
+            }
+            const next = body[i + 1];
+            if (/[0-7]/.test(next)) {
+                let oct = '';
+                while (oct.length < 3 && /[0-7]/.test(body[i + 1])) {
+                    i += 1;
+                    oct += body[i];
+                }
+                text += String.fromCharCode(parseInt(oct, 8));
+                continue;
+            }
+            i += 1;
+            const map = { n: '\n', r: '\r', t: '\t', b: '\b', f: '\f', '(': '(', ')': ')', '\\': '\\' };
+            text += map[next] || next || '';
+        }
+        out += text + '\n';
+    }
+    return out;
+}
+
+function rectsOverlap(a, b) {
+    return a.right > b.left + 1 && a.left < b.right - 1 && a.bottom > b.top + 1 && a.top < b.bottom - 1;
+}
+
+async function assertMoodflowExports(page) {
+    console.log('Testing Moodflow sheet, PDF, and print exports...');
+    const sample = JSON.parse(readFileSync(path.join(ROOT, 'tests/fixtures/moodflow-sample.json'), 'utf8'));
+    const tracked = execFileSync('git', ['ls-files', '-z'], { cwd: ROOT });
+    const banned = new RegExp(['bru', 'san'].join('') + '|' + ['are', 'na'].join('') + '|' + ['sili', 'cio'].join(''), 'i');
+    for (const name of tracked.toString('utf8').split('\0').filter(Boolean)) {
+        const text = readFileSync(path.join(ROOT, name)).toString('latin1');
+        assert.equal(banned.test(text), false, `forbidden word in ${name}`);
+    }
+
+    await page.setViewport({ width: 1280, height: 900, deviceScaleFactor: 1, isMobile: false, hasTouch: false });
+    const built = await page.evaluate((sample) => {
+        const mk = (i) => {
+            const canvas = document.createElement('canvas');
+            canvas.width = 64;
+            canvas.height = 36;
+            const g = canvas.getContext('2d');
+            g.fillStyle = i ? '#2a4d69' : '#c97b3a';
+            g.fillRect(0, 0, 64, 36);
+            return canvas.toDataURL('image/jpeg', 0.8);
+        };
+        const project = {
+            name: sample.name,
+            type: 'storyflow',
+            data: {
+                workers: sample.workers,
+                frames: sample.frames.map((frame) => ({
+                    ...frame,
+                    image: typeof frame.image === 'string' && frame.image.indexOf('@gradient:') === 0
+                        ? mk(Number(frame.image.split(':')[1]))
+                        : frame.image,
+                })),
+            },
+        };
+        const sheet = buildMoodflowSheetHtml(project, 'October 15, 2026');
+        const doc = buildStoryflowPdf(project, 'October 15, 2026');
+        return { sheet, pdf: btoa(doc.output()), pages: doc.getNumberOfPages() };
+    }, sample);
+
+    const html = built.sheet;
+    assert.match(html, /lang="en"/);
+    assert.match(html, /<title>Spot Verano 30s \(Moodflow sheet\)<\/title>/);
+    assert.match(html, /Outfit:wght@700;900/);
+    assert.match(html, /Plus\+Jakarta\+Sans/);
+    assert.match(html, /Exported from Moodinfinite/);
+    assert.match(html, /October 15, 2026/);
+    assert.match(html, /3 frames/);
+    assert.match(html, />10s</);
+    assert.match(html, /role="region"/);
+    assert.match(html, /tabindex="0"/);
+    assert.match(html, /<caption>Frames of Spot Verano 30s<\/caption>/);
+    assert.match(html, /scope="col"/);
+    assert.match(html, /scope="row"/);
+    assert.match(html, /Apertura en la costa/);
+    assert.match(html, /Detalle de las manos/);
+    assert.match(html, /amanecer\.<br>Entra la voz en off/);
+    assert.match(html, /&lt;b&gt;sin&lt;\/b&gt;/);
+    assert.equal(/<b>/.test(html), false, 'user text was not escaped');
+    assert.match(html, /5s/);
+    assert.match(html, /3s/);
+    assert.match(html, /2s/);
+    assert.match(html, /Wide Shot/);
+    assert.match(html, /Close Up/);
+    assert.match(html, /Lucía Fernández/);
+    assert.match(html, /Mateo Ríos/);
+    assert.match(html, /Voz en off \+ oleaje/);
+    assert.match(html, /Nudos y cuerda, sin música/);
+    assert.match(html, /status-approved">Approved/);
+    assert.match(html, /status-wip">WIP/);
+    assert.match(html, /status-none">Not started/);
+    assert.match(html, /alt="Apertura en la costa"/);
+    assert.match(html, /alt="Detalle de las manos"/);
+    assert.match(html, /data:image\/jpeg/);
+    assert.match(html, /10\.00,20\.00 50\.00,50\.00 90\.00,30\.00/);
+    assert.match(html, /stroke="#ff4d6a"/);
+    assert.match(html, /Untitled/);
+    assert.match(html, /No image/);
+    assert.match(html, /No notes/);
+    assert.match(html, /Not set/);
+    for (const hex of ['#121110', '#24201B', '#F4F1EA', '#D4A359', '#2589BD', '#F8F6F0', '#7A5C22', '#1C6A96', '#B8AFA0']) {
+        assert.ok(html.includes(hex), `sheet missing ${hex}`);
+    }
+    assert.match(html, /border-radius:0/);
+    const radii = [...html.matchAll(/border-radius\s*:\s*([^;}]+)/gi)].map((item) => item[1].trim());
+    assert.ok(radii.length > 0, 'sheet does not set square corners');
+    assert.ok(radii.every((value) => value === '0'), `sheet radius: ${radii.join(', ')}`);
+    assert.equal(banned.test(html), false, 'sheet html names the borrowed palette');
+
+    const pdfText = extractPdfText(Buffer.from(built.pdf, 'base64').toString('latin1'));
+    assert.ok(built.pages >= 3, `pdf pages ${built.pages}`);
+    for (const bit of [
+        'Lucía Fernández', 'Mateo Ríos', 'Approved', 'WIP', 'Not started',
+        'Voz en off + oleaje', 'Nudos y cuerda, sin música', 'Wide Shot', 'Close Up',
+        'Spot Verano 30s', 'October 15, 2026', 'Frame 3', 'No image', 'No notes',
+    ]) {
+        assert.ok(pdfText.includes(bit), `pdf text missing ${bit}`);
+    }
+
+    const sheetPage = await page.browser().newPage();
+    await sheetPage.setViewport({ width: 390, height: 800, deviceScaleFactor: 1 });
+    await sheetPage.setContent(html, { waitUntil: 'domcontentloaded' });
+    const narrow = await sheetPage.evaluate(() => ({
+        scroll: document.documentElement.scrollWidth,
+        inner: window.innerWidth,
+        rows: document.querySelectorAll('tbody tr').length,
+    }));
+    await sheetPage.close();
+    assert.equal(narrow.rows, 3);
+    assert.ok(narrow.scroll <= narrow.inner + 1, `sheet overflowed at 390px (${narrow.scroll} > ${narrow.inner})`);
+
+    await page.evaluate((sample) => {
+        createNewProject('storyflow');
+        const project = projects.find((entry) => entry.id === activeProjectId);
+        const mk = (i) => {
+            const canvas = document.createElement('canvas');
+            canvas.width = 320;
+            canvas.height = 180;
+            const g = canvas.getContext('2d');
+            g.fillStyle = i ? '#2a4d69' : '#c97b3a';
+            g.fillRect(0, 0, 320, 180);
+            return canvas.toDataURL('image/jpeg', 0.8);
+        };
+        project.name = sample.name;
+        project.data.workers = sample.workers.slice();
+        project.data.frames = sample.frames.map((frame) => ({
+            ...frame,
+            image: typeof frame.image === 'string' && frame.image.indexOf('@gradient:') === 0
+                ? mk(Number(frame.image.split(':')[1]))
+                : frame.image,
+        }));
+        renderStoryflowView(project);
+        window.print = () => { window.__printStubbed = true; };
+        prepareAndPrint();
+    }, sample);
+    await page.emulateMediaType('print');
+    await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+    const printed = await page.evaluate(() => {
+        const box = (el) => {
+            const r = el.getBoundingClientRect();
+            return { left: r.left, top: r.top, right: r.right, bottom: r.bottom, width: r.width, height: r.height };
+        };
+        const header = document.getElementById('print-header');
+        const stats = document.getElementById('storyflow-stats-bar');
+        const cards = [...document.querySelectorAll('#storyflow-scroll-area .story-card')].map((card) => {
+            const status = card.querySelector('.story-print-status');
+            const artist = card.querySelector('select.story-artist');
+            const audio = [...card.querySelectorAll('.story-meta-item')].find((item) => item.querySelector('.story-meta-label') && item.querySelector('.story-meta-label').textContent === 'Audio');
+            const statusBox = status ? box(status) : null;
+            const artistBox = artist ? box(artist) : null;
+            let clipped = false;
+            const cardBox = box(card);
+            let node = card.parentElement;
+            while (node && node !== document.documentElement) {
+                const style = getComputedStyle(node);
+                const clip = /auto|hidden|scroll|clip/.test(`${style.overflow}${style.overflowX}${style.overflowY}`);
+                if (clip) {
+                    const parent = box(node);
+                    if (cardBox.bottom > parent.bottom + 2 || cardBox.top < parent.top - 2) clipped = true;
+                }
+                node = node.parentElement;
+            }
+            return {
+                card: cardBox,
+                clipped,
+                status: status ? status.textContent : '',
+                statusBox,
+                artist: artist ? artist.value : '',
+                artistBox,
+                audio: audio ? audio.querySelector('input').value : null,
+                radius: getComputedStyle(card).borderRadius,
+            };
+        });
+        const headerStyle = getComputedStyle(header);
+        return {
+            stubbed: window.__printStubbed === true,
+            tab: document.body.dataset.printTab,
+            header: box(header),
+            headerRule: headerStyle.borderBottomWidth,
+            headerRuleColor: headerStyle.borderBottomColor,
+            stats: stats ? box(stats) : null,
+            statsDisplay: stats ? getComputedStyle(stats).display : 'missing',
+            cards,
+        };
+    });
+    assert.equal(printed.stubbed, true);
+    assert.equal(printed.tab, 'storyflow');
+    assert.equal(printed.cards.length, 3, 'print view did not render 3 frames');
+    assert.equal(printed.statsDisplay, 'none', 'stats bar still prints over the header');
+    assert.equal(printed.headerRule, '4px');
+    assert.ok(printed.cards.every((card) => card.card.height > 40 && card.card.width > 40), `a print card has no box: ${JSON.stringify(printed.cards.map((c) => c.card))}`);
+    assert.ok(printed.cards.every((card) => card.card.top >= printed.header.bottom - 1), `a card overlaps the print header: ${JSON.stringify(printed)}`);
+    assert.ok(printed.cards.every((card) => !card.clipped), `a print card is clipped: ${JSON.stringify(printed.cards.map((c) => c.card))}`);
+    for (let i = 0; i < printed.cards.length; i++) {
+        for (let j = i + 1; j < printed.cards.length; j++) {
+            assert.equal(rectsOverlap(printed.cards[i].card, printed.cards[j].card), false, `print cards ${i + 1} and ${j + 1} overlap`);
+        }
+    }
+    assert.deepEqual(printed.cards.map((card) => card.status), ['Approved', 'WIP', 'Not started']);
+    assert.deepEqual(printed.cards.map((card) => card.artist), ['Lucía Fernández', 'Mateo Ríos', '']);
+    assert.deepEqual(printed.cards.map((card) => card.audio), ['Voz en off + oleaje', 'Nudos y cuerda, sin música', '']);
+    assert.ok(printed.cards.every((card) => card.statusBox && card.statusBox.height > 8 && card.statusBox.width > 8), 'status text is hidden in print');
+    assert.ok(printed.cards.slice(0, 2).every((card) => card.artistBox && card.artistBox.height > 8), 'artist is hidden in print');
+    assert.ok(printed.cards.every((card) => /^0px(?: 0px){0,3}$/.test(card.radius)), `print cards are still rounded (${printed.cards.map((c) => c.radius).join(', ')})`);
+
+    const printPdf = Buffer.from(await page.pdf({ format: 'A4', printBackground: true, preferCSSPageSize: true }));
+    const printPages = (printPdf.toString('latin1').match(/\/Type\s*\/Page(?!s)/g) || []).length;
+    assert.ok(printPages >= 2, `print PDF has ${printPages} pages; frame 3 needs its own page`);
+    await page.emulateMediaType('screen');
+    console.log('Moodflow exports passed.');
 }
