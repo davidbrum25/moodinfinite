@@ -4,6 +4,28 @@
 
 <head>
     <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+    <script>
+        (function () {
+            var style = 'glass';
+            try {
+                var raw = localStorage.getItem('moodinfinite-settings');
+                if (raw) {
+                    var settings = JSON.parse(raw);
+                    if (settings && settings.baseStyle === 'flat') style = 'flat';
+                }
+            } catch (e) {}
+            document.documentElement.setAttribute('data-style', style);
+            if (style === 'flat') {
+                var root = document.documentElement.style;
+                root.setProperty('--bg-ui', '#24201B');
+                root.setProperty('--bg-ui-hover', '#3A342C');
+                root.setProperty('--text-color', '#F4F1EA');
+                root.setProperty('--text-color-light', '#B8AFA0');
+                root.setProperty('--text-color-strong', '#F4F1EA');
+                root.setProperty('--border-color', '#7A6E60');
+            }
+        })();
+    </script>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0">
     <meta name="google-site-verification" content="s00Wdue9_udUtKz7V7Sk82ZrcfGPIv9HWoYE0fO5mE8" />
     <title>Moodinfinite v1.1.0</title>
@@ -26,7 +48,10 @@
     <script src="https://accounts.google.com/gsi/client" async defer></script>
 </head>
 
-<body>
+<body data-style="glass">
+    <script>
+        document.body.setAttribute('data-style', document.documentElement.getAttribute('data-style') || 'glass');
+    </script>
     <div id="print-header" class="print-only">
         <div style="display: flex; align-items: center; gap: 1rem; margin-bottom: 0.5rem;">
             <img src="https://raw.githubusercontent.com/davidbrum25/moodinfinite/refs/heads/main/fav_icon_alternative.png"

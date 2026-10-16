@@ -1749,6 +1749,7 @@ let currentlyEditingText = null;
 let hoveredItem = null;
 let isDraggingConnector = false, tempConnector = null, hoveredPort = null, hoveredConnector = null;
 let showGrid = true, snapToGrid = true, showDropShadow = true, showNotifications = true, showUiBlur = true;
+let baseStyle = 'glass';
 let gridSize = 50, gridOpacity = 0.05;
 let currentProjectName = 'moodinfinite';
 const HISTORY_LIMIT = 50;
@@ -1841,7 +1842,7 @@ function saveSettings() {
         try {
             if (savedSettings) settings = JSON.parse(savedSettings);
         } catch (e) {}
-        Object.assign(settings, { showGrid, snapToGrid, showDropShadow, showNotifications, showUiBlur, gridSize, gridOpacity });
+        Object.assign(settings, { showGrid, snapToGrid, showDropShadow, showNotifications, showUiBlur, gridSize, gridOpacity, baseStyle });
         localStorage.setItem('moodinfinite-settings', JSON.stringify(settings));
     } catch (error) { console.error("Could not save settings to localStorage:", error); }
 }
@@ -1858,6 +1859,7 @@ function loadSettings() {
             showUiBlur = settings.showUiBlur ?? showUiBlur;
             gridSize = settings.gridSize ?? gridSize;
             gridOpacity = settings.gridOpacity ?? gridOpacity;
+            baseStyle = settings.baseStyle === 'flat' ? 'flat' : 'glass';
             defaultCanvasBg = settings.defaultCanvasBg ?? defaultCanvasBg;
             defaultAccent = settings.defaultAccent ?? defaultAccent;
             defaultGridColor = settings.defaultGridColor ?? defaultGridColor;
@@ -2216,6 +2218,7 @@ canvas.addEventListener('mouseleave', clearHoverStates);
         }
         if (palettePanel && palettePanel.classList.contains('open')) {
             palettePanel.classList.remove('open');
+            if (paletteBtn) paletteBtn.focus();
             closed = true;
         }
         if (iconPickerPanel && iconPickerPanel.style.display === 'flex') {
@@ -2376,8 +2379,13 @@ canvas.addEventListener('mouseleave', clearHoverStates);
             const panelWidth = palettePanel.offsetWidth;
             const screenPadding = 8;
             let newLeft = buttonRect.right - panelWidth;
+            const maxLeft = window.innerWidth - panelWidth - screenPadding;
+            newLeft = Math.min(newLeft, Math.max(screenPadding, maxLeft));
             newLeft = Math.max(screenPadding, newLeft);
             palettePanel.style.left = `${newLeft}px`;
+            syncBaseStyleRadios();
+            const selectedStyle = palettePanel.querySelector('[role="radio"][aria-checked="true"]');
+            if (selectedStyle) selectedStyle.focus();
         }
     });
 
@@ -6841,6 +6849,20 @@ function distributeHorizontally() { if (selectedItems.length < 3) return; const 
 function distributeVertically() { if (selectedItems.length < 3) return; const sorted = [...selectedItems].sort((a, b) => getItemBoundingBox(a).y - getItemBoundingBox(b).y); const first = getItemBoundingBox(sorted[0]); const last = getItemBoundingBox(sorted[sorted.length - 1]); const totalHeight = sorted.reduce((s, i) => s + getItemBoundingBox(i).height, 0); const gap = (last.y + last.height - first.y - totalHeight) / (sorted.length - 1); let cursor = first.y; sorted.forEach(item => { const bb = getItemBoundingBox(item); moveItem(item, 0, cursor - bb.y); cursor += bb.height + gap; }); saveStateForUndo(); requestUpdate(); }
 function updateLeftBarState() { const needsTwo = selectedItems.length < 2; const needsThree = selectedItems.length < 3; alignBtn.disabled = needsTwo; const ids = ['align-grid-btn','align-row-btn','align-col-btn','align-left-btn','align-center-h-btn','align-right-btn','align-top-btn','align-middle-v-btn','align-bottom-btn']; ids.forEach(id => { const b = document.getElementById(id); if (b) b.disabled = needsTwo; }); ['distribute-h-btn','distribute-v-btn'].forEach(id => { const b = document.getElementById(id); if (b) b.disabled = needsThree; }); }
 function getContrastColor(hex) { if (hex.indexOf('#') === 0) { hex = hex.slice(1) } if (hex.length === 3) { hex = hex[0] + hex[0] + hex[1] + hex[1] + hex[2] + hex[2] } if (hex.length !== 6) { return '#0d0d0d' } const r = parseInt(hex.slice(0, 2), 16), g = parseInt(hex.slice(2, 4), 16), b = parseInt(hex.slice(4, 6), 16), yiq = ((r * 299) + (g * 587) + (b * 114)) / 1000; return (yiq >= 128) ? '#262626' : '#ffffff' }
+// Shared export theme. Dark is the default for the sheet; light is used for print and for PDF pages.
+// Gold text on light backgrounds uses goldText (#7A5C22); #D4A359 is only a rule or fill there.
+// Cobalt is only used for borders and links on the dark background, and its darker variant on light.
+// Flat chrome reuses the dark surface, text, and muted colors. The 1px edge is #7A6E60:
+// #3A342C against #24201B is 1.32:1, and #7A6E60 is 3.26:1.
+const MOODFLOW_EXPORT_THEME = Object.freeze({
+    dark: Object.freeze({ bg: '#121110', surface: '#24201B', text: '#F4F1EA', muted: '#B8AFA0', gold: '#D4A359', goldText: '#D4A359', cobalt: '#2589BD', onGold: '#121110' }),
+    light: Object.freeze({ bg: '#F8F6F0', surface: '#EFEBE0', text: '#121110', muted: '#5C5548', gold: '#D4A359', goldText: '#7A5C22', cobalt: '#1C6A96', onGold: '#121110' }),
+    sketchColor: '#ff4d6a',
+    fontsHref: 'https://fonts.googleapis.com/css2?family=Outfit:wght@700;900&family=Plus+Jakarta+Sans:wght@400;500;700&display=swap',
+    headingStack: "'Outfit', 'Segoe UI', Arial, sans-serif",
+    bodyStack: "'Plus Jakarta Sans', 'Segoe UI', Arial, sans-serif",
+});
+const FLAT_UI_CHROME = Object.freeze({ hover: '#3A342C', border: '#7A6E60' });
 function syncColorInput(input, value) {
     // Writing .value while the native picker is open closes it in Firefox.
     if (!input || document.activeElement === input) return;
@@ -6848,15 +6870,29 @@ function syncColorInput(input, value) {
 }
 function updateUIColors() {
     const e = document.documentElement.style, t = getContrastColor(canvasBackgroundColor);
+    const flat = baseStyle === 'flat';
+    baseStyle = flat ? 'flat' : 'glass';
+    document.documentElement.setAttribute('data-style', baseStyle);
+    if (document.body) document.body.setAttribute('data-style', baseStyle);
     e.setProperty('--bg-page', canvasBackgroundColor);
     e.setProperty('--text-color-active-tab', t);
     e.setProperty('--contrast-color-light', hexToRgba(t, 0.6));
-    e.setProperty('--bg-ui', 'rgba(35, 38, 51, 0.4)');
-    e.setProperty('--bg-ui-hover', 'rgba(55, 58, 71, 0.5)');
-    e.setProperty('--text-color', '#e2e8f0');
-    e.setProperty('--text-color-light', '#94a3b8');
-    e.setProperty('--text-color-strong', '#ffffff');
-    e.setProperty('--border-color', 'rgba(255, 255, 255, 0.1)');
+    if (flat) {
+        const theme = MOODFLOW_EXPORT_THEME.dark;
+        e.setProperty('--bg-ui', theme.surface);
+        e.setProperty('--bg-ui-hover', FLAT_UI_CHROME.hover);
+        e.setProperty('--text-color', theme.text);
+        e.setProperty('--text-color-light', theme.muted);
+        e.setProperty('--text-color-strong', theme.text);
+        e.setProperty('--border-color', FLAT_UI_CHROME.border);
+    } else {
+        e.setProperty('--bg-ui', 'rgba(35, 38, 51, 0.4)');
+        e.setProperty('--bg-ui-hover', 'rgba(55, 58, 71, 0.5)');
+        e.setProperty('--text-color', '#e2e8f0');
+        e.setProperty('--text-color-light', '#94a3b8');
+        e.setProperty('--text-color-strong', '#ffffff');
+        e.setProperty('--border-color', 'rgba(255, 255, 255, 0.1)');
+    }
     e.setProperty('--switch-bg-checked', accentColor);
     const lightPage = t === '#262626';
     e.setProperty('--ml-text', lightPage ? '#1c1917' : '#e2e8f0');
@@ -7551,15 +7587,98 @@ function ungroupSelectedItems() {
     updateSelectionToolbar();
     updateLeftBarState();
 }
+function syncBaseStyleRadios() {
+    if (!palettePanel) return;
+    const open = palettePanel.classList.contains('open');
+    palettePanel.querySelectorAll('[role="radio"]').forEach((radio) => {
+        const on = radio.dataset.styleOption === baseStyle;
+        radio.setAttribute('aria-checked', on ? 'true' : 'false');
+        radio.tabIndex = open && on ? 0 : -1;
+    });
+}
+function selectBaseStyle(style) {
+    const next = style === 'flat' ? 'flat' : 'glass';
+    if (baseStyle === next) {
+        syncBaseStyleRadios();
+        return;
+    }
+    baseStyle = next;
+    syncBaseStyleRadios();
+    updateUIColors();
+    saveSettings();
+}
+function moveBaseStyle(fromEl, delta) {
+    const radios = [...palettePanel.querySelectorAll('[role="radio"]')];
+    const index = radios.indexOf(fromEl);
+    if (index < 0) return;
+    const next = radios[(index + delta + radios.length) % radios.length];
+    selectBaseStyle(next.dataset.styleOption);
+    next.focus();
+}
+function onBaseStyleKey(e) {
+    if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+        e.preventDefault();
+        e.stopPropagation();
+        moveBaseStyle(e.currentTarget, 1);
+    } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+        e.preventDefault();
+        e.stopPropagation();
+        moveBaseStyle(e.currentTarget, -1);
+    } else if (e.key === ' ' || e.key === 'Enter') {
+        e.preventDefault();
+        e.stopPropagation();
+        selectBaseStyle(e.currentTarget.dataset.styleOption);
+    }
+}
+function paletteSupportsPreview(project) {
+    return !!(project && (project.type === 'moodinfinite' || project.type === 'moodprompt' || project.type === 'storyflow' || project.type === 'moodlist'));
+}
 function buildPaletteMenu() {
     palettePanel.innerHTML = '';
-    colorPalettes.forEach(palette => {
+
+    const styleGroup = document.createElement('div');
+    styleGroup.className = 'base-style-group';
+    styleGroup.setAttribute('role', 'radiogroup');
+    styleGroup.setAttribute('aria-label', 'Base style');
+    const styleLabel = document.createElement('div');
+    styleLabel.className = 'base-style-label';
+    styleLabel.setAttribute('aria-hidden', 'true');
+    styleLabel.textContent = 'Base style';
+    styleGroup.appendChild(styleLabel);
+    [
+        { id: 'glass', label: 'Glassmorphism' },
+        { id: 'flat', label: 'Flat' },
+    ].forEach((entry) => {
+        const radio = document.createElement('button');
+        radio.type = 'button';
+        radio.className = 'base-style-option';
+        radio.dataset.styleOption = entry.id;
+        radio.setAttribute('role', 'radio');
+        radio.textContent = entry.label;
+        radio.addEventListener('click', () => selectBaseStyle(entry.id));
+        radio.addEventListener('keydown', onBaseStyleKey);
+        styleGroup.appendChild(radio);
+    });
+    palettePanel.appendChild(styleGroup);
+    syncBaseStyleRadios();
+
+    const styleSeparator = document.createElement('div');
+    styleSeparator.className = 'palette-separator';
+    styleSeparator.setAttribute('role', 'separator');
+    styleSeparator.style.borderTop = '1px solid var(--border-color)';
+    styleSeparator.style.margin = '4px 0';
+    palettePanel.appendChild(styleSeparator);
+
+    colorPalettes.forEach((palette, index) => {
         const option = document.createElement('div');
         option.className = 'palette-option';
+        option.setAttribute('role', 'button');
+        option.tabIndex = 0;
+        option.setAttribute('aria-label', `Palette ${index + 1}: background ${palette.bg}, accent ${palette.accent}, grid ${palette.grid}`);
         option.innerHTML = `<div class="palette-color" style="background-color: ${palette.bg}"></div><div class="palette-color" style="background-color: ${palette.accent}"></div><div class="palette-color" style="background-color: ${palette.grid}"></div>`;
         option.addEventListener('mouseenter', () => {
             const activeProject = projects.find(p => p.id === activeProjectId);
-            if (activeProject && (activeProject.type === 'moodinfinite' || activeProject.type === 'moodprompt' || activeProject.type === 'storyflow' || activeProject.type === 'moodlist')) {
+            if (paletteSupportsPreview(activeProject)) {
                 canvasBackgroundColor = palette.bg;
                 accentColor = palette.accent;
                 gridColor = palette.grid;
@@ -7569,7 +7688,7 @@ function buildPaletteMenu() {
 
         option.addEventListener('mouseleave', () => {
             const activeProject = projects.find(p => p.id === activeProjectId);
-            if (activeProject && (activeProject.type === 'moodinfinite' || activeProject.type === 'moodprompt' || activeProject.type === 'storyflow' || activeProject.type === 'moodlist')) {
+            if (paletteSupportsPreview(activeProject)) {
                 canvasBackgroundColor = activeProject.data.canvasBackgroundColor || '#0d0d0d';
                 accentColor = activeProject.data.accentColor || '#429eff';
                 gridColor = activeProject.data.gridColor || '#f9f8f6';
@@ -7579,7 +7698,7 @@ function buildPaletteMenu() {
 
         option.addEventListener('click', () => {
             const activeProject = projects.find(p => p.id === activeProjectId);
-            if (activeProject && (activeProject.type === 'moodinfinite' || activeProject.type === 'moodprompt' || activeProject.type === 'storyflow' || activeProject.type === 'moodlist')) {
+            if (paletteSupportsPreview(activeProject)) {
                 activeProject.data.canvasBackgroundColor = palette.bg;
                 activeProject.data.accentColor = palette.accent;
                 activeProject.data.gridColor = palette.grid;
@@ -7590,6 +7709,12 @@ function buildPaletteMenu() {
                 updateUIColors();
             }
             palettePanel.classList.remove('open');
+        });
+        option.addEventListener('keydown', (e) => {
+            if (e.key !== 'Enter' && e.key !== ' ') return;
+            e.preventDefault();
+            e.stopPropagation();
+            option.click();
         });
         palettePanel.appendChild(option);
     });
@@ -10326,18 +10451,6 @@ function renderAssetGrid(imagesSet, callback) {
     }
 }
 // --- MOODFLOW EXPORTS (sheet HTML, PDF, print) ---
-// Shared export theme. Dark is the default for the sheet; light is used for print and for PDF pages.
-// Gold text on light backgrounds uses goldText (#7A5C22); #D4A359 is only a rule or fill there.
-// Cobalt is only used for borders and links on the dark background, and its darker variant on light.
-const MOODFLOW_EXPORT_THEME = Object.freeze({
-    dark: Object.freeze({ bg: '#121110', surface: '#24201B', text: '#F4F1EA', muted: '#B8AFA0', gold: '#D4A359', goldText: '#D4A359', cobalt: '#2589BD', onGold: '#121110' }),
-    light: Object.freeze({ bg: '#F8F6F0', surface: '#EFEBE0', text: '#121110', muted: '#5C5548', gold: '#D4A359', goldText: '#7A5C22', cobalt: '#1C6A96', onGold: '#121110' }),
-    sketchColor: '#ff4d6a',
-    fontsHref: 'https://fonts.googleapis.com/css2?family=Outfit:wght@700;900&family=Plus+Jakarta+Sans:wght@400;500;700&display=swap',
-    headingStack: "'Outfit', 'Segoe UI', Arial, sans-serif",
-    bodyStack: "'Plus Jakarta Sans', 'Segoe UI', Arial, sans-serif",
-});
-
 const MOODFLOW_STATUS_LABELS = Object.freeze({ approved: 'Approved', wip: 'WIP', none: 'Not started' });
 const MOODFLOW_EMPTY_VALUE = 'Not set';
 

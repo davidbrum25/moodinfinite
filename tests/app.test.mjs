@@ -2282,6 +2282,7 @@ try {
     await assertRound5RerouteDelete(page);
     await assertToolCreationHistory(page);
     await assertMoodflowExports(page);
+    await assertBaseStyle(page);
 
     const lateErrors = pageErrors.filter(isFirstParty);
     assert.deepEqual(lateErrors, [], `first-party errors:\n${lateErrors.join('\n')}`);
@@ -5444,6 +5445,355 @@ function extractPdfText(raw) {
 
 function rectsOverlap(a, b) {
     return a.right > b.left + 1 && a.left < b.right - 1 && a.bottom > b.top + 1 && a.top < b.bottom - 1;
+}
+
+function forbiddenNamePattern() {
+    const parts = [
+        [98, 114, 117, 115, 97, 110],
+        [97, 114, 101, 110, 97],
+        [115, 105, 108, 105, 99, 105, 111],
+    ].map((codes) => String.fromCharCode(...codes));
+    return new RegExp(parts.join('|'), 'i');
+}
+
+function assertNoForbiddenNames() {
+    const banned = forbiddenNamePattern();
+    const tracked = execFileSync('git', ['ls-files', '-z'], { cwd: ROOT });
+    for (const name of tracked.toString('utf8').split('\0').filter(Boolean)) {
+        const text = readFileSync(path.join(ROOT, name)).toString('latin1');
+        assert.equal(banned.test(text), false, `forbidden word in ${name}`);
+    }
+}
+
+async function openPalette(page) {
+    await page.evaluate(() => document.querySelectorAll('.toast-notification').forEach((el) => el.remove()));
+    const open = await page.$eval('#palette-panel', (el) => el.classList.contains('open'));
+    if (!open) {
+        await page.click('#palette-btn');
+        await page.waitForSelector('#palette-panel.open [role="radio"]');
+    }
+}
+
+async function closePalette(page) {
+    const open = await page.$eval('#palette-panel', (el) => el.classList.contains('open'));
+    if (!open) return;
+    await page.keyboard.press('Escape');
+    await page.waitForFunction(() => !document.getElementById('palette-panel').classList.contains('open'));
+}
+
+async function chooseBaseStyle(page, style) {
+    await closePalette(page);
+    await openPalette(page);
+    await page.click(`#palette-panel [data-style-option="${style}"]`);
+    await page.waitForFunction((expected) => document.body.dataset.style === expected, {}, style);
+    await page.waitForFunction(() => !document.getAnimations().some((a) => a.transitionProperty && a.transitionProperty.startsWith('border-radius') || (a.playState === 'running' && a.transitionProperty)));
+}
+
+async function choosePreset(page, index) {
+    await openPalette(page);
+    await page.waitForSelector('#palette-panel.open .palette-option');
+    const options = await page.$$('#palette-panel .palette-option');
+    await options[index].click();
+    await page.waitForFunction(() => !document.getElementById('palette-panel').classList.contains('open'));
+}
+
+async function assertBaseStyle(page) {
+    console.log('Testing base style...');
+    assertNoForbiddenNames();
+    const errorsBefore = pageErrors.length;
+    await page.setViewport({ width: 1280, height: 800, deviceScaleFactor: 1, isMobile: false, hasTouch: false });
+    await page.evaluate(() => {
+        showUiBlur = true;
+        document.body.classList.toggle('no-blur', false);
+        saveSettings();
+    });
+
+    const initial = await page.evaluate(() => {
+        const bar = getComputedStyle(document.getElementById('tabs-bar'));
+        const bg = getComputedStyle(document.documentElement).getPropertyValue('--bg-ui').trim().toLowerCase();
+        return {
+            body: document.body.dataset.style,
+            html: document.documentElement.dataset.style,
+            backdrop: bar.backdropFilter,
+            bg,
+        };
+    });
+    assert.equal(initial.body, 'glass');
+    assert.equal(initial.html, 'glass');
+    assert.notEqual(initial.backdrop, 'none', `glass tabs bar has no blur: ${initial.backdrop}`);
+    assert.ok(initial.bg.includes('rgba'), `glass --bg-ui should stay translucent: ${initial.bg}`);
+
+    await chooseBaseStyle(page, 'flat');
+    const flat = await page.evaluate(() => {
+        const bar = getComputedStyle(document.getElementById('tabs-bar'));
+        const panel = getComputedStyle(document.getElementById('palette-panel'));
+        const bg = getComputedStyle(document.documentElement).getPropertyValue('--bg-ui').trim().toLowerCase();
+        const radios = [...document.querySelectorAll('#palette-panel [role="radio"]')].map((el) => ({
+            style: el.dataset.styleOption,
+            checked: el.getAttribute('aria-checked'),
+        }));
+        return {
+            body: document.body.dataset.style,
+            radiusBar: bar.borderRadius,
+            radiusPanel: panel.borderRadius,
+            backdrop: bar.backdropFilter,
+            bg,
+            surface: bar.backgroundColor,
+            stored: JSON.parse(localStorage.getItem('moodinfinite-settings')).baseStyle,
+            radios,
+        };
+    });
+    assert.equal(flat.body, 'flat');
+    assert.ok(flat.radiusBar === '0px' || flat.radiusBar.split(' ').every((part) => part === '0px'), flat.radiusBar);
+    assert.ok(flat.radiusPanel === '0px' || flat.radiusPanel.split(' ').every((part) => part === '0px'), flat.radiusPanel);
+    assert.equal(flat.backdrop, 'none');
+    assert.equal(flat.bg, '#24201b');
+    assert.ok(flat.surface === 'rgb(36, 32, 27)' || flat.surface === 'rgba(36, 32, 27, 1)', flat.surface);
+    assert.equal(flat.stored, 'flat');
+    assert.deepEqual(flat.radios, [
+        { style: 'glass', checked: 'false' },
+        { style: 'flat', checked: 'true' },
+    ]);
+
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    const early = await page.evaluate(() => document.body.dataset.style);
+    assert.equal(early, 'flat', 'stored flat style was not on the body before the app finished booting');
+    await page.waitForFunction(() => window.projects && window.projects.length > 0 && typeof selectBaseStyle === 'function' && typeof updateUIColors === 'function', { timeout: 15000 });
+    await page.setViewport({ width: 1280, height: 800, deviceScaleFactor: 1, isMobile: false, hasTouch: false });
+    const kept = await page.evaluate(() => ({
+        body: document.body.dataset.style,
+        stored: JSON.parse(localStorage.getItem('moodinfinite-settings')).baseStyle,
+        backdrop: getComputedStyle(document.getElementById('tabs-bar')).backdropFilter,
+        bg: getComputedStyle(document.documentElement).getPropertyValue('--bg-ui').trim().toLowerCase(),
+    }));
+    assert.equal(kept.body, 'flat');
+    assert.equal(kept.stored, 'flat');
+    assert.equal(kept.backdrop, 'none');
+    assert.equal(kept.bg, '#24201b');
+
+    await page.evaluate(() => createNewProject('moodinfinite'));
+    const boardA = await page.evaluate(() => activeProjectId);
+    await chooseBaseStyle(page, 'glass');
+    await choosePreset(page, 1);
+    const glassPreset = await page.evaluate(() => {
+        const project = projects.find((entry) => entry.id === activeProjectId);
+        const style = getComputedStyle(document.documentElement);
+        return {
+            id: project.id,
+            style: document.body.dataset.style,
+            bg: project.data.canvasBackgroundColor,
+            accent: project.data.accentColor,
+            grid: project.data.gridColor,
+            page: style.getPropertyValue('--bg-page').trim().toLowerCase(),
+            accentVar: style.getPropertyValue('--switch-bg-checked').trim().toLowerCase(),
+        };
+    });
+    assert.equal(glassPreset.style, 'glass');
+    assert.equal(glassPreset.bg, '#f8f9fa');
+    assert.equal(glassPreset.accent, '#007bff');
+    assert.equal(glassPreset.grid, '#ced4da');
+    assert.equal(glassPreset.page, '#f8f9fa');
+    assert.equal(glassPreset.accentVar, '#007bff');
+
+    await chooseBaseStyle(page, 'flat');
+    const styleDidNotRecolor = await page.evaluate((id) => {
+        const project = projects.find((entry) => entry.id === id);
+        const style = getComputedStyle(document.documentElement);
+        return {
+            style: document.body.dataset.style,
+            bg: project.data.canvasBackgroundColor,
+            accent: project.data.accentColor,
+            page: style.getPropertyValue('--bg-page').trim().toLowerCase(),
+            accentVar: style.getPropertyValue('--switch-bg-checked').trim().toLowerCase(),
+        };
+    }, boardA);
+    assert.equal(styleDidNotRecolor.style, 'flat');
+    assert.equal(styleDidNotRecolor.bg, '#f8f9fa');
+    assert.equal(styleDidNotRecolor.accent, '#007bff');
+    assert.equal(styleDidNotRecolor.page, '#f8f9fa');
+    assert.equal(styleDidNotRecolor.accentVar, '#007bff');
+
+    await page.evaluate(() => createNewProject('moodinfinite'));
+    const boardB = await page.evaluate(() => activeProjectId);
+    await choosePreset(page, 4);
+    const flatPreset = await page.evaluate(() => {
+        const project = projects.find((entry) => entry.id === activeProjectId);
+        const style = getComputedStyle(document.documentElement);
+        return {
+            style: document.body.dataset.style,
+            bg: project.data.canvasBackgroundColor,
+            accent: project.data.accentColor,
+            grid: project.data.gridColor,
+            page: style.getPropertyValue('--bg-page').trim().toLowerCase(),
+            accentVar: style.getPropertyValue('--switch-bg-checked').trim().toLowerCase(),
+        };
+    });
+    assert.equal(flatPreset.style, 'flat');
+    assert.equal(flatPreset.bg, '#2e3440');
+    assert.equal(flatPreset.accent, '#88c0d0');
+    assert.equal(flatPreset.grid, '#4c566a');
+    assert.equal(flatPreset.page, '#2e3440');
+    assert.equal(flatPreset.accentVar, '#88c0d0');
+
+    await page.evaluate((id) => switchTab(id), boardA);
+    const perProject = await page.evaluate(() => {
+        const project = projects.find((entry) => entry.id === activeProjectId);
+        return {
+            style: document.body.dataset.style,
+            bg: project.data.canvasBackgroundColor,
+            accent: project.data.accentColor,
+        };
+    });
+    assert.equal(perProject.style, 'flat');
+    assert.equal(perProject.bg, '#f8f9fa');
+    assert.equal(perProject.accent, '#007bff');
+
+    await chooseBaseStyle(page, 'glass');
+    const restored = await page.evaluate(() => {
+        const project = projects.find((entry) => entry.id === activeProjectId);
+        return {
+            style: document.body.dataset.style,
+            stored: JSON.parse(localStorage.getItem('moodinfinite-settings')).baseStyle,
+            backdrop: getComputedStyle(document.getElementById('tabs-bar')).backdropFilter,
+            bg: project.data.canvasBackgroundColor,
+            page: getComputedStyle(document.documentElement).getPropertyValue('--bg-page').trim().toLowerCase(),
+        };
+    });
+    assert.equal(restored.style, 'glass');
+    assert.equal(restored.stored, 'glass');
+    assert.notEqual(restored.backdrop, 'none');
+    assert.equal(restored.bg, '#f8f9fa');
+    assert.equal(restored.page, '#f8f9fa');
+    await page.evaluate((id) => switchTab(id), boardB);
+    const otherBoard = await page.evaluate(() => {
+        const project = projects.find((entry) => entry.id === activeProjectId);
+        return project.data.accentColor;
+    });
+    assert.equal(otherBoard, '#88c0d0');
+
+    await closePalette(page);
+    await openPalette(page);
+    await page.waitForFunction(() => document.activeElement && document.activeElement.getAttribute('role') === 'radio');
+    await page.keyboard.press('ArrowRight');
+    const moved = await page.evaluate(() => ({
+        active: document.activeElement && document.activeElement.dataset.styleOption,
+        flat: document.querySelector('[data-style-option="flat"]').getAttribute('aria-checked'),
+        glass: document.querySelector('[data-style-option="glass"]').getAttribute('aria-checked'),
+        body: document.body.dataset.style,
+    }));
+    assert.equal(moved.active, 'flat');
+    assert.equal(moved.flat, 'true');
+    assert.equal(moved.glass, 'false');
+    assert.equal(moved.body, 'flat');
+    await page.keyboard.press('ArrowLeft');
+    const movedBack = await page.evaluate(() => ({
+        active: document.activeElement && document.activeElement.dataset.styleOption,
+        flat: document.querySelector('[data-style-option="flat"]').getAttribute('aria-checked'),
+        glass: document.querySelector('[data-style-option="glass"]').getAttribute('aria-checked'),
+        body: document.body.dataset.style,
+    }));
+    assert.equal(movedBack.active, 'glass');
+    assert.equal(movedBack.glass, 'true');
+    assert.equal(movedBack.flat, 'false');
+    assert.equal(movedBack.body, 'glass');
+    await page.keyboard.press('Escape');
+    await page.waitForFunction(() => !document.getElementById('palette-panel').classList.contains('open'));
+    const refocused = await page.evaluate(() => document.activeElement && document.activeElement.id);
+    assert.equal(refocused, 'palette-btn');
+
+    await openPalette(page);
+    const hovered = await page.evaluate(() => {
+        const option = document.querySelectorAll('#palette-panel .palette-option')[0];
+        option.dispatchEvent(new MouseEvent('mouseenter', { bubbles: true }));
+        const during = getComputedStyle(document.documentElement).getPropertyValue('--bg-page').trim().toLowerCase();
+        option.dispatchEvent(new MouseEvent('mouseleave', { bubbles: true }));
+        const after = getComputedStyle(document.documentElement).getPropertyValue('--bg-page').trim().toLowerCase();
+        const sample = document.querySelectorAll('#palette-panel .palette-option')[2];
+        return {
+            during,
+            after,
+            role: sample.getAttribute('role'),
+            tab: sample.tabIndex,
+            label: sample.getAttribute('aria-label'),
+            style: document.body.dataset.style,
+        };
+    });
+    assert.equal(hovered.during, '#0d0d0d');
+    assert.equal(hovered.after, '#2e3440');
+    assert.equal(hovered.style, 'glass');
+    assert.equal(hovered.role, 'button');
+    assert.equal(hovered.tab, 0);
+    assert.match(hovered.label, /^Palette 3: background /);
+
+    await page.focus('#palette-panel .palette-option');
+    const optionIndex = 1;
+    await page.evaluate((index) => {
+        document.querySelectorAll('#palette-panel .palette-option')[index].focus();
+    }, optionIndex);
+    await page.keyboard.press('Enter');
+    await page.waitForFunction(() => !document.getElementById('palette-panel').classList.contains('open'));
+    const typed = await page.evaluate(() => {
+        const project = projects.find((entry) => entry.id === activeProjectId);
+        return {
+            bg: project.data.canvasBackgroundColor,
+            style: document.body.dataset.style,
+        };
+    });
+    assert.equal(typed.bg, '#f8f9fa');
+    assert.equal(typed.style, 'glass');
+
+    const blurredOff = await page.evaluate(() => {
+        const input = document.getElementById('ui-blur-toggle');
+        input.checked = false;
+        input.dispatchEvent(new Event('change', { bubbles: true }));
+        return getComputedStyle(document.getElementById('tabs-bar')).backdropFilter;
+    });
+    assert.equal(blurredOff, 'none');
+    const blurredOn = await page.evaluate(() => {
+        const input = document.getElementById('ui-blur-toggle');
+        input.checked = true;
+        input.dispatchEvent(new Event('change', { bubbles: true }));
+        return getComputedStyle(document.getElementById('tabs-bar')).backdropFilter;
+    });
+    assert.notEqual(blurredOn, 'none');
+    await chooseBaseStyle(page, 'flat');
+    const flatStillSharp = await page.evaluate(() => getComputedStyle(document.getElementById('tabs-bar')).backdropFilter);
+    assert.equal(flatStillSharp, 'none');
+    await chooseBaseStyle(page, 'glass');
+
+    for (const style of ['glass', 'flat']) {
+        await page.evaluate((next) => selectBaseStyle(next), style);
+        await page.setViewport({ width: 390, height: 844, deviceScaleFactor: 1, isMobile: true, hasTouch: true });
+        await page.waitForFunction(() => window.innerWidth === 390);
+        await page.evaluate(() => document.getElementById('palette-btn').click());
+        await page.waitForSelector('#palette-panel.open .base-style-option');
+        const phone = await page.evaluate(() => {
+            const option = document.querySelector('.base-style-option');
+            const rect = option.getBoundingClientRect();
+            return {
+                scrollW: document.documentElement.scrollWidth,
+                innerW: window.innerWidth,
+                h: rect.height,
+                w: rect.width,
+            };
+        });
+        assert.ok(phone.scrollW <= phone.innerW + 1, `${style} overflows at 390px (${phone.scrollW})`);
+        assert.ok(phone.h >= 44, `${style} style option is ${phone.h}px tall`);
+        assert.ok(phone.w >= 44, `${style} style option is ${phone.w}px wide`);
+        await page.keyboard.press('Escape');
+        await page.waitForFunction(() => !document.getElementById('palette-panel').classList.contains('open'));
+        const closedWidth = await page.evaluate(() => ({
+            scrollW: document.documentElement.scrollWidth,
+            innerW: window.innerWidth,
+        }));
+        assert.ok(closedWidth.scrollW <= closedWidth.innerW + 1, `${style} overflows at 390px with the popup closed (${closedWidth.scrollW})`);
+    }
+
+    await page.setViewport({ width: 1280, height: 800, deviceScaleFactor: 1, isMobile: false, hasTouch: false });
+    await page.evaluate(() => selectBaseStyle('glass'));
+    const added = pageErrors.slice(errorsBefore).filter(isFirstParty);
+    assert.deepEqual(added, [], `base style raised errors:\n${added.join('\n')}`);
+    console.log('Base style passed.');
 }
 
 async function assertMoodflowExports(page) {

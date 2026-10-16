@@ -2690,15 +2690,19 @@
             display: flex;
             flex-direction: column;
             gap: .5rem;
+            max-width: calc(100vw - 16px);
             transform: translateY(-20px);
             opacity: 0;
-            transition: transform .3s ease-out, opacity .3s ease-out;
+            visibility: hidden;
+            transition: transform .3s ease-out, opacity .3s ease-out, visibility 0s linear .3s;
             pointer-events: none
         }
 
         #palette-panel.open {
             transform: translateY(0);
             opacity: 1;
+            visibility: visible;
+            transition: transform .3s ease-out, opacity .3s ease-out, visibility 0s linear 0s;
             pointer-events: auto
         }
 
@@ -6378,4 +6382,246 @@ body.no-blur * {
         min-height: 44px;
         justify-content: center;
     }
+}
+
+/* Base style choices in the palette popup. Glass stays rounded; flat squares the chrome. */
+.base-style-group {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+.base-style-label {
+    padding: 4px 8px 0;
+    color: var(--text-color-light);
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    line-height: 16px;
+    text-transform: uppercase;
+}
+.base-style-option {
+    width: 100%;
+    min-height: 44px;
+    margin: 0;
+    padding: 8px;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    background: transparent;
+    color: var(--text-color);
+    font: inherit;
+    font-size: 14px;
+    line-height: 20px;
+    text-align: left;
+    cursor: pointer;
+}
+.base-style-option[aria-checked="true"] {
+    border-color: var(--switch-bg-checked);
+    box-shadow: inset 0 0 0 1px var(--switch-bg-checked);
+}
+@media (prefers-reduced-motion: reduce) {
+    #palette-panel,
+    .base-style-option,
+    .palette-option,
+    .set-default-btn {
+        transition: none;
+    }
+}
+
+/* Flat chrome. Canvas color, accent and grid stay on the preset variables.
+   Border #7A6E60 is 3.26:1 on #24201B. #3A342C is only 1.32:1, so it is a hover fill.
+   Link cobalt #2589BD is 4.16:1 on #24201B, so chrome links keep the text color.
+   Round controls that are pills today keep their radius. */
+html[data-style="flat"] {
+    scrollbar-color: #7A6E60 #24201B;
+}
+html[data-style="flat"] body {
+    --bg-ui: #24201B;
+    --bg-ui-hover: #3A342C;
+    --text-color: #F4F1EA;
+    --text-color-light: #B8AFA0;
+    --text-color-strong: #F4F1EA;
+    --border-color: #7A6E60;
+    font-family: 'Plus Jakarta Sans', 'Segoe UI', Arial, sans-serif;
+}
+html[data-style="flat"] body,
+html[data-style="flat"] body * {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+}
+html[data-style="flat"] :focus-visible {
+    outline: 2px solid #D4A359;
+    outline-offset: 2px;
+}
+html[data-style="flat"] .tab-item,
+html[data-style="flat"] .tab-name,
+html[data-style="flat"] h1,
+html[data-style="flat"] h2,
+html[data-style="flat"] h3,
+html[data-style="flat"] .glass-modal h2,
+html[data-style="flat"] .stats-item,
+html[data-style="flat"] .ml-top-title,
+html[data-style="flat"] .base-style-label {
+    font-family: 'Outfit', 'Segoe UI', Arial, sans-serif;
+}
+html[data-style="flat"] .tab-item.active {
+    border-radius: 0;
+    box-shadow: inset 0 -2px 0 #D4A359;
+}
+html[data-style="flat"] #tabs-bar,
+html[data-style="flat"] #left-bar,
+html[data-style="flat"] #selection-toolbar,
+html[data-style="flat"] #palette-panel,
+html[data-style="flat"] #icon-picker-panel,
+html[data-style="flat"] #context-menu,
+html[data-style="flat"] #tab-context-menu,
+html[data-style="flat"] #storyflow-context-menu,
+html[data-style="flat"] #gantt-context-menu,
+html[data-style="flat"] #mobile-tabs-popup,
+html[data-style="flat"] .glass-modal,
+html[data-style="flat"] #input-modal,
+html[data-style="flat"] #note-editor-modal,
+html[data-style="flat"] .toast-notification,
+html[data-style="flat"] .tool-group-flyout,
+html[data-style="flat"] .story-card,
+html[data-style="flat"] #storyflow-stats-bar,
+html[data-style="flat"] #storyflow-minimap,
+html[data-style="flat"] .moodprompt-top-bar,
+html[data-style="flat"] .ml-top-bar,
+html[data-style="flat"] #gantt-stats-bar,
+html[data-style="flat"] #gantt-bottom-bar,
+html[data-style="flat"] #gantt-detail-panel,
+html[data-style="flat"] .tool-button,
+html[data-style="flat"] .tab-add-btn,
+html[data-style="flat"] .tab-item,
+html[data-style="flat"] .menu-item,
+html[data-style="flat"] .modal-button,
+html[data-style="flat"] .selection-tool-btn,
+html[data-style="flat"] .selection-tool-select,
+html[data-style="flat"] .palette-option,
+html[data-style="flat"] .palette-color,
+html[data-style="flat"] .set-default-btn,
+html[data-style="flat"] .base-style-option,
+html[data-style="flat"] .icon-picker-btn,
+html[data-style="flat"] .form-input,
+html[data-style="flat"] .story-desc-area,
+html[data-style="flat"] .note-fmt-btn,
+html[data-style="flat"] #project-name-input,
+html[data-style="flat"] #note-title-input,
+html[data-style="flat"] #note-body-input,
+html[data-style="flat"] .input-modal-group input,
+html[data-style="flat"] .minimap-control-btn,
+html[data-style="flat"] #storyflow-minimap-viewport,
+html[data-style="flat"] #add-story-frame-btn,
+html[data-style="flat"] .gantt-zoom-group,
+html[data-style="flat"] .gantt-zoom-btn,
+html[data-style="flat"] .gantt-nav-btn,
+html[data-style="flat"] .slider-value-box,
+html[data-style="flat"] .color-picker-input,
+html[data-style="flat"] .color-picker-input {
+    border-radius: 0;
+}
+html[data-style="flat"] #tabs-bar,
+html[data-style="flat"] #left-bar,
+html[data-style="flat"] #selection-toolbar,
+html[data-style="flat"] #palette-panel,
+html[data-style="flat"] #icon-picker-panel,
+html[data-style="flat"] #context-menu,
+html[data-style="flat"] #tab-context-menu,
+html[data-style="flat"] #storyflow-context-menu,
+html[data-style="flat"] #gantt-context-menu,
+html[data-style="flat"] .glass-modal,
+html[data-style="flat"] #input-modal,
+html[data-style="flat"] #note-editor-modal,
+html[data-style="flat"] .toast-notification,
+html[data-style="flat"] .tool-group-flyout,
+html[data-style="flat"] .story-card,
+html[data-style="flat"] #storyflow-minimap,
+html[data-style="flat"] #gantt-detail-panel,
+html[data-style="flat"] .cloud-sync-indicator,
+html[data-style="flat"] #cloud-sync-indicator,
+html[data-style="flat"] .footer-btn {
+    box-shadow: none;
+}
+html[data-style="flat"] #note-editor-modal,
+html[data-style="flat"] #context-menu,
+html[data-style="flat"] #tab-context-menu,
+html[data-style="flat"] #gantt-context-menu,
+html[data-style="flat"] #storyflow-context-menu {
+    background: #24201B !important;
+}
+html[data-style="flat"] .moodprompt-top-bar,
+html[data-style="flat"] #storyflow-stats-bar,
+html[data-style="flat"] .ml-top-bar,
+html[data-style="flat"] #mobile-tabs-popup,
+html[data-style="flat"] #gantt-stats-bar,
+html[data-style="flat"] #gantt-bottom-bar {
+    background: #24201B;
+    box-shadow: none;
+}
+html[data-style="flat"] .stats-item iconify-icon,
+html[data-style="flat"] .moodprompt-top-bar .stats-item:hover iconify-icon {
+    filter: none;
+}
+html[data-style="flat"] .story-desc-area,
+html[data-style="flat"] .story-card input,
+html[data-style="flat"] .story-card select,
+html[data-style="flat"] .story-card textarea,
+html[data-style="flat"] .moodprompt-top-bar .form-input,
+html[data-style="flat"] .input-modal-group input,
+html[data-style="flat"] .gantt-zoom-group {
+    background: #121110;
+    color: #F4F1EA;
+    border: 1px solid #7A6E60;
+    box-shadow: none;
+}
+html[data-style="flat"] .story-desc-area::placeholder,
+html[data-style="flat"] .input-modal-group input::placeholder,
+html[data-style="flat"] #note-title-input::placeholder,
+html[data-style="flat"] #note-body-input::placeholder {
+    color: #B8AFA0;
+}
+html[data-style="flat"] .base-style-option {
+    border-radius: 0;
+    background: #24201B;
+    color: #F4F1EA;
+    border-color: #7A6E60;
+}
+html[data-style="flat"] .base-style-option[aria-checked="true"] {
+    background: #D4A359;
+    color: #121110;
+    border-color: #D4A359;
+    box-shadow: none;
+}
+html[data-style="flat"] .set-default-btn,
+html[data-style="flat"] .set-default-btn:hover,
+html[data-style="flat"] .set-default-btn:active {
+    border-radius: 0;
+    transform: none;
+}
+html[data-style="flat"] .menu-item .text-red-500,
+html[data-style="flat"] .selection-tool-btn .text-red-500 {
+    color: #f87171;
+    text-shadow: none;
+}
+html[data-style="flat"] a {
+    color: #F4F1EA;
+}
+html[data-style="flat"] .story-desc-area a,
+html[data-style="flat"] .input-modal-group a {
+    color: #2589BD;
+}
+html[data-style="flat"] ::-webkit-scrollbar-thumb {
+    background-color: #7A6E60;
+    border-radius: 0;
+}
+html[data-style="flat"] #palette-panel {
+    padding: 8px;
+    gap: 8px;
+}
+
+html[data-style="flat"] .color-picker-input::-webkit-color-swatch {
+    border-radius: 0;
+}
+html[data-style="flat"] .color-picker-input::-moz-color-swatch {
+    border-radius: 0;
 }
