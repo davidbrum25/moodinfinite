@@ -6036,7 +6036,7 @@ async function assertPaletteReview(page) {
         const read = (el) => {
             if (!el) return null;
             const style = getComputedStyle(el);
-            return { color: style.color, background: realBackground(el) };
+            return { color: style.color, background: realBackground(el), text: (el.textContent || '').replace(/\s+/g, ' ').trim() };
         };
         const square = (el) => {
             const style = getComputedStyle(el);
@@ -6068,11 +6068,99 @@ async function assertPaletteReview(page) {
                 });
             }
         }
+        const freezeMotion = document.createElement('style');
+        freezeMotion.textContent = '*, *::before, *::after { transition: none !important; animation: none !important; }';
+        document.head.appendChild(freezeMotion);
+        const applyLook = (style, palette) => {
+            selectBaseStyle(style);
+            canvasBackgroundColor = palette.bg;
+            accentColor = palette.accent;
+            gridColor = palette.grid;
+            updateUIColors();
+        };
+        if (!projects.some((project) => project.type === 'moodprompt')) createNewProject('moodprompt');
+        if (!projects.some((project) => project.type === 'storyflow')) createNewProject('storyflow');
+        const ganttBoard = projects.find((project) => project.type === 'moodgantt');
+        const promptBoard = projects.find((project) => project.type === 'moodprompt');
+        const flowBoard = projects.find((project) => project.type === 'storyflow');
+        if (ganttBoard) {
+            ganttBoard.data.groups = [];
+            ganttBoard.data.zoomLevel = 'week';
+            renderGanttView(ganttBoard);
+        }
+        if (promptBoard) {
+            promptBoard.data.prompts = [];
+            renderMoodpromptView(promptBoard);
+        }
+        if (flowBoard) {
+            flowBoard.data.frames = [];
+            renderStoryflowView(flowBoard);
+        }
+        list.data.cards = [];
+        renderMoodlistView(list);
+        const surfaces = [];
+        for (const style of ['flat', 'glass']) {
+            for (const index of [1, 2, 9, 3]) {
+                applyLook(style, colorPalettes[index]);
+                const bottoms = [...document.querySelectorAll('.gcol-bottom')];
+                const today = bottoms.find((el) => el.closest('.is-today'));
+                const other = bottoms.find((el) => !el.closest('.is-today'));
+                const mp = document.getElementById('moodprompt-empty-guide');
+                const sf = document.getElementById('storyflow-empty-guide');
+                surfaces.push({
+                    style,
+                    palette: index + 1,
+                    ganttTitle: read(document.querySelector('#gantt-empty-guide .board-empty-title')),
+                    ganttDetail: read(document.querySelector('#gantt-empty-guide p:not(.board-empty-title)')),
+                    week: read(today),
+                    weekOther: read(other),
+                    weekTop: read(today && today.parentElement.querySelector('.gcol-top')),
+                    weekOtherTop: read(other && other.parentElement.querySelector('.gcol-top')),
+                    promptTitle: read(mp && mp.querySelector('.board-empty-title')),
+                    promptDetail: read(mp && mp.querySelector('p:not(.board-empty-title)')),
+                    flowTitle: read(sf && sf.querySelector('.board-empty-title')),
+                    flowDetail: read(sf && sf.querySelector('p:not(.board-empty-title)')),
+                    listEmpty: read(document.querySelector('.ml-empty p')),
+                    listOpacity: getComputedStyle(document.querySelector('.ml-empty')).opacity,
+                });
+            }
+        }
+        if (promptBoard) {
+            promptBoard.data.prompts = [{
+                id: 'contrast-image-prompt',
+                title: 'Contrast',
+                platform: 'midjourney',
+                mediaType: 'image',
+                image1: null,
+                image2: null,
+                text: '',
+                tags: [],
+            }];
+            renderMoodpromptView(promptBoard);
+        }
+        const buttons = [];
+        for (const style of ['flat', 'glass']) {
+            for (let index = 0; index < colorPalettes.length; index++) {
+                applyLook(style, colorPalettes[index]);
+                const image = [...document.querySelectorAll('.media-type-btn')].find((el) => el.classList.contains('active') && el.textContent.trim() === 'Image');
+                const setDefault = document.querySelector('.set-default-btn');
+                buttons.push({
+                    style,
+                    palette: index + 1,
+                    image: read(image),
+                    imageText: image ? image.textContent.trim() : '',
+                    setDefault: read(setDefault),
+                    setDefaultText: setDefault ? setDefault.textContent.trim() : '',
+                });
+            }
+        }
         selectBaseStyle('flat');
         const guide = document.getElementById('canvas-empty-guide');
         guide.hidden = false;
         return {
             rows,
+            surfaces,
+            buttons,
             squares: {
                 guide: square(guide),
                 pills: [...document.querySelectorAll('#canvas-template-picker button')].map(square),
@@ -6092,6 +6180,39 @@ async function assertPaletteReview(page) {
     }
     for (const row of samples.rows) {
         for (const key of ['close', 'zoom', 'save', 'pin', 'label']) {
+            const pair = row[key];
+            assert.ok(pair, `${row.style} palette ${row.palette} missing ${key}`);
+            const ratio = cssContrastRatio(pair.color, pair.background);
+            assert.ok(ratio >= 4.5, `${row.style} palette ${row.palette} ${key} is ${ratio.toFixed(2)}:1 (${pair.color} on ${pair.background})`);
+        }
+    }
+    const surfaceText = {
+        ganttTitle: /No groups yet/,
+        ganttDetail: /Add a group to start/,
+        week: /^W\d+$/,
+        weekOther: /^W\d+$/,
+        promptTitle: /No prompts yet/,
+        promptDetail: /Add a prompt card/,
+        flowTitle: /No frames yet/,
+        flowDetail: /Add a frame to start/,
+        listEmpty: /No cards yet/,
+    };
+    assert.equal(samples.surfaces.length, 8);
+    for (const row of samples.surfaces) {
+        assert.equal(row.listOpacity, '1', `${row.style} palette ${row.palette} moodlist empty is faded`);
+        for (const key of ['ganttTitle', 'ganttDetail', 'week', 'weekOther', 'weekTop', 'weekOtherTop', 'promptTitle', 'promptDetail', 'flowTitle', 'flowDetail', 'listEmpty']) {
+            const pair = row[key];
+            assert.ok(pair, `${row.style} palette ${row.palette} missing ${key}`);
+            if (surfaceText[key]) assert.match(pair.text, surfaceText[key], `${row.style} palette ${row.palette} ${key} text ${pair.text}`);
+            const ratio = cssContrastRatio(pair.color, pair.background);
+            assert.ok(ratio >= 4.5, `${row.style} palette ${row.palette} ${key} is ${ratio.toFixed(2)}:1 (${pair.color} on ${pair.background})`);
+        }
+    }
+    assert.equal(samples.buttons.length, 20);
+    for (const row of samples.buttons) {
+        assert.equal(row.imageText, 'Image');
+        assert.match(row.setDefaultText, /Set current as default/);
+        for (const key of ['image', 'setDefault']) {
             const pair = row[key];
             assert.ok(pair, `${row.style} palette ${row.palette} missing ${key}`);
             const ratio = cssContrastRatio(pair.color, pair.background);
