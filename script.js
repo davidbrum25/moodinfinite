@@ -6970,6 +6970,25 @@ function chromeBarColor(flat, pageHex) {
     // Moodlist top bar is rgba(20, 22, 30, 0.9) over the page.
     return mixHex('#14161E', parseHexColor(pageHex) ? pageHex : '#0d0d0d', 0.1);
 }
+// Same choice as the active tab close (getContrastColor), then nudged if that
+// pair is still under 4.5 on the painted surface.
+function pageContrastInk(background) {
+    const surface = parseHexColor(background) ? background : '#24201B';
+    const ink = readableInkOn(getContrastColor(surface), surface);
+    if (wcagContrast(ink, surface) >= 4.5) return ink;
+    const toward = wcagContrast('#000000', surface) >= wcagContrast('#ffffff', surface) ? '#000000' : '#ffffff';
+    return readableInkOn(toward, surface);
+}
+function ganttChromeSurface(flat, pageHex) {
+    const page = parseHexColor(pageHex) ? pageHex : '#0d0d0d';
+    if (flat) return '#24201B';
+    // #gantt-sidebar and #gantt-date-header use --bg-ui: rgba(35, 38, 51, 0.4).
+    return mixHex('#232633', page, 0.6);
+}
+function ganttTodaySurface(chrome) {
+    // .gantt-col-header.is-today paints rgba(66, 158, 255, 0.12) over the header.
+    return mixHex(chrome, '#429eff', 0.12);
+}
 function flatChrome() {
     return document.documentElement.dataset.style === 'flat';
 }
@@ -7028,8 +7047,21 @@ function updateUIColors() {
     e.setProperty('--accent-on-chrome', readableInkOn(accentColor, chromeBarColor(flat, canvasBackgroundColor)));
     const lightPage = t === '#262626';
     document.documentElement.dataset.pageTone = lightPage ? 'light' : 'dark';
-    e.setProperty('--text-on-page', flat ? (lightPage ? '#121110' : '#F4F1EA') : t);
-    e.setProperty('--text-on-page-muted', flat ? (lightPage ? '#5C5548' : '#B8AFA0') : (lightPage ? '#44403c' : '#94a3b8'));
+    const pageBg = parseHexColor(canvasBackgroundColor) ? canvasBackgroundColor : '#0d0d0d';
+    const pageInk = flat ? (lightPage ? '#121110' : '#F4F1EA') : t;
+    const pageMuted = flat ? (lightPage ? '#5C5548' : '#B8AFA0') : (lightPage ? '#44403c' : '#94a3b8');
+    // #5C5548 on preset 10 (#bfbfbf) is 4.01:1, so muted page ink is measured against the page.
+    e.setProperty('--text-on-page', readableInkOn(pageInk, pageBg));
+    e.setProperty('--text-on-page-muted', readableInkOn(pageMuted, pageBg));
+    const ganttChrome = ganttChromeSurface(flat, pageBg);
+    const ganttToday = ganttTodaySurface(ganttChrome);
+    const ganttMuted = flat ? '#B8AFA0' : '#94a3b8';
+    e.setProperty('--gantt-empty-ink', pageContrastInk(ganttChrome));
+    e.setProperty('--gantt-empty-muted', readableInkOn(ganttMuted, ganttChrome));
+    e.setProperty('--gantt-header-ink', pageContrastInk(ganttChrome));
+    e.setProperty('--gantt-header-muted', readableInkOn(ganttMuted, ganttChrome));
+    e.setProperty('--gantt-today-ink', pageContrastInk(ganttToday));
+    e.setProperty('--gantt-today-muted', readableInkOn(ganttMuted, ganttToday));
     if (flat) {
         e.setProperty('--ml-text', lightPage ? '#121110' : '#F4F1EA');
         e.setProperty('--ml-muted', lightPage ? '#5C5548' : '#B8AFA0');

@@ -576,8 +576,8 @@
         }
 
         .media-type-btn.active {
-            background: var(--switch-bg-checked);
-            color: var(--on-accent, #fff);
+            background: var(--accent-control-bg, var(--switch-bg-checked));
+            color: var(--accent-control-ink, var(--on-accent, #fff));
             font-weight: 600;
         }
 
@@ -1878,6 +1878,11 @@
         #gantt-empty-guide {
             margin: 1rem 0.75rem;
             width: auto;
+            color: var(--gantt-empty-muted, var(--text-color-light));
+        }
+
+        #gantt-empty-guide .board-empty-title {
+            color: var(--gantt-empty-ink, var(--text-color));
         }
 
         #colorseeker-palette {
@@ -2795,8 +2800,8 @@
         .set-default-btn {
             margin-top: 0.25rem;
             padding: 0.6rem;
-            background: var(--switch-bg-checked);
-            color: var(--on-accent, #fff);
+            background: var(--accent-control-bg, var(--switch-bg-checked));
+            color: var(--accent-control-ink, var(--on-accent, #fff));
             border: none;
             border-radius: 0.5rem;
             cursor: pointer;
@@ -4903,7 +4908,7 @@
         .gantt-col-header.is-weekend { background: rgba(255,255,255,0.02); }
         .gcol-top {
             font-size: 0.65rem;
-            color: var(--text-color-light);
+            color: var(--gantt-header-muted, var(--text-color-light));
             font-weight: 500;
             text-transform: uppercase;
             letter-spacing: 0.04em;
@@ -4911,9 +4916,10 @@
         .gcol-bottom {
             font-size: 0.8rem;
             font-weight: 700;
-            color: var(--text-color);
+            color: var(--gantt-header-ink, var(--text-color));
         }
-        .gantt-col-header.is-today .gcol-bottom { color: var(--switch-bg-checked); }
+        .gantt-col-header.is-today .gcol-top { color: var(--gantt-today-muted, var(--gantt-header-muted, var(--text-color-light))); }
+        .gantt-col-header.is-today .gcol-bottom { color: var(--gantt-today-ink, var(--gantt-header-ink, var(--text-color))); }
 
         #gantt-rows-area {
             position: relative;
@@ -5717,8 +5723,8 @@
     justify-content: center;
     gap: 1rem;
     padding: 4rem 2rem;
-    color: var(--ml-muted);
-    opacity: 0.7;
+    color: var(--text-on-page-muted, var(--ml-muted));
+    opacity: 1;
     text-align: center;
     user-select: none;
 }
