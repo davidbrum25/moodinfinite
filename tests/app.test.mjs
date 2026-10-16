@@ -1401,7 +1401,7 @@ async function assertRound2Upgrades(page) {
         const s = window.getComputedStyle(btn);
         return { borderRadius: s.borderRadius, cursor: s.cursor, position: s.position };
     });
-    assert.equal(hexBtnStyle.borderRadius, '999px');
+    assert.equal(hexBtnStyle.borderRadius, '0px');
     assert.equal(hexBtnStyle.cursor, 'pointer');
     assert.equal(hexBtnStyle.position, 'relative');
     await page.click('#colorseeker-copy-hex');
