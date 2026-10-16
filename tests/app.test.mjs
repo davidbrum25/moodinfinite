@@ -2143,7 +2143,7 @@ try {
     assert.ok(interactions.color.css.includes('12ab34'), `accent color did not apply: ${interactions.color.css}`);
     assert.equal(interactions.color.inputKept, '#12ab34');
     assert.ok(interactions.color.itemPixel[1] > 180, `item color was not painted: ${JSON.stringify(interactions.color.itemPixel)}`);
-    assert.notEqual(interactions.color.barBackdrop, 'none');
+    assert.equal(interactions.color.barBackdrop, 'none', 'flat default keeps the left bar sharp');
 
     const routes = await page.evaluate(() => {
         const board = projects.find((p) => p.type === 'moodinfinite');
@@ -2314,6 +2314,9 @@ try {
         assert.equal(ff.color.inputKept, '#12ab34');
         assert.ok(ff.color.itemPixel[1] > 180, `firefox item color: ${JSON.stringify(ff.color)}`);
         assert.equal(ff.color.barBackdrop, 'none', `firefox left bar still blurs over the color input: ${ff.color.barBackdrop}`);
+        await ffPage.evaluate(() => selectBaseStyle('glass'));
+        const ffGlassBlur = await ffPage.evaluate(() => getComputedStyle(document.getElementById('left-bar')).backdropFilter);
+        assert.equal(ffGlassBlur, 'none', `firefox glass left bar must stay sharp: ${ffGlassBlur}`);
         assert.notEqual(ff.color.appearance, 'none');
         assert.deepEqual(ffErrors.filter(isFirstParty), []);
         await firefox.close();
@@ -5508,21 +5511,37 @@ async function assertBaseStyle(page) {
         saveSettings();
     });
 
+    await page.evaluate(() => localStorage.removeItem('moodinfinite-settings'));
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    const earlyEmpty = await page.evaluate(() => document.body.dataset.style);
+    assert.equal(earlyEmpty, 'flat', 'empty storage should paint flat before the app boots');
+    await page.waitForFunction(() => window.projects && window.projects.length > 0 && typeof selectBaseStyle === 'function' && typeof updateUIColors === 'function', { timeout: 15000 });
+    await page.setViewport({ width: 1280, height: 800, deviceScaleFactor: 1, isMobile: false, hasTouch: false });
     const initial = await page.evaluate(() => {
         const bar = getComputedStyle(document.getElementById('tabs-bar'));
         const bg = getComputedStyle(document.documentElement).getPropertyValue('--bg-ui').trim().toLowerCase();
+        const radios = [...document.querySelectorAll('#palette-panel [role="radio"]')].map((el) => ({
+            style: el.dataset.styleOption,
+            checked: el.getAttribute('aria-checked'),
+        }));
         return {
             body: document.body.dataset.style,
             html: document.documentElement.dataset.style,
             backdrop: bar.backdropFilter,
             bg,
+            radios,
         };
     });
-    assert.equal(initial.body, 'glass');
-    assert.equal(initial.html, 'glass');
-    assert.notEqual(initial.backdrop, 'none', `glass tabs bar has no blur: ${initial.backdrop}`);
-    assert.ok(initial.bg.includes('rgba'), `glass --bg-ui should stay translucent: ${initial.bg}`);
+    assert.equal(initial.body, 'flat');
+    assert.equal(initial.html, 'flat');
+    assert.equal(initial.backdrop, 'none', `empty storage should not blur the tabs bar: ${initial.backdrop}`);
+    assert.equal(initial.bg, '#24201b');
+    assert.deepEqual(initial.radios, [
+        { style: 'glass', checked: 'false' },
+        { style: 'flat', checked: 'true' },
+    ]);
 
+    await page.evaluate(() => selectBaseStyle('glass'));
     await chooseBaseStyle(page, 'flat');
     const flat = await page.evaluate(() => {
         const bar = getComputedStyle(document.getElementById('tabs-bar'));
@@ -5570,6 +5589,62 @@ async function assertBaseStyle(page) {
     assert.equal(kept.stored, 'flat');
     assert.equal(kept.backdrop, 'none');
     assert.equal(kept.bg, '#24201b');
+
+    const surfaces = await page.evaluate(() => {
+        const read = (el) => {
+            if (!el) return null;
+            const style = getComputedStyle(el);
+            return { radius: style.borderRadius, blur: style.backdropFilter };
+        };
+        createNewProject('storyflow');
+        const flowId = activeProjectId;
+        const flow = projects.find((p) => p.id === flowId);
+        const canvas = document.createElement('canvas');
+        canvas.width = 32;
+        canvas.height = 18;
+        const g = canvas.getContext('2d');
+        g.fillStyle = '#c97b3a';
+        g.fillRect(0, 0, 32, 18);
+        flow.data.frames = [{
+            title: 'Apertura',
+            description: 'Plano',
+            image: canvas.toDataURL('image/jpeg', 0.5),
+            meta: { duration: '5s', camera: 'Wide Shot', audio: '', artist: 'Lucía', status: 'wip' },
+        }];
+        flow.data.workers = ['Lucía'];
+        renderStoryflowView(flow);
+        createNewProject('moodlist');
+        const listId = activeProjectId;
+        const list = projects.find((p) => p.id === listId);
+        list.data.cards = [{ id: 'c1', title: 'Rodaje', color: '', pinned: false, image: null, items: [{ id: 'i1', text: 'Llamar', checked: false }] }];
+        renderMoodlistView(list);
+        createNewProject('colorseeker');
+        const toneId = activeProjectId;
+        createNewProject('moodgantt');
+        const ganttId = activeProjectId;
+        const gantt = projects.find((p) => p.id === ganttId);
+        const today = ganttFormatDate(ganttToday());
+        gantt.data.groups = [{ id: 'g1', name: 'Pre', color: '#d4a359', collapsed: false, tasks: [{ id: 't1', name: 'Guion', startDate: today, endDate: today, progress: 20, status: 'wip', assignee: '', notes: '' }] }];
+        renderGanttView(gantt);
+        switchTab(flowId);
+        const imageSlot = read(document.querySelector('.story-image-slot'));
+        const thumb = read(document.querySelector('.story-image-slot img'));
+        const select = read(document.querySelector('.story-card select') || document.getElementById('asset-library-filter'));
+        switchTab(ganttId);
+        const ganttPanel = read(document.getElementById('gantt-detail-panel'));
+        switchTab(listId);
+        const listCard = read(document.querySelector('.ml-card'));
+        switchTab(toneId);
+        const tone = read(document.getElementById('colorseeker-sidebar'));
+        const menu = read(document.getElementById('context-menu'));
+        return { imageSlot, thumb, select, ganttPanel, listCard, tone, menu };
+    });
+    const radiusIsZero = (value) => value === '0px' || value.split(' ').every((part) => part === '0px');
+    for (const [name, value] of Object.entries(surfaces)) {
+        assert.ok(value, `flat surface missing: ${name}`);
+        assert.ok(radiusIsZero(value.radius), `${name} radius ${value.radius}`);
+        assert.equal(value.blur, 'none', `${name} blur ${value.blur}`);
+    }
 
     await page.evaluate(() => createNewProject('moodinfinite'));
     const boardA = await page.evaluate(() => activeProjectId);
@@ -5791,8 +5866,33 @@ async function assertBaseStyle(page) {
 
     await page.setViewport({ width: 1280, height: 800, deviceScaleFactor: 1, isMobile: false, hasTouch: false });
     await page.evaluate(() => selectBaseStyle('glass'));
+    const glassChrome = await page.evaluate(() => ({
+        tabs: getComputedStyle(document.getElementById('tabs-bar')).backdropFilter,
+        left: getComputedStyle(document.getElementById('left-bar')).backdropFilter,
+        menu: getComputedStyle(document.getElementById('context-menu')).backdropFilter,
+        modal: getComputedStyle(document.querySelector('.glass-modal')).backdropFilter,
+    }));
+    assert.notEqual(glassChrome.tabs, 'none', glassChrome.tabs);
+    assert.notEqual(glassChrome.left, 'none', glassChrome.left);
+    assert.notEqual(glassChrome.menu, 'none', glassChrome.menu);
+    assert.notEqual(glassChrome.modal, 'none', glassChrome.modal);
     const added = pageErrors.slice(errorsBefore).filter(isFirstParty);
     assert.deepEqual(added, [], `base style raised errors:\n${added.join('\n')}`);
+
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    const earlyGlass = await page.evaluate(() => document.body.dataset.style);
+    assert.equal(earlyGlass, 'glass', 'stored glass style was not on the body before the app finished booting');
+    await page.waitForFunction(() => window.projects && window.projects.length > 0 && typeof selectBaseStyle === 'function', { timeout: 15000 });
+    const keptGlass = await page.evaluate(() => ({
+        body: document.body.dataset.style,
+        html: document.documentElement.dataset.style,
+        stored: JSON.parse(localStorage.getItem('moodinfinite-settings')).baseStyle,
+        backdrop: getComputedStyle(document.getElementById('tabs-bar')).backdropFilter,
+    }));
+    assert.equal(keptGlass.body, 'glass');
+    assert.equal(keptGlass.html, 'glass');
+    assert.equal(keptGlass.stored, 'glass');
+    assert.notEqual(keptGlass.backdrop, 'none', keptGlass.backdrop);
     console.log('Base style passed.');
 }
 
