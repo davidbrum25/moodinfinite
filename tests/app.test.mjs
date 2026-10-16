@@ -2283,6 +2283,7 @@ try {
     await assertToolCreationHistory(page);
     await assertMoodflowExports(page);
     await assertBaseStyle(page);
+    await assertPaletteReview(page);
 
     const lateErrors = pageErrors.filter(isFirstParty);
     assert.deepEqual(lateErrors, [], `first-party errors:\n${lateErrors.join('\n')}`);
@@ -5894,6 +5895,210 @@ async function assertBaseStyle(page) {
     assert.equal(keptGlass.stored, 'glass');
     assert.notEqual(keptGlass.backdrop, 'none', keptGlass.backdrop);
     console.log('Base style passed.');
+}
+
+function cssContrastRatio(foreground, background) {
+    const parse = (value) => {
+        const match = String(value).match(/rgba?\(([^)]+)\)/);
+        if (!match) return null;
+        const parts = match[1].split(',').map((part) => parseFloat(part));
+        return { r: parts[0], g: parts[1], b: parts[2], a: parts.length > 3 ? parts[3] : 1 };
+    };
+    const linear = (channel) => {
+        const c = channel / 255;
+        return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+    };
+    const luminance = (rgb) => linear(rgb.r) * 0.2126 + linear(rgb.g) * 0.7152 + linear(rgb.b) * 0.0722;
+    const fg = parse(foreground);
+    const bg = parse(background);
+    if (!fg || !bg) return 0;
+    const paint = {
+        r: fg.r * fg.a + bg.r * (1 - fg.a),
+        g: fg.g * fg.a + bg.g * (1 - fg.a),
+        b: fg.b * fg.a + bg.b * (1 - fg.a),
+    };
+    const lighter = Math.max(luminance(paint), luminance(bg));
+    const darker = Math.min(luminance(paint), luminance(bg));
+    return (lighter + 0.05) / (darker + 0.05);
+}
+
+async function assertPaletteReview(page) {
+    console.log('Testing palette review fixes...');
+    await page.setViewport({ width: 1280, height: 800, deviceScaleFactor: 1, isMobile: false, hasTouch: false });
+    await page.evaluate(() => {
+        if (!projects.some((project) => project.type === 'moodlist')) createNewProject('moodlist');
+        if (!projects.some((project) => project.type === 'moodgantt')) createNewProject('moodgantt');
+        const list = projects.find((project) => project.type === 'moodlist');
+        list.data.cards = [
+            { id: 'pin-a', title: 'Held', color: '', pinned: true, image: null, items: [] },
+            { id: 'pin-b', title: 'Loose', color: '', pinned: false, image: null, items: [] },
+        ];
+        switchTab(list.id);
+    });
+
+    const idle = await page.$eval('#palette-btn', (el) => ({
+        haspopup: el.getAttribute('aria-haspopup'),
+        expanded: el.getAttribute('aria-expanded'),
+    }));
+    assert.equal(idle.haspopup, 'true');
+    assert.equal(idle.expanded, 'false');
+
+    await openPalette(page);
+    assert.equal(await page.$eval('#palette-btn', (el) => el.getAttribute('aria-expanded')), 'true');
+    await page.keyboard.press('Escape');
+    await page.waitForFunction(() => !document.getElementById('palette-panel').classList.contains('open'));
+    const afterEscape = await page.evaluate(() => ({
+        id: document.activeElement && document.activeElement.id,
+        expanded: document.getElementById('palette-btn').getAttribute('aria-expanded'),
+    }));
+    assert.equal(afterEscape.id, 'palette-btn');
+    assert.equal(afterEscape.expanded, 'false');
+
+    await openPalette(page);
+    await page.evaluate(() => {
+        document.body.dispatchEvent(new MouseEvent('click', { bubbles: true, clientX: 4, clientY: 4 }));
+    });
+    await page.waitForFunction(() => !document.getElementById('palette-panel').classList.contains('open'));
+    assert.equal(await page.$eval('#palette-btn', (el) => el.getAttribute('aria-expanded')), 'false');
+
+    await openPalette(page);
+    await page.evaluate(() => document.querySelector('#palette-panel [data-style-option="glass"]').click());
+    const styleStaysOpen = await page.evaluate(() => ({
+        open: document.getElementById('palette-panel').classList.contains('open'),
+        expanded: document.getElementById('palette-btn').getAttribute('aria-expanded'),
+        style: document.body.dataset.style,
+    }));
+    assert.equal(styleStaysOpen.open, true);
+    assert.equal(styleStaysOpen.expanded, 'true');
+    assert.equal(styleStaysOpen.style, 'glass');
+    await page.evaluate(() => document.querySelector('#palette-panel [data-style-option="flat"]').click());
+    assert.equal(await page.$eval('#palette-btn', (el) => el.getAttribute('aria-expanded')), 'true');
+    await page.keyboard.press('Escape');
+    await page.waitForFunction(() => !document.getElementById('palette-panel').classList.contains('open'));
+
+    await openPalette(page);
+    const presetButtons = await page.$$('#palette-panel .palette-option');
+    await presetButtons[1].click();
+    await page.waitForFunction(() => !document.getElementById('palette-panel').classList.contains('open'));
+    const afterClick = await page.evaluate(() => ({
+        id: document.activeElement && document.activeElement.id,
+        expanded: document.getElementById('palette-btn').getAttribute('aria-expanded'),
+        bg: projects.find((project) => project.id === activeProjectId).data.canvasBackgroundColor,
+    }));
+    assert.equal(afterClick.id, 'palette-btn');
+    assert.equal(afterClick.expanded, 'false');
+    assert.equal(afterClick.bg, '#f8f9fa');
+
+    await openPalette(page);
+    await page.evaluate(() => document.querySelectorAll('#palette-panel .palette-option')[2].focus());
+    await page.keyboard.press('Enter');
+    await page.waitForFunction(() => !document.getElementById('palette-panel').classList.contains('open'));
+    const afterEnter = await page.evaluate(() => ({
+        id: document.activeElement && document.activeElement.id,
+        expanded: document.getElementById('palette-btn').getAttribute('aria-expanded'),
+        bg: projects.find((project) => project.id === activeProjectId).data.canvasBackgroundColor,
+    }));
+    assert.equal(afterEnter.id, 'palette-btn');
+    assert.equal(afterEnter.expanded, 'false');
+    assert.equal(afterEnter.bg, '#fdf6e3');
+
+    const samples = await page.evaluate(() => {
+        const parse = (value) => {
+            const match = String(value).match(/rgba?\(([^)]+)\)/);
+            if (!match) return null;
+            const parts = match[1].split(',').map((part) => parseFloat(part));
+            return { r: parts[0], g: parts[1], b: parts[2], a: parts.length > 3 ? parts[3] : 1 };
+        };
+        const realBackground = (el) => {
+            const layers = [];
+            let node = el;
+            while (node) {
+                const bg = parse(getComputedStyle(node).backgroundColor);
+                if (bg && bg.a > 0.01) {
+                    layers.push(bg);
+                    if (bg.a >= 0.99) break;
+                }
+                node = node.parentElement;
+            }
+            if (!layers.length) return 'rgb(255, 255, 255)';
+            let out = layers[layers.length - 1];
+            for (let i = layers.length - 2; i >= 0; i--) {
+                const src = layers[i];
+                out = {
+                    r: src.r * src.a + out.r * (1 - src.a),
+                    g: src.g * src.a + out.g * (1 - src.a),
+                    b: src.b * src.a + out.b * (1 - src.a),
+                    a: 1,
+                };
+            }
+            return `rgb(${Math.round(out.r)}, ${Math.round(out.g)}, ${Math.round(out.b)})`;
+        };
+        const read = (el) => {
+            if (!el) return null;
+            const style = getComputedStyle(el);
+            return { color: style.color, background: realBackground(el) };
+        };
+        const square = (el) => {
+            const style = getComputedStyle(el);
+            return { radius: style.borderRadius, shadow: style.boxShadow };
+        };
+        const list = projects.find((project) => project.type === 'moodlist');
+        const gantt = projects.find((project) => project.type === 'moodgantt');
+        const board = projects.find((project) => project.type === 'moodinfinite') || list;
+        const rows = [];
+        for (const style of ['flat', 'glass']) {
+            selectBaseStyle(style);
+            for (const index of [1, 2, 9, 3]) {
+                const palette = colorPalettes[index];
+                [list, gantt, board].forEach((project) => {
+                    if (!project) return;
+                    project.data.canvasBackgroundColor = palette.bg;
+                    project.data.accentColor = palette.accent;
+                    project.data.gridColor = palette.grid;
+                });
+                switchTab(list.id);
+                rows.push({
+                    style,
+                    palette: index + 1,
+                    close: read(document.querySelector('.tab-item.active .tab-close-btn')),
+                    zoom: read(document.querySelector('.gantt-zoom-btn.active')),
+                    save: read(document.querySelector('.ml-save-btn')),
+                    pin: read(document.querySelector('.ml-view-toggle')),
+                    label: read(document.querySelector('.ml-section-label')),
+                });
+            }
+        }
+        selectBaseStyle('flat');
+        const guide = document.getElementById('canvas-empty-guide');
+        guide.hidden = false;
+        return {
+            rows,
+            squares: {
+                guide: square(guide),
+                pills: [...document.querySelectorAll('#canvas-template-picker button')].map(square),
+                fit: square(document.getElementById('canvas-fit-view-btn')),
+                zoom: square(document.getElementById('canvas-zoom-readout')),
+            },
+        };
+    });
+
+    assert.equal(samples.squares.pills.length, 3);
+    for (const [name, box] of Object.entries(samples.squares)) {
+        const boxes = Array.isArray(box) ? box : [box];
+        for (const entry of boxes) {
+            assert.ok(entry.radius === '0px' || entry.radius.split(' ').every((part) => part === '0px'), `${name} radius ${entry.radius}`);
+            assert.equal(entry.shadow, 'none', `${name} shadow ${entry.shadow}`);
+        }
+    }
+    for (const row of samples.rows) {
+        for (const key of ['close', 'zoom', 'save', 'pin', 'label']) {
+            const pair = row[key];
+            assert.ok(pair, `${row.style} palette ${row.palette} missing ${key}`);
+            const ratio = cssContrastRatio(pair.color, pair.background);
+            assert.ok(ratio >= 4.5, `${row.style} palette ${row.palette} ${key} is ${ratio.toFixed(2)}:1 (${pair.color} on ${pair.background})`);
+        }
+    }
+    console.log('Palette review fixes passed.');
 }
 
 async function assertMoodflowExports(page) {
