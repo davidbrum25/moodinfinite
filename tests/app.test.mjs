@@ -1117,7 +1117,7 @@ async function assertNextImprovements(page) {
     await page.click('.ml-save-btn');
     await page.waitForSelector('.ml-card-item-text');
     const itemInk = await page.$eval('.ml-card-item-text', (el) => getComputedStyle(el).color);
-    assert.equal(itemInk, 'rgb(226, 232, 240)', `list item text is not readable: ${itemInk}`);
+    assert.equal(itemInk, 'rgb(244, 241, 234)', `list item text is not readable: ${itemInk}`);
     await page.click('#palette-btn');
     await page.waitForSelector('#palette-panel.open .palette-option');
     await (await page.$$('#palette-panel .palette-option'))[1].click();
@@ -1127,8 +1127,8 @@ async function assertNextImprovements(page) {
         const check = getComputedStyle(document.querySelector('.ml-card-checkbox')).color;
         return { text, card, check };
     });
-    assert.equal(lightList.text, 'rgb(28, 25, 23)', `light preset left the list text pale: ${lightList.text}`);
-    assert.equal(lightList.check, 'rgb(68, 64, 60)', `light preset left the checkbox pale: ${lightList.check}`);
+    assert.equal(lightList.text, 'rgb(18, 17, 16)', `light preset left the list text pale: ${lightList.text}`);
+    assert.equal(lightList.check, 'rgb(92, 85, 72)', `light preset left the checkbox pale: ${lightList.check}`);
     assert.equal(lightList.card, 'rgb(255, 255, 255)', `light preset left the card muddy: ${lightList.card}`);
     const cardsBeforePaste = await page.$$eval('.ml-card', (els) => els.length);
     await page.click('.ml-card-item-text');
@@ -4813,7 +4813,7 @@ async function assertRound4ListTone(page) {
     });
     assert.equal(tint.cleared.color, '');
     assert.equal(tint.cleared.tinted, false, 'clearing a card color left the tinted text colors on');
-    assert.equal(tint.cleared.text, 'rgb(28, 25, 23)', `cleared card text is not dark on white: ${tint.cleared.text} on ${tint.cleared.bg}`);
+    assert.equal(tint.cleared.text, 'rgb(18, 17, 16)', `cleared card text is not dark on white: ${tint.cleared.text} on ${tint.cleared.bg}`);
     assert.equal(tint.applied.color, '#4a1c1c');
     assert.equal(tint.applied.tinted, true, 'picking a card color did not mark the card tinted');
     assert.equal(tint.applied.text, 'rgb(245, 245, 244)', `tinted card text stayed dark: ${tint.applied.text}`);
