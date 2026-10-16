@@ -277,6 +277,29 @@
             color: #fff;
         }
 
+        /* The active tab sits on the preset page color. The muted chrome ink fails that surface on light presets. */
+        .tab-item.active .tab-close-btn,
+        .tab-item.active .tab-close-btn:hover {
+            color: var(--text-color-active-tab);
+        }
+
+        .tab-item.active .tab-close-btn:hover {
+            background-color: color-mix(in srgb, var(--text-color-active-tab) 16%, transparent);
+        }
+
+        html[data-style="glass"][data-page-tone="light"] .tab-item:not(.active) .tab-close-btn,
+        html[data-style="glass"][data-page-tone="light"] .tab-item:not(.active) .tab-close-btn:hover {
+            color: #121110;
+        }
+
+        html[data-style="glass"][data-page-tone="light"] .tab-item:not(.active) .tab-close-btn:hover {
+            background-color: rgba(18, 17, 16, 0.12);
+        }
+
+        html[data-style="glass"][data-page-tone="dark"] .tab-item:not(.active) .tab-close-btn {
+            color: #e2e8f0;
+        }
+
         /* --- CONTENT AREA & TABS --- */
         #content-area {
             flex-grow: 1;
@@ -5056,8 +5079,8 @@
         }
         .gantt-zoom-btn:hover { background: var(--bg-ui-hover); color: var(--text-color); }
         .gantt-zoom-btn.active {
-            background: var(--switch-bg-checked);
-            color: var(--on-accent, #fff);
+            background: var(--accent-control-bg, var(--switch-bg-checked));
+            color: var(--accent-control-ink, #121110);
             font-weight: 600;
         }
         .gantt-nav-btn {
@@ -5428,7 +5451,7 @@
 }
 
 .ml-view-toggle input { display: none; }
-.ml-view-toggle:has(input:checked) { color: var(--switch-bg-checked); }
+.ml-view-toggle:has(input:checked) { color: var(--accent-on-chrome, var(--switch-bg-checked)); }
 
 /* ── Scrollable area ─────────────────────────────────── */
 .ml-scroll-area {
@@ -5581,9 +5604,9 @@
 .ml-icon-btn.active { color: var(--switch-bg-checked); }
 
 .ml-save-btn {
-    background: var(--switch-bg-checked);
+    background: var(--accent-control-bg, var(--switch-bg-checked));
     border: none;
-    color: var(--on-accent, #fff);
+    color: var(--accent-control-ink, #121110);
     cursor: pointer;
     padding: 0.4rem 1rem;
     border-radius: 0.5rem;
@@ -6766,10 +6789,20 @@ html[data-style="flat"] #canvas-empty-guide p {
 html[data-style="flat"] #canvas-empty-guide .canvas-empty-title {
     color: #F4F1EA;
 }
+html[data-style="flat"] #canvas-empty-guide,
+html[data-style="flat"] #canvas-template-picker button,
+html[data-style="flat"] #canvas-fit-view-btn,
+html[data-style="flat"] #canvas-zoom-readout {
+    border-radius: 0 !important;
+    box-shadow: none !important;
+}
 html[data-style="flat"] #canvas-template-picker button {
     background: #24201B;
     color: #F4F1EA;
     border: 1px solid #7A6E60;
+}
+html[data-style="flat"][data-page-tone="light"] .ml-section-label {
+    color: #4A433C;
 }
 html[data-style="flat"] .ml-card:hover,
 html[data-style="flat"] .gantt-bar:hover,

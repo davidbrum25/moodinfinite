@@ -1663,6 +1663,25 @@ const itemOpacitySlider = document.getElementById('item-opacity-slider');
 const itemOpacityValue = document.getElementById('item-opacity-value');
 const paletteBtn = document.getElementById('palette-btn');
 const palettePanel = document.getElementById('palette-panel');
+function syncPaletteButton() {
+    if (!paletteBtn) return;
+    paletteBtn.setAttribute('aria-haspopup', 'true');
+    const open = !!(palettePanel && palettePanel.classList.contains('open'));
+    paletteBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
+}
+function closePalettePopup(returnFocus) {
+    if (!palettePanel) return;
+    const wasOpen = palettePanel.classList.contains('open');
+    palettePanel.classList.remove('open');
+    syncPaletteButton();
+    if (wasOpen && returnFocus && paletteBtn) paletteBtn.focus();
+}
+function markPaletteOpen() {
+    if (!palettePanel) return;
+    palettePanel.classList.add('open');
+    syncPaletteButton();
+}
+syncPaletteButton();
 const eyedropperBtn = document.getElementById('eyedropper-btn');
 const groupBtn = document.getElementById('group-btn');
 const groupOrderedBtn = document.getElementById('group-ordered-btn');
@@ -2182,7 +2201,7 @@ canvas.addEventListener('mouseleave', clearHoverStates);
             mobileTabsPopup.style.display = 'none'
         }
         if (palettePanel && palettePanel.classList.contains('open') && !palettePanel.contains(e.target) && e.target !== paletteBtn && !paletteBtn.contains(e.target)) {
-            palettePanel.classList.remove('open');
+            closePalettePopup(false);
         }
     });
 
@@ -2217,8 +2236,7 @@ canvas.addEventListener('mouseleave', clearHoverStates);
             closed = true;
         }
         if (palettePanel && palettePanel.classList.contains('open')) {
-            palettePanel.classList.remove('open');
-            if (paletteBtn) paletteBtn.focus();
+            closePalettePopup(true);
             closed = true;
         }
         if (iconPickerPanel && iconPickerPanel.style.display === 'flex') {
@@ -2318,7 +2336,7 @@ canvas.addEventListener('mouseleave', clearHoverStates);
         if (tabContextMenu && !tabContextMenu.contains(e.target)) tabContextMenu.style.display = 'none';
         if (sfContextMenu && !sfContextMenu.contains(e.target)) sfContextMenu.style.display = 'none';
         if (palettePanel && palettePanel.classList.contains('open') && !palettePanel.contains(e.target) && e.target !== paletteBtn && !paletteBtn.contains(e.target)) {
-            palettePanel.classList.remove('open')
+            closePalettePopup(false);
         }
         if (iconPickerPanel && iconPickerPanel.style.display === 'flex' && !iconPickerPanel.contains(e.target) && e.target !== commentIconBtn && !commentIconBtn.contains(e.target)) {
             iconPickerPanel.style.display = 'none'
@@ -2370,12 +2388,12 @@ canvas.addEventListener('mouseleave', clearHoverStates);
 
     if (paletteBtn) paletteBtn.addEventListener('click', () => {
         if (palettePanel.classList.contains('open')) {
-            palettePanel.classList.remove('open');
+            closePalettePopup(false);
         } else {
             const buttonRect = paletteBtn.getBoundingClientRect();
             palettePanel.style.top = `${buttonRect.bottom + 8}px`;
             palettePanel.style.left = `0px`;
-            palettePanel.classList.add('open');
+            markPaletteOpen();
             const panelWidth = palettePanel.offsetWidth;
             const screenPadding = 8;
             let newLeft = buttonRect.right - panelWidth;
@@ -4859,7 +4877,7 @@ function onMouseDown(e) {
     if (contextMenu) contextMenu.style.display = 'none';
     if (tabContextMenu) tabContextMenu.style.display = 'none';
     if (iconPickerPanel) iconPickerPanel.style.display = 'none';
-    if (palettePanel) palettePanel.classList.remove('open');
+    if (palettePanel && palettePanel.classList.contains('open')) closePalettePopup(false);
 
     if (e.button === 1) {
         beginCanvasPan(e);
@@ -6858,6 +6876,100 @@ function contrastInk(hex) {
     const ratio = (a, b) => (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
     return ratio(lum, darkLum) >= ratio(lum, lightLum) ? '#121110' : '#F4F1EA';
 }
+// WCAG relative luminance. getLuminance weights blue at 0.722, so button pairs use this copy.
+const READABLE_CONTRAST = 4.6;
+function parseHexColor(hex) {
+    if (!hex) return null;
+    let h = String(hex).trim().replace('#', '');
+    if (h.length === 3) h = h[0] + h[0] + h[1] + h[1] + h[2] + h[2];
+    if (!/^[0-9a-fA-F]{6}$/.test(h)) return null;
+    return [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)];
+}
+function hexFromRgb(rgb) {
+    return '#' + rgb.map((n) => Math.max(0, Math.min(255, Math.round(n))).toString(16).padStart(2, '0')).join('');
+}
+function wcagLinear(channel) {
+    const c = channel / 255;
+    return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+}
+function wcagLuminance(hex) {
+    const rgb = parseHexColor(hex);
+    if (!rgb) return 0;
+    return wcagLinear(rgb[0]) * 0.2126 + wcagLinear(rgb[1]) * 0.7152 + wcagLinear(rgb[2]) * 0.0722;
+}
+function wcagContrast(a, b) {
+    const hi = Math.max(wcagLuminance(a), wcagLuminance(b));
+    const lo = Math.min(wcagLuminance(a), wcagLuminance(b));
+    return (hi + 0.05) / (lo + 0.05);
+}
+function mixHex(a, b, t) {
+    const A = parseHexColor(a);
+    const B = parseHexColor(b);
+    if (!A || !B) return a;
+    return hexFromRgb(A.map((v, i) => v * (1 - t) + B[i] * t));
+}
+function readableFillPair(accent) {
+    const source = parseHexColor(accent) ? accent : '#429eff';
+    const dark = '#121110';
+    const light = '#F4F1EA';
+    const darkRatio = wcagContrast(dark, source);
+    const lightRatio = wcagContrast(light, source);
+    const preferDark = darkRatio >= lightRatio;
+    const ink = preferDark ? dark : light;
+    if ((preferDark ? darkRatio : lightRatio) >= READABLE_CONTRAST) return { bg: source, fg: ink };
+    const toward = preferDark ? '#ffffff' : '#000000';
+    let lo = 0;
+    let hi = 1;
+    let bg = source;
+    for (let i = 0; i < 20; i++) {
+        const mid = (lo + hi) / 2;
+        const next = mixHex(source, toward, mid);
+        if (wcagContrast(ink, next) >= READABLE_CONTRAST) {
+            bg = next;
+            hi = mid;
+        } else {
+            lo = mid;
+        }
+    }
+    let guard = 0;
+    while (wcagContrast(ink, bg) < 4.55 && guard < 8) {
+        hi = Math.min(1, hi + 0.02);
+        bg = mixHex(source, toward, hi);
+        guard += 1;
+    }
+    return { bg, fg: ink };
+}
+function readableInkOn(color, background) {
+    const source = parseHexColor(color) ? color : '#F4F1EA';
+    const surface = parseHexColor(background) ? background : '#24201B';
+    if (wcagContrast(source, surface) >= READABLE_CONTRAST) return source;
+    const toward = wcagContrast('#F4F1EA', surface) >= wcagContrast('#121110', surface) ? '#F4F1EA' : '#121110';
+    let lo = 0;
+    let hi = 1;
+    let best = toward;
+    for (let i = 0; i < 20; i++) {
+        const mid = (lo + hi) / 2;
+        const next = mixHex(source, toward, mid);
+        if (wcagContrast(next, surface) >= READABLE_CONTRAST) {
+            best = next;
+            hi = mid;
+        } else {
+            lo = mid;
+        }
+    }
+    let guard = 0;
+    while (wcagContrast(best, surface) < 4.55 && guard < 8) {
+        hi = Math.min(1, hi + 0.02);
+        best = mixHex(source, toward, hi);
+        guard += 1;
+    }
+    return best;
+}
+function chromeBarColor(flat, pageHex) {
+    if (flat) return '#24201B';
+    // Moodlist top bar is rgba(20, 22, 30, 0.9) over the page.
+    return mixHex('#14161E', parseHexColor(pageHex) ? pageHex : '#0d0d0d', 0.1);
+}
 function flatChrome() {
     return document.documentElement.dataset.style === 'flat';
 }
@@ -6910,6 +7022,10 @@ function updateUIColors() {
     }
     e.setProperty('--switch-bg-checked', accentColor);
     e.setProperty('--on-accent', contrastInk(accentColor));
+    const controlPair = readableFillPair(accentColor);
+    e.setProperty('--accent-control-bg', controlPair.bg);
+    e.setProperty('--accent-control-ink', controlPair.fg);
+    e.setProperty('--accent-on-chrome', readableInkOn(accentColor, chromeBarColor(flat, canvasBackgroundColor)));
     const lightPage = t === '#262626';
     document.documentElement.dataset.pageTone = lightPage ? 'light' : 'dark';
     e.setProperty('--text-on-page', flat ? (lightPage ? '#121110' : '#F4F1EA') : t);
@@ -7735,7 +7851,7 @@ function buildPaletteMenu() {
                 scheduleAutoSave();
                 updateUIColors();
             }
-            palettePanel.classList.remove('open');
+            closePalettePopup(true);
         });
         option.addEventListener('keydown', (e) => {
             if (e.key !== 'Enter' && e.key !== ' ') return;
@@ -7757,7 +7873,7 @@ function buildPaletteMenu() {
     setDefaultBtn.onclick = (e) => {
         e.stopPropagation();
         saveDefaultTheme();
-        palettePanel.classList.remove('open');
+        closePalettePopup(true);
     };
     palettePanel.appendChild(setDefaultBtn);
 }
