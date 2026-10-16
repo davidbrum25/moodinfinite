@@ -6602,6 +6602,7 @@ html[data-style="flat"] .set-default-btn:hover,
 html[data-style="flat"] .set-default-btn:active {
     border-radius: 0;
     transform: none;
+    filter: none;
 }
 html[data-style="flat"] .menu-item .text-red-500,
 html[data-style="flat"] .selection-tool-btn .text-red-500 {
