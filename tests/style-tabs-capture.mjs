@@ -30,7 +30,7 @@ async function shot(page, name) {
             document.head.appendChild(style);
         }
         const light = document.getElementById('storyflow-lightbox');
-        if (light && light.classList.contains('open')) light.style.opacity = '1';
+        if (light && light.classList.contains('open')) light.style.opacity = '';
     });
     await new Promise((r) => setTimeout(r, 80));
     await page.screenshot({ path: path.join(out, name) });
@@ -132,7 +132,10 @@ try {
                 el.style.display = 'none';
             });
             const light = document.getElementById('storyflow-lightbox');
-            if (light) light.classList.remove('open');
+            if (light) {
+                light.classList.remove('open');
+                light.style.opacity = '';
+            }
             const menu = document.getElementById('cloud-user-menu');
             if (menu) menu.classList.remove('open');
             const sync = document.getElementById('cloud-sync-indicator');
