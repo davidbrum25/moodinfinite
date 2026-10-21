@@ -1663,6 +1663,25 @@ const itemOpacitySlider = document.getElementById('item-opacity-slider');
 const itemOpacityValue = document.getElementById('item-opacity-value');
 const paletteBtn = document.getElementById('palette-btn');
 const palettePanel = document.getElementById('palette-panel');
+function syncPaletteButton() {
+    if (!paletteBtn) return;
+    paletteBtn.setAttribute('aria-haspopup', 'true');
+    const open = !!(palettePanel && palettePanel.classList.contains('open'));
+    paletteBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
+}
+function closePalettePopup(returnFocus) {
+    if (!palettePanel) return;
+    const wasOpen = palettePanel.classList.contains('open');
+    palettePanel.classList.remove('open');
+    syncPaletteButton();
+    if (wasOpen && returnFocus && paletteBtn) paletteBtn.focus();
+}
+function markPaletteOpen() {
+    if (!palettePanel) return;
+    palettePanel.classList.add('open');
+    syncPaletteButton();
+}
+syncPaletteButton();
 const eyedropperBtn = document.getElementById('eyedropper-btn');
 const groupBtn = document.getElementById('group-btn');
 const groupOrderedBtn = document.getElementById('group-ordered-btn');
@@ -1749,6 +1768,7 @@ let currentlyEditingText = null;
 let hoveredItem = null;
 let isDraggingConnector = false, tempConnector = null, hoveredPort = null, hoveredConnector = null;
 let showGrid = true, snapToGrid = true, showDropShadow = true, showNotifications = true, showUiBlur = true;
+let baseStyle = 'flat';
 let gridSize = 50, gridOpacity = 0.05;
 let currentProjectName = 'moodinfinite';
 const HISTORY_LIMIT = 50;
@@ -1841,7 +1861,7 @@ function saveSettings() {
         try {
             if (savedSettings) settings = JSON.parse(savedSettings);
         } catch (e) {}
-        Object.assign(settings, { showGrid, snapToGrid, showDropShadow, showNotifications, showUiBlur, gridSize, gridOpacity });
+        Object.assign(settings, { showGrid, snapToGrid, showDropShadow, showNotifications, showUiBlur, gridSize, gridOpacity, baseStyle });
         localStorage.setItem('moodinfinite-settings', JSON.stringify(settings));
     } catch (error) { console.error("Could not save settings to localStorage:", error); }
 }
@@ -1858,6 +1878,7 @@ function loadSettings() {
             showUiBlur = settings.showUiBlur ?? showUiBlur;
             gridSize = settings.gridSize ?? gridSize;
             gridOpacity = settings.gridOpacity ?? gridOpacity;
+            if (settings.baseStyle === 'glass' || settings.baseStyle === 'flat') baseStyle = settings.baseStyle;
             defaultCanvasBg = settings.defaultCanvasBg ?? defaultCanvasBg;
             defaultAccent = settings.defaultAccent ?? defaultAccent;
             defaultGridColor = settings.defaultGridColor ?? defaultGridColor;
@@ -2180,7 +2201,7 @@ canvas.addEventListener('mouseleave', clearHoverStates);
             mobileTabsPopup.style.display = 'none'
         }
         if (palettePanel && palettePanel.classList.contains('open') && !palettePanel.contains(e.target) && e.target !== paletteBtn && !paletteBtn.contains(e.target)) {
-            palettePanel.classList.remove('open');
+            closePalettePopup(false);
         }
     });
 
@@ -2215,7 +2236,7 @@ canvas.addEventListener('mouseleave', clearHoverStates);
             closed = true;
         }
         if (palettePanel && palettePanel.classList.contains('open')) {
-            palettePanel.classList.remove('open');
+            closePalettePopup(true);
             closed = true;
         }
         if (iconPickerPanel && iconPickerPanel.style.display === 'flex') {
@@ -2315,7 +2336,7 @@ canvas.addEventListener('mouseleave', clearHoverStates);
         if (tabContextMenu && !tabContextMenu.contains(e.target)) tabContextMenu.style.display = 'none';
         if (sfContextMenu && !sfContextMenu.contains(e.target)) sfContextMenu.style.display = 'none';
         if (palettePanel && palettePanel.classList.contains('open') && !palettePanel.contains(e.target) && e.target !== paletteBtn && !paletteBtn.contains(e.target)) {
-            palettePanel.classList.remove('open')
+            closePalettePopup(false);
         }
         if (iconPickerPanel && iconPickerPanel.style.display === 'flex' && !iconPickerPanel.contains(e.target) && e.target !== commentIconBtn && !commentIconBtn.contains(e.target)) {
             iconPickerPanel.style.display = 'none'
@@ -2367,17 +2388,22 @@ canvas.addEventListener('mouseleave', clearHoverStates);
 
     if (paletteBtn) paletteBtn.addEventListener('click', () => {
         if (palettePanel.classList.contains('open')) {
-            palettePanel.classList.remove('open');
+            closePalettePopup(false);
         } else {
             const buttonRect = paletteBtn.getBoundingClientRect();
             palettePanel.style.top = `${buttonRect.bottom + 8}px`;
             palettePanel.style.left = `0px`;
-            palettePanel.classList.add('open');
+            markPaletteOpen();
             const panelWidth = palettePanel.offsetWidth;
             const screenPadding = 8;
             let newLeft = buttonRect.right - panelWidth;
+            const maxLeft = window.innerWidth - panelWidth - screenPadding;
+            newLeft = Math.min(newLeft, Math.max(screenPadding, maxLeft));
             newLeft = Math.max(screenPadding, newLeft);
             palettePanel.style.left = `${newLeft}px`;
+            syncBaseStyleRadios();
+            const selectedStyle = palettePanel.querySelector('[role="radio"][aria-checked="true"]');
+            if (selectedStyle) selectedStyle.focus();
         }
     });
 
@@ -3390,16 +3416,18 @@ function drawTextItem(ctx, item) {
     const x = -item.width / 2;
     const y = -item.height / 2;
 
-    // Post-it Card Rendering
-    ctx.shadowColor = 'rgba(0,0,0,0.15)';
-    ctx.shadowBlur = 10;
-    ctx.shadowOffsetX = 2;
-    ctx.shadowOffsetY = 4;
+    // Post-it Card Rendering. Flat chrome has no drop shadow and square corners.
+    if (!flatChrome()) {
+        ctx.shadowColor = 'rgba(0,0,0,0.15)';
+        ctx.shadowBlur = 10;
+        ctx.shadowOffsetX = 2;
+        ctx.shadowOffsetY = 4;
+    }
 
     // Card Background
     ctx.fillStyle = item.bgColor || '#ffffff';
     ctx.beginPath();
-    if (ctx.roundRect) ctx.roundRect(x, y, item.width, item.height, 8);
+    if (ctx.roundRect) ctx.roundRect(x, y, item.width, item.height, shapeRadius(8));
     else ctx.rect(x, y, item.width, item.height);
     ctx.fill();
 
@@ -3410,7 +3438,7 @@ function drawTextItem(ctx, item) {
     // Accent Header Strip
     ctx.fillStyle = item.color || accentColor;
     ctx.beginPath();
-    const radius = 8;
+    const radius = shapeRadius(8);
     if (ctx.roundRect) ctx.roundRect(x, y, item.width, 12, [radius, radius, 0, 0]);
     else ctx.rect(x, y, item.width, 12);
     ctx.fill();
@@ -3614,7 +3642,7 @@ function drawInlineFormattedText(ctx, text, x, y, size, fontFamily, forceBold, d
             ctx.fillStyle = 'rgba(0,0,0,0.15)';
             const bgH = currentSize * 1.35;
             const bgY = y - (currentSize * 0.15);
-            if (ctx.roundRect) ctx.roundRect(currentX - 2, bgY, w + 4, bgH, 4);
+            if (ctx.roundRect) ctx.roundRect(currentX - 2, bgY, w + 4, bgH, shapeRadius(4));
             else ctx.fillRect(currentX - 2, bgY, w + 4, bgH);
             ctx.fill();
             ctx.restore();
@@ -3655,7 +3683,7 @@ function wrapText(ctx, text, maxWidth) {
 
 function drawBoxItem(e, t) { e.save(); const o = t.x + t.width / 2, a = t.y + t.height / 2; e.translate(o, a); e.rotate(t.rotation || 0); e.scale(t.scaleX || 1, t.scaleY || 1); if (!t.style || t.style === 'fill') { e.fillStyle = t.color; e.fillRect(-t.width / 2, -t.height / 2, t.width, t.height) } else { e.strokeStyle = t.color; e.lineWidth = 4 / cameraZoom; e.strokeRect(-t.width / 2, -t.height / 2, t.width, t.height) } e.restore() }
 function drawCircleItem(e, t) { e.save(); const o = t.x + t.width / 2, a = t.y + t.height / 2, i = t.width / 2, r = t.height / 2; e.translate(o, a); e.rotate(t.rotation || 0); e.scale(t.scaleX || 1, t.scaleY || 1); e.beginPath(); e.ellipse(0, 0, i, r, 0, 0, Math.PI * 2); if (!t.style || t.style === "fill") { e.fillStyle = t.color; e.fill(); } else { e.strokeStyle = t.color; e.lineWidth = 4 / cameraZoom; e.stroke(); } e.restore(); }
-function drawCommentItem(e, t) { e.save(); const o = t.x + t.width / 2, a = t.y + t.height / 2; e.translate(o, a); e.rotate(t.rotation || 0); e.scale(t.scaleX || 1, t.scaleY || 1); e.globalAlpha = t.opacity ?? 1; e.fillStyle = t.color; e.beginPath(); if (e.roundRect) { e.roundRect(-t.width / 2, -t.height / 2, t.width, t.height, 12 / cameraZoom); } else { e.rect(-t.width / 2, -t.height / 2, t.width, t.height); } e.fill(); const lum = getLuminance(t.color); const textColor = lum > 0.5 ? '#111111' : '#ffffff'; e.fillStyle = textColor; const i = t.fontStyle || 'normal', r = t.fontWeight || 'bold', s = t.fontFamily || 'Nunito'; e.font = `${i} ${r} ${t.fontSize}px '${s}', sans-serif`; let iconOffset = 0; if (t.icon && t.icon !== 'none') { const img = getIconImage(t.icon, textColor); const iconSize = t.fontSize * 1.2; iconOffset = iconSize + 10; if (img.complete && img.naturalWidth !== 0) { e.drawImage(img, -t.width / 2 + 15, -iconSize / 2, iconSize, iconSize) } } e.textAlign = t.textAlign || 'left'; e.textBaseline = 'top'; const l = t.text.split('\n'); const h = t.fontSize * 1.4; let m = 0; if (e.textAlign === 'left') { m = -t.width / 2 + 15 + iconOffset } else if (e.textAlign === 'right') { m = t.width / 2 - 15 } else { m = iconOffset / 2 } l.forEach((txt, i) => { const yLineStart = -(l.length * h) / 2 + i * h; const yTextTop = yLineStart + (h - t.fontSize) / 2; e.fillText(txt, m, yTextTop); }); e.restore(); }
+function drawCommentItem(e, t) { e.save(); const o = t.x + t.width / 2, a = t.y + t.height / 2; e.translate(o, a); e.rotate(t.rotation || 0); e.scale(t.scaleX || 1, t.scaleY || 1); e.globalAlpha = t.opacity ?? 1; e.fillStyle = t.color; e.beginPath(); if (e.roundRect) { e.roundRect(-t.width / 2, -t.height / 2, t.width, t.height, shapeRadius(12 / cameraZoom)); } else { e.rect(-t.width / 2, -t.height / 2, t.width, t.height); } e.fill(); const lum = getLuminance(t.color); const textColor = lum > 0.5 ? '#111111' : '#ffffff'; e.fillStyle = textColor; const i = t.fontStyle || 'normal', r = t.fontWeight || 'bold', s = t.fontFamily || 'Nunito'; e.font = `${i} ${r} ${t.fontSize}px '${s}', sans-serif`; let iconOffset = 0; if (t.icon && t.icon !== 'none') { const img = getIconImage(t.icon, textColor); const iconSize = t.fontSize * 1.2; iconOffset = iconSize + 10; if (img.complete && img.naturalWidth !== 0) { e.drawImage(img, -t.width / 2 + 15, -iconSize / 2, iconSize, iconSize) } } e.textAlign = t.textAlign || 'left'; e.textBaseline = 'top'; const l = t.text.split('\n'); const h = t.fontSize * 1.4; let m = 0; if (e.textAlign === 'left') { m = -t.width / 2 + 15 + iconOffset } else if (e.textAlign === 'right') { m = t.width / 2 - 15 } else { m = iconOffset / 2 } l.forEach((txt, i) => { const yLineStart = -(l.length * h) / 2 + i * h; const yTextTop = yLineStart + (h - t.fontSize) / 2; e.fillText(txt, m, yTextTop); }); e.restore(); }
 
 function drawImageItem(ctx, item) {
     if (!item.img) return;
@@ -3685,13 +3713,13 @@ function drawImageItem(ctx, item) {
         ctx.fillStyle = accentColor;
         ctx.beginPath();
         if (ctx.roundRect) {
-            ctx.roundRect(labelX, labelY, labelWidth, labelHeight, 4 / cameraZoom);
+            ctx.roundRect(labelX, labelY, labelWidth, labelHeight, shapeRadius(4 / cameraZoom));
         } else {
             ctx.rect(labelX, labelY, labelWidth, labelHeight);
         }
         ctx.fill();
 
-        ctx.fillStyle = '#ffffff';
+        ctx.fillStyle = contrastInk(accentColor);
         ctx.textAlign = 'left';
         ctx.textBaseline = 'middle';
         ctx.fillText(labelText, labelX + padding, labelY + labelHeight / 2);
@@ -3824,13 +3852,13 @@ function drawVideoItem(ctx, item) {
         ctx.fillStyle = accentColor;
         ctx.beginPath();
         if (ctx.roundRect) {
-            ctx.roundRect(labelX, labelY, labelWidth, labelHeight, 4 / cameraZoom);
+            ctx.roundRect(labelX, labelY, labelWidth, labelHeight, shapeRadius(4 / cameraZoom));
         } else {
             ctx.rect(labelX, labelY, labelWidth, labelHeight);
         }
         ctx.fill();
 
-        ctx.fillStyle = '#ffffff';
+        ctx.fillStyle = contrastInk(accentColor);
         ctx.textAlign = 'left';
         ctx.textBaseline = 'middle';
         ctx.fillText(labelText, labelX + padding, labelY + labelHeight / 2);
@@ -3940,7 +3968,7 @@ function drawTextListItem(e, t) {
     e.fillStyle = t.color;
     e.beginPath();
     if (e.roundRect) {
-        e.roundRect(-t.width / 2, -t.height / 2, t.width, t.height, 12 / cameraZoom);
+        e.roundRect(-t.width / 2, -t.height / 2, t.width, t.height, shapeRadius(12 / cameraZoom));
     } else {
         e.rect(-t.width / 2, -t.height / 2, t.width, t.height);
     }
@@ -4406,7 +4434,7 @@ function drawConnectorItem(e, renderCtx) {
     _ctx.beginPath();
     _ctx.moveTo(cleanRoute[0].x, cleanRoute[0].y);
 
-    const cornerRadius = 16 / cameraZoom;
+    const cornerRadius = shapeRadius(16 / cameraZoom);
     for (let i = 1; i < cleanRoute.length - 1; i++) {
         const pA = cleanRoute[i - 1];
         const pB = cleanRoute[i];
@@ -4471,7 +4499,7 @@ function drawCounterItem(e, t) {
     e.lineWidth = 2 / cameraZoom;
     e.beginPath();
     if (e.roundRect) {
-        e.roundRect(-halfW, -halfH, t.width, t.height, 8 / cameraZoom);
+        e.roundRect(-halfW, -halfH, t.width, t.height, shapeRadius(8 / cameraZoom));
     } else {
         e.rect(-halfW, -halfH, t.width, t.height);
     }
@@ -4849,7 +4877,7 @@ function onMouseDown(e) {
     if (contextMenu) contextMenu.style.display = 'none';
     if (tabContextMenu) tabContextMenu.style.display = 'none';
     if (iconPickerPanel) iconPickerPanel.style.display = 'none';
-    if (palettePanel) palettePanel.classList.remove('open');
+    if (palettePanel && palettePanel.classList.contains('open')) closePalettePopup(false);
 
     if (e.button === 1) {
         beginCanvasPan(e);
@@ -6841,6 +6869,146 @@ function distributeHorizontally() { if (selectedItems.length < 3) return; const 
 function distributeVertically() { if (selectedItems.length < 3) return; const sorted = [...selectedItems].sort((a, b) => getItemBoundingBox(a).y - getItemBoundingBox(b).y); const first = getItemBoundingBox(sorted[0]); const last = getItemBoundingBox(sorted[sorted.length - 1]); const totalHeight = sorted.reduce((s, i) => s + getItemBoundingBox(i).height, 0); const gap = (last.y + last.height - first.y - totalHeight) / (sorted.length - 1); let cursor = first.y; sorted.forEach(item => { const bb = getItemBoundingBox(item); moveItem(item, 0, cursor - bb.y); cursor += bb.height + gap; }); saveStateForUndo(); requestUpdate(); }
 function updateLeftBarState() { const needsTwo = selectedItems.length < 2; const needsThree = selectedItems.length < 3; alignBtn.disabled = needsTwo; const ids = ['align-grid-btn','align-row-btn','align-col-btn','align-left-btn','align-center-h-btn','align-right-btn','align-top-btn','align-middle-v-btn','align-bottom-btn']; ids.forEach(id => { const b = document.getElementById(id); if (b) b.disabled = needsTwo; }); ['distribute-h-btn','distribute-v-btn'].forEach(id => { const b = document.getElementById(id); if (b) b.disabled = needsThree; }); }
 function getContrastColor(hex) { if (hex.indexOf('#') === 0) { hex = hex.slice(1) } if (hex.length === 3) { hex = hex[0] + hex[0] + hex[1] + hex[1] + hex[2] + hex[2] } if (hex.length !== 6) { return '#0d0d0d' } const r = parseInt(hex.slice(0, 2), 16), g = parseInt(hex.slice(2, 4), 16), b = parseInt(hex.slice(4, 6), 16), yiq = ((r * 299) + (g * 587) + (b * 114)) / 1000; return (yiq >= 128) ? '#262626' : '#ffffff' }
+function contrastInk(hex) {
+    const lum = getLuminance(hex);
+    const darkLum = getLuminance('#121110');
+    const lightLum = getLuminance('#F4F1EA');
+    const ratio = (a, b) => (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
+    return ratio(lum, darkLum) >= ratio(lum, lightLum) ? '#121110' : '#F4F1EA';
+}
+// WCAG relative luminance. getLuminance weights blue at 0.722, so button pairs use this copy.
+const READABLE_CONTRAST = 4.6;
+function parseHexColor(hex) {
+    if (!hex) return null;
+    let h = String(hex).trim().replace('#', '');
+    if (h.length === 3) h = h[0] + h[0] + h[1] + h[1] + h[2] + h[2];
+    if (!/^[0-9a-fA-F]{6}$/.test(h)) return null;
+    return [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)];
+}
+function hexFromRgb(rgb) {
+    return '#' + rgb.map((n) => Math.max(0, Math.min(255, Math.round(n))).toString(16).padStart(2, '0')).join('');
+}
+function wcagLinear(channel) {
+    const c = channel / 255;
+    return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+}
+function wcagLuminance(hex) {
+    const rgb = parseHexColor(hex);
+    if (!rgb) return 0;
+    return wcagLinear(rgb[0]) * 0.2126 + wcagLinear(rgb[1]) * 0.7152 + wcagLinear(rgb[2]) * 0.0722;
+}
+function wcagContrast(a, b) {
+    const hi = Math.max(wcagLuminance(a), wcagLuminance(b));
+    const lo = Math.min(wcagLuminance(a), wcagLuminance(b));
+    return (hi + 0.05) / (lo + 0.05);
+}
+function mixHex(a, b, t) {
+    const A = parseHexColor(a);
+    const B = parseHexColor(b);
+    if (!A || !B) return a;
+    return hexFromRgb(A.map((v, i) => v * (1 - t) + B[i] * t));
+}
+function readableFillPair(accent) {
+    const source = parseHexColor(accent) ? accent : '#429eff';
+    const dark = '#121110';
+    const light = '#F4F1EA';
+    const darkRatio = wcagContrast(dark, source);
+    const lightRatio = wcagContrast(light, source);
+    const preferDark = darkRatio >= lightRatio;
+    const ink = preferDark ? dark : light;
+    if ((preferDark ? darkRatio : lightRatio) >= READABLE_CONTRAST) return { bg: source, fg: ink };
+    const toward = preferDark ? '#ffffff' : '#000000';
+    let lo = 0;
+    let hi = 1;
+    let bg = source;
+    for (let i = 0; i < 20; i++) {
+        const mid = (lo + hi) / 2;
+        const next = mixHex(source, toward, mid);
+        if (wcagContrast(ink, next) >= READABLE_CONTRAST) {
+            bg = next;
+            hi = mid;
+        } else {
+            lo = mid;
+        }
+    }
+    let guard = 0;
+    while (wcagContrast(ink, bg) < 4.55 && guard < 8) {
+        hi = Math.min(1, hi + 0.02);
+        bg = mixHex(source, toward, hi);
+        guard += 1;
+    }
+    return { bg, fg: ink };
+}
+function readableInkOn(color, background) {
+    const source = parseHexColor(color) ? color : '#F4F1EA';
+    const surface = parseHexColor(background) ? background : '#24201B';
+    if (wcagContrast(source, surface) >= READABLE_CONTRAST) return source;
+    const toward = wcagContrast('#F4F1EA', surface) >= wcagContrast('#121110', surface) ? '#F4F1EA' : '#121110';
+    let lo = 0;
+    let hi = 1;
+    let best = toward;
+    for (let i = 0; i < 20; i++) {
+        const mid = (lo + hi) / 2;
+        const next = mixHex(source, toward, mid);
+        if (wcagContrast(next, surface) >= READABLE_CONTRAST) {
+            best = next;
+            hi = mid;
+        } else {
+            lo = mid;
+        }
+    }
+    let guard = 0;
+    while (wcagContrast(best, surface) < 4.55 && guard < 8) {
+        hi = Math.min(1, hi + 0.02);
+        best = mixHex(source, toward, hi);
+        guard += 1;
+    }
+    return best;
+}
+function chromeBarColor(flat, pageHex) {
+    if (flat) return '#24201B';
+    // Moodlist top bar is rgba(20, 22, 30, 0.9) over the page.
+    return mixHex('#14161E', parseHexColor(pageHex) ? pageHex : '#0d0d0d', 0.1);
+}
+// Same choice as the active tab close (getContrastColor), then nudged if that
+// pair is still under 4.5 on the painted surface.
+function pageContrastInk(background) {
+    const surface = parseHexColor(background) ? background : '#24201B';
+    const ink = readableInkOn(getContrastColor(surface), surface);
+    if (wcagContrast(ink, surface) >= 4.5) return ink;
+    const toward = wcagContrast('#000000', surface) >= wcagContrast('#ffffff', surface) ? '#000000' : '#ffffff';
+    return readableInkOn(toward, surface);
+}
+function ganttChromeSurface(flat, pageHex) {
+    const page = parseHexColor(pageHex) ? pageHex : '#0d0d0d';
+    if (flat) return '#24201B';
+    // #gantt-sidebar and #gantt-date-header use --bg-ui: rgba(35, 38, 51, 0.4).
+    return mixHex('#232633', page, 0.6);
+}
+function ganttTodaySurface(chrome) {
+    // .gantt-col-header.is-today paints rgba(66, 158, 255, 0.12) over the header.
+    return mixHex(chrome, '#429eff', 0.12);
+}
+function flatChrome() {
+    return document.documentElement.dataset.style === 'flat';
+}
+function shapeRadius(px) {
+    return flatChrome() ? 0 : px;
+}
+// Shared export theme. Dark is the default for the sheet; light is used for print and for PDF pages.
+// Gold text on light backgrounds uses goldText (#7A5C22); #D4A359 is only a rule or fill there.
+// Cobalt is only used for borders and links on the dark background, and its darker variant on light.
+// Flat chrome reuses the dark surface, text, and muted colors. The 1px edge is #7A6E60:
+// #3A342C against #24201B is 1.32:1, and #7A6E60 is 3.26:1.
+const MOODFLOW_EXPORT_THEME = Object.freeze({
+    dark: Object.freeze({ bg: '#121110', surface: '#24201B', text: '#F4F1EA', muted: '#B8AFA0', gold: '#D4A359', goldText: '#D4A359', cobalt: '#2589BD', onGold: '#121110' }),
+    light: Object.freeze({ bg: '#F8F6F0', surface: '#EFEBE0', text: '#121110', muted: '#5C5548', gold: '#D4A359', goldText: '#7A5C22', cobalt: '#1C6A96', onGold: '#121110' }),
+    sketchColor: '#ff4d6a',
+    fontsHref: 'https://fonts.googleapis.com/css2?family=Outfit:wght@700;900&family=Plus+Jakarta+Sans:wght@400;500;700&display=swap',
+    headingStack: "'Outfit', 'Segoe UI', Arial, sans-serif",
+    bodyStack: "'Plus Jakarta Sans', 'Segoe UI', Arial, sans-serif",
+});
+const FLAT_UI_CHROME = Object.freeze({ hover: '#3A342C', border: '#7A6E60' });
 function syncColorInput(input, value) {
     // Writing .value while the native picker is open closes it in Firefox.
     if (!input || document.activeElement === input) return;
@@ -6848,22 +7016,65 @@ function syncColorInput(input, value) {
 }
 function updateUIColors() {
     const e = document.documentElement.style, t = getContrastColor(canvasBackgroundColor);
+    const flat = baseStyle === 'flat';
+    baseStyle = flat ? 'flat' : 'glass';
+    document.documentElement.setAttribute('data-style', baseStyle);
+    if (document.body) document.body.setAttribute('data-style', baseStyle);
     e.setProperty('--bg-page', canvasBackgroundColor);
     e.setProperty('--text-color-active-tab', t);
     e.setProperty('--contrast-color-light', hexToRgba(t, 0.6));
-    e.setProperty('--bg-ui', 'rgba(35, 38, 51, 0.4)');
-    e.setProperty('--bg-ui-hover', 'rgba(55, 58, 71, 0.5)');
-    e.setProperty('--text-color', '#e2e8f0');
-    e.setProperty('--text-color-light', '#94a3b8');
-    e.setProperty('--text-color-strong', '#ffffff');
-    e.setProperty('--border-color', 'rgba(255, 255, 255, 0.1)');
+    if (flat) {
+        const theme = MOODFLOW_EXPORT_THEME.dark;
+        e.setProperty('--bg-ui', theme.surface);
+        e.setProperty('--bg-ui-hover', FLAT_UI_CHROME.hover);
+        e.setProperty('--text-color', theme.text);
+        e.setProperty('--text-color-light', theme.muted);
+        e.setProperty('--text-color-strong', theme.text);
+        e.setProperty('--border-color', FLAT_UI_CHROME.border);
+    } else {
+        e.setProperty('--bg-ui', 'rgba(35, 38, 51, 0.4)');
+        e.setProperty('--bg-ui-hover', 'rgba(55, 58, 71, 0.5)');
+        e.setProperty('--text-color', '#e2e8f0');
+        e.setProperty('--text-color-light', '#94a3b8');
+        e.setProperty('--text-color-strong', '#ffffff');
+        e.setProperty('--border-color', 'rgba(255, 255, 255, 0.1)');
+    }
     e.setProperty('--switch-bg-checked', accentColor);
+    e.setProperty('--on-accent', contrastInk(accentColor));
+    const controlPair = readableFillPair(accentColor);
+    e.setProperty('--accent-control-bg', controlPair.bg);
+    e.setProperty('--accent-control-ink', controlPair.fg);
+    e.setProperty('--accent-on-chrome', readableInkOn(accentColor, chromeBarColor(flat, canvasBackgroundColor)));
     const lightPage = t === '#262626';
-    e.setProperty('--ml-text', lightPage ? '#1c1917' : '#e2e8f0');
-    e.setProperty('--ml-muted', lightPage ? '#44403c' : '#94a3b8');
-    e.setProperty('--ml-border', lightPage ? 'rgba(0,0,0,0.16)' : 'rgba(255,255,255,0.12)');
-    e.setProperty('--ml-surface', lightPage ? '#ffffff' : 'rgba(35, 38, 51, 0.72)');
-    e.setProperty('--ml-hover', lightPage ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.06)');
+    document.documentElement.dataset.pageTone = lightPage ? 'light' : 'dark';
+    const pageBg = parseHexColor(canvasBackgroundColor) ? canvasBackgroundColor : '#0d0d0d';
+    const pageInk = flat ? (lightPage ? '#121110' : '#F4F1EA') : t;
+    const pageMuted = flat ? (lightPage ? '#5C5548' : '#B8AFA0') : (lightPage ? '#44403c' : '#94a3b8');
+    // #5C5548 on preset 10 (#bfbfbf) is 4.01:1, so muted page ink is measured against the page.
+    e.setProperty('--text-on-page', readableInkOn(pageInk, pageBg));
+    e.setProperty('--text-on-page-muted', readableInkOn(pageMuted, pageBg));
+    const ganttChrome = ganttChromeSurface(flat, pageBg);
+    const ganttToday = ganttTodaySurface(ganttChrome);
+    const ganttMuted = flat ? '#B8AFA0' : '#94a3b8';
+    e.setProperty('--gantt-empty-ink', pageContrastInk(ganttChrome));
+    e.setProperty('--gantt-empty-muted', readableInkOn(ganttMuted, ganttChrome));
+    e.setProperty('--gantt-header-ink', pageContrastInk(ganttChrome));
+    e.setProperty('--gantt-header-muted', readableInkOn(ganttMuted, ganttChrome));
+    e.setProperty('--gantt-today-ink', pageContrastInk(ganttToday));
+    e.setProperty('--gantt-today-muted', readableInkOn(ganttMuted, ganttToday));
+    if (flat) {
+        e.setProperty('--ml-text', lightPage ? '#121110' : '#F4F1EA');
+        e.setProperty('--ml-muted', lightPage ? '#5C5548' : '#B8AFA0');
+        e.setProperty('--ml-border', lightPage ? '#6F6456' : '#7A6E60');
+        e.setProperty('--ml-surface', lightPage ? '#ffffff' : '#24201B');
+        e.setProperty('--ml-hover', lightPage ? '#EFEBE0' : '#3A342C');
+    } else {
+        e.setProperty('--ml-text', lightPage ? '#1c1917' : '#e2e8f0');
+        e.setProperty('--ml-muted', lightPage ? '#44403c' : '#94a3b8');
+        e.setProperty('--ml-border', lightPage ? 'rgba(0,0,0,0.16)' : 'rgba(255,255,255,0.12)');
+        e.setProperty('--ml-surface', lightPage ? '#ffffff' : 'rgba(35, 38, 51, 0.72)');
+        e.setProperty('--ml-hover', lightPage ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.06)');
+    }
     canvas.style.backgroundColor = canvasBackgroundColor;
     syncColorInput(bgColorPicker, canvasBackgroundColor);
     syncColorInput(accentColorPicker, accentColor);
@@ -7204,7 +7415,7 @@ function editText(e) {
     if (e.type === 'comment' && e.icon && e.icon !== 'none') {
         paddingWidthAdjust += e.fontSize * 1.2 * cameraZoom + 10;
     }
-    Object.assign(textEditor.style, { display: 'block', left: `${t.x}px`, top: `${t.y}px`, width: `${o}px`, height: 'auto', transform: `rotate(${e.rotation}rad)`, transformOrigin: 'top left', color: e.type === 'comment' ? (getLuminance(e.color) > 0.5 ? '#111' : '#fff') : e.color, backgroundColor: e.type === 'comment' ? e.color : hexToRgba(e.color, .1), borderRadius: e.type === 'comment' ? `${12 * cameraZoom}px` : '0px', padding: e.type === 'comment' ? '8px 15px' : '0px', paddingLeft: e.type === 'comment' && e.icon && e.icon !== 'none' ? `${e.fontSize * 1.2 * cameraZoom + 20}px` : (e.type === 'comment' ? '15px' : '0px'), fontSize: `${e.fontSize * cameraZoom}px`, fontFamily: e.fontFamily || 'Nunito', textAlign: e.textAlign || 'center', fontWeight: e.fontWeight || 'bold', fontStyle: e.fontStyle || 'normal', lineHeight: e.type === 'comment' ? '1.4' : 'normal' });
+    Object.assign(textEditor.style, { display: 'block', left: `${t.x}px`, top: `${t.y}px`, width: `${o}px`, height: 'auto', transform: `rotate(${e.rotation}rad)`, transformOrigin: 'top left', color: e.type === 'comment' ? (getLuminance(e.color) > 0.5 ? '#111' : '#fff') : e.color, backgroundColor: e.type === 'comment' ? e.color : hexToRgba(e.color, .1), borderRadius: e.type === 'comment' && !flatChrome() ? `${12 * cameraZoom}px` : '0px', padding: e.type === 'comment' ? '8px 15px' : '0px', paddingLeft: e.type === 'comment' && e.icon && e.icon !== 'none' ? `${e.fontSize * 1.2 * cameraZoom + 20}px` : (e.type === 'comment' ? '15px' : '0px'), fontSize: `${e.fontSize * cameraZoom}px`, fontFamily: e.fontFamily || 'Nunito', textAlign: e.textAlign || 'center', fontWeight: e.fontWeight || 'bold', fontStyle: e.fontStyle || 'normal', lineHeight: e.type === 'comment' ? '1.4' : 'normal' });
     textEditor.value = e.text === "Type..." || e.text === "Note..." ? "" : e.text;
     textEditor.focus();
     autoResizeTextEditor();
@@ -7551,15 +7762,98 @@ function ungroupSelectedItems() {
     updateSelectionToolbar();
     updateLeftBarState();
 }
+function syncBaseStyleRadios() {
+    if (!palettePanel) return;
+    const open = palettePanel.classList.contains('open');
+    palettePanel.querySelectorAll('[role="radio"]').forEach((radio) => {
+        const on = radio.dataset.styleOption === baseStyle;
+        radio.setAttribute('aria-checked', on ? 'true' : 'false');
+        radio.tabIndex = open && on ? 0 : -1;
+    });
+}
+function selectBaseStyle(style) {
+    const next = style === 'flat' ? 'flat' : 'glass';
+    if (baseStyle === next) {
+        syncBaseStyleRadios();
+        return;
+    }
+    baseStyle = next;
+    syncBaseStyleRadios();
+    updateUIColors();
+    saveSettings();
+}
+function moveBaseStyle(fromEl, delta) {
+    const radios = [...palettePanel.querySelectorAll('[role="radio"]')];
+    const index = radios.indexOf(fromEl);
+    if (index < 0) return;
+    const next = radios[(index + delta + radios.length) % radios.length];
+    selectBaseStyle(next.dataset.styleOption);
+    next.focus();
+}
+function onBaseStyleKey(e) {
+    if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+        e.preventDefault();
+        e.stopPropagation();
+        moveBaseStyle(e.currentTarget, 1);
+    } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+        e.preventDefault();
+        e.stopPropagation();
+        moveBaseStyle(e.currentTarget, -1);
+    } else if (e.key === ' ' || e.key === 'Enter') {
+        e.preventDefault();
+        e.stopPropagation();
+        selectBaseStyle(e.currentTarget.dataset.styleOption);
+    }
+}
+function paletteSupportsPreview(project) {
+    return !!(project && (project.type === 'moodinfinite' || project.type === 'moodprompt' || project.type === 'storyflow' || project.type === 'moodlist'));
+}
 function buildPaletteMenu() {
     palettePanel.innerHTML = '';
-    colorPalettes.forEach(palette => {
+
+    const styleGroup = document.createElement('div');
+    styleGroup.className = 'base-style-group';
+    styleGroup.setAttribute('role', 'radiogroup');
+    styleGroup.setAttribute('aria-label', 'Base style');
+    const styleLabel = document.createElement('div');
+    styleLabel.className = 'base-style-label';
+    styleLabel.setAttribute('aria-hidden', 'true');
+    styleLabel.textContent = 'Base style';
+    styleGroup.appendChild(styleLabel);
+    [
+        { id: 'glass', label: 'Glassmorphism' },
+        { id: 'flat', label: 'Flat' },
+    ].forEach((entry) => {
+        const radio = document.createElement('button');
+        radio.type = 'button';
+        radio.className = 'base-style-option';
+        radio.dataset.styleOption = entry.id;
+        radio.setAttribute('role', 'radio');
+        radio.textContent = entry.label;
+        radio.addEventListener('click', () => selectBaseStyle(entry.id));
+        radio.addEventListener('keydown', onBaseStyleKey);
+        styleGroup.appendChild(radio);
+    });
+    palettePanel.appendChild(styleGroup);
+    syncBaseStyleRadios();
+
+    const styleSeparator = document.createElement('div');
+    styleSeparator.className = 'palette-separator';
+    styleSeparator.setAttribute('role', 'separator');
+    styleSeparator.style.borderTop = '1px solid var(--border-color)';
+    styleSeparator.style.margin = '4px 0';
+    palettePanel.appendChild(styleSeparator);
+
+    colorPalettes.forEach((palette, index) => {
         const option = document.createElement('div');
         option.className = 'palette-option';
+        option.setAttribute('role', 'button');
+        option.tabIndex = 0;
+        option.setAttribute('aria-label', `Palette ${index + 1}: background ${palette.bg}, accent ${palette.accent}, grid ${palette.grid}`);
         option.innerHTML = `<div class="palette-color" style="background-color: ${palette.bg}"></div><div class="palette-color" style="background-color: ${palette.accent}"></div><div class="palette-color" style="background-color: ${palette.grid}"></div>`;
         option.addEventListener('mouseenter', () => {
             const activeProject = projects.find(p => p.id === activeProjectId);
-            if (activeProject && (activeProject.type === 'moodinfinite' || activeProject.type === 'moodprompt' || activeProject.type === 'storyflow' || activeProject.type === 'moodlist')) {
+            if (paletteSupportsPreview(activeProject)) {
                 canvasBackgroundColor = palette.bg;
                 accentColor = palette.accent;
                 gridColor = palette.grid;
@@ -7569,7 +7863,7 @@ function buildPaletteMenu() {
 
         option.addEventListener('mouseleave', () => {
             const activeProject = projects.find(p => p.id === activeProjectId);
-            if (activeProject && (activeProject.type === 'moodinfinite' || activeProject.type === 'moodprompt' || activeProject.type === 'storyflow' || activeProject.type === 'moodlist')) {
+            if (paletteSupportsPreview(activeProject)) {
                 canvasBackgroundColor = activeProject.data.canvasBackgroundColor || '#0d0d0d';
                 accentColor = activeProject.data.accentColor || '#429eff';
                 gridColor = activeProject.data.gridColor || '#f9f8f6';
@@ -7579,7 +7873,7 @@ function buildPaletteMenu() {
 
         option.addEventListener('click', () => {
             const activeProject = projects.find(p => p.id === activeProjectId);
-            if (activeProject && (activeProject.type === 'moodinfinite' || activeProject.type === 'moodprompt' || activeProject.type === 'storyflow' || activeProject.type === 'moodlist')) {
+            if (paletteSupportsPreview(activeProject)) {
                 activeProject.data.canvasBackgroundColor = palette.bg;
                 activeProject.data.accentColor = palette.accent;
                 activeProject.data.gridColor = palette.grid;
@@ -7589,7 +7883,13 @@ function buildPaletteMenu() {
                 scheduleAutoSave();
                 updateUIColors();
             }
-            palettePanel.classList.remove('open');
+            closePalettePopup(true);
+        });
+        option.addEventListener('keydown', (e) => {
+            if (e.key !== 'Enter' && e.key !== ' ') return;
+            e.preventDefault();
+            e.stopPropagation();
+            option.click();
         });
         palettePanel.appendChild(option);
     });
@@ -7605,7 +7905,7 @@ function buildPaletteMenu() {
     setDefaultBtn.onclick = (e) => {
         e.stopPropagation();
         saveDefaultTheme();
-        palettePanel.classList.remove('open');
+        closePalettePopup(true);
     };
     palettePanel.appendChild(setDefaultBtn);
 }
@@ -8264,13 +8564,12 @@ function drawLinkItem(ctx, item) {
     const x = -item.width / 2;
     const y = -item.height / 2;
 
-    // Glassmorphism effect for link container
-    ctx.fillStyle = 'rgba(30, 30, 30, 0.9)';
+    ctx.fillStyle = flatChrome() ? '#24201B' : 'rgba(30, 30, 30, 0.9)';
     ctx.strokeStyle = item.color || accentColor;
     ctx.lineWidth = 2 / cameraZoom;
 
     ctx.beginPath();
-    if (ctx.roundRect) ctx.roundRect(x, y, item.width, item.height, 10 / cameraZoom);
+    if (ctx.roundRect) ctx.roundRect(x, y, item.width, item.height, shapeRadius(10 / cameraZoom));
     else ctx.rect(x, y, item.width, item.height);
     ctx.fill();
     ctx.stroke();
@@ -8315,14 +8614,14 @@ function drawLinkItem(ctx, item) {
         ctx.beginPath();
         ctx.arc(x + padding + iconSize / 2, y + item.height / 2, 8 / cameraZoom, 0, Math.PI * 2);
         ctx.fill();
-        ctx.fillStyle = '#fff';
+        ctx.fillStyle = contrastInk(item.color || accentColor);
         ctx.font = `bold ${10 / cameraZoom}px Inter`;
         ctx.textAlign = 'center';
         ctx.fillText('L', x + padding + iconSize / 2, y + item.height / 2 + 3 / cameraZoom);
     }
 
     // Text handling
-    ctx.fillStyle = '#ffffff';
+    ctx.fillStyle = flatChrome() ? '#F4F1EA' : '#ffffff';
     ctx.font = `500 ${14 / cameraZoom}px Inter, sans-serif`;
     ctx.textAlign = 'left';
     ctx.textBaseline = 'middle';
@@ -8351,20 +8650,20 @@ function drawLinkItem(ctx, item) {
     ctx.fillText(displayTitle, textX, y + item.height / 2);
 
     // Quick Go button rendering with hover effect
-    ctx.fillStyle = item.isHovered ? 'rgba(255, 255, 255, 0.2)' : 'rgba(255, 255, 255, 0.1)';
+    ctx.fillStyle = flatChrome() ? (item.isHovered ? '#3A342C' : '#121110') : (item.isHovered ? 'rgba(255, 255, 255, 0.2)' : 'rgba(255, 255, 255, 0.1)');
     ctx.beginPath();
-    if (ctx.roundRect) ctx.roundRect(btnX, btnY, btnSize, btnSize, 6 / cameraZoom);
+    if (ctx.roundRect) ctx.roundRect(btnX, btnY, btnSize, btnSize, shapeRadius(6 / cameraZoom));
     else ctx.rect(btnX, btnY, btnSize, btnSize);
     ctx.fill();
 
-    ctx.strokeStyle = item.isHovered ? 'rgba(255, 255, 255, 0.5)' : 'rgba(255, 255, 255, 0.3)';
+    ctx.strokeStyle = flatChrome() ? '#7A6E60' : (item.isHovered ? 'rgba(255, 255, 255, 0.5)' : 'rgba(255, 255, 255, 0.3)');
     ctx.lineWidth = 1 / cameraZoom;
     ctx.stroke();
 
     // External link icon arrow
     ctx.beginPath();
     ctx.lineWidth = 2 / cameraZoom;
-    ctx.strokeStyle = item.isHovered ? '#fff' : 'rgba(255, 255, 255, 0.8)';
+    ctx.strokeStyle = flatChrome() ? '#F4F1EA' : (item.isHovered ? '#fff' : 'rgba(255, 255, 255, 0.8)');
     const arrowPadding = 6 / cameraZoom;
     const ax = btnX + arrowPadding;
     const ay = btnY + btnSize - arrowPadding;
@@ -10326,18 +10625,6 @@ function renderAssetGrid(imagesSet, callback) {
     }
 }
 // --- MOODFLOW EXPORTS (sheet HTML, PDF, print) ---
-// Shared export theme. Dark is the default for the sheet; light is used for print and for PDF pages.
-// Gold text on light backgrounds uses goldText (#7A5C22); #D4A359 is only a rule or fill there.
-// Cobalt is only used for borders and links on the dark background, and its darker variant on light.
-const MOODFLOW_EXPORT_THEME = Object.freeze({
-    dark: Object.freeze({ bg: '#121110', surface: '#24201B', text: '#F4F1EA', muted: '#B8AFA0', gold: '#D4A359', goldText: '#D4A359', cobalt: '#2589BD', onGold: '#121110' }),
-    light: Object.freeze({ bg: '#F8F6F0', surface: '#EFEBE0', text: '#121110', muted: '#5C5548', gold: '#D4A359', goldText: '#7A5C22', cobalt: '#1C6A96', onGold: '#121110' }),
-    sketchColor: '#ff4d6a',
-    fontsHref: 'https://fonts.googleapis.com/css2?family=Outfit:wght@700;900&family=Plus+Jakarta+Sans:wght@400;500;700&display=swap',
-    headingStack: "'Outfit', 'Segoe UI', Arial, sans-serif",
-    bodyStack: "'Plus Jakarta Sans', 'Segoe UI', Arial, sans-serif",
-});
-
 const MOODFLOW_STATUS_LABELS = Object.freeze({ approved: 'Approved', wip: 'WIP', none: 'Not started' });
 const MOODFLOW_EMPTY_VALUE = 'Not set';
 

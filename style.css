@@ -277,6 +277,29 @@
             color: #fff;
         }
 
+        /* The active tab sits on the preset page color. The muted chrome ink fails that surface on light presets. */
+        .tab-item.active .tab-close-btn,
+        .tab-item.active .tab-close-btn:hover {
+            color: var(--text-color-active-tab);
+        }
+
+        .tab-item.active .tab-close-btn:hover {
+            background-color: color-mix(in srgb, var(--text-color-active-tab) 16%, transparent);
+        }
+
+        html[data-style="glass"][data-page-tone="light"] .tab-item:not(.active) .tab-close-btn,
+        html[data-style="glass"][data-page-tone="light"] .tab-item:not(.active) .tab-close-btn:hover {
+            color: #121110;
+        }
+
+        html[data-style="glass"][data-page-tone="light"] .tab-item:not(.active) .tab-close-btn:hover {
+            background-color: rgba(18, 17, 16, 0.12);
+        }
+
+        html[data-style="glass"][data-page-tone="dark"] .tab-item:not(.active) .tab-close-btn {
+            color: #e2e8f0;
+        }
+
         /* --- CONTENT AREA & TABS --- */
         #content-area {
             flex-grow: 1;
@@ -553,8 +576,8 @@
         }
 
         .media-type-btn.active {
-            background: var(--switch-bg-checked);
-            color: white;
+            background: var(--accent-control-bg, var(--switch-bg-checked));
+            color: var(--accent-control-ink, var(--on-accent, #fff));
             font-weight: 600;
         }
 
@@ -619,6 +642,7 @@
         
         .slot-action-btn:hover {
             background: var(--switch-bg-checked);
+            color: var(--on-accent, #fff);
         }
 
         .image-upload-slot:hover .slot-action-btn {
@@ -853,7 +877,7 @@
 
         .minimap-control-btn:hover {
             background-color: var(--switch-bg-checked);
-            color: #fff;
+            color: var(--on-accent, #fff);
             border-color: var(--switch-bg-checked);
         }
 
@@ -891,7 +915,7 @@
         #storyflow-add-count-btn:hover {
             background: var(--switch-bg-checked);
             border-color: var(--switch-bg-checked);
-            color: #fff;
+            color: var(--on-accent, #fff);
         }
 
         #storyflow-add-count {
@@ -1766,6 +1790,10 @@
             font-weight: 700;
         }
 
+        .board-empty-guide .board-empty-title {
+            color: var(--text-on-page, var(--text-color));
+        }
+
         #canvas-empty-guide p {
             margin: 0;
             line-height: 1.5;
@@ -1817,7 +1845,7 @@
             padding: 1.5rem 1.25rem;
             border: 1px dashed var(--border-color);
             border-radius: 0.9rem;
-            color: var(--text-color-light);
+            color: var(--text-on-page-muted, var(--text-color-light));
             text-align: center;
         }
 
@@ -1850,6 +1878,11 @@
         #gantt-empty-guide {
             margin: 1rem 0.75rem;
             width: auto;
+            color: var(--gantt-empty-muted, var(--text-color-light));
+        }
+
+        #gantt-empty-guide .board-empty-title {
+            color: var(--gantt-empty-ink, var(--text-color));
         }
 
         #colorseeker-palette {
@@ -2442,7 +2475,7 @@
             padding: 0 6px;
             border-radius: 999px;
             background: var(--switch-bg-checked);
-            color: #ffffff;
+            color: var(--on-accent, #ffffff);
             font: 700 0.72rem/1 Inter, sans-serif;
             align-self: center;
             user-select: none;
@@ -2634,13 +2667,13 @@
         }
 
         .modal-button.confirm {
-            background-color: #ef4444;
+            background-color: #dc2626;
             color: #fff;
             border-color: transparent
         }
 
         .modal-button.confirm:hover {
-            background-color: #dc2626
+            background-color: #b91c1c
         }
 
         .modal-button.cancel {
@@ -2690,15 +2723,19 @@
             display: flex;
             flex-direction: column;
             gap: .5rem;
+            max-width: calc(100vw - 16px);
             transform: translateY(-20px);
             opacity: 0;
-            transition: transform .3s ease-out, opacity .3s ease-out;
+            visibility: hidden;
+            transition: transform .3s ease-out, opacity .3s ease-out, visibility 0s linear .3s;
             pointer-events: none
         }
 
         #palette-panel.open {
             transform: translateY(0);
             opacity: 1;
+            visibility: visible;
+            transition: transform .3s ease-out, opacity .3s ease-out, visibility 0s linear 0s;
             pointer-events: auto
         }
 
@@ -2763,8 +2800,8 @@
         .set-default-btn {
             margin-top: 0.25rem;
             padding: 0.6rem;
-            background: var(--switch-bg-checked);
-            color: #fff;
+            background: var(--accent-control-bg, var(--switch-bg-checked));
+            color: var(--accent-control-ink, var(--on-accent, #fff));
             border: none;
             border-radius: 0.5rem;
             cursor: pointer;
@@ -3555,7 +3592,7 @@
         #confirm-note-btn.modal-button.confirm,
         #confirm-input-btn.modal-button.confirm {
             background-color: var(--switch-bg-checked);
-            color: #fff;
+            color: var(--on-accent, #fff);
         }
 
         #confirm-note-btn.modal-button.confirm:hover,
@@ -4871,7 +4908,7 @@
         .gantt-col-header.is-weekend { background: rgba(255,255,255,0.02); }
         .gcol-top {
             font-size: 0.65rem;
-            color: var(--text-color-light);
+            color: var(--gantt-header-muted, var(--text-color-light));
             font-weight: 500;
             text-transform: uppercase;
             letter-spacing: 0.04em;
@@ -4879,9 +4916,10 @@
         .gcol-bottom {
             font-size: 0.8rem;
             font-weight: 700;
-            color: var(--text-color);
+            color: var(--gantt-header-ink, var(--text-color));
         }
-        .gantt-col-header.is-today .gcol-bottom { color: var(--switch-bg-checked); }
+        .gantt-col-header.is-today .gcol-top { color: var(--gantt-today-muted, var(--gantt-header-muted, var(--text-color-light))); }
+        .gantt-col-header.is-today .gcol-bottom { color: var(--gantt-today-ink, var(--gantt-header-ink, var(--text-color))); }
 
         #gantt-rows-area {
             position: relative;
@@ -5047,8 +5085,8 @@
         }
         .gantt-zoom-btn:hover { background: var(--bg-ui-hover); color: var(--text-color); }
         .gantt-zoom-btn.active {
-            background: var(--switch-bg-checked);
-            color: #fff;
+            background: var(--accent-control-bg, var(--switch-bg-checked));
+            color: var(--accent-control-ink, #121110);
             font-weight: 600;
         }
         .gantt-nav-btn {
@@ -5260,7 +5298,7 @@
         }
 
         .tab-switcher-item.active * {
-            color: #fff !important;
+            color: var(--on-accent, #fff) !important;
         }
 
         .tab-switcher-icon {
@@ -5419,7 +5457,7 @@
 }
 
 .ml-view-toggle input { display: none; }
-.ml-view-toggle:has(input:checked) { color: var(--switch-bg-checked); }
+.ml-view-toggle:has(input:checked) { color: var(--accent-on-chrome, var(--switch-bg-checked)); }
 
 /* ── Scrollable area ─────────────────────────────────── */
 .ml-scroll-area {
@@ -5572,9 +5610,9 @@
 .ml-icon-btn.active { color: var(--switch-bg-checked); }
 
 .ml-save-btn {
-    background: var(--switch-bg-checked);
+    background: var(--accent-control-bg, var(--switch-bg-checked));
     border: none;
-    color: #fff;
+    color: var(--accent-control-ink, #121110);
     cursor: pointer;
     padding: 0.4rem 1rem;
     border-radius: 0.5rem;
@@ -5685,8 +5723,8 @@
     justify-content: center;
     gap: 1rem;
     padding: 4rem 2rem;
-    color: var(--ml-muted);
-    opacity: 0.7;
+    color: var(--text-on-page-muted, var(--ml-muted));
+    opacity: 1;
     text-align: center;
     user-select: none;
 }
@@ -6378,4 +6416,504 @@ body.no-blur * {
         min-height: 44px;
         justify-content: center;
     }
+}
+
+/* Base style choices in the palette popup. Glass stays rounded; flat squares the chrome. */
+.base-style-group {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+.base-style-label {
+    padding: 4px 8px 0;
+    color: var(--text-color-light);
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    line-height: 16px;
+    text-transform: uppercase;
+}
+.base-style-option {
+    width: 100%;
+    min-height: 44px;
+    margin: 0;
+    padding: 8px;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    background: transparent;
+    color: var(--text-color);
+    font: inherit;
+    font-size: 14px;
+    line-height: 20px;
+    text-align: left;
+    cursor: pointer;
+}
+.base-style-option[aria-checked="true"] {
+    border-color: var(--switch-bg-checked);
+    box-shadow: inset 0 0 0 1px var(--switch-bg-checked);
+}
+@media (prefers-reduced-motion: reduce) {
+    #palette-panel,
+    .base-style-option,
+    .palette-option,
+    .set-default-btn {
+        transition: none;
+    }
+}
+
+/* Flat chrome. Canvas color, accent and grid stay on the preset variables.
+   Border #7A6E60 is 3.26:1 on #24201B. #3A342C is only 1.32:1, so it is a hover fill.
+   Link cobalt #2589BD is 4.16:1 on #24201B, so chrome links keep the text color.
+   Round controls that are pills today keep their radius. */
+html[data-style="flat"] {
+    scrollbar-color: #7A6E60 #24201B;
+}
+html[data-style="flat"] body {
+    --bg-ui: #24201B;
+    --bg-ui-hover: #3A342C;
+    --text-color: #F4F1EA;
+    --text-color-light: #B8AFA0;
+    --text-color-strong: #F4F1EA;
+    --border-color: #7A6E60;
+    font-family: 'Plus Jakarta Sans', 'Segoe UI', Arial, sans-serif;
+}
+html[data-style="flat"] body,
+html[data-style="flat"] body * {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+}
+html[data-style="flat"] :focus-visible {
+    outline: 2px solid #D4A359;
+    outline-offset: 2px;
+}
+html[data-style="flat"] .tab-item,
+html[data-style="flat"] .tab-name,
+html[data-style="flat"] h1,
+html[data-style="flat"] h2,
+html[data-style="flat"] h3,
+html[data-style="flat"] .glass-modal h2,
+html[data-style="flat"] .stats-item,
+html[data-style="flat"] .ml-top-title,
+html[data-style="flat"] .base-style-label {
+    font-family: 'Outfit', 'Segoe UI', Arial, sans-serif;
+}
+html[data-style="flat"] .tab-item.active {
+    border-radius: 0;
+    box-shadow: inset 0 -2px 0 #D4A359;
+}
+html[data-style="flat"] #tabs-bar,
+html[data-style="flat"] #left-bar,
+html[data-style="flat"] #selection-toolbar,
+html[data-style="flat"] #palette-panel,
+html[data-style="flat"] #icon-picker-panel,
+html[data-style="flat"] #context-menu,
+html[data-style="flat"] #tab-context-menu,
+html[data-style="flat"] #storyflow-context-menu,
+html[data-style="flat"] #gantt-context-menu,
+html[data-style="flat"] #mobile-tabs-popup,
+html[data-style="flat"] .glass-modal,
+html[data-style="flat"] #input-modal,
+html[data-style="flat"] #note-editor-modal,
+html[data-style="flat"] .toast-notification,
+html[data-style="flat"] .tool-group-flyout,
+html[data-style="flat"] .story-card,
+html[data-style="flat"] #storyflow-stats-bar,
+html[data-style="flat"] #storyflow-minimap,
+html[data-style="flat"] .moodprompt-top-bar,
+html[data-style="flat"] .ml-top-bar,
+html[data-style="flat"] #gantt-stats-bar,
+html[data-style="flat"] #gantt-bottom-bar,
+html[data-style="flat"] #gantt-detail-panel,
+html[data-style="flat"] .tool-button,
+html[data-style="flat"] .tab-add-btn,
+html[data-style="flat"] .tab-item,
+html[data-style="flat"] .menu-item,
+html[data-style="flat"] .modal-button,
+html[data-style="flat"] .selection-tool-btn,
+html[data-style="flat"] .selection-tool-select,
+html[data-style="flat"] .palette-option,
+html[data-style="flat"] .palette-color,
+html[data-style="flat"] .set-default-btn,
+html[data-style="flat"] .base-style-option,
+html[data-style="flat"] .icon-picker-btn,
+html[data-style="flat"] .form-input,
+html[data-style="flat"] .story-desc-area,
+html[data-style="flat"] .note-fmt-btn,
+html[data-style="flat"] #project-name-input,
+html[data-style="flat"] #note-title-input,
+html[data-style="flat"] #note-body-input,
+html[data-style="flat"] .input-modal-group input,
+html[data-style="flat"] .minimap-control-btn,
+html[data-style="flat"] #storyflow-minimap-viewport,
+html[data-style="flat"] #add-story-frame-btn,
+html[data-style="flat"] .gantt-zoom-group,
+html[data-style="flat"] .gantt-zoom-btn,
+html[data-style="flat"] .gantt-nav-btn,
+html[data-style="flat"] .slider-value-box,
+html[data-style="flat"] .color-picker-input,
+html[data-style="flat"] .color-picker-input {
+    border-radius: 0;
+}
+html[data-style="flat"] #tabs-bar,
+html[data-style="flat"] #left-bar,
+html[data-style="flat"] #selection-toolbar,
+html[data-style="flat"] #palette-panel,
+html[data-style="flat"] #icon-picker-panel,
+html[data-style="flat"] #context-menu,
+html[data-style="flat"] #tab-context-menu,
+html[data-style="flat"] #storyflow-context-menu,
+html[data-style="flat"] #gantt-context-menu,
+html[data-style="flat"] .glass-modal,
+html[data-style="flat"] #input-modal,
+html[data-style="flat"] #note-editor-modal,
+html[data-style="flat"] .toast-notification,
+html[data-style="flat"] .tool-group-flyout,
+html[data-style="flat"] .story-card,
+html[data-style="flat"] #storyflow-minimap,
+html[data-style="flat"] #gantt-detail-panel,
+html[data-style="flat"] .cloud-sync-indicator,
+html[data-style="flat"] #cloud-sync-indicator,
+html[data-style="flat"] .footer-btn {
+    box-shadow: none;
+}
+html[data-style="flat"] #note-editor-modal,
+html[data-style="flat"] #context-menu,
+html[data-style="flat"] #tab-context-menu,
+html[data-style="flat"] #gantt-context-menu,
+html[data-style="flat"] #storyflow-context-menu {
+    background: #24201B !important;
+}
+html[data-style="flat"] .moodprompt-top-bar,
+html[data-style="flat"] #storyflow-stats-bar,
+html[data-style="flat"] .ml-top-bar,
+html[data-style="flat"] #mobile-tabs-popup,
+html[data-style="flat"] #gantt-stats-bar,
+html[data-style="flat"] #gantt-bottom-bar {
+    background: #24201B;
+    box-shadow: none;
+}
+html[data-style="flat"] .stats-item iconify-icon,
+html[data-style="flat"] .moodprompt-top-bar .stats-item:hover iconify-icon {
+    filter: none;
+}
+html[data-style="flat"] .story-desc-area,
+html[data-style="flat"] .story-card input,
+html[data-style="flat"] .story-card select,
+html[data-style="flat"] .story-card textarea,
+html[data-style="flat"] .moodprompt-top-bar .form-input,
+html[data-style="flat"] .input-modal-group input,
+html[data-style="flat"] .gantt-zoom-group {
+    background: #121110;
+    color: #F4F1EA;
+    border: 1px solid #7A6E60;
+    box-shadow: none;
+}
+html[data-style="flat"] .story-desc-area::placeholder,
+html[data-style="flat"] .input-modal-group input::placeholder,
+html[data-style="flat"] #note-title-input::placeholder,
+html[data-style="flat"] #note-body-input::placeholder {
+    color: #B8AFA0;
+}
+html[data-style="flat"] .base-style-option {
+    border-radius: 0;
+    background: #24201B;
+    color: #F4F1EA;
+    border-color: #7A6E60;
+}
+html[data-style="flat"] .base-style-option[aria-checked="true"] {
+    background: #D4A359;
+    color: #121110;
+    border-color: #D4A359;
+    box-shadow: none;
+}
+html[data-style="flat"] .set-default-btn,
+html[data-style="flat"] .set-default-btn:hover,
+html[data-style="flat"] .set-default-btn:active {
+    border-radius: 0;
+    transform: none;
+    filter: none;
+}
+html[data-style="flat"] .menu-item .text-red-500,
+html[data-style="flat"] .selection-tool-btn .text-red-500 {
+    color: #f87171;
+    text-shadow: none;
+}
+html[data-style="flat"] a {
+    color: #F4F1EA;
+}
+html[data-style="flat"] .story-desc-area a,
+html[data-style="flat"] .input-modal-group a {
+    color: #2589BD;
+}
+html[data-style="flat"] ::-webkit-scrollbar-thumb {
+    background-color: #7A6E60;
+    border-radius: 0;
+}
+html[data-style="flat"] #palette-panel {
+    padding: 8px;
+    gap: 8px;
+}
+
+html[data-style="flat"] .color-picker-input::-webkit-color-swatch {
+    border-radius: 0;
+}
+html[data-style="flat"] .color-picker-input::-moz-color-swatch {
+    border-radius: 0;
+}
+
+/* Flat covers every element. Circles that are round controls stay round, in their own rule.
+   Webkit and moz pseudos stay out of these lists so an unknown pseudo cannot drop the rule.
+   #7A6E60 is the 1px edge: #3A342C on #24201B is 1.32:1, #7A6E60 is 3.26:1. */
+html[data-style="flat"] {
+    color-scheme: dark;
+}
+html[data-style="flat"] body,
+html[data-style="flat"] body * {
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    text-shadow: none !important;
+}
+html[data-style="flat"] .tab-close-btn,
+html[data-style="flat"] .story-image-overlay-btn,
+html[data-style="flat"] #toolbar-accent-color-picker,
+html[data-style="flat"] .footer-btn,
+html[data-style="flat"] #storyflow-lightbox-close,
+html[data-style="flat"] .cloud-status-dot,
+html[data-style="flat"] .cloud-modal-icon,
+html[data-style="flat"] .cloud-storage-dot,
+html[data-style="flat"] .gantt-group-color-dot,
+html[data-style="flat"] .gantt-task-status-dot,
+html[data-style="flat"] .ml-swatch,
+html[data-style="flat"] .ml-remove-img-btn {
+    border-radius: 50% !important;
+}
+html[data-style="flat"] .tab-item.active {
+    box-shadow: inset 0 -2px 0 #D4A359 !important;
+}
+html[data-style="flat"][data-page-tone="light"] .tab-item.active {
+    box-shadow: inset 0 -2px 0 #7A5C22 !important;
+}
+html[data-style="flat"] .story-card.drag-target,
+html[data-style="flat"] .story-card.animatic-current,
+html[data-style="flat"] .gantt-group-sidebar-row.drag-over {
+    box-shadow: inset 0 0 0 2px var(--switch-bg-checked) !important;
+}
+html[data-style="flat"] .ml-card-item.ml-drag-over-top {
+    box-shadow: inset 0 2px 0 var(--switch-bg-checked) !important;
+}
+html[data-style="flat"] .ml-card-item.ml-drag-over-bottom {
+    box-shadow: inset 0 -2px 0 var(--switch-bg-checked) !important;
+}
+html[data-style="flat"] :focus-visible {
+    outline: 2px solid #D4A359;
+    outline-offset: 2px;
+    box-shadow: 0 0 0 2px #121110 !important;
+}
+html[data-style="flat"][data-page-tone="light"] :focus-visible {
+    outline-color: #7A5C22;
+}
+html[data-style="flat"] .scroll-indicator.left,
+html[data-style="flat"] .scroll-indicator.right {
+    background: none;
+}
+html[data-style="flat"] #tabs-bar::before,
+html[data-style="flat"] #left-bar::before {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23B8AFA0' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='15 18 9 12 15 6'/%3E%3C/svg%3E");
+    background-color: #24201B;
+    background-repeat: no-repeat;
+    background-position: left 0.35rem center;
+    background-size: 12px 12px;
+}
+html[data-style="flat"] #tabs-bar::after,
+html[data-style="flat"] #left-bar::after {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23B8AFA0' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='9 18 15 12 9 6'/%3E%3C/svg%3E");
+    background-color: #24201B;
+    background-repeat: no-repeat;
+    background-position: right 0.35rem center;
+    background-size: 12px 12px;
+}
+html[data-style="flat"] .slider::before {
+    box-shadow: none;
+    background-color: #F4F1EA;
+}
+html[data-style="flat"] input:checked + .slider::before {
+    background-color: var(--on-accent, #121110);
+}
+html[data-style="flat"] .modal-overlay,
+html[data-style="flat"] #storyflow-lightbox,
+html[data-style="flat"] #storyflow-fullscreen,
+html[data-style="flat"] #input-modal-overlay,
+html[data-style="flat"] #note-editor-overlay,
+html[data-style="flat"] #help-modal-overlay {
+    background: #121110;
+}
+html[data-style="flat"] .story-image-slot,
+html[data-style="flat"] .story-image-slot:hover,
+html[data-style="flat"] .story-image-slot.drag-over,
+html[data-style="flat"] .image-upload-slot,
+html[data-style="flat"] .image-upload-slot:hover,
+html[data-style="flat"] .image-upload-slot.drag-over,
+html[data-style="flat"] .prompt-text-area,
+html[data-style="flat"] .story-desc-area,
+html[data-style="flat"] .story-script-title,
+html[data-style="flat"] .story-script-action,
+html[data-style="flat"] .ml-search-wrap,
+html[data-style="flat"] .story-drag-handle,
+html[data-style="flat"] .gantt-zoom-group,
+html[data-style="flat"] .gantt-field input[type="text"],
+html[data-style="flat"] .gantt-field input[type="date"],
+html[data-style="flat"] .gantt-field select,
+html[data-style="flat"] .gantt-field textarea,
+html[data-style="flat"] select,
+html[data-style="flat"] .form-input,
+html[data-style="flat"] #canvas-empty-guide {
+    background: #121110;
+    color: #F4F1EA;
+    border: 1px solid #7A6E60;
+    box-shadow: none !important;
+}
+html[data-style="flat"] .story-image-slot:hover,
+html[data-style="flat"] .image-upload-slot:hover,
+html[data-style="flat"] .prompt-text-area:focus,
+html[data-style="flat"] .gantt-field input:focus,
+html[data-style="flat"] .gantt-field select:focus,
+html[data-style="flat"] .gantt-field textarea:focus {
+    border-color: var(--switch-bg-checked);
+    background: #121110;
+}
+html[data-style="flat"] select option,
+html[data-style="flat"] .gantt-field select option,
+html[data-style="flat"] .cloud-autosave-select option,
+html[data-style="flat"] #asset-library-filter option {
+    background-color: #24201B;
+    color: #F4F1EA;
+}
+html[data-style="flat"] #canvas-empty-guide,
+html[data-style="flat"] #canvas-empty-guide p {
+    color: #B8AFA0;
+}
+html[data-style="flat"] #canvas-empty-guide .canvas-empty-title {
+    color: #F4F1EA;
+}
+html[data-style="flat"] #canvas-empty-guide,
+html[data-style="flat"] #canvas-template-picker button,
+html[data-style="flat"] #canvas-fit-view-btn,
+html[data-style="flat"] #canvas-zoom-readout {
+    border-radius: 0 !important;
+    box-shadow: none !important;
+}
+html[data-style="flat"] #canvas-template-picker button {
+    background: #24201B;
+    color: #F4F1EA;
+    border: 1px solid #7A6E60;
+}
+html[data-style="flat"][data-page-tone="light"] .ml-section-label {
+    color: #4A433C;
+}
+html[data-style="flat"] .ml-card:hover,
+html[data-style="flat"] .gantt-bar:hover,
+html[data-style="flat"] .asset-library-item:hover,
+html[data-style="flat"] .story-image-overlay-btn:hover,
+html[data-style="flat"] .ml-save-btn:hover {
+    transform: none;
+    filter: none;
+}
+html[data-style="flat"] .gantt-bar,
+html[data-style="flat"] .gantt-bar-progress,
+html[data-style="flat"] .story-image-slot img,
+html[data-style="flat"] .image-upload-slot img,
+html[data-style="flat"] .ml-card-img,
+html[data-style="flat"] .colorseeker-image-choice,
+html[data-style="flat"] .colorseeker-image-choice img,
+html[data-style="flat"] #storyflow-lightbox-img {
+    border-radius: 0 !important;
+    box-shadow: none !important;
+}
+html[data-style="flat"] #storyflow-lightbox-close {
+    background: #24201B;
+    color: #F4F1EA;
+    border: 1px solid #7A6E60;
+}
+html[data-style="flat"] .text-red-500,
+html[data-style="flat"] .gantt-detail-delete-btn,
+html[data-style="flat"] .cloud-menu-item--danger,
+html[data-style="flat"] .ml-card-delete-btn:hover,
+html[data-style="flat"] .ml-card-item-del:hover {
+    color: #f87171;
+}
+html[data-style="flat"] #gantt-workers-list > div {
+    background: #121110 !important;
+    border: 1px solid #7A6E60;
+}
+html[data-style="flat"] .cloud-sync-indicator,
+html[data-style="flat"] .cloud-sync-indicator iconify-icon,
+html[data-style="flat"] #cloud-sync-icon {
+    filter: none;
+}
+html[data-style="flat"] .cloud-sync-indicator.not-logged-in #cloud-sync-icon,
+html[data-style="flat"] .cloud-sync-indicator.not-synced #cloud-sync-icon {
+    color: #B8AFA0;
+}
+html[data-style="flat"][data-page-tone="light"] .ml-card:not(.ml-tinted),
+html[data-style="flat"][data-page-tone="light"] .ml-add-panel:not(.ml-tinted) {
+    color-scheme: light;
+}
+html[data-style="flat"] .board-empty-guide {
+    border-style: solid;
+    background: transparent;
+}
+html[data-style="flat"] .board-empty-guide button:hover {
+    color: #F4F1EA;
+    border-color: var(--switch-bg-checked);
+    background: #3A342C;
+}
+html[data-style="flat"][data-page-tone="light"] .board-empty-guide a,
+html[data-style="flat"][data-page-tone="light"] .ml-card:not(.ml-tinted) a {
+    color: #121110;
+}
+html[data-style="flat"] .story-card-index {
+    background: #121110;
+    color: #F4F1EA;
+    border: 1px solid #7A6E60;
+}
+html[data-style="flat"] .mobile-tab-item.active {
+    background: #3A342C;
+    color: #F4F1EA;
+}
+html[data-style="flat"] .gantt-nav-btn,
+html[data-style="flat"] .colorseeker-remove,
+html[data-style="flat"] .colorseeker-set-base,
+html[data-style="flat"] .colorseeker-move-btn,
+html[data-style="flat"] .colorseeker-lock-btn,
+html[data-style="flat"] .colorseeker-copied {
+    background: #121110;
+    color: #F4F1EA;
+    border: 1px solid #7A6E60;
+    opacity: 1;
+}
+html[data-style="flat"] .colorseeker-set-base.is-base,
+html[data-style="flat"] .colorseeker-set-base:hover,
+html[data-style="flat"] #colorseeker-sidebar button:hover {
+    background: #3A342C;
+    color: #F4F1EA;
+    border-color: var(--switch-bg-checked);
+}
+html[data-style="flat"] .colorseeker-set-base.is-base {
+    box-shadow: inset 0 0 0 1px var(--switch-bg-checked) !important;
+}
+html[data-style="flat"] .modal-button.confirm {
+    background-color: #f87171;
+    color: #121110;
+}
+html[data-style="flat"] .modal-button.confirm:hover {
+    background-color: #fca5a5;
+    color: #121110;
+}
+html[data-style="flat"] #confirm-note-btn.modal-button.confirm,
+html[data-style="flat"] #confirm-input-btn.modal-button.confirm,
+html[data-style="flat"] #confirm-note-btn.modal-button.confirm:hover,
+html[data-style="flat"] #confirm-input-btn.modal-button.confirm:hover {
+    background-color: var(--switch-bg-checked);
+    color: var(--on-accent, #121110);
+    filter: none;
 }
