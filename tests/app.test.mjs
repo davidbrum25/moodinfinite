@@ -5470,19 +5470,104 @@ function assertNoForbiddenNames() {
 }
 
 async function openPalette(page) {
-    await page.evaluate(() => document.querySelectorAll('.toast-notification').forEach((el) => el.remove()));
-    const open = await page.$eval('#palette-panel', (el) => el.classList.contains('open'));
-    if (!open) {
-        await page.click('#palette-btn');
-        await page.waitForSelector('#palette-panel.open [role="radio"]');
+    for (let attempt = 0; attempt < 3; attempt++) {
+        await page.evaluate(() => {
+            document.querySelectorAll('.toast-notification').forEach((el) => el.remove());
+            const btn = document.getElementById('palette-btn');
+            if (btn && typeof btn.scrollIntoView === 'function') {
+                btn.scrollIntoView({ inline: 'nearest', block: 'nearest' });
+            }
+        });
+        const open = await page.$eval('#palette-panel', (el) => el.classList.contains('open'));
+        if (!open) {
+            try {
+                await page.waitForFunction(() => {
+                    const panel = document.getElementById('palette-panel');
+                    if (panel) {
+                        if (panel.classList.contains('open')) return false;
+                        const anims = typeof panel.getAnimations === 'function' ? panel.getAnimations({ subtree: true }) : [];
+                        if (anims.some((a) => a.playState === 'running')) return false;
+                        const s = window.getComputedStyle(panel);
+                        const isClosed = s.display === 'none' || s.visibility === 'hidden' || s.opacity === '0' || parseFloat(s.opacity) === 0;
+                        if (!isClosed) return false;
+                    }
+                    const btn = document.getElementById('palette-btn');
+                    if (!btn) return false;
+                    const btnStyle = window.getComputedStyle(btn);
+                    if (btnStyle.display === 'none' || btnStyle.visibility !== 'visible' || btnStyle.opacity === '0') return false;
+                    if (typeof btn.checkVisibility === 'function' && !btn.checkVisibility()) return false;
+                    const rect = btn.getBoundingClientRect();
+                    if (rect.width <= 0 || rect.height <= 0) return false;
+                    const cx = rect.left + rect.width / 2;
+                    const cy = rect.top + rect.height / 2;
+                    if (cx < 0 || cx > window.innerWidth || cy < 0 || cy > window.innerHeight) {
+                        if (typeof btn.scrollIntoView === 'function') {
+                            btn.scrollIntoView({ inline: 'nearest', block: 'nearest' });
+                        }
+                        return false;
+                    }
+                    const topEl = document.elementFromPoint(cx, cy);
+                    if (!topEl) return false;
+                    return topEl === btn || btn.contains(topEl) || (topEl.getRootNode && btn.contains(topEl.getRootNode().host));
+                }, { timeout: 5000 });
+            } catch {
+                const diag = await page.evaluate(() => {
+                    const panel = document.getElementById('palette-panel');
+                    const panelClasses = panel ? panel.className : 'null';
+                    const panelStyle = panel ? window.getComputedStyle(panel) : null;
+                    const display = panelStyle ? panelStyle.display : 'null';
+                    const visibility = panelStyle ? panelStyle.visibility : 'null';
+                    const opacity = panelStyle ? panelStyle.opacity : 'null';
+                    const btn = document.getElementById('palette-btn');
+                    const r = btn ? btn.getBoundingClientRect() : null;
+                    const buttonRect = r ? `${r.left},${r.top},${r.width}x${r.height}` : 'null';
+                    let topDesc = 'null';
+                    if (r && r.width > 0 && r.height > 0) {
+                        const topEl = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+                        if (topEl) {
+                            topDesc = `${topEl.tagName.toLowerCase()}${topEl.id ? '#' + topEl.id : ''}${topEl.classList && topEl.classList.length ? '.' + [...topEl.classList].join('.') : ''}`;
+                        }
+                    }
+                    return `openPalette timeout: panel classes="${panelClasses}", computed display=${display}, visibility=${visibility}, opacity=${opacity}, button rect=${buttonRect}, elementFromPoint=<${topDesc}>`;
+                });
+                console.warn(diag);
+            }
+            await page.click('#palette-btn').catch(() => {});
+        }
+        try {
+            await page.waitForSelector('#palette-panel.open [role="radio"]', { timeout: 3000 });
+            return;
+        } catch {
+            // Panel failed to open within 3s; retry up to 3 attempts.
+        }
     }
+    const state = await page.evaluate(() => {
+        const panel = document.getElementById('palette-panel');
+        const active = document.activeElement;
+        const activeDesc = active
+            ? `${active.tagName.toLowerCase()}${active.id ? '#' + active.id : ''}${active.classList && active.classList.length ? '.' + [...active.classList].join('.') : ''}`
+            : 'null';
+        return {
+            panelClasses: panel ? panel.className : 'null',
+            activeElement: activeDesc,
+        };
+    });
+    throw new Error(`Failed to open palette panel after 3 attempts (panel classes: "${state.panelClasses}", document.activeElement: <${state.activeElement}>)`);
 }
 
 async function closePalette(page) {
     const open = await page.$eval('#palette-panel', (el) => el.classList.contains('open'));
     if (!open) return;
     await page.keyboard.press('Escape');
-    await page.waitForFunction(() => !document.getElementById('palette-panel').classList.contains('open'));
+    await page.waitForFunction(() => {
+        const panel = document.getElementById('palette-panel');
+        if (!panel) return true;
+        if (panel.classList.contains('open')) return false;
+        const anims = typeof panel.getAnimations === 'function' ? panel.getAnimations({ subtree: true }) : [];
+        if (anims.some((a) => a.playState === 'running')) return false;
+        const s = window.getComputedStyle(panel);
+        return s.display === 'none' || s.visibility === 'hidden' || s.opacity === '0' || parseFloat(s.opacity) === 0;
+    });
 }
 
 async function chooseBaseStyle(page, style) {
