@@ -1,9 +1,38 @@
 <!DOCTYPE html>
 <html lang="en"
-    style="--bg-page: #0d0d0d; --bg-ui: rgba(35, 38, 51, 0.4); --bg-ui-hover: rgba(55, 58, 71, 0.5); --text-color: #e2e8f0; --text-color-light: #94a3b8; --text-color-strong: #ffffff; --text-color-active-tab: #ffffff; --border-color: rgba(255, 255, 255, 0.1); --switch-bg-checked: #429eff; --contrast-color-light: #94a3b8;">
+    style="--bg-page: #0d0d0d; --bg-ui: #24201B; --bg-ui-hover: #3A342C; --text-color: #F4F1EA; --text-color-light: #B8AFA0; --text-color-strong: #F4F1EA; --text-color-active-tab: #ffffff; --border-color: #7A6E60; --switch-bg-checked: #429eff; --on-accent: #121110; --contrast-color-light: #94a3b8;">
 
 <head>
     <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+    <script>
+        (function () {
+            var style = 'flat';
+            try {
+                var raw = localStorage.getItem('moodinfinite-settings');
+                if (raw) {
+                    var settings = JSON.parse(raw);
+                    if (settings && (settings.baseStyle === 'glass' || settings.baseStyle === 'flat')) style = settings.baseStyle;
+                }
+            } catch (e) {}
+            document.documentElement.setAttribute('data-style', style);
+            var root = document.documentElement.style;
+            if (style === 'glass') {
+                root.setProperty('--bg-ui', 'rgba(35, 38, 51, 0.4)');
+                root.setProperty('--bg-ui-hover', 'rgba(55, 58, 71, 0.5)');
+                root.setProperty('--text-color', '#e2e8f0');
+                root.setProperty('--text-color-light', '#94a3b8');
+                root.setProperty('--text-color-strong', '#ffffff');
+                root.setProperty('--border-color', 'rgba(255, 255, 255, 0.1)');
+            } else {
+                root.setProperty('--bg-ui', '#24201B');
+                root.setProperty('--bg-ui-hover', '#3A342C');
+                root.setProperty('--text-color', '#F4F1EA');
+                root.setProperty('--text-color-light', '#B8AFA0');
+                root.setProperty('--text-color-strong', '#F4F1EA');
+                root.setProperty('--border-color', '#7A6E60');
+            }
+        })();
+    </script>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0">
     <meta name="google-site-verification" content="s00Wdue9_udUtKz7V7Sk82ZrcfGPIv9HWoYE0fO5mE8" />
     <title>Moodinfinite v1.1.0</title>
@@ -26,7 +55,10 @@
     <script src="https://accounts.google.com/gsi/client" async defer></script>
 </head>
 
-<body>
+<body data-style="flat">
+    <script>
+        document.body.setAttribute('data-style', document.documentElement.getAttribute('data-style') || 'flat');
+    </script>
     <div id="print-header" class="print-only">
         <div style="display: flex; align-items: center; gap: 1rem; margin-bottom: 0.5rem;">
             <img src="https://raw.githubusercontent.com/davidbrum25/moodinfinite/refs/heads/main/fav_icon_alternative.png"
@@ -113,7 +145,7 @@
             <button id="copy-to-clipboard-btn" title="Copy to Clipboard (Shift+C)" aria-label="Copy to Clipboard (Shift+C)" class="tab-add-btn">
                 <iconify-icon icon="lucide:copy" width="20" height="20"></iconify-icon>
             </button>
-            <button id="palette-btn" title="Color Palettes" aria-label="Color Palettes" class="tab-add-btn">
+            <button id="palette-btn" title="Color Palettes" aria-label="Color Palettes" aria-haspopup="true" aria-expanded="false" class="tab-add-btn">
                 <iconify-icon icon="lucide:palette" width="20" height="20"></iconify-icon>
             </button>
 

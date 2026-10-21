@@ -1117,7 +1117,7 @@ async function assertNextImprovements(page) {
     await page.click('.ml-save-btn');
     await page.waitForSelector('.ml-card-item-text');
     const itemInk = await page.$eval('.ml-card-item-text', (el) => getComputedStyle(el).color);
-    assert.equal(itemInk, 'rgb(226, 232, 240)', `list item text is not readable: ${itemInk}`);
+    assert.equal(itemInk, 'rgb(244, 241, 234)', `list item text is not readable: ${itemInk}`);
     await page.click('#palette-btn');
     await page.waitForSelector('#palette-panel.open .palette-option');
     await (await page.$$('#palette-panel .palette-option'))[1].click();
@@ -1127,8 +1127,8 @@ async function assertNextImprovements(page) {
         const check = getComputedStyle(document.querySelector('.ml-card-checkbox')).color;
         return { text, card, check };
     });
-    assert.equal(lightList.text, 'rgb(28, 25, 23)', `light preset left the list text pale: ${lightList.text}`);
-    assert.equal(lightList.check, 'rgb(68, 64, 60)', `light preset left the checkbox pale: ${lightList.check}`);
+    assert.equal(lightList.text, 'rgb(18, 17, 16)', `light preset left the list text pale: ${lightList.text}`);
+    assert.equal(lightList.check, 'rgb(92, 85, 72)', `light preset left the checkbox pale: ${lightList.check}`);
     assert.equal(lightList.card, 'rgb(255, 255, 255)', `light preset left the card muddy: ${lightList.card}`);
     const cardsBeforePaste = await page.$$eval('.ml-card', (els) => els.length);
     await page.click('.ml-card-item-text');
@@ -1401,7 +1401,7 @@ async function assertRound2Upgrades(page) {
         const s = window.getComputedStyle(btn);
         return { borderRadius: s.borderRadius, cursor: s.cursor, position: s.position };
     });
-    assert.equal(hexBtnStyle.borderRadius, '999px');
+    assert.equal(hexBtnStyle.borderRadius, '0px');
     assert.equal(hexBtnStyle.cursor, 'pointer');
     assert.equal(hexBtnStyle.position, 'relative');
     await page.click('#colorseeker-copy-hex');
@@ -2143,7 +2143,7 @@ try {
     assert.ok(interactions.color.css.includes('12ab34'), `accent color did not apply: ${interactions.color.css}`);
     assert.equal(interactions.color.inputKept, '#12ab34');
     assert.ok(interactions.color.itemPixel[1] > 180, `item color was not painted: ${JSON.stringify(interactions.color.itemPixel)}`);
-    assert.notEqual(interactions.color.barBackdrop, 'none');
+    assert.equal(interactions.color.barBackdrop, 'none', 'flat default keeps the left bar sharp');
 
     const routes = await page.evaluate(() => {
         const board = projects.find((p) => p.type === 'moodinfinite');
@@ -2282,6 +2282,8 @@ try {
     await assertRound5RerouteDelete(page);
     await assertToolCreationHistory(page);
     await assertMoodflowExports(page);
+    await assertBaseStyle(page);
+    await assertPaletteReview(page);
 
     const lateErrors = pageErrors.filter(isFirstParty);
     assert.deepEqual(lateErrors, [], `first-party errors:\n${lateErrors.join('\n')}`);
@@ -2313,6 +2315,9 @@ try {
         assert.equal(ff.color.inputKept, '#12ab34');
         assert.ok(ff.color.itemPixel[1] > 180, `firefox item color: ${JSON.stringify(ff.color)}`);
         assert.equal(ff.color.barBackdrop, 'none', `firefox left bar still blurs over the color input: ${ff.color.barBackdrop}`);
+        await ffPage.evaluate(() => selectBaseStyle('glass'));
+        const ffGlassBlur = await ffPage.evaluate(() => getComputedStyle(document.getElementById('left-bar')).backdropFilter);
+        assert.equal(ffGlassBlur, 'none', `firefox glass left bar must stay sharp: ${ffGlassBlur}`);
         assert.notEqual(ff.color.appearance, 'none');
         assert.deepEqual(ffErrors.filter(isFirstParty), []);
         await firefox.close();
@@ -4809,7 +4814,7 @@ async function assertRound4ListTone(page) {
     });
     assert.equal(tint.cleared.color, '');
     assert.equal(tint.cleared.tinted, false, 'clearing a card color left the tinted text colors on');
-    assert.equal(tint.cleared.text, 'rgb(28, 25, 23)', `cleared card text is not dark on white: ${tint.cleared.text} on ${tint.cleared.bg}`);
+    assert.equal(tint.cleared.text, 'rgb(18, 17, 16)', `cleared card text is not dark on white: ${tint.cleared.text} on ${tint.cleared.bg}`);
     assert.equal(tint.applied.color, '#4a1c1c');
     assert.equal(tint.applied.tinted, true, 'picking a card color did not mark the card tinted');
     assert.equal(tint.applied.text, 'rgb(245, 245, 244)', `tinted card text stayed dark: ${tint.applied.text}`);
@@ -5444,6 +5449,862 @@ function extractPdfText(raw) {
 
 function rectsOverlap(a, b) {
     return a.right > b.left + 1 && a.left < b.right - 1 && a.bottom > b.top + 1 && a.top < b.bottom - 1;
+}
+
+function forbiddenNamePattern() {
+    const parts = [
+        [98, 114, 117, 115, 97, 110],
+        [97, 114, 101, 110, 97],
+        [115, 105, 108, 105, 99, 105, 111],
+    ].map((codes) => String.fromCharCode(...codes));
+    return new RegExp(parts.join('|'), 'i');
+}
+
+function assertNoForbiddenNames() {
+    const banned = forbiddenNamePattern();
+    const tracked = execFileSync('git', ['ls-files', '-z'], { cwd: ROOT });
+    for (const name of tracked.toString('utf8').split('\0').filter(Boolean)) {
+        const text = readFileSync(path.join(ROOT, name)).toString('latin1');
+        assert.equal(banned.test(text), false, `forbidden word in ${name}`);
+    }
+}
+
+async function openPalette(page) {
+    for (let attempt = 0; attempt < 3; attempt++) {
+        await page.evaluate(() => {
+            document.querySelectorAll('.toast-notification').forEach((el) => el.remove());
+            const btn = document.getElementById('palette-btn');
+            if (btn && typeof btn.scrollIntoView === 'function') {
+                btn.scrollIntoView({ inline: 'nearest', block: 'nearest' });
+            }
+        });
+        const open = await page.$eval('#palette-panel', (el) => el.classList.contains('open'));
+        if (!open) {
+            try {
+                await page.waitForFunction(() => {
+                    const panel = document.getElementById('palette-panel');
+                    if (panel) {
+                        if (panel.classList.contains('open')) return false;
+                        const anims = typeof panel.getAnimations === 'function' ? panel.getAnimations({ subtree: true }) : [];
+                        if (anims.some((a) => a.playState === 'running')) return false;
+                        const s = window.getComputedStyle(panel);
+                        const isClosed = s.display === 'none' || s.visibility === 'hidden' || s.opacity === '0' || parseFloat(s.opacity) === 0;
+                        if (!isClosed) return false;
+                    }
+                    const btn = document.getElementById('palette-btn');
+                    if (!btn) return false;
+                    const btnStyle = window.getComputedStyle(btn);
+                    if (btnStyle.display === 'none' || btnStyle.visibility !== 'visible' || btnStyle.opacity === '0') return false;
+                    if (typeof btn.checkVisibility === 'function' && !btn.checkVisibility()) return false;
+                    const rect = btn.getBoundingClientRect();
+                    if (rect.width <= 0 || rect.height <= 0) return false;
+                    const cx = rect.left + rect.width / 2;
+                    const cy = rect.top + rect.height / 2;
+                    if (cx < 0 || cx > window.innerWidth || cy < 0 || cy > window.innerHeight) {
+                        if (typeof btn.scrollIntoView === 'function') {
+                            btn.scrollIntoView({ inline: 'nearest', block: 'nearest' });
+                        }
+                        return false;
+                    }
+                    const topEl = document.elementFromPoint(cx, cy);
+                    if (!topEl) return false;
+                    return topEl === btn || btn.contains(topEl) || (topEl.getRootNode && btn.contains(topEl.getRootNode().host));
+                }, { timeout: 5000 });
+            } catch {
+                const diag = await page.evaluate(() => {
+                    const panel = document.getElementById('palette-panel');
+                    const panelClasses = panel ? panel.className : 'null';
+                    const panelStyle = panel ? window.getComputedStyle(panel) : null;
+                    const display = panelStyle ? panelStyle.display : 'null';
+                    const visibility = panelStyle ? panelStyle.visibility : 'null';
+                    const opacity = panelStyle ? panelStyle.opacity : 'null';
+                    const btn = document.getElementById('palette-btn');
+                    const r = btn ? btn.getBoundingClientRect() : null;
+                    const buttonRect = r ? `${r.left},${r.top},${r.width}x${r.height}` : 'null';
+                    let topDesc = 'null';
+                    if (r && r.width > 0 && r.height > 0) {
+                        const topEl = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+                        if (topEl) {
+                            topDesc = `${topEl.tagName.toLowerCase()}${topEl.id ? '#' + topEl.id : ''}${topEl.classList && topEl.classList.length ? '.' + [...topEl.classList].join('.') : ''}`;
+                        }
+                    }
+                    return `openPalette timeout: panel classes="${panelClasses}", computed display=${display}, visibility=${visibility}, opacity=${opacity}, button rect=${buttonRect}, elementFromPoint=<${topDesc}>`;
+                });
+                console.warn(diag);
+            }
+            await page.click('#palette-btn').catch(() => {});
+        }
+        try {
+            await page.waitForSelector('#palette-panel.open [role="radio"]', { timeout: 3000 });
+            return;
+        } catch {
+            // Panel failed to open within 3s; retry up to 3 attempts.
+        }
+    }
+    const state = await page.evaluate(() => {
+        const panel = document.getElementById('palette-panel');
+        const active = document.activeElement;
+        const activeDesc = active
+            ? `${active.tagName.toLowerCase()}${active.id ? '#' + active.id : ''}${active.classList && active.classList.length ? '.' + [...active.classList].join('.') : ''}`
+            : 'null';
+        return {
+            panelClasses: panel ? panel.className : 'null',
+            activeElement: activeDesc,
+        };
+    });
+    throw new Error(`Failed to open palette panel after 3 attempts (panel classes: "${state.panelClasses}", document.activeElement: <${state.activeElement}>)`);
+}
+
+async function closePalette(page) {
+    const open = await page.$eval('#palette-panel', (el) => el.classList.contains('open'));
+    if (!open) return;
+    await page.keyboard.press('Escape');
+    await page.waitForFunction(() => {
+        const panel = document.getElementById('palette-panel');
+        if (!panel) return true;
+        if (panel.classList.contains('open')) return false;
+        const anims = typeof panel.getAnimations === 'function' ? panel.getAnimations({ subtree: true }) : [];
+        if (anims.some((a) => a.playState === 'running')) return false;
+        const s = window.getComputedStyle(panel);
+        return s.display === 'none' || s.visibility === 'hidden' || s.opacity === '0' || parseFloat(s.opacity) === 0;
+    });
+}
+
+async function chooseBaseStyle(page, style) {
+    await closePalette(page);
+    await openPalette(page);
+    await page.click(`#palette-panel [data-style-option="${style}"]`);
+    await page.waitForFunction((expected) => document.body.dataset.style === expected, {}, style);
+    await page.waitForFunction(() => !document.getAnimations().some((a) => a.transitionProperty && a.transitionProperty.startsWith('border-radius') || (a.playState === 'running' && a.transitionProperty)));
+}
+
+async function choosePreset(page, index) {
+    await openPalette(page);
+    await page.waitForSelector('#palette-panel.open .palette-option');
+    const options = await page.$$('#palette-panel .palette-option');
+    await options[index].click();
+    await page.waitForFunction(() => !document.getElementById('palette-panel').classList.contains('open'));
+}
+
+async function assertBaseStyle(page) {
+    console.log('Testing base style...');
+    assertNoForbiddenNames();
+    const errorsBefore = pageErrors.length;
+    await page.setViewport({ width: 1280, height: 800, deviceScaleFactor: 1, isMobile: false, hasTouch: false });
+    await page.evaluate(() => {
+        showUiBlur = true;
+        document.body.classList.toggle('no-blur', false);
+        saveSettings();
+    });
+
+    await page.evaluate(() => localStorage.removeItem('moodinfinite-settings'));
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    const earlyEmpty = await page.evaluate(() => document.body.dataset.style);
+    assert.equal(earlyEmpty, 'flat', 'empty storage should paint flat before the app boots');
+    await page.waitForFunction(() => window.projects && window.projects.length > 0 && typeof selectBaseStyle === 'function' && typeof updateUIColors === 'function', { timeout: 15000 });
+    await page.setViewport({ width: 1280, height: 800, deviceScaleFactor: 1, isMobile: false, hasTouch: false });
+    const initial = await page.evaluate(() => {
+        const bar = getComputedStyle(document.getElementById('tabs-bar'));
+        const bg = getComputedStyle(document.documentElement).getPropertyValue('--bg-ui').trim().toLowerCase();
+        const radios = [...document.querySelectorAll('#palette-panel [role="radio"]')].map((el) => ({
+            style: el.dataset.styleOption,
+            checked: el.getAttribute('aria-checked'),
+        }));
+        return {
+            body: document.body.dataset.style,
+            html: document.documentElement.dataset.style,
+            backdrop: bar.backdropFilter,
+            bg,
+            radios,
+        };
+    });
+    assert.equal(initial.body, 'flat');
+    assert.equal(initial.html, 'flat');
+    assert.equal(initial.backdrop, 'none', `empty storage should not blur the tabs bar: ${initial.backdrop}`);
+    assert.equal(initial.bg, '#24201b');
+    assert.deepEqual(initial.radios, [
+        { style: 'glass', checked: 'false' },
+        { style: 'flat', checked: 'true' },
+    ]);
+
+    await page.evaluate(() => selectBaseStyle('glass'));
+    await chooseBaseStyle(page, 'flat');
+    const flat = await page.evaluate(() => {
+        const bar = getComputedStyle(document.getElementById('tabs-bar'));
+        const panel = getComputedStyle(document.getElementById('palette-panel'));
+        const bg = getComputedStyle(document.documentElement).getPropertyValue('--bg-ui').trim().toLowerCase();
+        const radios = [...document.querySelectorAll('#palette-panel [role="radio"]')].map((el) => ({
+            style: el.dataset.styleOption,
+            checked: el.getAttribute('aria-checked'),
+        }));
+        return {
+            body: document.body.dataset.style,
+            radiusBar: bar.borderRadius,
+            radiusPanel: panel.borderRadius,
+            backdrop: bar.backdropFilter,
+            bg,
+            surface: bar.backgroundColor,
+            stored: JSON.parse(localStorage.getItem('moodinfinite-settings')).baseStyle,
+            radios,
+        };
+    });
+    assert.equal(flat.body, 'flat');
+    assert.ok(flat.radiusBar === '0px' || flat.radiusBar.split(' ').every((part) => part === '0px'), flat.radiusBar);
+    assert.ok(flat.radiusPanel === '0px' || flat.radiusPanel.split(' ').every((part) => part === '0px'), flat.radiusPanel);
+    assert.equal(flat.backdrop, 'none');
+    assert.equal(flat.bg, '#24201b');
+    assert.ok(flat.surface === 'rgb(36, 32, 27)' || flat.surface === 'rgba(36, 32, 27, 1)', flat.surface);
+    assert.equal(flat.stored, 'flat');
+    assert.deepEqual(flat.radios, [
+        { style: 'glass', checked: 'false' },
+        { style: 'flat', checked: 'true' },
+    ]);
+
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    const early = await page.evaluate(() => document.body.dataset.style);
+    assert.equal(early, 'flat', 'stored flat style was not on the body before the app finished booting');
+    await page.waitForFunction(() => window.projects && window.projects.length > 0 && typeof selectBaseStyle === 'function' && typeof updateUIColors === 'function', { timeout: 15000 });
+    await page.setViewport({ width: 1280, height: 800, deviceScaleFactor: 1, isMobile: false, hasTouch: false });
+    const kept = await page.evaluate(() => ({
+        body: document.body.dataset.style,
+        stored: JSON.parse(localStorage.getItem('moodinfinite-settings')).baseStyle,
+        backdrop: getComputedStyle(document.getElementById('tabs-bar')).backdropFilter,
+        bg: getComputedStyle(document.documentElement).getPropertyValue('--bg-ui').trim().toLowerCase(),
+    }));
+    assert.equal(kept.body, 'flat');
+    assert.equal(kept.stored, 'flat');
+    assert.equal(kept.backdrop, 'none');
+    assert.equal(kept.bg, '#24201b');
+
+    const surfaces = await page.evaluate(() => {
+        const read = (el) => {
+            if (!el) return null;
+            const style = getComputedStyle(el);
+            return { radius: style.borderRadius, blur: style.backdropFilter };
+        };
+        createNewProject('storyflow');
+        const flowId = activeProjectId;
+        const flow = projects.find((p) => p.id === flowId);
+        const canvas = document.createElement('canvas');
+        canvas.width = 32;
+        canvas.height = 18;
+        const g = canvas.getContext('2d');
+        g.fillStyle = '#c97b3a';
+        g.fillRect(0, 0, 32, 18);
+        flow.data.frames = [{
+            title: 'Apertura',
+            description: 'Plano',
+            image: canvas.toDataURL('image/jpeg', 0.5),
+            meta: { duration: '5s', camera: 'Wide Shot', audio: '', artist: 'Lucía', status: 'wip' },
+        }];
+        flow.data.workers = ['Lucía'];
+        renderStoryflowView(flow);
+        createNewProject('moodlist');
+        const listId = activeProjectId;
+        const list = projects.find((p) => p.id === listId);
+        list.data.cards = [{ id: 'c1', title: 'Rodaje', color: '', pinned: false, image: null, items: [{ id: 'i1', text: 'Llamar', checked: false }] }];
+        renderMoodlistView(list);
+        createNewProject('colorseeker');
+        const toneId = activeProjectId;
+        createNewProject('moodgantt');
+        const ganttId = activeProjectId;
+        const gantt = projects.find((p) => p.id === ganttId);
+        const today = ganttFormatDate(ganttToday());
+        gantt.data.groups = [{ id: 'g1', name: 'Pre', color: '#d4a359', collapsed: false, tasks: [{ id: 't1', name: 'Guion', startDate: today, endDate: today, progress: 20, status: 'wip', assignee: '', notes: '' }] }];
+        renderGanttView(gantt);
+        switchTab(flowId);
+        const imageSlot = read(document.querySelector('.story-image-slot'));
+        const thumb = read(document.querySelector('.story-image-slot img'));
+        const select = read(document.querySelector('.story-card select') || document.getElementById('asset-library-filter'));
+        switchTab(ganttId);
+        const ganttPanel = read(document.getElementById('gantt-detail-panel'));
+        switchTab(listId);
+        const listCard = read(document.querySelector('.ml-card'));
+        switchTab(toneId);
+        const tone = read(document.getElementById('colorseeker-sidebar'));
+        const menu = read(document.getElementById('context-menu'));
+        return { imageSlot, thumb, select, ganttPanel, listCard, tone, menu };
+    });
+    const radiusIsZero = (value) => value === '0px' || value.split(' ').every((part) => part === '0px');
+    for (const [name, value] of Object.entries(surfaces)) {
+        assert.ok(value, `flat surface missing: ${name}`);
+        assert.ok(radiusIsZero(value.radius), `${name} radius ${value.radius}`);
+        assert.equal(value.blur, 'none', `${name} blur ${value.blur}`);
+    }
+
+    await page.evaluate(() => createNewProject('moodinfinite'));
+    const boardA = await page.evaluate(() => activeProjectId);
+    await chooseBaseStyle(page, 'glass');
+    await choosePreset(page, 1);
+    const glassPreset = await page.evaluate(() => {
+        const project = projects.find((entry) => entry.id === activeProjectId);
+        const style = getComputedStyle(document.documentElement);
+        return {
+            id: project.id,
+            style: document.body.dataset.style,
+            bg: project.data.canvasBackgroundColor,
+            accent: project.data.accentColor,
+            grid: project.data.gridColor,
+            page: style.getPropertyValue('--bg-page').trim().toLowerCase(),
+            accentVar: style.getPropertyValue('--switch-bg-checked').trim().toLowerCase(),
+        };
+    });
+    assert.equal(glassPreset.style, 'glass');
+    assert.equal(glassPreset.bg, '#f8f9fa');
+    assert.equal(glassPreset.accent, '#007bff');
+    assert.equal(glassPreset.grid, '#ced4da');
+    assert.equal(glassPreset.page, '#f8f9fa');
+    assert.equal(glassPreset.accentVar, '#007bff');
+
+    await chooseBaseStyle(page, 'flat');
+    const styleDidNotRecolor = await page.evaluate((id) => {
+        const project = projects.find((entry) => entry.id === id);
+        const style = getComputedStyle(document.documentElement);
+        return {
+            style: document.body.dataset.style,
+            bg: project.data.canvasBackgroundColor,
+            accent: project.data.accentColor,
+            page: style.getPropertyValue('--bg-page').trim().toLowerCase(),
+            accentVar: style.getPropertyValue('--switch-bg-checked').trim().toLowerCase(),
+        };
+    }, boardA);
+    assert.equal(styleDidNotRecolor.style, 'flat');
+    assert.equal(styleDidNotRecolor.bg, '#f8f9fa');
+    assert.equal(styleDidNotRecolor.accent, '#007bff');
+    assert.equal(styleDidNotRecolor.page, '#f8f9fa');
+    assert.equal(styleDidNotRecolor.accentVar, '#007bff');
+
+    await page.evaluate(() => createNewProject('moodinfinite'));
+    const boardB = await page.evaluate(() => activeProjectId);
+    await choosePreset(page, 4);
+    const flatPreset = await page.evaluate(() => {
+        const project = projects.find((entry) => entry.id === activeProjectId);
+        const style = getComputedStyle(document.documentElement);
+        return {
+            style: document.body.dataset.style,
+            bg: project.data.canvasBackgroundColor,
+            accent: project.data.accentColor,
+            grid: project.data.gridColor,
+            page: style.getPropertyValue('--bg-page').trim().toLowerCase(),
+            accentVar: style.getPropertyValue('--switch-bg-checked').trim().toLowerCase(),
+        };
+    });
+    assert.equal(flatPreset.style, 'flat');
+    assert.equal(flatPreset.bg, '#2e3440');
+    assert.equal(flatPreset.accent, '#88c0d0');
+    assert.equal(flatPreset.grid, '#4c566a');
+    assert.equal(flatPreset.page, '#2e3440');
+    assert.equal(flatPreset.accentVar, '#88c0d0');
+
+    await page.evaluate((id) => switchTab(id), boardA);
+    const perProject = await page.evaluate(() => {
+        const project = projects.find((entry) => entry.id === activeProjectId);
+        return {
+            style: document.body.dataset.style,
+            bg: project.data.canvasBackgroundColor,
+            accent: project.data.accentColor,
+        };
+    });
+    assert.equal(perProject.style, 'flat');
+    assert.equal(perProject.bg, '#f8f9fa');
+    assert.equal(perProject.accent, '#007bff');
+
+    await chooseBaseStyle(page, 'glass');
+    const restored = await page.evaluate(() => {
+        const project = projects.find((entry) => entry.id === activeProjectId);
+        return {
+            style: document.body.dataset.style,
+            stored: JSON.parse(localStorage.getItem('moodinfinite-settings')).baseStyle,
+            backdrop: getComputedStyle(document.getElementById('tabs-bar')).backdropFilter,
+            bg: project.data.canvasBackgroundColor,
+            page: getComputedStyle(document.documentElement).getPropertyValue('--bg-page').trim().toLowerCase(),
+        };
+    });
+    assert.equal(restored.style, 'glass');
+    assert.equal(restored.stored, 'glass');
+    assert.notEqual(restored.backdrop, 'none');
+    assert.equal(restored.bg, '#f8f9fa');
+    assert.equal(restored.page, '#f8f9fa');
+    await page.evaluate((id) => switchTab(id), boardB);
+    const otherBoard = await page.evaluate(() => {
+        const project = projects.find((entry) => entry.id === activeProjectId);
+        return project.data.accentColor;
+    });
+    assert.equal(otherBoard, '#88c0d0');
+
+    await closePalette(page);
+    await openPalette(page);
+    await page.waitForFunction(() => document.activeElement && document.activeElement.getAttribute('role') === 'radio');
+    await page.keyboard.press('ArrowRight');
+    const moved = await page.evaluate(() => ({
+        active: document.activeElement && document.activeElement.dataset.styleOption,
+        flat: document.querySelector('[data-style-option="flat"]').getAttribute('aria-checked'),
+        glass: document.querySelector('[data-style-option="glass"]').getAttribute('aria-checked'),
+        body: document.body.dataset.style,
+    }));
+    assert.equal(moved.active, 'flat');
+    assert.equal(moved.flat, 'true');
+    assert.equal(moved.glass, 'false');
+    assert.equal(moved.body, 'flat');
+    await page.keyboard.press('ArrowLeft');
+    const movedBack = await page.evaluate(() => ({
+        active: document.activeElement && document.activeElement.dataset.styleOption,
+        flat: document.querySelector('[data-style-option="flat"]').getAttribute('aria-checked'),
+        glass: document.querySelector('[data-style-option="glass"]').getAttribute('aria-checked'),
+        body: document.body.dataset.style,
+    }));
+    assert.equal(movedBack.active, 'glass');
+    assert.equal(movedBack.glass, 'true');
+    assert.equal(movedBack.flat, 'false');
+    assert.equal(movedBack.body, 'glass');
+    await page.keyboard.press('Escape');
+    await page.waitForFunction(() => !document.getElementById('palette-panel').classList.contains('open'));
+    const refocused = await page.evaluate(() => document.activeElement && document.activeElement.id);
+    assert.equal(refocused, 'palette-btn');
+
+    await openPalette(page);
+    const hovered = await page.evaluate(() => {
+        const option = document.querySelectorAll('#palette-panel .palette-option')[0];
+        option.dispatchEvent(new MouseEvent('mouseenter', { bubbles: true }));
+        const during = getComputedStyle(document.documentElement).getPropertyValue('--bg-page').trim().toLowerCase();
+        option.dispatchEvent(new MouseEvent('mouseleave', { bubbles: true }));
+        const after = getComputedStyle(document.documentElement).getPropertyValue('--bg-page').trim().toLowerCase();
+        const sample = document.querySelectorAll('#palette-panel .palette-option')[2];
+        return {
+            during,
+            after,
+            role: sample.getAttribute('role'),
+            tab: sample.tabIndex,
+            label: sample.getAttribute('aria-label'),
+            style: document.body.dataset.style,
+        };
+    });
+    assert.equal(hovered.during, '#0d0d0d');
+    assert.equal(hovered.after, '#2e3440');
+    assert.equal(hovered.style, 'glass');
+    assert.equal(hovered.role, 'button');
+    assert.equal(hovered.tab, 0);
+    assert.match(hovered.label, /^Palette 3: background /);
+
+    await page.focus('#palette-panel .palette-option');
+    const optionIndex = 1;
+    await page.evaluate((index) => {
+        document.querySelectorAll('#palette-panel .palette-option')[index].focus();
+    }, optionIndex);
+    await page.keyboard.press('Enter');
+    await page.waitForFunction(() => !document.getElementById('palette-panel').classList.contains('open'));
+    const typed = await page.evaluate(() => {
+        const project = projects.find((entry) => entry.id === activeProjectId);
+        return {
+            bg: project.data.canvasBackgroundColor,
+            style: document.body.dataset.style,
+        };
+    });
+    assert.equal(typed.bg, '#f8f9fa');
+    assert.equal(typed.style, 'glass');
+
+    const blurredOff = await page.evaluate(() => {
+        const input = document.getElementById('ui-blur-toggle');
+        input.checked = false;
+        input.dispatchEvent(new Event('change', { bubbles: true }));
+        return getComputedStyle(document.getElementById('tabs-bar')).backdropFilter;
+    });
+    assert.equal(blurredOff, 'none');
+    const blurredOn = await page.evaluate(() => {
+        const input = document.getElementById('ui-blur-toggle');
+        input.checked = true;
+        input.dispatchEvent(new Event('change', { bubbles: true }));
+        return getComputedStyle(document.getElementById('tabs-bar')).backdropFilter;
+    });
+    assert.notEqual(blurredOn, 'none');
+    await chooseBaseStyle(page, 'flat');
+    const flatStillSharp = await page.evaluate(() => getComputedStyle(document.getElementById('tabs-bar')).backdropFilter);
+    assert.equal(flatStillSharp, 'none');
+    await chooseBaseStyle(page, 'glass');
+
+    for (const style of ['glass', 'flat']) {
+        await page.evaluate((next) => selectBaseStyle(next), style);
+        await page.setViewport({ width: 390, height: 844, deviceScaleFactor: 1, isMobile: true, hasTouch: true });
+        await page.waitForFunction(() => window.innerWidth === 390);
+        await page.evaluate(() => document.getElementById('palette-btn').click());
+        await page.waitForSelector('#palette-panel.open .base-style-option');
+        const phone = await page.evaluate(() => {
+            const option = document.querySelector('.base-style-option');
+            const rect = option.getBoundingClientRect();
+            return {
+                scrollW: document.documentElement.scrollWidth,
+                innerW: window.innerWidth,
+                h: rect.height,
+                w: rect.width,
+            };
+        });
+        assert.ok(phone.scrollW <= phone.innerW + 1, `${style} overflows at 390px (${phone.scrollW})`);
+        assert.ok(phone.h >= 44, `${style} style option is ${phone.h}px tall`);
+        assert.ok(phone.w >= 44, `${style} style option is ${phone.w}px wide`);
+        await page.keyboard.press('Escape');
+        await page.waitForFunction(() => !document.getElementById('palette-panel').classList.contains('open'));
+        const closedWidth = await page.evaluate(() => ({
+            scrollW: document.documentElement.scrollWidth,
+            innerW: window.innerWidth,
+        }));
+        assert.ok(closedWidth.scrollW <= closedWidth.innerW + 1, `${style} overflows at 390px with the popup closed (${closedWidth.scrollW})`);
+    }
+
+    await page.setViewport({ width: 1280, height: 800, deviceScaleFactor: 1, isMobile: false, hasTouch: false });
+    await page.evaluate(() => selectBaseStyle('glass'));
+    const glassChrome = await page.evaluate(() => ({
+        tabs: getComputedStyle(document.getElementById('tabs-bar')).backdropFilter,
+        left: getComputedStyle(document.getElementById('left-bar')).backdropFilter,
+        menu: getComputedStyle(document.getElementById('context-menu')).backdropFilter,
+        modal: getComputedStyle(document.querySelector('.glass-modal')).backdropFilter,
+    }));
+    assert.notEqual(glassChrome.tabs, 'none', glassChrome.tabs);
+    assert.notEqual(glassChrome.left, 'none', glassChrome.left);
+    assert.notEqual(glassChrome.menu, 'none', glassChrome.menu);
+    assert.notEqual(glassChrome.modal, 'none', glassChrome.modal);
+    const added = pageErrors.slice(errorsBefore).filter(isFirstParty);
+    assert.deepEqual(added, [], `base style raised errors:\n${added.join('\n')}`);
+
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    const earlyGlass = await page.evaluate(() => document.body.dataset.style);
+    assert.equal(earlyGlass, 'glass', 'stored glass style was not on the body before the app finished booting');
+    await page.waitForFunction(() => window.projects && window.projects.length > 0 && typeof selectBaseStyle === 'function', { timeout: 15000 });
+    const keptGlass = await page.evaluate(() => ({
+        body: document.body.dataset.style,
+        html: document.documentElement.dataset.style,
+        stored: JSON.parse(localStorage.getItem('moodinfinite-settings')).baseStyle,
+        backdrop: getComputedStyle(document.getElementById('tabs-bar')).backdropFilter,
+    }));
+    assert.equal(keptGlass.body, 'glass');
+    assert.equal(keptGlass.html, 'glass');
+    assert.equal(keptGlass.stored, 'glass');
+    assert.notEqual(keptGlass.backdrop, 'none', keptGlass.backdrop);
+    console.log('Base style passed.');
+}
+
+function cssContrastRatio(foreground, background) {
+    const parse = (value) => {
+        const match = String(value).match(/rgba?\(([^)]+)\)/);
+        if (!match) return null;
+        const parts = match[1].split(',').map((part) => parseFloat(part));
+        return { r: parts[0], g: parts[1], b: parts[2], a: parts.length > 3 ? parts[3] : 1 };
+    };
+    const linear = (channel) => {
+        const c = channel / 255;
+        return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+    };
+    const luminance = (rgb) => linear(rgb.r) * 0.2126 + linear(rgb.g) * 0.7152 + linear(rgb.b) * 0.0722;
+    const fg = parse(foreground);
+    const bg = parse(background);
+    if (!fg || !bg) return 0;
+    const paint = {
+        r: fg.r * fg.a + bg.r * (1 - fg.a),
+        g: fg.g * fg.a + bg.g * (1 - fg.a),
+        b: fg.b * fg.a + bg.b * (1 - fg.a),
+    };
+    const lighter = Math.max(luminance(paint), luminance(bg));
+    const darker = Math.min(luminance(paint), luminance(bg));
+    return (lighter + 0.05) / (darker + 0.05);
+}
+
+async function assertPaletteReview(page) {
+    console.log('Testing palette review fixes...');
+    await page.setViewport({ width: 1280, height: 800, deviceScaleFactor: 1, isMobile: false, hasTouch: false });
+    await page.evaluate(() => {
+        if (!projects.some((project) => project.type === 'moodlist')) createNewProject('moodlist');
+        if (!projects.some((project) => project.type === 'moodgantt')) createNewProject('moodgantt');
+        const list = projects.find((project) => project.type === 'moodlist');
+        list.data.cards = [
+            { id: 'pin-a', title: 'Held', color: '', pinned: true, image: null, items: [] },
+            { id: 'pin-b', title: 'Loose', color: '', pinned: false, image: null, items: [] },
+        ];
+        switchTab(list.id);
+    });
+
+    const idle = await page.$eval('#palette-btn', (el) => ({
+        haspopup: el.getAttribute('aria-haspopup'),
+        expanded: el.getAttribute('aria-expanded'),
+    }));
+    assert.equal(idle.haspopup, 'true');
+    assert.equal(idle.expanded, 'false');
+
+    await openPalette(page);
+    assert.equal(await page.$eval('#palette-btn', (el) => el.getAttribute('aria-expanded')), 'true');
+    await page.keyboard.press('Escape');
+    await page.waitForFunction(() => !document.getElementById('palette-panel').classList.contains('open'));
+    const afterEscape = await page.evaluate(() => ({
+        id: document.activeElement && document.activeElement.id,
+        expanded: document.getElementById('palette-btn').getAttribute('aria-expanded'),
+    }));
+    assert.equal(afterEscape.id, 'palette-btn');
+    assert.equal(afterEscape.expanded, 'false');
+
+    await openPalette(page);
+    await page.evaluate(() => {
+        document.body.dispatchEvent(new MouseEvent('click', { bubbles: true, clientX: 4, clientY: 4 }));
+    });
+    await page.waitForFunction(() => !document.getElementById('palette-panel').classList.contains('open'));
+    assert.equal(await page.$eval('#palette-btn', (el) => el.getAttribute('aria-expanded')), 'false');
+
+    await openPalette(page);
+    await page.evaluate(() => document.querySelector('#palette-panel [data-style-option="glass"]').click());
+    const styleStaysOpen = await page.evaluate(() => ({
+        open: document.getElementById('palette-panel').classList.contains('open'),
+        expanded: document.getElementById('palette-btn').getAttribute('aria-expanded'),
+        style: document.body.dataset.style,
+    }));
+    assert.equal(styleStaysOpen.open, true);
+    assert.equal(styleStaysOpen.expanded, 'true');
+    assert.equal(styleStaysOpen.style, 'glass');
+    await page.evaluate(() => document.querySelector('#palette-panel [data-style-option="flat"]').click());
+    assert.equal(await page.$eval('#palette-btn', (el) => el.getAttribute('aria-expanded')), 'true');
+    await page.keyboard.press('Escape');
+    await page.waitForFunction(() => !document.getElementById('palette-panel').classList.contains('open'));
+
+    await openPalette(page);
+    const presetButtons = await page.$$('#palette-panel .palette-option');
+    await presetButtons[1].click();
+    await page.waitForFunction(() => !document.getElementById('palette-panel').classList.contains('open'));
+    const afterClick = await page.evaluate(() => ({
+        id: document.activeElement && document.activeElement.id,
+        expanded: document.getElementById('palette-btn').getAttribute('aria-expanded'),
+        bg: projects.find((project) => project.id === activeProjectId).data.canvasBackgroundColor,
+    }));
+    assert.equal(afterClick.id, 'palette-btn');
+    assert.equal(afterClick.expanded, 'false');
+    assert.equal(afterClick.bg, '#f8f9fa');
+
+    await openPalette(page);
+    await page.evaluate(() => document.querySelectorAll('#palette-panel .palette-option')[2].focus());
+    await page.keyboard.press('Enter');
+    await page.waitForFunction(() => !document.getElementById('palette-panel').classList.contains('open'));
+    const afterEnter = await page.evaluate(() => ({
+        id: document.activeElement && document.activeElement.id,
+        expanded: document.getElementById('palette-btn').getAttribute('aria-expanded'),
+        bg: projects.find((project) => project.id === activeProjectId).data.canvasBackgroundColor,
+    }));
+    assert.equal(afterEnter.id, 'palette-btn');
+    assert.equal(afterEnter.expanded, 'false');
+    assert.equal(afterEnter.bg, '#fdf6e3');
+
+    const samples = await page.evaluate(() => {
+        const parse = (value) => {
+            const match = String(value).match(/rgba?\(([^)]+)\)/);
+            if (!match) return null;
+            const parts = match[1].split(',').map((part) => parseFloat(part));
+            return { r: parts[0], g: parts[1], b: parts[2], a: parts.length > 3 ? parts[3] : 1 };
+        };
+        const realBackground = (el) => {
+            const layers = [];
+            let node = el;
+            while (node) {
+                const bg = parse(getComputedStyle(node).backgroundColor);
+                if (bg && bg.a > 0.01) {
+                    layers.push(bg);
+                    if (bg.a >= 0.99) break;
+                }
+                node = node.parentElement;
+            }
+            if (!layers.length) return 'rgb(255, 255, 255)';
+            let out = layers[layers.length - 1];
+            for (let i = layers.length - 2; i >= 0; i--) {
+                const src = layers[i];
+                out = {
+                    r: src.r * src.a + out.r * (1 - src.a),
+                    g: src.g * src.a + out.g * (1 - src.a),
+                    b: src.b * src.a + out.b * (1 - src.a),
+                    a: 1,
+                };
+            }
+            return `rgb(${Math.round(out.r)}, ${Math.round(out.g)}, ${Math.round(out.b)})`;
+        };
+        const read = (el) => {
+            if (!el) return null;
+            const style = getComputedStyle(el);
+            return { color: style.color, background: realBackground(el), text: (el.textContent || '').replace(/\s+/g, ' ').trim() };
+        };
+        const square = (el) => {
+            const style = getComputedStyle(el);
+            return { radius: style.borderRadius, shadow: style.boxShadow };
+        };
+        const list = projects.find((project) => project.type === 'moodlist');
+        const gantt = projects.find((project) => project.type === 'moodgantt');
+        const board = projects.find((project) => project.type === 'moodinfinite') || list;
+        const rows = [];
+        for (const style of ['flat', 'glass']) {
+            selectBaseStyle(style);
+            for (const index of [1, 2, 9, 3]) {
+                const palette = colorPalettes[index];
+                [list, gantt, board].forEach((project) => {
+                    if (!project) return;
+                    project.data.canvasBackgroundColor = palette.bg;
+                    project.data.accentColor = palette.accent;
+                    project.data.gridColor = palette.grid;
+                });
+                switchTab(list.id);
+                rows.push({
+                    style,
+                    palette: index + 1,
+                    close: read(document.querySelector('.tab-item.active .tab-close-btn')),
+                    zoom: read(document.querySelector('.gantt-zoom-btn.active')),
+                    save: read(document.querySelector('.ml-save-btn')),
+                    pin: read(document.querySelector('.ml-view-toggle')),
+                    label: read(document.querySelector('.ml-section-label')),
+                });
+            }
+        }
+        const freezeMotion = document.createElement('style');
+        freezeMotion.textContent = '*, *::before, *::after { transition: none !important; animation: none !important; }';
+        document.head.appendChild(freezeMotion);
+        const applyLook = (style, palette) => {
+            selectBaseStyle(style);
+            canvasBackgroundColor = palette.bg;
+            accentColor = palette.accent;
+            gridColor = palette.grid;
+            updateUIColors();
+        };
+        if (!projects.some((project) => project.type === 'moodprompt')) createNewProject('moodprompt');
+        if (!projects.some((project) => project.type === 'storyflow')) createNewProject('storyflow');
+        const ganttBoard = projects.find((project) => project.type === 'moodgantt');
+        const promptBoard = projects.find((project) => project.type === 'moodprompt');
+        const flowBoard = projects.find((project) => project.type === 'storyflow');
+        if (ganttBoard) {
+            ganttBoard.data.groups = [];
+            ganttBoard.data.zoomLevel = 'week';
+            renderGanttView(ganttBoard);
+        }
+        if (promptBoard) {
+            promptBoard.data.prompts = [];
+            renderMoodpromptView(promptBoard);
+        }
+        if (flowBoard) {
+            flowBoard.data.frames = [];
+            renderStoryflowView(flowBoard);
+        }
+        list.data.cards = [];
+        renderMoodlistView(list);
+        const surfaces = [];
+        for (const style of ['flat', 'glass']) {
+            for (const index of [1, 2, 9, 3]) {
+                applyLook(style, colorPalettes[index]);
+                const bottoms = [...document.querySelectorAll('.gcol-bottom')];
+                const today = bottoms.find((el) => el.closest('.is-today'));
+                const other = bottoms.find((el) => !el.closest('.is-today'));
+                const mp = document.getElementById('moodprompt-empty-guide');
+                const sf = document.getElementById('storyflow-empty-guide');
+                surfaces.push({
+                    style,
+                    palette: index + 1,
+                    ganttTitle: read(document.querySelector('#gantt-empty-guide .board-empty-title')),
+                    ganttDetail: read(document.querySelector('#gantt-empty-guide p:not(.board-empty-title)')),
+                    week: read(today),
+                    weekOther: read(other),
+                    weekTop: read(today && today.parentElement.querySelector('.gcol-top')),
+                    weekOtherTop: read(other && other.parentElement.querySelector('.gcol-top')),
+                    promptTitle: read(mp && mp.querySelector('.board-empty-title')),
+                    promptDetail: read(mp && mp.querySelector('p:not(.board-empty-title)')),
+                    flowTitle: read(sf && sf.querySelector('.board-empty-title')),
+                    flowDetail: read(sf && sf.querySelector('p:not(.board-empty-title)')),
+                    listEmpty: read(document.querySelector('.ml-empty p')),
+                    listOpacity: getComputedStyle(document.querySelector('.ml-empty')).opacity,
+                });
+            }
+        }
+        if (promptBoard) {
+            promptBoard.data.prompts = [{
+                id: 'contrast-image-prompt',
+                title: 'Contrast',
+                platform: 'midjourney',
+                mediaType: 'image',
+                image1: null,
+                image2: null,
+                text: '',
+                tags: [],
+            }];
+            renderMoodpromptView(promptBoard);
+        }
+        const buttons = [];
+        for (const style of ['flat', 'glass']) {
+            for (let index = 0; index < colorPalettes.length; index++) {
+                applyLook(style, colorPalettes[index]);
+                const image = [...document.querySelectorAll('.media-type-btn')].find((el) => el.classList.contains('active') && el.textContent.trim() === 'Image');
+                const setDefault = document.querySelector('.set-default-btn');
+                buttons.push({
+                    style,
+                    palette: index + 1,
+                    image: read(image),
+                    imageText: image ? image.textContent.trim() : '',
+                    setDefault: read(setDefault),
+                    setDefaultText: setDefault ? setDefault.textContent.trim() : '',
+                });
+            }
+        }
+        selectBaseStyle('flat');
+        const guide = document.getElementById('canvas-empty-guide');
+        guide.hidden = false;
+        return {
+            rows,
+            surfaces,
+            buttons,
+            squares: {
+                guide: square(guide),
+                pills: [...document.querySelectorAll('#canvas-template-picker button')].map(square),
+                fit: square(document.getElementById('canvas-fit-view-btn')),
+                zoom: square(document.getElementById('canvas-zoom-readout')),
+            },
+        };
+    });
+
+    assert.equal(samples.squares.pills.length, 3);
+    for (const [name, box] of Object.entries(samples.squares)) {
+        const boxes = Array.isArray(box) ? box : [box];
+        for (const entry of boxes) {
+            assert.ok(entry.radius === '0px' || entry.radius.split(' ').every((part) => part === '0px'), `${name} radius ${entry.radius}`);
+            assert.equal(entry.shadow, 'none', `${name} shadow ${entry.shadow}`);
+        }
+    }
+    for (const row of samples.rows) {
+        for (const key of ['close', 'zoom', 'save', 'pin', 'label']) {
+            const pair = row[key];
+            assert.ok(pair, `${row.style} palette ${row.palette} missing ${key}`);
+            const ratio = cssContrastRatio(pair.color, pair.background);
+            assert.ok(ratio >= 4.5, `${row.style} palette ${row.palette} ${key} is ${ratio.toFixed(2)}:1 (${pair.color} on ${pair.background})`);
+        }
+    }
+    const surfaceText = {
+        ganttTitle: /No groups yet/,
+        ganttDetail: /Add a group to start/,
+        week: /^W\d+$/,
+        weekOther: /^W\d+$/,
+        promptTitle: /No prompts yet/,
+        promptDetail: /Add a prompt card/,
+        flowTitle: /No frames yet/,
+        flowDetail: /Add a frame to start/,
+        listEmpty: /No cards yet/,
+    };
+    assert.equal(samples.surfaces.length, 8);
+    for (const row of samples.surfaces) {
+        assert.equal(row.listOpacity, '1', `${row.style} palette ${row.palette} moodlist empty is faded`);
+        for (const key of ['ganttTitle', 'ganttDetail', 'week', 'weekOther', 'weekTop', 'weekOtherTop', 'promptTitle', 'promptDetail', 'flowTitle', 'flowDetail', 'listEmpty']) {
+            const pair = row[key];
+            assert.ok(pair, `${row.style} palette ${row.palette} missing ${key}`);
+            if (surfaceText[key]) assert.match(pair.text, surfaceText[key], `${row.style} palette ${row.palette} ${key} text ${pair.text}`);
+            const ratio = cssContrastRatio(pair.color, pair.background);
+            assert.ok(ratio >= 4.5, `${row.style} palette ${row.palette} ${key} is ${ratio.toFixed(2)}:1 (${pair.color} on ${pair.background})`);
+        }
+    }
+    assert.equal(samples.buttons.length, 20);
+    for (const row of samples.buttons) {
+        assert.equal(row.imageText, 'Image');
+        assert.match(row.setDefaultText, /Set current as default/);
+        for (const key of ['image', 'setDefault']) {
+            const pair = row[key];
+            assert.ok(pair, `${row.style} palette ${row.palette} missing ${key}`);
+            const ratio = cssContrastRatio(pair.color, pair.background);
+            assert.ok(ratio >= 4.5, `${row.style} palette ${row.palette} ${key} is ${ratio.toFixed(2)}:1 (${pair.color} on ${pair.background})`);
+        }
+    }
+    console.log('Palette review fixes passed.');
 }
 
 async function assertMoodflowExports(page) {
