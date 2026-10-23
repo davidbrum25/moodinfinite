@@ -1,4 +1,4 @@
-# Moodinfinite v1.2.0
+# Moodinfinite v1.2.1
 
 ![Moodinfinite Logo](https://github.com/davidbrum25/moodinfinite/blob/main/_branding/_png/moodinfinite__Logotipo_alpha.png?raw=true)
 
@@ -8,7 +8,7 @@
 
 ## Demo
 
-Try it live: <https://davidbrum25.github.io/moodinfinite/index.html>
+Try it live: <https://moodinfinite.pages.dev/> (or <https://davidbrum25.github.io/moodinfinite/index.html>)
 
 ---
 
@@ -174,6 +174,17 @@ If you find this tool useful and want to help me build more, consider supporting
 ---
 
 ## Update Log
+
+### ✨ v1.2.1 (Multi-Resolution Layout, Flat Base Style & QoL Fixes)
+
+* **🎨 Flat & Glassmorphism Base Style:** Switch between **Flat** (default, crisp square surfaces) and **Glassmorphism** directly inside the palette selector, with improved contrast across light and dark presets.
+* **🖥️ Full Top Bar Access on All Resolutions:** Fixed the tab container flex sizing and added a compact layout for narrow PC windows (`769px` to `1100px`), keeping all right-side export, print, palette, and cloud buttons reachable even with many open tabs. Enabled the **Open Boards** quick switcher up to `1100px`, clickable scroll indicators, and horizontal mouse-wheel scrolling.
+* **🧰 Unclipped Tool Flyouts & Touch Toggle:** Repositioned left-toolbar group flyouts (`Text`, `Shape`, `Measurement & Counter`, `Arrange`, `View`, `Video`) with viewport-clamped fixed positioning and click/tap toggle support so submenus never clip on `720p`/`768p` screens or mobile devices.
+* **✅ Text List Tool Fix:** Fixed the **Add Text List (`L`)** toolbar button ID binding so clicking the button activates the tool and shows its active state.
+* **🎬 Moodflow Full-Field Exports & Navigation:** Sheet, PDF, and print exports now include every frame field. Fixed the **Go to Beginning** button to scroll the frame track, raised fullscreen preview above the top bar, and stacked Script View vertically on mobile.
+* **📱 Responsive Moodtone, Moodgantt & Moodprompt:** Compacted Moodtone sidebar actions into a 2-column grid on short and mobile screens, wrapped Moodgantt bottom controls and narrowed its task sidebar on phones, and clamped floating selection, palette, and icon panels inside the viewport.
+
+---
 
 ### ✨ v1.2.0 — Faster boards and a tighter toolset
 
