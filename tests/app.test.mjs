@@ -2284,6 +2284,7 @@ try {
     await assertMoodflowExports(page);
     await assertBaseStyle(page);
     await assertPaletteReview(page);
+    await assertMultiResolutionAndQoLFixes(page);
 
     const lateErrors = pageErrors.filter(isFirstParty);
     assert.deepEqual(lateErrors, [], `first-party errors:\n${lateErrors.join('\n')}`);
@@ -6516,4 +6517,178 @@ async function assertMoodflowExports(page) {
     assert.ok(printPages >= 2, `print PDF has ${printPages} pages; frame 3 needs its own page`);
     await page.emulateMediaType('screen');
     console.log('Moodflow exports passed.');
+}
+
+async function assertMultiResolutionAndQoLFixes(page) {
+    console.log('Testing multi-resolution & QoL fixes (Fixes 1-7)...');
+
+    // Ensure at least 8 open tabs
+    await page.evaluate(() => {
+        while (projects.length < 8) {
+            createNewProject('moodinfinite');
+        }
+        const board = projects.find((p) => p.type === 'moodinfinite');
+        if (board) switchTab(board.id);
+        renderTabs();
+    });
+
+    // 1. At 800x600, 960x700, 1024x768, 1280x720 (with 8+ open tabs), all #tabs-bar right-side buttons fit in viewport
+    const topBarViewports = [
+        { width: 800, height: 600 },
+        { width: 960, height: 700 },
+        { width: 1024, height: 768 },
+        { width: 1280, height: 720 },
+    ];
+    for (const vp of topBarViewports) {
+        await page.setViewport({ width: vp.width, height: vp.height, deviceScaleFactor: 1, isMobile: false });
+        await page.waitForFunction((w, h) => window.innerWidth === w && window.innerHeight === h, {}, vp.width, vp.height);
+        const rightButtons = await page.evaluate(() => {
+            if (typeof updateScrollIndicators === 'function') updateScrollIndicators();
+            if (typeof updateHScrollOverflowHints === 'function') updateHScrollOverflowHints();
+            const ids = ['save-png-btn', 'print-btn', 'copy-to-clipboard-btn', 'palette-btn', 'cloud-login-btn'];
+            if (window.innerWidth <= 1100) ids.push('mobile-tabs-btn');
+            return ids.map((id) => {
+                const el = document.getElementById(id);
+                if (!el) return { id, missing: true };
+                const rect = el.getBoundingClientRect();
+                return {
+                    id,
+                    left: rect.left,
+                    right: rect.right,
+                    width: rect.width,
+                    innerWidth: window.innerWidth,
+                };
+            });
+        });
+        for (const btn of rightButtons) {
+            assert.ok(!btn.missing, `${vp.width}x${vp.height}: missing #${btn.id}`);
+            assert.ok(btn.width > 0, `${vp.width}x${vp.height}: #${btn.id} has 0 width`);
+            assert.ok(btn.left >= 0, `${vp.width}x${vp.height}: #${btn.id} rect.left (${btn.left}) < 0`);
+            assert.ok(btn.right <= btn.innerWidth, `${vp.width}x${vp.height}: #${btn.id} rect.right (${btn.right}) > innerWidth (${btn.innerWidth})`);
+        }
+    }
+
+    // 2. Clicking #add-text-list-btn activates textList tool (#add-text-list-btn.active)
+    await page.setViewport({ width: 1280, height: 720, deviceScaleFactor: 1, isMobile: false });
+    await page.waitForFunction(() => window.innerWidth === 1280 && window.innerHeight === 720);
+    const textListCheck = await page.evaluate(() => {
+        const board = projects.find((p) => p.type === 'moodinfinite');
+        if (board) switchTab(board.id);
+        setCurrentTool(null);
+        const textGroupTrigger = document.querySelector('#left-bar .tool-button[title="Text Tools (T, N, K, L)"]');
+        if (textGroupTrigger) textGroupTrigger.click();
+        const btn = document.getElementById('add-text-list-btn');
+        if (btn) btn.click();
+        return {
+            exists: !!btn,
+            active: btn ? btn.classList.contains('active') : false,
+            tool: (0, eval)('currentTool'),
+        };
+    });
+    assert.equal(textListCheck.exists, true, '#add-text-list-btn should exist');
+    assert.equal(textListCheck.tool, 'textList', 'clicking #add-text-list-btn should set currentTool to textList');
+    assert.equal(textListCheck.active, true, 'clicking #add-text-list-btn should add .active to #add-text-list-btn');
+
+    // 3. Opening a .tool-group on 1280x720, 800x600, 390x844 displays .tool-group-flyout fully within viewport
+    const flyoutViewports = [
+        { width: 1280, height: 720, isMobile: false, hasTouch: false },
+        { width: 800, height: 600, isMobile: false, hasTouch: false },
+        { width: 390, height: 844, isMobile: true, hasTouch: true },
+    ];
+    for (const vp of flyoutViewports) {
+        await page.setViewport({ width: vp.width, height: vp.height, deviceScaleFactor: 1, isMobile: vp.isMobile, hasTouch: vp.hasTouch });
+        await page.waitForFunction((w, h) => window.innerWidth === w && window.innerHeight === h, {}, vp.width, vp.height);
+        const flyoutResults = await page.evaluate(() => {
+            const board = projects.find((p) => p.type === 'moodinfinite');
+            if (board) switchTab(board.id);
+            const groups = [...document.querySelectorAll('#left-bar .tool-group')];
+            return groups.map((group, idx) => {
+                const trigger = group.querySelector(':scope > .tool-button');
+                if (trigger && !trigger.disabled) {
+                    trigger.click();
+                } else {
+                    document.querySelectorAll('#left-bar .tool-group.flyout-open').forEach((g) => g.classList.remove('flyout-open'));
+                    group.classList.add('flyout-open');
+                    if (typeof positionToolGroupFlyout === 'function') positionToolGroupFlyout(group);
+                }
+                const flyout = group.querySelector(':scope > .tool-group-flyout');
+                const rect = flyout.getBoundingClientRect();
+                const display = getComputedStyle(flyout).display;
+                group.classList.remove('flyout-open');
+                return {
+                    idx,
+                    display,
+                    left: rect.left,
+                    top: rect.top,
+                    right: rect.right,
+                    bottom: rect.bottom,
+                    width: rect.width,
+                    height: rect.height,
+                    vw: window.innerWidth,
+                    vh: window.innerHeight,
+                };
+            });
+        });
+        assert.ok(flyoutResults.length > 0, `${vp.width}x${vp.height}: should find .tool-group elements`);
+        for (const res of flyoutResults) {
+            assert.notEqual(res.display, 'none', `${vp.width}x${vp.height} group ${res.idx}: flyout should be visible when opened`);
+            assert.ok(res.width > 0 && res.height > 0, `${vp.width}x${vp.height} group ${res.idx}: flyout should have non-zero size`);
+            assert.ok(res.left >= 0, `${vp.width}x${vp.height} group ${res.idx}: flyout left (${res.left}) < 0`);
+            assert.ok(res.top >= 0, `${vp.width}x${vp.height} group ${res.idx}: flyout top (${res.top}) < 0`);
+            assert.ok(res.right <= res.vw, `${vp.width}x${vp.height} group ${res.idx}: flyout right (${res.right}) > innerWidth (${res.vw})`);
+            assert.ok(res.bottom <= res.vh, `${vp.width}x${vp.height} group ${res.idx}: flyout bottom (${res.bottom}) > innerHeight (${res.vh})`);
+        }
+    }
+
+    // 4. In Storyflow, #storyflow-scroll-start-btn scrolls #storyflow-scroll-area to scrollLeft === 0, and #storyflow-fullscreen has z-index > 100
+    await page.setViewport({ width: 1280, height: 800, deviceScaleFactor: 1, isMobile: false, hasTouch: false });
+    await page.waitForFunction(() => window.innerWidth === 1280 && window.innerHeight === 800);
+    const storyflowCheck = await page.evaluate(() => {
+        createNewProject('storyflow');
+        const project = projects.find((p) => p.id === activeProjectId);
+        addStoryflowFrames(project, 10);
+        const scrollArea = document.getElementById('storyflow-scroll-area');
+        scrollArea.scrollLeft = 400;
+        const beforeScroll = scrollArea.scrollLeft;
+        const startBtn = document.getElementById('storyflow-scroll-start-btn');
+        startBtn.click();
+        const afterScroll = scrollArea.scrollLeft;
+        const fullscreenEl = document.getElementById('storyflow-fullscreen');
+        const zIndex = parseInt(getComputedStyle(fullscreenEl).zIndex, 10);
+        return {
+            beforeScroll,
+            afterScroll,
+            zIndex,
+        };
+    });
+    assert.ok(storyflowCheck.beforeScroll > 0, `expected storyflow scrollArea to scroll > 0 before clicking start button, got ${storyflowCheck.beforeScroll}`);
+    assert.equal(storyflowCheck.afterScroll, 0, `#storyflow-scroll-start-btn should scroll #storyflow-scroll-area to scrollLeft === 0, got ${storyflowCheck.afterScroll}`);
+    assert.ok(storyflowCheck.zIndex > 100, `#storyflow-fullscreen z-index (${storyflowCheck.zIndex}) should be > 100`);
+
+    // 5. #palette-panel renders .base-style-group with both Glassmorphism ([data-style-option="glass"]) and Flat ([data-style-option="flat"]) options
+    const paletteCheck = await page.evaluate(() => {
+        const group = document.querySelector('#palette-panel .base-style-group');
+        const glassOpt = document.querySelector('#palette-panel .base-style-group .base-style-option[data-style-option="glass"]');
+        const flatOpt = document.querySelector('#palette-panel .base-style-group .base-style-option[data-style-option="flat"]');
+        return {
+            hasGroup: !!group,
+            hasGlass: !!glassOpt,
+            glassText: glassOpt ? glassOpt.textContent.trim() : null,
+            hasFlat: !!flatOpt,
+            flatText: flatOpt ? flatOpt.textContent.trim() : null,
+        };
+    });
+    assert.ok(paletteCheck.hasGroup, '#palette-panel should render .base-style-group');
+    assert.ok(paletteCheck.hasGlass, '#palette-panel should have [data-style-option="glass"]');
+    assert.equal(paletteCheck.glassText, 'Glassmorphism', 'glass option should be labeled Glassmorphism');
+    assert.ok(paletteCheck.hasFlat, '#palette-panel should have [data-style-option="flat"]');
+    assert.equal(paletteCheck.flatText, 'Flat', 'flat option should be labeled Flat');
+
+    // Restore to moodinfinite board
+    await page.evaluate(() => {
+        const board = projects.find((p) => p.type === 'moodinfinite');
+        if (board) switchTab(board.id);
+        setCurrentTool(null);
+    });
+    console.log('Multi-resolution & QoL fixes passed.');
 }
