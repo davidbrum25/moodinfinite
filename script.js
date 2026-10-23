@@ -26,8 +26,8 @@ const cancelCloseBtn = document.getElementById('cancel-close-btn');
 const confirmCloseBtn = document.getElementById('confirm-close-btn');
 let projectPendingClose = null;
 
-const leftScrollIndicator = document.querySelector('.tabs-list-container .scroll-indicator.left');
-const rightScrollIndicator = document.querySelector('.tabs-list-container .scroll-indicator.right');
+const leftScrollIndicator = document.getElementById('scroll-left-indicator') || document.querySelector('.tabs-list-container .scroll-indicator.left');
+const rightScrollIndicator = document.getElementById('scroll-right-indicator') || document.querySelector('.tabs-list-container .scroll-indicator.right');
 
 // Performance: Lazy loading observer for board images
 const imageLazyObserver = new IntersectionObserver((entries, observer) => {
@@ -1611,7 +1611,7 @@ const addBoxBtn = document.getElementById('add-box-btn');
 const addCircleBtn = document.getElementById('add-circle-btn');
 const addMeasureBtn = document.getElementById('add-measure-btn');
 const addGridBtn = document.getElementById('add-grid-btn');
-const addTextListBtn = document.getElementById('add-text-list-btn');
+const addTextListBtn = document.getElementById('add-text-list-btn') || document.getElementById('add-textList-btn');
 const addCounterBtn = document.getElementById('add-counter-btn');
 const drawBtn = document.getElementById('draw-btn');
 const alignBtn = document.getElementById('align-btn');
@@ -1935,7 +1935,33 @@ function setupEventListeners() {
         renderTabs();
         scheduleAutoSave();
     });
-    tabsList.addEventListener('wheel', e => { if (tabsList.scrollWidth <= tabsList.clientWidth || e.deltaY === 0) return; e.preventDefault(); tabsList.scrollLeft += e.deltaY; });
+    const bindHorizontalWheel = (el) => {
+        if (!el) return;
+        el.addEventListener('wheel', (e) => {
+            if (e.defaultPrevented) return;
+            if (el.scrollWidth > el.clientWidth && Math.abs(e.deltaY) > Math.abs(e.deltaX)) {
+                e.preventDefault();
+                el.scrollLeft += e.deltaY;
+            }
+        }, { passive: false });
+    };
+    bindHorizontalWheel(tabsList);
+    bindHorizontalWheel(document.querySelector('#tabs-bar > .h-scroll-track'));
+    bindHorizontalWheel(document.querySelector('#left-bar > .h-scroll-track'));
+    if (leftScrollIndicator) {
+        leftScrollIndicator.addEventListener('click', () => {
+            if (!tabsList) return;
+            tabsList.scrollLeft -= 180;
+            updateScrollIndicators();
+        });
+    }
+    if (rightScrollIndicator) {
+        rightScrollIndicator.addEventListener('click', () => {
+            if (!tabsList) return;
+            tabsList.scrollLeft += 180;
+            updateScrollIndicators();
+        });
+    }
     tabsList.addEventListener('dblclick', e => { if (e.target === tabsList) createNewProject('moodinfinite'); });
     tabsList.addEventListener('scroll', updateScrollIndicators);
     const tabObserver = new ResizeObserver(updateScrollIndicators);
@@ -2395,12 +2421,12 @@ canvas.addEventListener('mouseleave', clearHoverStates);
             palettePanel.style.left = `0px`;
             markPaletteOpen();
             const panelWidth = palettePanel.offsetWidth;
+            const panelHeight = palettePanel.offsetHeight;
             const screenPadding = 8;
-            let newLeft = buttonRect.right - panelWidth;
-            const maxLeft = window.innerWidth - panelWidth - screenPadding;
-            newLeft = Math.min(newLeft, Math.max(screenPadding, maxLeft));
-            newLeft = Math.max(screenPadding, newLeft);
+            const newLeft = Math.max(screenPadding, Math.min(buttonRect.right - panelWidth, window.innerWidth - panelWidth - screenPadding));
+            const newTop = Math.max(screenPadding, Math.min(buttonRect.bottom + 8, window.innerHeight - panelHeight - screenPadding));
             palettePanel.style.left = `${newLeft}px`;
+            palettePanel.style.top = `${newTop}px`;
             syncBaseStyleRadios();
             const selectedStyle = palettePanel.querySelector('[role="radio"][aria-checked="true"]');
             if (selectedStyle) selectedStyle.focus();
@@ -2490,8 +2516,44 @@ canvas.addEventListener('mouseleave', clearHoverStates);
         onContextMenu(fakeEvent);
     });
 
+    document.querySelectorAll('#left-bar .tool-group').forEach((group) => {
+        group.addEventListener('mouseenter', () => positionToolGroupFlyout(group));
+        group.addEventListener('focusin', () => positionToolGroupFlyout(group));
+        if (typeof MutationObserver !== 'undefined') {
+            const mo = new MutationObserver(() => {
+                if (group.classList.contains('flyout-open')) positionToolGroupFlyout(group);
+            });
+            mo.observe(group, { attributes: true, attributeFilter: ['class'] });
+        }
+    });
+    const leftBarEl = document.getElementById('left-bar');
+    const leftBarTrackEl = document.querySelector('#left-bar > .h-scroll-track');
+    const repositionAllFlyouts = () => {
+        document.querySelectorAll('#left-bar .tool-group').forEach((g) => positionToolGroupFlyout(g));
+    };
+    if (leftBarEl) leftBarEl.addEventListener('scroll', repositionAllFlyouts, { passive: true });
+    if (leftBarTrackEl) leftBarTrackEl.addEventListener('scroll', repositionAllFlyouts, { passive: true });
+    window.addEventListener('resize', repositionAllFlyouts);
+    repositionAllFlyouts();
+
     document.body.addEventListener('click', (e) => {
+        const leftBar = document.getElementById('left-bar');
+        if (!leftBar || !leftBar.contains(e.target)) {
+            document.querySelectorAll('#left-bar .tool-group.flyout-open').forEach((g) => g.classList.remove('flyout-open'));
+            return;
+        }
+        const flyout = e.target.closest('#left-bar .tool-group-flyout');
         const btn = e.target.closest('#left-bar .tool-button');
+        const group = e.target.closest('#left-bar .tool-group');
+        if (group && !flyout) {
+            const willOpen = !group.classList.contains('flyout-open');
+            document.querySelectorAll('#left-bar .tool-group.flyout-open').forEach((g) => {
+                if (g !== group) g.classList.remove('flyout-open');
+            });
+            group.classList.toggle('flyout-open', willOpen);
+            if (willOpen) positionToolGroupFlyout(group);
+            return;
+        }
         if (!btn) return;
         if (btn.id === 'add-arrow-btn') setCurrentTool('arrow');
         else if (btn.id === 'add-text-btn') setCurrentTool('text');
@@ -2501,11 +2563,12 @@ canvas.addEventListener('mouseleave', clearHoverStates);
         else if (btn.id === 'add-circle-btn') setCurrentTool('circle');
         else if (btn.id === 'add-measure-btn') setCurrentTool('measure');
         else if (btn.id === 'add-grid-btn') setCurrentTool('grid');
-        else if (btn.id === 'add-textList-btn') setCurrentTool('textList');
+        else if (btn.id === 'add-text-list-btn' || btn.id === 'add-textList-btn') setCurrentTool('textList');
         else if (btn.id === 'add-counter-btn') setCurrentTool('counter');
         else if (btn.id === 'draw-btn') setCurrentTool('draw');
         else if (btn.id === 'eyedropper-btn') setCurrentTool('eyedropper');
         else if (btn.id === 'select-tool-btn') setCurrentTool(null);
+        document.querySelectorAll('#left-bar .tool-group.flyout-open').forEach((g) => g.classList.remove('flyout-open'));
     });
 
     if (alignBtn) alignBtn.addEventListener('click', autoAlignSelection);
@@ -2794,8 +2857,13 @@ canvas.addEventListener('mouseleave', clearHoverStates);
         }
         const rect = commentIconBtn.getBoundingClientRect();
         iconPickerPanel.style.display = 'flex';
-        iconPickerPanel.style.left = `${rect.left}px`;
-        iconPickerPanel.style.top = `${rect.bottom + 5}px`;
+        const panelWidth = iconPickerPanel.offsetWidth;
+        const panelHeight = iconPickerPanel.offsetHeight;
+        const screenPadding = 8;
+        const clampedLeft = Math.max(screenPadding, Math.min(rect.left, window.innerWidth - panelWidth - screenPadding));
+        const clampedTop = Math.max(screenPadding, Math.min(rect.bottom + 5, window.innerHeight - panelHeight - screenPadding));
+        iconPickerPanel.style.left = `${clampedLeft}px`;
+        iconPickerPanel.style.top = `${clampedTop}px`;
     });
 
     document.addEventListener('click', (e) => {
@@ -2803,6 +2871,72 @@ canvas.addEventListener('mouseleave', clearHoverStates);
             iconPickerPanel.style.display = 'none';
         }
     });
+}
+
+function positionToolGroupFlyout(group) {
+    if (!group) return;
+    const flyout = group.querySelector(':scope > .tool-group-flyout') || group.querySelector('.tool-group-flyout');
+    const leftBar = document.getElementById('left-bar');
+    if (!flyout || !leftBar) return;
+
+    const wasHidden = getComputedStyle(flyout).display === 'none';
+    if (wasHidden) {
+        flyout.style.visibility = 'hidden';
+        flyout.style.display = 'flex';
+    }
+
+    flyout.style.position = 'fixed';
+    flyout.style.transform = 'none';
+    flyout.style.animation = 'none';
+    flyout.style.right = 'auto';
+
+    const leftBarRect = leftBar.getBoundingClientRect();
+    const groupRect = group.getBoundingClientRect();
+    const flyoutRect = flyout.getBoundingClientRect();
+    const flyoutWidth = flyoutRect.width || flyout.offsetWidth || 130;
+    const flyoutHeight = flyoutRect.height || flyout.offsetHeight || 48;
+    const pad = 8;
+
+    if (window.innerWidth > 768) {
+        const desiredLeft = Math.max(pad, Math.min(leftBarRect.right + pad, window.innerWidth - flyoutWidth - pad));
+        const maxTop = Math.max(pad, window.innerHeight - flyoutHeight - pad);
+        const desiredTop = Math.max(pad, Math.min(groupRect.top, maxTop));
+
+        flyout.style.bottom = 'auto';
+        flyout.style.left = `${desiredLeft}px`;
+        flyout.style.top = `${desiredTop}px`;
+
+        const checkRect = flyout.getBoundingClientRect();
+        const dx = checkRect.left - desiredLeft;
+        const dy = checkRect.top - desiredTop;
+        if (Math.abs(dx) > 0.5 || Math.abs(dy) > 0.5) {
+            flyout.style.left = `${desiredLeft - dx}px`;
+            flyout.style.top = `${desiredTop - dy}px`;
+        }
+    } else {
+        const desiredBottomOffset = Math.max(pad, window.innerHeight - leftBarRect.top + pad);
+        const maxLeft = Math.max(pad, window.innerWidth - flyoutWidth - pad);
+        const centeredLeft = groupRect.left + (groupRect.width - flyoutWidth) / 2;
+        const desiredLeft = Math.max(pad, Math.min(centeredLeft, maxLeft));
+
+        flyout.style.top = 'auto';
+        flyout.style.bottom = `${desiredBottomOffset}px`;
+        flyout.style.left = `${desiredLeft}px`;
+
+        const desiredViewportBottom = Math.min(window.innerHeight - pad, Math.max(flyoutHeight + pad, window.innerHeight - desiredBottomOffset));
+        const checkRect = flyout.getBoundingClientRect();
+        const dx = checkRect.left - desiredLeft;
+        const dBottom = checkRect.bottom - desiredViewportBottom;
+        if (Math.abs(dx) > 0.5 || Math.abs(dBottom) > 0.5) {
+            flyout.style.left = `${desiredLeft - dx}px`;
+            flyout.style.bottom = `${desiredBottomOffset + dBottom}px`;
+        }
+    }
+
+    if (wasHidden) {
+        flyout.style.display = '';
+        flyout.style.visibility = '';
+    }
 }
 function resizeCanvas() {
     if (!activeProjectId || projects.find(e => e.id === activeProjectId)?.type !== 'moodinfinite') return;
@@ -3099,16 +3233,19 @@ function hScrollEndPadding(el) {
 }
 
 function updateHScrollOverflowHints() {
-    const mobile = window.innerWidth <= 768;
+    const allowHints = window.innerWidth <= 1100;
     for (const [hostSel, trackSel] of hScrollHintPairs) {
         const host = document.querySelector(hostSel);
         if (!host) continue;
-        if (!mobile) {
+        if (!allowHints) {
             host.classList.remove('can-scroll-left', 'can-scroll-right');
             continue;
         }
         const scroller = hScrollScroller(host, document.querySelector(trackSel));
-        if (!scroller) continue;
+        if (!scroller || scroller.scrollWidth <= scroller.clientWidth + 1) {
+            host.classList.remove('can-scroll-left', 'can-scroll-right');
+            continue;
+        }
         const sl = scroller.scrollLeft;
         const limit = scroller.scrollWidth - hScrollEndPadding(scroller);
         host.classList.toggle('can-scroll-left', sl > H_SCROLL_HINT_EPS);
@@ -7123,8 +7260,8 @@ function setCurrentTool(e) {
         const gridBtn = document.getElementById('add-grid-btn');
         if (gridBtn) gridBtn.classList.add('active');
     } else if (currentTool === 'textList') {
-        const textListBtn = document.getElementById('add-textList-btn');
-        if (textListBtn) textListBtn.classList.add('active');
+        const addTextListBtn = document.getElementById('add-text-list-btn') || document.getElementById('add-textList-btn');
+        if (addTextListBtn) addTextListBtn.classList.add('active');
     } else if (currentTool === 'counter') {
         const counterBtn = document.getElementById('add-counter-btn');
         if (counterBtn) counterBtn.classList.add('active');
@@ -9740,8 +9877,17 @@ function addStoryflowFrames(project, count) {
     }
     renderStoryflowView(project);
     saveToBrowser();
+    const scrollAreaNow = document.getElementById('storyflow-scroll-area') || storyflowContainer;
+    if (scrollAreaNow) {
+        scrollAreaNow.scrollLeft = scrollAreaNow.scrollWidth;
+        if (typeof updateStoryflowMinimapViewport === 'function') updateStoryflowMinimapViewport();
+    }
     setTimeout(() => {
-        if (storyflowContainer) storyflowContainer.scrollTo({ left: storyflowContainer.scrollWidth, behavior: 'smooth' });
+        const scrollArea = document.getElementById('storyflow-scroll-area') || storyflowContainer;
+        if (scrollArea) {
+            scrollArea.scrollTo({ left: scrollArea.scrollWidth, behavior: 'smooth' });
+            if (typeof updateStoryflowMinimapViewport === 'function') updateStoryflowMinimapViewport();
+        }
     }, 50);
     return n;
 }
@@ -9851,7 +9997,12 @@ function renderStoryflowView(project) {
     const storyflowScrollStartBtn = document.getElementById('storyflow-scroll-start-btn');
     if (storyflowScrollStartBtn) {
         storyflowScrollStartBtn.onclick = () => {
-            storyflowContainer.scrollTo({ left: 0, behavior: 'smooth' });
+            const scrollArea = document.getElementById('storyflow-scroll-area') || storyflowContainer;
+            if (scrollArea) {
+                scrollArea.scrollTo({ left: 0, behavior: 'auto' });
+                scrollArea.scrollLeft = 0;
+            }
+            if (typeof updateStoryflowMinimapViewport === 'function') updateStoryflowMinimapViewport();
         };
     }
 
