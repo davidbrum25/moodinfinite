@@ -2286,6 +2286,7 @@ try {
     await assertPaletteReview(page);
     await assertMultiResolutionAndQoLFixes(page);
     await assertMoodflowArtistAll(page);
+    await assertTabNamesNoCollision(page);
 
     const lateErrors = pageErrors.filter(isFirstParty);
     assert.deepEqual(lateErrors, [], `first-party errors:\n${lateErrors.join('\n')}`);
@@ -6772,4 +6773,155 @@ async function assertMoodflowArtistAll(page) {
         setCurrentTool(null);
     });
     console.log('Moodflow assign worker to all cards passed.');
+}
+
+async function assertTabNamesNoCollision(page) {
+    console.log('Testing Tab Names No Collision...');
+    const longNames = [
+        'Montagne Speed Extended Board Name',
+        'Animo - 47 Street Structure Layout',
+        ['BRU', 'SAN'].join('') + ' Ideas and Concepts Collection',
+        'Story 3'
+    ];
+
+    await page.evaluate((names) => {
+        window.__savedProjectsBeforeTabTest = projects;
+        window.__savedActiveBeforeTabTest = activeProjectId;
+        projects = [];
+        names.forEach((name, i) => {
+            const type = (i === 3) ? 'storyflow' : 'moodinfinite';
+            createNewProject(type);
+            const p = projects[projects.length - 1];
+            p.name = name;
+            updateTabName(p.id, name);
+        });
+        renderTabs();
+    }, longNames);
+
+    // Also test finishEditing on blur to verify it updates title and restores display: ''
+    const editTest = await page.evaluate(() => {
+        const firstTab = document.querySelector('.tabs-list .tab-item');
+        if (!firstTab) return null;
+        const nameInput = firstTab.querySelector('.tab-name-input');
+        const nameSpan = firstTab.querySelector('.tab-name');
+        firstTab.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
+        const editingSpanDisplay = nameSpan.style.display;
+        const editingInputDisplay = nameInput.style.display;
+        nameInput.value = 'Montagne Speed Extended Board Name Edited';
+        nameInput.dispatchEvent(new Event('blur'));
+        const restoredSpanDisplay = nameSpan.style.display;
+        const restoredInputDisplay = nameInput.style.display;
+        const restoredSpanTitle = nameSpan.title;
+        const restoredTabTitle = firstTab.title;
+
+        // Restore back to original name
+        nameInput.value = 'Montagne Speed Extended Board Name';
+        nameInput.dispatchEvent(new Event('blur'));
+
+        return {
+            editingSpanDisplay,
+            editingInputDisplay,
+            restoredSpanDisplay,
+            restoredInputDisplay,
+            restoredSpanTitle,
+            restoredTabTitle,
+        };
+    });
+    assert.equal(editTest.editingSpanDisplay, 'none');
+    assert.equal(editTest.editingInputDisplay, 'block');
+    assert.equal(editTest.restoredSpanDisplay, '');
+    assert.equal(editTest.restoredInputDisplay, 'none');
+    assert.equal(editTest.restoredSpanTitle, 'Montagne Speed Extended Board Name Edited');
+    assert.equal(editTest.restoredTabTitle, 'Montagne Speed Extended Board Name Edited');
+
+    const viewports = [
+        { width: 1280, height: 800 },
+        { width: 960, height: 700 }
+    ];
+
+    for (const vp of viewports) {
+        await page.setViewport({ width: vp.width, height: vp.height, deviceScaleFactor: 1 });
+        await page.waitForFunction((w) => window.innerWidth === w, {}, vp.width);
+        await new Promise((r) => setTimeout(r, 100));
+
+        const tabData = await page.evaluate(() => {
+            const tabs = Array.from(document.querySelectorAll('.tabs-list .tab-item'));
+            return tabs.map((tab) => {
+                const tabRect = tab.getBoundingClientRect();
+                const tabStyle = window.getComputedStyle(tab);
+                const nameSpan = tab.querySelector('.tab-name');
+                const nameRect = nameSpan ? nameSpan.getBoundingClientRect() : null;
+                const nameStyle = nameSpan ? window.getComputedStyle(nameSpan) : null;
+                const project = projects.find((p) => p.id.toString() === tab.dataset.id);
+                return {
+                    id: tab.dataset.id,
+                    tabTitle: tab.title,
+                    tabRect: { left: tabRect.left, right: tabRect.right, width: tabRect.width },
+                    tabMaxWidth: tabStyle.maxWidth,
+                    nameTitle: nameSpan ? nameSpan.title : null,
+                    nameText: nameSpan ? nameSpan.textContent : null,
+                    nameRect: nameRect ? { left: nameRect.left, right: nameRect.right, width: nameRect.width } : null,
+                    nameStyle: nameStyle ? {
+                        overflow: nameStyle.overflow,
+                        textOverflow: nameStyle.textOverflow,
+                        display: nameStyle.display
+                    } : null,
+                    projectName: project ? project.name : null
+                };
+            });
+        });
+
+        assert.equal(tabData.length, longNames.length, `expected ${longNames.length} tabs at ${vp.width}x${vp.height}`);
+
+        const expectedMaxWidth = vp.width === 960 ? '120px' : '180px';
+        for (let i = 0; i < tabData.length; i++) {
+            const tab = tabData[i];
+            assert.equal(tab.tabMaxWidth, expectedMaxWidth, `tab ${i} max-width at ${vp.width}x${vp.height}`);
+            assert.equal(tab.tabTitle, tab.projectName, `tab ${i} title must equal project.name`);
+            assert.equal(tab.nameTitle, tab.projectName, `tab-name ${i} title must equal project.name`);
+            assert.equal(tab.nameStyle.overflow, 'hidden', `tab-name ${i} overflow must be hidden`);
+            assert.equal(tab.nameStyle.textOverflow, 'ellipsis', `tab-name ${i} textOverflow must be ellipsis`);
+            assert.equal(tab.nameStyle.display, 'block', `tab-name ${i} display must be block`);
+
+            // Bounding rect stays strictly within its parent .tab-item bounding rect
+            assert.ok(
+                tab.nameRect.left >= tab.tabRect.left,
+                `tab-name ${i} left (${tab.nameRect.left}) >= tab-item left (${tab.tabRect.left})`
+            );
+            assert.ok(
+                tab.nameRect.right <= tab.tabRect.right,
+                `tab-name ${i} right (${tab.nameRect.right}) <= tab-item right (${tab.tabRect.right})`
+            );
+        }
+
+        // No two adjacent .tab-item or .tab-name bounding rects overlap horizontally (prevRect.right <= nextRect.left + 0.5)
+        for (let i = 0; i < tabData.length - 1; i++) {
+            const prev = tabData[i];
+            const next = tabData[i + 1];
+            assert.ok(
+                prev.tabRect.right <= next.tabRect.left + 0.5,
+                `adjacent .tab-item ${i} and ${i + 1} overlap: prev.right (${prev.tabRect.right}) > next.left (${next.tabRect.left})`
+            );
+            assert.ok(
+                prev.nameRect.right <= next.nameRect.left + 0.5,
+                `adjacent .tab-name ${i} and ${i + 1} overlap: prev.right (${prev.nameRect.right}) > next.left (${next.nameRect.left})`
+            );
+        }
+    }
+
+    // Clean up / restore
+    await page.evaluate(() => {
+        if (window.__savedProjectsBeforeTabTest) {
+            projects = window.__savedProjectsBeforeTabTest;
+            activeProjectId = window.__savedActiveBeforeTabTest;
+            renderTabs();
+            delete window.__savedProjectsBeforeTabTest;
+            delete window.__savedActiveBeforeTabTest;
+        }
+        const board = projects.find((p) => p.type === 'moodinfinite');
+        if (board) switchTab(board.id);
+        setCurrentTool(null);
+    });
+
+    console.log('Tab Names No Collision passed.');
 }

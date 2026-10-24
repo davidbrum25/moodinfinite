@@ -197,6 +197,10 @@
             background-color: transparent;
             font-size: 0.875rem;
             white-space: nowrap;
+            max-width: 180px;
+            min-width: 0;
+            overflow: hidden;
+            position: relative;
             flex-shrink: 0;
         }
 
@@ -232,6 +236,12 @@
             display: none !important;
         }
 
+        .tab-icon {
+            display: inline-flex;
+            align-items: center;
+            flex-shrink: 0;
+        }
+
         .tab-name {
             background: transparent;
             border: none;
@@ -242,7 +252,12 @@
             padding: 2px 4px;
             border-radius: 4px;
             user-select: none;
-            display: inline;
+            display: block;
+            flex: 1 1 auto;
+            min-width: 0;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
         }
 
         .tab-name-input {
@@ -255,6 +270,9 @@
             padding: 2px 4px;
             border-radius: 4px;
             display: none;
+            flex: 1 1 auto;
+            min-width: 0;
+            max-width: 100%;
         }
 
         .tab-name-input:focus {
@@ -3205,7 +3223,7 @@
             .tab-item {
                 padding: 0.35rem 0.5rem;
                 font-size: 0.8rem;
-                max-width: 130px;
+                max-width: 120px;
             }
 
             #mobile-tabs-btn {

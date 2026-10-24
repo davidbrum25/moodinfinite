@@ -594,6 +594,21 @@ function updateTabName(projectId, newName) {
         if (project.type === 'moodinfinite' && project.id === activeProjectId) {
             currentProjectName = newName;
         }
+        const tab = document.querySelector(`.tab-item[data-id='${projectId}']`);
+        if (tab) {
+            tab.title = newName;
+            const nameSpan = tab.querySelector('.tab-name');
+            if (nameSpan) {
+                nameSpan.textContent = newName;
+                nameSpan.title = newName;
+                nameSpan.style.display = '';
+            }
+            const nameInput = tab.querySelector('.tab-name-input');
+            if (nameInput) {
+                nameInput.value = newName;
+                nameInput.style.display = 'none';
+            }
+        }
         scheduleAutoSave();
     }
 }
@@ -634,6 +649,7 @@ function renderTabs() {
         tab.classList.toggle('pinned', !!project.pinned);
         tab.dataset.id = project.id;
         tab.draggable = true;
+        tab.title = project.name;
 
         const icon = document.createElement('span');
         icon.className = 'tab-icon';
@@ -652,6 +668,7 @@ function renderTabs() {
         const nameSpan = document.createElement('span');
         nameSpan.className = 'tab-name';
         nameSpan.textContent = project.name;
+        nameSpan.title = project.name;
 
         const nameInput = document.createElement('input');
         nameInput.type = 'text';
@@ -672,7 +689,7 @@ function renderTabs() {
         const startEditing = () => {
             clearTimeout(clickTimeout);
             nameSpan.style.display = 'none';
-            nameInput.style.display = 'inline';
+            nameInput.style.display = 'block';
             nameInput.focus();
             nameInput.select();
         };
@@ -686,8 +703,10 @@ function renderTabs() {
                 nameInput.value = project.name;
                 nameSpan.textContent = project.name;
             }
+            nameSpan.title = project.name;
+            tab.title = project.name;
             nameInput.style.display = 'none';
-            nameSpan.style.display = 'inline';
+            nameSpan.style.display = '';
         };
 
         tab.addEventListener('click', (e) => {
@@ -1978,18 +1997,20 @@ function setupEventListeners() {
 
     if (copyBtn) copyBtn.addEventListener('click', copyToClipboard);
     if (renameTabBtn) renameTabBtn.addEventListener('click', () => {
-        const e = tabContextMenu.dataset.tabId;
-        if (e) {
-            const t = document.querySelector(`.tab-item[data-id='${e}']`);
-            if (t) {
-                const e = t.querySelector('.tab-name'), o = t.querySelector('.tab-name-input');
-                e.style.display = 'none';
-                o.style.display = 'inline';
-                o.focus();
-                o.select()
+        const id = tabContextMenu.dataset.tabId;
+        if (id) {
+            const tab = document.querySelector(`.tab-item[data-id='${id}']`);
+            if (tab) {
+                const nameSpan = tab.querySelector('.tab-name'), nameInput = tab.querySelector('.tab-name-input');
+                if (nameSpan) nameSpan.style.display = 'none';
+                if (nameInput) {
+                    nameInput.style.display = 'block';
+                    nameInput.focus();
+                    nameInput.select();
+                }
             }
         }
-        tabContextMenu.style.display = 'none'
+        tabContextMenu.style.display = 'none';
     });
     const duplicateTabBtn = document.getElementById('duplicate-tab-btn');
     if (duplicateTabBtn) duplicateTabBtn.addEventListener('click', () => {
