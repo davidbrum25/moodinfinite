@@ -1386,7 +1386,8 @@
 
         .story-artist-row select { flex: 1; min-width: 0; }
 
-        .story-manage-artists {
+        .story-manage-artists,
+        .story-apply-artist-all {
             flex: 0 0 auto;
             display: inline-flex;
             align-items: center;
@@ -1399,6 +1400,10 @@
             background: var(--bg-ui-hover);
             color: var(--text-color);
             cursor: pointer;
+            transition: color 0.15s, background 0.15s;
+        }
+        .story-apply-artist-all:hover {
+            color: var(--switch-bg-checked);
         }
 
         .story-print-status {
@@ -3840,7 +3845,7 @@
             .media-type-toggle, .story-duration-slider,
             #storyflow-scroll-start-btn, #storyflow-add-frame-btn,
             #storyflow-stats-bar, #storyflow-fullscreen, #storyflow-script-view,
-            .story-manage-artists, .story-card-duplicate-btn,
+            .story-manage-artists, .story-apply-artist-all, .story-card-duplicate-btn,
             .story-card-move-left-btn, .story-card-move-right-btn {
                 display: none !important;
             }

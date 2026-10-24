@@ -10379,6 +10379,30 @@ function createStoryCard(project, frame, index) {
         frame.meta.artist = artistSelect.value;
         scheduleAutoSave();
     });
+    const artistApplyAll = document.createElement('button');
+    artistApplyAll.type = 'button';
+    artistApplyAll.className = 'story-apply-artist-all';
+    artistApplyAll.title = 'Assign this worker to all cards';
+    artistApplyAll.setAttribute('aria-label', 'Assign this worker to all cards');
+    artistApplyAll.innerHTML = '<iconify-icon icon="lucide:check-check" width="14" height="14"></iconify-icon>';
+    artistApplyAll.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const activeProject = projects.find(p => p.id === activeProjectId);
+        if (!activeProject || !activeProject.data || !Array.isArray(activeProject.data.frames)) return;
+        const targetWorker = artistSelect.value || '';
+        activeProject.data.frames.forEach(f => {
+            if (!f.meta) f.meta = {};
+            f.meta.artist = targetWorker;
+        });
+        document.querySelectorAll('#storyflow-scroll-area select.story-artist').forEach(sel => {
+            sel.value = targetWorker;
+        });
+        scheduleAutoSave();
+        const count = activeProject.data.frames.length;
+        showToast(targetWorker 
+            ? `Assigned "${targetWorker}" to all ${count} cards.` 
+            : `Cleared assigned worker on all ${count} cards.`);
+    });
     const artistManage = document.createElement('button');
     artistManage.type = 'button';
     artistManage.className = 'story-manage-artists';
@@ -10390,7 +10414,7 @@ function createStoryCard(project, frame, index) {
         if (overlay) overlay.style.display = 'flex';
         if (typeof renderSharedWorkersList === 'function') renderSharedWorkersList();
     });
-    artistRow.append(artistSelect, artistManage);
+    artistRow.append(artistSelect, artistApplyAll, artistManage);
     artistItem.append(artistLbl, artistRow);
 
     metaGrid.append(durationItem, cameraItem, artistItem, createMetaItem('Audio', 'audio'));

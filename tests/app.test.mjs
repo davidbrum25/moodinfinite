@@ -2285,6 +2285,7 @@ try {
     await assertBaseStyle(page);
     await assertPaletteReview(page);
     await assertMultiResolutionAndQoLFixes(page);
+    await assertMoodflowArtistAll(page);
 
     const lateErrors = pageErrors.filter(isFirstParty);
     assert.deepEqual(lateErrors, [], `first-party errors:\n${lateErrors.join('\n')}`);
@@ -6691,4 +6692,84 @@ async function assertMultiResolutionAndQoLFixes(page) {
         setCurrentTool(null);
     });
     console.log('Multi-resolution & QoL fixes passed.');
+}
+
+async function assertMoodflowArtistAll(page) {
+    console.log('Testing Moodflow assign worker to all cards...');
+    await page.setViewport({ width: 1280, height: 800, deviceScaleFactor: 1, isMobile: false, hasTouch: false });
+    await page.evaluate(() => {
+        if (typeof rememberSharedWorker === 'function') {
+            rememberSharedWorker('Ada Lovelace');
+        }
+        createNewProject('storyflow');
+        const project = projects.find((p) => p.id === activeProjectId);
+        addStoryflowFrames(project, 3);
+    });
+
+    await page.waitForSelector('#storyflow-scroll-area .story-card');
+    await page.waitForFunction(() => document.querySelectorAll('#storyflow-scroll-area .story-card').length >= 3);
+    await page.waitForSelector('select.story-artist');
+    await page.waitForSelector('.story-apply-artist-all');
+
+    // Verify 'Ada Lovelace' is available in the options
+    const artistOptions = await page.$$eval('select.story-artist option', (els) => els.map((el) => el.value));
+    assert.ok(artistOptions.includes('Ada Lovelace'), `artist list missed 'Ada Lovelace': ${artistOptions.join(', ')}`);
+
+    // 1. In a storyflow board with 3+ frames and a shared worker (e.g. 'Ada Lovelace'), selecting 'Ada Lovelace' on frame 0 and clicking .story-apply-artist-all sets meta.artist === 'Ada Lovelace' on all frames in project.data.frames and updates all select.story-artist elements on the board.
+    await page.select('select.story-artist', 'Ada Lovelace');
+    await page.$eval('.story-apply-artist-all', (btn) => btn.click());
+
+    const resultAfterAssign = await page.evaluate(() => {
+        const project = projects.find((p) => p.id === activeProjectId);
+        const frameArtists = project.data.frames.map((f) => f.meta ? f.meta.artist : null);
+        const selectValues = [...document.querySelectorAll('#storyflow-scroll-area select.story-artist')].map((s) => s.value);
+        return {
+            frameCount: project.data.frames.length,
+            frameArtists,
+            selectCount: selectValues.length,
+            selectValues,
+        };
+    });
+
+    assert.ok(resultAfterAssign.frameCount >= 3, `expected at least 3 frames, got ${resultAfterAssign.frameCount}`);
+    assert.ok(
+        resultAfterAssign.frameArtists.every((a) => a === 'Ada Lovelace'),
+        `expected all frames to have artist 'Ada Lovelace', got: ${JSON.stringify(resultAfterAssign.frameArtists)}`
+    );
+    assert.ok(resultAfterAssign.selectCount >= 3, `expected at least 3 select elements, got ${resultAfterAssign.selectCount}`);
+    assert.ok(
+        resultAfterAssign.selectValues.every((v) => v === 'Ada Lovelace'),
+        `expected all select.story-artist elements to have value 'Ada Lovelace', got: ${JSON.stringify(resultAfterAssign.selectValues)}`
+    );
+
+    // 2. Selecting 'Unassigned' ("") and clicking .story-apply-artist-all clears meta.artist on all frames.
+    await page.select('select.story-artist', '');
+    await page.$eval('.story-apply-artist-all', (btn) => btn.click());
+
+    const resultAfterClear = await page.evaluate(() => {
+        const project = projects.find((p) => p.id === activeProjectId);
+        const frameArtists = project.data.frames.map((f) => f.meta ? f.meta.artist : null);
+        const selectValues = [...document.querySelectorAll('#storyflow-scroll-area select.story-artist')].map((s) => s.value);
+        return {
+            frameArtists,
+            selectValues,
+        };
+    });
+
+    assert.ok(
+        resultAfterClear.frameArtists.every((a) => !a),
+        `expected all frames to have empty artist, got: ${JSON.stringify(resultAfterClear.frameArtists)}`
+    );
+    assert.ok(
+        resultAfterClear.selectValues.every((v) => v === ''),
+        `expected all select.story-artist elements to have value '', got: ${JSON.stringify(resultAfterClear.selectValues)}`
+    );
+
+    // Restore to moodinfinite board
+    await page.evaluate(() => {
+        const board = projects.find((p) => p.type === 'moodinfinite');
+        if (board) switchTab(board.id);
+        setCurrentTool(null);
+    });
+    console.log('Moodflow assign worker to all cards passed.');
 }
