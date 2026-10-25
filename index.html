@@ -213,7 +213,7 @@
                 <div id="canvas-minimap-viewport"></div>
             </div>
             <div id="canvas-snap-indicator" hidden>Snap on</div>
-            <form id="gen-meta-search" class="gen-meta-search" role="search" onsubmit="return false">
+            <form id="gen-meta-search" class="gen-meta-search" role="search" onsubmit="return false" hidden>
                 <label class="gen-meta-visually-hidden" for="gen-meta-search-input">Buscar en el tablero</label>
                 <iconify-icon icon="lucide:search" width="16" height="16" aria-hidden="true"></iconify-icon>
                 <input id="gen-meta-search-input" type="search" placeholder="Buscar prompt, modelo o LoRA" autocomplete="off" enterkeyhint="search">
@@ -224,7 +224,10 @@
                     <option value="model">Modelo</option>
                     <option value="lora">LoRA</option>
                 </select>
-                <button type="button" id="gen-meta-search-clear">Limpiar</button>
+                <button type="button" id="gen-meta-search-clear" aria-label="Limpiar búsqueda">
+                    <iconify-icon icon="lucide:x" width="16" height="16" aria-hidden="true"></iconify-icon>
+                    <span class="gen-meta-search-clear-label">Limpiar</span>
+                </button>
             </form>
 
             <textarea id="text-editor" style="display: none;"></textarea>

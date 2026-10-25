@@ -7170,6 +7170,98 @@ async function assertGenMetaStage1(page) {
     assert.equal(capped.loadedNotes, 2000);
     assert.equal(capped.loadedTool, 'ComfyUI');
 
+    const searchChrome = await page.evaluate(() => {
+        createNewProject('moodinfinite');
+        const bar = document.getElementById('gen-meta-search');
+        const shown = () => !!(bar && !bar.hidden && getComputedStyle(bar).display !== 'none');
+        draw();
+        const empty = shown();
+        items.push({
+            id: 'search-vis-box', type: 'box', color: '#429eff', x: 30, y: 30, width: 60, height: 40,
+            rotation: 0, opacity: 1, scaleX: 1, scaleY: 1, style: 'fill', isPinned: false,
+        });
+        draw();
+        const boxOnly = shown();
+        items.push({
+            id: 'search-vis-image', type: 'image', x: 140, y: 30, width: 48, height: 48,
+            rotation: 0, opacity: 1, scaleX: 1, scaleY: 1,
+        });
+        draw();
+        const withImage = shown();
+        const imageAt = items.findIndex((item) => item.id === 'search-vis-image');
+        if (imageAt >= 0) items.splice(imageAt, 1);
+        draw();
+        const afterRemove = shown();
+        items.push({
+            id: 'search-vis-image', type: 'image', x: 140, y: 30, width: 48, height: 48,
+            rotation: 0, opacity: 1, scaleX: 1, scaleY: 1,
+        });
+        const filledId = activeProjectId;
+        const filled = projects.find((entry) => entry.id === filledId);
+        if (filled && filled.data) filled.data.items = items;
+        createNewProject('moodinfinite');
+        draw();
+        const otherEmpty = shown();
+        switchTab(filledId);
+        draw();
+        const afterTab = shown();
+        loadProject(JSON.stringify({ items: [], cameraOffset: { x: 0, y: 0 }, cameraZoom: 1 }));
+        draw();
+        const loadedEmpty = shown();
+        loadProject(JSON.stringify({
+            items: [{ id: 'loaded-image', type: 'image', x: 8, y: 8, width: 24, height: 24, rotation: 0, opacity: 1 }],
+            cameraOffset: { x: 0, y: 0 },
+            cameraZoom: 1,
+        }));
+        draw();
+        const loadedImage = shown();
+        const nested = moodboardHasImageCard([{ type: 'group', items: [{ type: 'image', id: 'nested' }] }]);
+        const nestedMiss = moodboardHasImageCard([{ type: 'group', items: [{ type: 'text', id: 'note' }] }, { type: 'box', id: 'sq' }]);
+        const previousStyle = document.documentElement.getAttribute('data-style') || 'flat';
+        const styleSample = (style) => {
+            document.documentElement.setAttribute('data-style', style);
+            if (document.body) document.body.setAttribute('data-style', style);
+            openGenShareDialog(document.getElementById('save-project-btn'));
+            const cancel = getComputedStyle(document.getElementById('gen-share-cancel'));
+            const confirmBtn = getComputedStyle(document.getElementById('gen-share-confirm'));
+            const other = getComputedStyle(document.getElementById('cancel-new-btn'));
+            const body = getComputedStyle(document.body);
+            const result = {
+                cancel: cancel.fontFamily,
+                confirm: confirmBtn.fontFamily,
+                other: other.fontFamily,
+                body: body.fontFamily,
+                cancelWeight: cancel.fontWeight,
+                otherWeight: other.fontWeight,
+            };
+            closeGenShareDialog();
+            return result;
+        };
+        const fonts = { flat: styleSample('flat'), glass: styleSample('glass') };
+        document.documentElement.setAttribute('data-style', previousStyle);
+        if (document.body) document.body.setAttribute('data-style', previousStyle);
+        return { empty, boxOnly, withImage, afterRemove, otherEmpty, afterTab, loadedEmpty, loadedImage, nested, nestedMiss, fonts };
+    });
+    assert.equal(searchChrome.empty, false, 'search bar stayed visible on an empty moodboard');
+    assert.equal(searchChrome.boxOnly, false, 'search bar showed for a board with no image card');
+    assert.equal(searchChrome.withImage, true, 'search bar stayed hidden after an image card was added');
+    assert.equal(searchChrome.afterRemove, false, 'search bar stayed visible after the image card was removed');
+    assert.equal(searchChrome.otherEmpty, false, 'search bar stayed visible after switching to an empty moodboard');
+    assert.equal(searchChrome.afterTab, true, 'search bar stayed hidden after switching back to a moodboard with an image');
+    assert.equal(searchChrome.loadedEmpty, false, 'search bar stayed visible after loading an empty project');
+    assert.equal(searchChrome.loadedImage, true, 'search bar stayed hidden after loading a project with an image');
+    assert.equal(searchChrome.nested, true);
+    assert.equal(searchChrome.nestedMiss, false);
+    for (const style of ['flat', 'glass']) {
+        const sample = searchChrome.fonts[style];
+        const firstFamily = (value) => String(value || '').split(',')[0].replace(/["']/g, '').trim().toLowerCase();
+        assert.equal(sample.cancel, sample.body, `${style} Cancelar font ${sample.cancel} !== body ${sample.body}`);
+        assert.equal(sample.confirm, sample.body, `${style} Exportar font ${sample.confirm} !== body ${sample.body}`);
+        assert.equal(sample.cancel, sample.other, `${style} share button font ${sample.cancel} !== other modal button ${sample.other}`);
+        assert.notEqual(firstFamily(sample.cancel), 'arial', `${style} share button used Arial (${sample.cancel})`);
+        assert.equal(sample.cancelWeight, sample.otherWeight);
+    }
+
     const filtered = await page.evaluate(async () => {
         createNewProject('moodinfinite');
         cameraOffset = { x: 0, y: 0 };

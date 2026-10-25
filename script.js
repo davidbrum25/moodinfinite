@@ -551,7 +551,8 @@ function switchTab(projectId, options) {
     });
     scheduleAutoSave();
     requestUpdate();
-    
+    syncGenMetaSearchVisibility();
+
     if (window.CloudSync && typeof window.CloudSync.updateIndicator === 'function') {
         window.CloudSync.updateIndicator();
     }
@@ -3063,8 +3064,34 @@ function gameLoop() {
     requestAnimationFrame(gameLoop);
 }
 
+function moodboardHasImageCard(list) {
+    if (!Array.isArray(list)) return false;
+    for (let i = 0; i < list.length; i++) {
+        const item = list[i];
+        if (!item) continue;
+        if (item.type === 'image') return true;
+        if (item.type === 'group' && moodboardHasImageCard(item.items)) return true;
+    }
+    return false;
+}
+
+function syncGenMetaSearchVisibility() {
+    const form = document.getElementById('gen-meta-search');
+    if (!form) return;
+    const project = projects.find((entry) => entry && entry.id === activeProjectId);
+    const show = !!(project && project.type === 'moodinfinite' && moodboardHasImageCard(items));
+    form.hidden = !show;
+    if (!show && form.contains(document.activeElement)) {
+        const fallback = document.getElementById('select-tool-btn');
+        if (fallback && typeof fallback.focus === 'function') fallback.focus();
+    }
+}
+
 function draw() {
-    if (!activeProjectId || projects.find(e => e.id === activeProjectId)?.type !== 'moodinfinite') return;
+    if (!activeProjectId || projects.find(e => e.id === activeProjectId)?.type !== 'moodinfinite') {
+        syncGenMetaSearchVisibility();
+        return;
+    }
 
     // Culling: Calculate visible viewport in world coordinates
     const padding = 50 / cameraZoom; // Extra margin to prevent flickering
@@ -3232,6 +3259,7 @@ function syncCanvasChrome() {
         const show = items.length === 0;
         if (guide.hidden === show) guide.hidden = !show;
     }
+    syncGenMetaSearchVisibility();
     syncCanvasMinimap();
 }
 
@@ -7795,6 +7823,7 @@ function saveStateForUndo() {
     syncActiveMoodboard();
     scheduleAutoSave();
     requestUpdate();
+    syncGenMetaSearchVisibility();
 }
 function loadStateFromHistory(e) {
     const t = JSON.parse(e);
@@ -7836,6 +7865,7 @@ function loadStateFromHistory(e) {
     items = o(t);
     syncActiveMoodboard();
     requestUpdate();
+    syncGenMetaSearchVisibility();
 }
 
 function undoLastAction() {
@@ -13263,4 +13293,5 @@ function setupGenMetaUi() {
             if (ev.target === shareOverlay) closeGenShareDialog();
         });
     }
+    syncGenMetaSearchVisibility();
 }
