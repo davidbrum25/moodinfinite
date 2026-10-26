@@ -76,6 +76,17 @@ function serializeItems(itemArray) {
     });
 }
 
+function sanitizeStoredGenMeta(item) {
+    if (!item || typeof item !== 'object' || item.genMeta == null) {
+        if (item && item.genMeta === null) delete item.genMeta;
+        return;
+    }
+    if (!window.GenMeta || typeof window.GenMeta.sanitizeGenMeta !== 'function') return;
+    const clean = window.GenMeta.sanitizeGenMeta(item.genMeta);
+    if (clean) item.genMeta = clean;
+    else delete item.genMeta;
+}
+
 function restoreImages(itemArray) {
     itemArray.forEach(t => {
         if (t.type === 'image') {
@@ -83,6 +94,7 @@ function restoreImages(itemArray) {
             if (t.imageId && globalImageCache[t.imageId]) img.src = globalImageCache[t.imageId];
             else if (t.img) img.src = t.img;
             t.img = img;
+            sanitizeStoredGenMeta(t);
         } else if (t.type === 'video') {
             const video = document.createElement('video');
             video.loop = true;
@@ -539,7 +551,8 @@ function switchTab(projectId, options) {
     });
     scheduleAutoSave();
     requestUpdate();
-    
+    syncGenMetaSearchVisibility();
+
     if (window.CloudSync && typeof window.CloudSync.updateIndicator === 'function') {
         window.CloudSync.updateIndicator();
     }
@@ -1752,6 +1765,11 @@ const centerSelectedBtn = document.getElementById('center-selected-btn');
 
 let cameraOffset = { x: 0, y: 0 }, cameraZoom = 1;
 let items = [], selectedItems = [];
+let genMetaQuery = '';
+let genMetaField = 'all';
+let genMetaPanelItemId = null;
+let genMetaReturnFocus = null;
+let genShareReturnFocus = null;
 let globalImageCache = {}; // Cache for image source data
 let globalVideoCache = {}; // Cache for video files (Blobs or URLs)
 let _webpBlobCache = {};   // In-memory cache for WebP compressed blobs: imageId -> WebP Blob
@@ -2367,6 +2385,21 @@ canvas.addEventListener('mouseleave', clearHoverStates);
             ganttCloseDetail();
             closed = true;
         }
+        const genMetaPanel = document.getElementById('gen-meta-panel');
+        if (genMetaPanel && !genMetaPanel.hidden) {
+            closeGenMetaPanel();
+            closed = true;
+        }
+        const genShareOverlay = document.getElementById('gen-share-overlay');
+        if (!closed && genShareOverlay && genShareOverlay.style.display !== 'none') {
+            closeGenShareDialog();
+            closed = true;
+        }
+        const genSearchInput = document.getElementById('gen-meta-search-input');
+        if (!closed && genMetaQuery && genSearchInput && (document.activeElement === genSearchInput || !isTextEntryTarget(document.activeElement))) {
+            clearGenMetaSearch();
+            closed = true;
+        }
 
         if (closed) {
             e.preventDefault();
@@ -2432,6 +2465,7 @@ canvas.addEventListener('mouseleave', clearHoverStates);
     });
     if (saveProjectBtn) saveProjectBtn.addEventListener('click', saveProject);
     if (loadProjectBtn) loadProjectBtn.addEventListener('click', () => projectInput.click());
+    setupGenMetaUi();
 
     if (paletteBtn) paletteBtn.addEventListener('click', () => {
         if (palettePanel.classList.contains('open')) {
@@ -3030,8 +3064,34 @@ function gameLoop() {
     requestAnimationFrame(gameLoop);
 }
 
+function moodboardHasImageCard(list) {
+    if (!Array.isArray(list)) return false;
+    for (let i = 0; i < list.length; i++) {
+        const item = list[i];
+        if (!item) continue;
+        if (item.type === 'image') return true;
+        if (item.type === 'group' && moodboardHasImageCard(item.items)) return true;
+    }
+    return false;
+}
+
+function syncGenMetaSearchVisibility() {
+    const form = document.getElementById('gen-meta-search');
+    if (!form) return;
+    const project = projects.find((entry) => entry && entry.id === activeProjectId);
+    const show = !!(project && project.type === 'moodinfinite' && moodboardHasImageCard(items));
+    form.hidden = !show;
+    if (!show && form.contains(document.activeElement)) {
+        const fallback = document.getElementById('select-tool-btn');
+        if (fallback && typeof fallback.focus === 'function') fallback.focus();
+    }
+}
+
 function draw() {
-    if (!activeProjectId || projects.find(e => e.id === activeProjectId)?.type !== 'moodinfinite') return;
+    if (!activeProjectId || projects.find(e => e.id === activeProjectId)?.type !== 'moodinfinite') {
+        syncGenMetaSearchVisibility();
+        return;
+    }
 
     // Culling: Calculate visible viewport in world coordinates
     const padding = 50 / cameraZoom; // Extra margin to prevent flickering
@@ -3199,6 +3259,7 @@ function syncCanvasChrome() {
         const show = items.length === 0;
         if (guide.hidden === show) guide.hidden = !show;
     }
+    syncGenMetaSearchVisibility();
     syncCanvasMinimap();
 }
 
@@ -3851,11 +3912,17 @@ function drawImageItem(ctx, item) {
     ctx.translate(centerX, centerY);
     ctx.rotate(item.rotation || 0);
     ctx.scale(item.scaleX || 1, item.scaleY || 1);
-    ctx.globalAlpha = item.opacity ?? 1;
+    ctx.globalAlpha = (item.opacity ?? 1) * genMetaDimFactor(item);
     try {
         ctx.drawImage(item.img, -item.width / 2, -item.height / 2, item.width, item.height);
     } catch (e) {
         // Fallback
+    }
+    if (genMetaQueryActive() && genMetaDimFactor(item) === 1) {
+        ctx.globalAlpha = 1;
+        ctx.lineWidth = 3 / (cameraZoom || 1);
+        ctx.strokeStyle = accentColor;
+        ctx.strokeRect(-item.width / 2, -item.height / 2, item.width, item.height);
     }
 
     const labelText = item.caption || item.label;
@@ -5710,6 +5777,8 @@ function onContextMenu(e) {
     const isImg = selectedItems.length === 1 && selectedItems[0].type === 'image';
     downloadImageBtn.style.display = isImg ? 'flex' : 'none';
     downloadSeparator.style.display = isImg ? 'block' : 'none';
+    const genMetaOpenBtn = document.getElementById('gen-meta-open-btn');
+    if (genMetaOpenBtn) genMetaOpenBtn.style.display = isImg ? 'flex' : 'none';
 
     const canConnect = selectedItems.length === 1 && !['connector', 'stroke', 'measure'].includes(selectedItems[0].type);
     contextConnectBtn.style.display = canConnect ? 'flex' : 'none';
@@ -6030,7 +6099,9 @@ function exportSelectionAsPng() {
     l.click();
     showToast("Selection exported as PNG.");
 }
-function saveProject() {
+function saveProject(options) {
+    const shareExport = !!(options && options.genMetaExport === true);
+    const includeGenMeta = shareExport ? options.includeGenMeta === true : true;
     const t = projects.find(e => e.id === activeProjectId);
     if (!t) { showToast("No active project to save.", "error"); return; }
     const o = `${t.name}.mood`;
@@ -6048,8 +6119,9 @@ function saveProject() {
         t.data.historyStack = historyStack;
         t.data.historyIndex = historyIndex;
 
+        const serializedItems = includeGenMeta ? serializeItems(items) : stripGenMetaFromItems(serializeItems(items));
         eJSON = {
-            items: serializeItems(items),
+            items: serializedItems,
             cameraOffset: cameraOffset,
             cameraZoom: cameraZoom,
             canvasBackgroundColor: canvasBackgroundColor,
@@ -6144,7 +6216,7 @@ function saveProject() {
                 n.click();
                 document.body.removeChild(n);
                 URL.revokeObjectURL(n.href);
-                showToast("Project exported successfully.");
+                showToast(shareExport ? "Export listo para compartir." : "Project exported successfully.");
             });
         });
     } else if (t.type === 'moodprompt' || t.type === 'storyflow' || t.type === 'moodlist' || t.type === 'moodgantt' || t.type === 'colorseeker') {
@@ -6608,36 +6680,50 @@ function handleImageFile(file, callback) {
 function processFiles(files, worldPos) {
     Array.from(files).forEach((file, index) => {
         if (!file.type.startsWith('image/')) return;
+        const bufferPromise = (file.arrayBuffer ? file.arrayBuffer() : Promise.resolve(null)).catch(() => null);
         const reader = new FileReader();
         reader.onload = (readEvent) => {
             const img = new Image();
             img.onload = () => {
-                const aspectRatio = img.width / img.height;
-                const initialWidth = 250;
-                const initialHeight = initialWidth / aspectRatio;
-                const imageId = Date.now() + '_' + index + '_' + Math.random().toString(36).substr(2, 9);
+                const finish = (genMeta) => {
+                    const aspectRatio = img.width / img.height;
+                    const initialWidth = 250;
+                    const initialHeight = initialWidth / aspectRatio;
+                    const imageId = Date.now() + '_' + index + '_' + Math.random().toString(36).substr(2, 9);
 
-                // Store in global cache
-                globalImageCache[imageId] = readEvent.target.result;
+                    // Store in global cache
+                    globalImageCache[imageId] = readEvent.target.result;
 
-                addItemToLayeredItems({
-                    id: 'group_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5) + index,
-                    type: 'image',
-                    imageId: imageId, // Reference to cache
-                    img: img, // Runtime object (not for JSON)
-                    x: worldPos.x - initialWidth / 2 + index * 20,
-                    y: worldPos.y - initialHeight / 2 + index * 20,
-                    width: initialWidth,
-                    height: initialHeight,
-                    originalWidth: initialWidth,
-                    originalHeight: initialHeight,
-                    rotation: 0,
-                    isPinned: false,
-                    opacity: 1,
-                    scaleX: 1,
-                    scaleY: 1
-                });
-                bringSelectedToFront();
+                    const item = {
+                        id: 'group_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5) + index,
+                        type: 'image',
+                        imageId: imageId, // Reference to cache
+                        img: img, // Runtime object (not for JSON)
+                        x: worldPos.x - initialWidth / 2 + index * 20,
+                        y: worldPos.y - initialHeight / 2 + index * 20,
+                        width: initialWidth,
+                        height: initialHeight,
+                        originalWidth: initialWidth,
+                        originalHeight: initialHeight,
+                        rotation: 0,
+                        isPinned: false,
+                        opacity: 1,
+                        scaleX: 1,
+                        scaleY: 1
+                    };
+                    if (genMeta) item.genMeta = genMeta;
+                    addItemToLayeredItems(item);
+                    bringSelectedToFront();
+                };
+                bufferPromise.then((buf) => {
+                    if (!buf || !window.GenMeta || typeof window.GenMeta.readGenMetaFromBuffer !== 'function') {
+                        finish(null);
+                        return null;
+                    }
+                    return Promise.resolve(window.GenMeta.readGenMetaFromBuffer(buf)).then((genMeta) => {
+                        finish(genMeta || null);
+                    }).catch(() => finish(null));
+                }).catch(() => finish(null));
             };
             img.src = readEvent.target.result;
         };
@@ -7737,6 +7823,7 @@ function saveStateForUndo() {
     syncActiveMoodboard();
     scheduleAutoSave();
     requestUpdate();
+    syncGenMetaSearchVisibility();
 }
 function loadStateFromHistory(e) {
     const t = JSON.parse(e);
@@ -7756,7 +7843,8 @@ function loadStateFromHistory(e) {
                 } else if (t.imgSrc) {
                     img.src = t.imgSrc;
                 }
-                t.img = img
+                t.img = img;
+                sanitizeStoredGenMeta(t);
             } else if (t.type === 'video') {
                 const video = document.createElement('video');
                 video.loop = true;
@@ -7777,6 +7865,7 @@ function loadStateFromHistory(e) {
     items = o(t);
     syncActiveMoodboard();
     requestUpdate();
+    syncGenMetaSearchVisibility();
 }
 
 function undoLastAction() {
@@ -12865,3 +12954,344 @@ function setupGanttListeners() {
 }
 
 window.__getHoveredItem = () => hoveredItem;
+
+const GEN_META_TOOLS = ['Flow', 'Kling', 'Seedance', 'ComfyUI', 'A1111', 'Otro'];
+
+function genMetaQueryActive() {
+    return String(genMetaQuery || '').trim().length > 0;
+}
+
+function genMetaDimFactor(item) {
+    if (!genMetaQueryActive() || !item || item.type !== 'image') return 1;
+    if (!window.GenMeta || typeof window.GenMeta.itemMatchesGenQuery !== 'function') return 1;
+    return window.GenMeta.itemMatchesGenQuery(item, genMetaQuery, genMetaField) ? 1 : 0.22;
+}
+
+function genMetaFilterState(item) {
+    if (!genMetaQueryActive()) return 'idle';
+    if (!item || item.type !== 'image') return 'skip';
+    return genMetaDimFactor(item) < 1 ? 'dim' : 'match';
+}
+
+function stripGenMetaFromItems(list) {
+    if (window.GenMeta && typeof window.GenMeta.stripGenMeta === 'function') return window.GenMeta.stripGenMeta(list);
+    if (!Array.isArray(list)) return [];
+    return list.map((item) => {
+        if (!item || typeof item !== 'object') return item;
+        const copy = { ...item };
+        delete copy.genMeta;
+        if (copy.type === 'group' && Array.isArray(copy.items)) copy.items = stripGenMetaFromItems(copy.items);
+        return copy;
+    });
+}
+
+function clearGenMetaSearch() {
+    genMetaQuery = '';
+    const input = document.getElementById('gen-meta-search-input');
+    if (input && input.value) input.value = '';
+    requestUpdate();
+}
+
+function focusIfVisible(el) {
+    if (!el || typeof el.focus !== 'function') return false;
+    if (!el.getClientRects || !el.getClientRects().length) return false;
+    el.focus();
+    return document.activeElement === el;
+}
+
+function currentGenMetaItem() {
+    if (genMetaPanelItemId == null) return null;
+    return items.find((item) => item && item.id === genMetaPanelItemId) || null;
+}
+
+function genMetaFieldValue(meta, key) {
+    if (!meta) return '';
+    if (key === 'loras') return Array.isArray(meta.loras) ? meta.loras.join('\n') : '';
+    return meta[key] || '';
+}
+
+function formatGenMetaText(meta) {
+    if (!meta) return '';
+    const lines = [];
+    const add = (label, value) => {
+        const text = Array.isArray(value) ? value.filter(Boolean).join(', ') : String(value || '').trim();
+        if (text) lines.push(label + ': ' + text);
+    };
+    add('Prompt', meta.prompt);
+    add('Negativo', meta.negativePrompt);
+    add('Modelo', meta.model);
+    add('Seed', meta.seed);
+    add('LoRAs', meta.loras);
+    add('Herramienta', meta.tool);
+    add('Fecha', meta.date);
+    add('Notas', meta.notes);
+    return lines.join('\n');
+}
+
+function syncGenMetaEmptyState() {
+    const empty = document.getElementById('gen-meta-empty');
+    if (!empty) return;
+    const item = currentGenMetaItem();
+    const clean = item && item.genMeta && window.GenMeta ? window.GenMeta.sanitizeGenMeta(item.genMeta) : item && item.genMeta;
+    const has = !!clean;
+    empty.hidden = has;
+}
+
+function fillGenMetaPanel(item) {
+    const meta = (item && item.genMeta) || {};
+    const prompt = document.getElementById('gen-meta-prompt');
+    const negative = document.getElementById('gen-meta-negative');
+    const model = document.getElementById('gen-meta-model');
+    const seed = document.getElementById('gen-meta-seed');
+    const loras = document.getElementById('gen-meta-loras');
+    const date = document.getElementById('gen-meta-date');
+    const notes = document.getElementById('gen-meta-notes');
+    const tool = document.getElementById('gen-meta-tool');
+    if (prompt) prompt.value = genMetaFieldValue(meta, 'prompt');
+    if (negative) negative.value = genMetaFieldValue(meta, 'negativePrompt');
+    if (model) model.value = genMetaFieldValue(meta, 'model');
+    if (seed) seed.value = genMetaFieldValue(meta, 'seed');
+    if (loras) loras.value = genMetaFieldValue(meta, 'loras');
+    if (date) date.value = genMetaFieldValue(meta, 'date');
+    if (notes) notes.value = genMetaFieldValue(meta, 'notes');
+    if (tool) {
+        const value = genMetaFieldValue(meta, 'tool');
+        const known = GEN_META_TOOLS.indexOf(value) !== -1 || value === '';
+        Array.from(tool.options).forEach((option) => {
+            if (option.dataset && option.dataset.extra === '1') option.remove();
+        });
+        if (!known && value) {
+            const extra = document.createElement('option');
+            extra.value = value;
+            extra.textContent = value;
+            extra.dataset.extra = '1';
+            tool.appendChild(extra);
+        }
+        tool.value = value;
+    }
+    syncGenMetaEmptyState();
+}
+
+function readGenMetaDraft() {
+    const lorasEl = document.getElementById('gen-meta-loras');
+    const loras = lorasEl
+        ? lorasEl.value.split(/\n+/).map((line) => line.trim()).filter(Boolean)
+        : [];
+    return {
+        prompt: document.getElementById('gen-meta-prompt') ? document.getElementById('gen-meta-prompt').value : '',
+        negativePrompt: document.getElementById('gen-meta-negative') ? document.getElementById('gen-meta-negative').value : '',
+        model: document.getElementById('gen-meta-model') ? document.getElementById('gen-meta-model').value : '',
+        seed: document.getElementById('gen-meta-seed') ? document.getElementById('gen-meta-seed').value : '',
+        loras: loras,
+        tool: document.getElementById('gen-meta-tool') ? document.getElementById('gen-meta-tool').value : '',
+        date: document.getElementById('gen-meta-date') ? document.getElementById('gen-meta-date').value : '',
+        notes: document.getElementById('gen-meta-notes') ? document.getElementById('gen-meta-notes').value : '',
+    };
+}
+
+function capGenMetaField(el, max) {
+    if (!el || el.value.length <= max) return;
+    const pos = el.selectionStart;
+    el.value = el.value.slice(0, max);
+    if (typeof pos === 'number' && el.setSelectionRange) el.setSelectionRange(Math.min(pos, max), Math.min(pos, max));
+}
+
+function commitGenMetaFromPanel() {
+    const item = currentGenMetaItem();
+    if (!item || !window.GenMeta) return;
+    capGenMetaField(document.getElementById('gen-meta-prompt'), 4000);
+    capGenMetaField(document.getElementById('gen-meta-negative'), 4000);
+    capGenMetaField(document.getElementById('gen-meta-notes'), 2000);
+    capGenMetaField(document.getElementById('gen-meta-model'), 200);
+    capGenMetaField(document.getElementById('gen-meta-tool'), 200);
+    capGenMetaField(document.getElementById('gen-meta-seed'), 40);
+    capGenMetaField(document.getElementById('gen-meta-date'), 40);
+    const clean = window.GenMeta.sanitizeGenMeta(readGenMetaDraft());
+    if (clean) item.genMeta = clean;
+    else delete item.genMeta;
+    syncGenMetaEmptyState();
+    saveStateForUndo();
+}
+
+function openGenMetaPanel(item, opener) {
+    if (!item || item.type !== 'image') return;
+    const panel = document.getElementById('gen-meta-panel');
+    if (!panel) return;
+    genMetaPanelItemId = item.id;
+    genMetaReturnFocus = opener || document.activeElement;
+    sanitizeStoredGenMeta(item);
+    fillGenMetaPanel(item);
+    panel.hidden = false;
+    const prompt = document.getElementById('gen-meta-prompt');
+    if (prompt) prompt.focus();
+}
+
+function closeGenMetaPanel() {
+    const panel = document.getElementById('gen-meta-panel');
+    if (panel && !panel.hidden) commitGenMetaFromPanel();
+    genMetaPanelItemId = null;
+    if (panel) panel.hidden = true;
+    const opener = genMetaReturnFocus;
+    genMetaReturnFocus = null;
+    if (!focusIfVisible(opener)) {
+        const search = document.getElementById('gen-meta-search-input');
+        if (search) search.focus();
+    }
+}
+
+function copyGenMetaText(text) {
+    if (!text) {
+        showToast('No hay nada para copiar.', 'error');
+        return;
+    }
+    const done = () => showToast('Copiado.');
+    const fallback = () => {
+        const area = document.createElement('textarea');
+        area.value = text;
+        area.setAttribute('readonly', '');
+        area.style.position = 'fixed';
+        area.style.left = '-9999px';
+        document.body.appendChild(area);
+        area.select();
+        try {
+            document.execCommand('copy');
+            done();
+        } catch (err) {
+            showToast('No se pudo copiar.', 'error');
+        }
+        area.remove();
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(done).catch(fallback);
+    } else {
+        fallback();
+    }
+}
+
+function copyGenMetaField(key) {
+    const item = currentGenMetaItem();
+    const meta = (item && item.genMeta) || {};
+    if (key === 'all') {
+        copyGenMetaText(formatGenMetaText(meta));
+        return;
+    }
+    copyGenMetaText(genMetaFieldValue(meta, key));
+}
+
+function openGenShareDialog(opener) {
+    const overlay = document.getElementById('gen-share-overlay');
+    if (!overlay) return;
+    genShareReturnFocus = opener || document.activeElement;
+    const box = document.getElementById('gen-share-include');
+    if (box) box.checked = false;
+    if (contextMenu) contextMenu.style.display = 'none';
+    overlay.style.display = 'flex';
+    const cancel = document.getElementById('gen-share-cancel');
+    if (cancel) cancel.focus();
+}
+
+function closeGenShareDialog() {
+    const overlay = document.getElementById('gen-share-overlay');
+    if (overlay) overlay.style.display = 'none';
+    const opener = genShareReturnFocus;
+    genShareReturnFocus = null;
+    if (!focusIfVisible(opener)) {
+        const saveBtn = document.getElementById('save-project-btn');
+        if (saveBtn) saveBtn.focus();
+    }
+}
+
+function exportProjectForShare(includeGenMeta) {
+    saveProject({ genMetaExport: true, includeGenMeta: includeGenMeta === true });
+}
+
+function setupGenMetaUi() {
+    const openBtn = document.getElementById('gen-meta-open-btn');
+    if (openBtn) {
+        openBtn.addEventListener('click', (ev) => {
+            ev.stopPropagation();
+            const item = selectedItems.length === 1 ? selectedItems[0] : null;
+            if (contextMenu) contextMenu.style.display = 'none';
+            openGenMetaPanel(item, ev.currentTarget);
+        });
+    }
+    const closeBtn = document.getElementById('gen-meta-close');
+    if (closeBtn) closeBtn.addEventListener('click', () => closeGenMetaPanel());
+    const copyAll = document.getElementById('gen-meta-copy-all');
+    if (copyAll) copyAll.addEventListener('click', () => copyGenMetaField('all'));
+    document.querySelectorAll('.gen-meta-copy').forEach((button) => {
+        button.addEventListener('click', () => copyGenMetaField(button.getAttribute('data-copy')));
+    });
+    const panel = document.getElementById('gen-meta-panel');
+    if (panel) {
+        panel.addEventListener('input', (ev) => {
+            const target = ev.target;
+            if (!target || !panel.contains(target)) return;
+            if (target.id === 'gen-meta-prompt' || target.id === 'gen-meta-negative') capGenMetaField(target, 4000);
+            else if (target.id === 'gen-meta-notes') capGenMetaField(target, 2000);
+            else if (target.id === 'gen-meta-model') capGenMetaField(target, 200);
+            else if (target.id === 'gen-meta-seed' || target.id === 'gen-meta-date') capGenMetaField(target, 40);
+            else if (target.id === 'gen-meta-loras') {
+                const lines = target.value.split('\n');
+                const capped = lines.slice(0, 20).map((line) => line.slice(0, 200));
+                const next = capped.join('\n');
+                if (next !== target.value) target.value = next;
+            }
+            commitGenMetaFromPanel();
+        });
+        panel.addEventListener('change', (ev) => {
+            if (ev.target && panel.contains(ev.target)) commitGenMetaFromPanel();
+        });
+    }
+
+    const searchInput = document.getElementById('gen-meta-search-input');
+    const searchField = document.getElementById('gen-meta-search-field');
+    const searchClear = document.getElementById('gen-meta-search-clear');
+    if (searchInput) {
+        searchInput.addEventListener('input', () => {
+            genMetaQuery = searchInput.value;
+            requestUpdate();
+        });
+        searchInput.addEventListener('keydown', (ev) => {
+            if (ev.key !== 'Escape' && ev.key !== 'Esc') return;
+            if (!searchInput.value && !genMetaQuery) return;
+            ev.preventDefault();
+            ev.stopPropagation();
+            clearGenMetaSearch();
+        });
+    }
+    if (searchField) {
+        searchField.addEventListener('change', () => {
+            genMetaField = searchField.value || 'all';
+            requestUpdate();
+        });
+    }
+    if (searchClear) searchClear.addEventListener('click', () => {
+        clearGenMetaSearch();
+        if (searchInput) searchInput.focus();
+    });
+
+    const shareBtn = document.getElementById('export-share-mood-btn');
+    if (shareBtn) {
+        shareBtn.addEventListener('click', (ev) => {
+            ev.stopPropagation();
+            openGenShareDialog(ev.currentTarget);
+        });
+    }
+    const shareCancel = document.getElementById('gen-share-cancel');
+    const shareConfirm = document.getElementById('gen-share-confirm');
+    const shareOverlay = document.getElementById('gen-share-overlay');
+    if (shareCancel) shareCancel.addEventListener('click', () => closeGenShareDialog());
+    if (shareConfirm) shareConfirm.addEventListener('click', () => {
+        const box = document.getElementById('gen-share-include');
+        const include = !!(box && box.checked);
+        closeGenShareDialog();
+        exportProjectForShare(include);
+    });
+    if (shareOverlay) {
+        shareOverlay.addEventListener('click', (ev) => {
+            if (ev.target === shareOverlay) closeGenShareDialog();
+        });
+    }
+    syncGenMetaSearchVisibility();
+}

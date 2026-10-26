@@ -2700,6 +2700,7 @@
             padding: .5rem 1rem;
             border: 1px solid transparent;
             border-radius: .375rem;
+            font-family: inherit;
             font-size: .875rem;
             font-weight: 500;
             cursor: pointer;
@@ -3744,13 +3745,15 @@
 
         /* Confirm / Done button — use accent blue, not red */
         #confirm-note-btn.modal-button.confirm,
-        #confirm-input-btn.modal-button.confirm {
+        #confirm-input-btn.modal-button.confirm,
+        #gen-share-confirm.modal-button.confirm {
             background-color: var(--switch-bg-checked);
             color: var(--on-accent, #fff);
         }
 
         #confirm-note-btn.modal-button.confirm:hover,
-        #confirm-input-btn.modal-button.confirm:hover {
+        #confirm-input-btn.modal-button.confirm:hover,
+        #gen-share-confirm.modal-button.confirm:hover {
             filter: brightness(1.15);
             background-color: var(--switch-bg-checked);
         }
@@ -7113,8 +7116,10 @@ html[data-style="flat"] .modal-button.confirm:hover {
 }
 html[data-style="flat"] #confirm-note-btn.modal-button.confirm,
 html[data-style="flat"] #confirm-input-btn.modal-button.confirm,
+html[data-style="flat"] #gen-share-confirm.modal-button.confirm,
 html[data-style="flat"] #confirm-note-btn.modal-button.confirm:hover,
-html[data-style="flat"] #confirm-input-btn.modal-button.confirm:hover {
+html[data-style="flat"] #confirm-input-btn.modal-button.confirm:hover,
+html[data-style="flat"] #gen-share-confirm.modal-button.confirm:hover {
     background-color: var(--switch-bg-checked);
     color: var(--on-accent, #121110);
     filter: none;
@@ -7160,5 +7165,447 @@ html[data-style="flat"] #confirm-input-btn.modal-button.confirm:hover {
     #colorseeker-wheel-container {
         width: 150px !important;
         height: 150px !important;
+    }
+}
+
+/* Generation metadata. Same chrome tokens as the board menus.
+   Side panel, not a card grid: one record per image.
+   Opaque fills because the panel sits on top of photos. */
+.gen-meta-visually-hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}
+
+button.menu-item {
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+    min-width: 0;
+    margin: 0;
+    background: transparent;
+    border: none;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    min-height: 36px;
+}
+
+button.menu-item .menu-label {
+    min-width: 0;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    text-align: left;
+}
+
+#gen-meta-search {
+    position: absolute;
+    top: calc(var(--tabs-bar-height) + 0.55rem);
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 60;
+    display: flex;
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: 0.35rem;
+    width: max-content;
+    max-width: calc(100% - 1rem);
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0.35rem;
+    background: var(--bg-ui);
+    color: var(--text-color);
+    border: 1px solid var(--border-color);
+}
+
+#gen-meta-search[hidden] {
+    display: none !important;
+}
+
+#gen-meta-search > iconify-icon {
+    color: var(--text-color-light);
+    flex: 0 0 auto;
+    margin-left: 0.35rem;
+}
+
+#gen-meta-search input,
+#gen-meta-search select,
+#gen-meta-search-clear {
+    min-height: 44px;
+    box-sizing: border-box;
+    font: inherit;
+    font-size: 0.85rem;
+    color: var(--text-color);
+    background: rgba(0, 0, 0, 0.25);
+    border: 1px solid var(--border-color);
+}
+
+#gen-meta-search input {
+    flex: 1 1 12rem;
+    width: 12rem;
+    min-width: 0;
+    padding: 0.35rem 0.6rem;
+}
+
+#gen-meta-search input::placeholder {
+    color: var(--text-color-light);
+}
+
+#gen-meta-search select {
+    flex: 0 0 auto;
+    min-width: 44px;
+    padding: 0.35rem 0.45rem;
+}
+
+#gen-meta-search-clear {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.35rem;
+    min-width: 44px;
+    padding: 0.35rem 0.75rem;
+    white-space: nowrap;
+    cursor: pointer;
+}
+
+#gen-meta-search-clear iconify-icon {
+    display: none;
+    margin: 0;
+    color: currentColor;
+}
+
+#gen-meta-panel {
+    position: fixed;
+    top: calc(var(--tabs-bar-height) + 0.5rem);
+    right: 0.5rem;
+    bottom: 0.5rem;
+    width: min(400px, calc(100vw - 1rem));
+    max-width: calc(100vw - 1rem);
+    z-index: 2300;
+    display: flex;
+    flex-direction: column;
+    box-sizing: border-box;
+    background: var(--bg-ui);
+    color: var(--text-color);
+    border: 1px solid var(--border-color);
+    overflow: hidden;
+}
+
+#gen-meta-panel[hidden] {
+    display: none !important;
+}
+
+.gen-meta-header,
+.gen-meta-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    padding: 0.75rem 0.85rem;
+    border-bottom: 1px solid var(--border-color);
+    flex-shrink: 0;
+}
+
+.gen-meta-footer {
+    border-bottom: none;
+    border-top: 1px solid var(--border-color);
+}
+
+#gen-meta-title {
+    margin: 0;
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: var(--text-color-strong, var(--text-color));
+}
+
+#gen-meta-close,
+#gen-meta-copy-all,
+.gen-meta-copy {
+    font: inherit;
+    cursor: pointer;
+    color: var(--text-color);
+    background: transparent;
+    border: 1px solid var(--border-color);
+}
+
+#gen-meta-close {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    padding: 0;
+}
+
+#gen-meta-copy-all,
+.gen-meta-copy {
+    min-height: 36px;
+    min-width: 44px;
+    padding: 0.3rem 0.65rem;
+    font-size: 0.8rem;
+}
+
+.gen-meta-empty {
+    margin: 0;
+    padding: 0.75rem 0.85rem 0;
+    color: var(--text-color);
+    font-size: 0.95rem;
+}
+
+.gen-meta-empty[hidden] {
+    display: none !important;
+}
+
+.gen-meta-body {
+    flex: 1;
+    overflow: auto;
+    padding: 0.85rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.gen-meta-field-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    margin-bottom: 0.3rem;
+}
+
+.gen-meta-field label {
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: var(--text-color-light);
+}
+
+.gen-meta-field input,
+.gen-meta-field textarea,
+.gen-meta-field select {
+    width: 100%;
+    box-sizing: border-box;
+    background: rgba(0, 0, 0, 0.25);
+    border: 1px solid var(--border-color);
+    color: var(--text-color);
+    font: inherit;
+    font-size: 0.85rem;
+    padding: 0.5rem 0.65rem;
+    overflow-wrap: anywhere;
+}
+
+.gen-meta-field textarea {
+    resize: vertical;
+    min-height: 4.5rem;
+}
+
+.gen-meta-field-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.6rem;
+}
+
+.gen-share-dialog {
+    text-align: left;
+    max-width: 420px;
+    animation: none;
+}
+
+.gen-share-dialog .modal-button {
+    font-family: inherit;
+    font-size: 0.875rem;
+    font-weight: 500;
+}
+
+html[data-style="glass"] .gen-share-dialog .modal-button {
+    font-family: 'Inter', sans-serif;
+}
+
+html[data-style="flat"] .gen-share-dialog .modal-button {
+    font-family: 'Plus Jakarta Sans', 'Segoe UI', Arial, sans-serif;
+}
+
+.gen-share-dialog p {
+    margin: 0 0 0.85rem;
+    color: var(--text-color);
+    font-size: 0.9rem;
+    line-height: 1.4;
+}
+
+.gen-share-check {
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+    min-height: 44px;
+    margin-bottom: 1rem;
+    color: var(--text-color);
+    font-size: 0.95rem;
+    cursor: pointer;
+}
+
+.gen-share-check input {
+    width: 1.15rem;
+    height: 1.15rem;
+    flex: 0 0 auto;
+}
+
+html[data-style="glass"] #gen-meta-panel,
+html[data-style="glass"] #gen-meta-search {
+    background: #232633;
+    color: #e2e8f0;
+    border-color: rgba(255, 255, 255, 0.18);
+}
+
+html[data-style="glass"] .gen-meta-field input,
+html[data-style="glass"] .gen-meta-field textarea,
+html[data-style="glass"] .gen-meta-field select,
+html[data-style="glass"] #gen-meta-search input,
+html[data-style="glass"] #gen-meta-search select,
+html[data-style="glass"] #gen-meta-search-clear,
+html[data-style="glass"] .gen-meta-copy,
+html[data-style="glass"] #gen-meta-copy-all {
+    background: #12141c;
+    color: #e2e8f0;
+    border-color: rgba(255, 255, 255, 0.18);
+}
+
+html[data-style="glass"] .gen-meta-field select option,
+html[data-style="glass"] #gen-meta-search-field option,
+html[data-style="glass"] #gen-meta-tool option {
+    background: #232633;
+    color: #e2e8f0;
+}
+
+html[data-style="flat"] #gen-meta-panel,
+html[data-style="flat"] #gen-meta-search,
+html[data-style="flat"] .gen-share-dialog {
+    background: #24201B;
+    color: #F4F1EA;
+    border: 1px solid #7A6E60;
+    border-radius: 0;
+    box-shadow: none;
+}
+
+html[data-style="flat"] #gen-meta-title,
+html[data-style="flat"] #gen-share-title {
+    font-family: 'Outfit', 'Segoe UI', Arial, sans-serif;
+    color: #F4F1EA;
+}
+
+html[data-style="flat"] .gen-meta-field input,
+html[data-style="flat"] .gen-meta-field textarea,
+html[data-style="flat"] .gen-meta-field select,
+html[data-style="flat"] #gen-meta-search input,
+html[data-style="flat"] #gen-meta-search select,
+html[data-style="flat"] #gen-meta-search-clear,
+html[data-style="flat"] .gen-meta-copy,
+html[data-style="flat"] #gen-meta-copy-all,
+html[data-style="flat"] #gen-meta-close {
+    background: #121110;
+    color: #F4F1EA;
+    border: 1px solid #7A6E60;
+    border-radius: 0;
+    box-shadow: none;
+}
+
+html[data-style="flat"] button.menu-item {
+    background: transparent;
+    color: #F4F1EA;
+    border: none;
+    border-radius: 0;
+    box-shadow: none;
+}
+
+html[data-style="flat"] button.menu-item:hover {
+    background: #3A342C;
+}
+
+html[data-style="flat"] .gen-meta-field label,
+html[data-style="flat"] #gen-meta-search input::placeholder {
+    color: #B8AFA0;
+}
+
+html[data-style="flat"] .gen-meta-field select option,
+html[data-style="flat"] #gen-meta-search-field option {
+    background: #24201B;
+    color: #F4F1EA;
+}
+
+@media (max-width: 480px) {
+    #gen-meta-search {
+        gap: 0.25rem;
+        padding: 0.2rem;
+        max-width: calc(100% - 0.75rem);
+    }
+
+    #gen-meta-search > iconify-icon {
+        margin-left: 0.2rem;
+    }
+
+    #gen-meta-search input {
+        flex: 1 1 auto;
+        width: auto;
+        min-width: 0;
+        padding: 0.25rem 0.4rem;
+    }
+
+    #gen-meta-search select {
+        flex: 0 0 4.75rem;
+        width: 4.75rem;
+        min-width: 44px;
+        max-width: 4.75rem;
+        padding: 0.25rem 0.2rem;
+    }
+
+    #gen-meta-search-clear {
+        flex: 0 0 44px;
+        width: 44px;
+        min-width: 44px;
+        height: 44px;
+        padding: 0;
+    }
+
+    #gen-meta-search-clear .gen-meta-search-clear-label {
+        display: none;
+    }
+
+    #gen-meta-search-clear iconify-icon {
+        display: inline-block;
+    }
+}
+
+@media (max-width: 768px) {
+    button.menu-item,
+    .gen-meta-copy,
+    #gen-meta-copy-all,
+    .modal-button {
+        min-height: 44px;
+    }
+
+    #gen-meta-panel {
+        left: 0;
+        right: 0;
+        top: calc(var(--tabs-bar-height) + 0.25rem);
+        bottom: 0;
+        width: 100%;
+        max-width: 100%;
+    }
+
+    .gen-meta-field-row {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    #gen-meta-panel,
+    #gen-meta-search,
+    .gen-share-dialog {
+        transition: none;
+        animation: none;
     }
 }

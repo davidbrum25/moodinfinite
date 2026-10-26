@@ -8,6 +8,7 @@ import { mkdirSync, readFileSync, existsSync } from 'node:fs';
 import net from 'node:net';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import zlib from 'node:zlib';
 import puppeteer from 'puppeteer';
 import { measureHotPath } from './hotpath.mjs';
 
@@ -96,7 +97,7 @@ async function waitForServer(port) {
 }
 
 function isFirstParty(text) {
-    return /script\.js|modules\/moodlist\.js|cloud\.js/.test(text);
+    return /script\.js|modules\/moodlist\.js|modules\/gen-meta\.js|cloud\.js/.test(text);
 }
 
 function wait(ms) {
@@ -2287,6 +2288,7 @@ try {
     await assertMultiResolutionAndQoLFixes(page);
     await assertMoodflowArtistAll(page);
     await assertTabNamesNoCollision(page);
+    await assertGenMetaStage1(page);
 
     const lateErrors = pageErrors.filter(isFirstParty);
     assert.deepEqual(lateErrors, [], `first-party errors:\n${lateErrors.join('\n')}`);
@@ -6924,4 +6926,558 @@ async function assertTabNamesNoCollision(page) {
     });
 
     console.log('Tab Names No Collision passed.');
+}
+
+function pngCrc32(buf) {
+    let crc = 0xffffffff;
+    for (let i = 0; i < buf.length; i++) {
+        crc ^= buf[i];
+        for (let bit = 0; bit < 8; bit++) {
+            const mask = -(crc & 1);
+            crc = (crc >>> 1) ^ (0xedb88320 & mask);
+        }
+    }
+    return (crc ^ 0xffffffff) >>> 0;
+}
+
+function pngChunk(type, data) {
+    const body = Buffer.concat([Buffer.from(type, 'ascii'), data]);
+    const out = Buffer.alloc(8 + body.length);
+    out.writeUInt32BE(data.length, 0);
+    body.copy(out, 4);
+    out.writeUInt32BE(pngCrc32(body), 4 + body.length);
+    return out;
+}
+
+function pngTextChunk(keyword, text) {
+    const data = Buffer.concat([Buffer.from(keyword, 'latin1'), Buffer.from([0]), Buffer.from(text, 'utf8')]);
+    return pngChunk('tEXt', data);
+}
+
+function buildComfyPng() {
+    const graph = {
+        4: { class_type: 'CheckpointLoaderSimple', inputs: { ckpt_name: 'dreamshaper.safetensors' } },
+        6: { class_type: 'CLIPTextEncode', inputs: { text: 'un gato en la azotea', clip: ['4', 1] } },
+        7: { class_type: 'CLIPTextEncode', inputs: { text: 'borroso, texto', clip: ['4', 1] } },
+        10: {
+            class_type: 'LoraLoader',
+            inputs: {
+                lora_name: 'detalle.safetensors',
+                strength_model: 0.65,
+                strength_clip: 0.65,
+                model: ['4', 0],
+                clip: ['4', 1],
+            },
+        },
+        3: {
+            class_type: 'KSampler',
+            inputs: {
+                seed: 424242,
+                steps: 20,
+                cfg: 7,
+                sampler_name: 'euler',
+                scheduler: 'normal',
+                denoise: 1,
+                model: ['10', 0],
+                positive: ['6', 0],
+                negative: ['7', 0],
+                latent_image: ['5', 0],
+            },
+        },
+    };
+    const workflow = { nodes: [{ RAW_WORKFLOW_GRAPH: true, class_type: 'should-not-be-stored' }] };
+    const ihdr = Buffer.alloc(13);
+    ihdr.writeUInt32BE(8, 0);
+    ihdr.writeUInt32BE(8, 4);
+    ihdr[8] = 8;
+    ihdr[9] = 2;
+    const row = Buffer.alloc(1 + 8 * 3);
+    for (let px = 0; px < 8; px++) {
+        row[1 + px * 3] = 220;
+        row[2 + px * 3] = 20;
+        row[3 + px * 3] = 20;
+    }
+    const raw = Buffer.concat(Array.from({ length: 8 }, () => row));
+    const idat = zlib.deflateSync(raw);
+    return Buffer.concat([
+        Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]),
+        pngChunk('IHDR', ihdr),
+        pngTextChunk('prompt', JSON.stringify(graph)),
+        pngTextChunk('workflow', JSON.stringify(workflow)),
+        pngChunk('IDAT', idat),
+        pngChunk('IEND', Buffer.alloc(0)),
+    ]);
+}
+
+async function assertGenMetaStage1(page) {
+    console.log('Testing generation metadata stage 1...');
+    await page.setViewport({ width: 1280, height: 800, deviceScaleFactor: 1 });
+    const pngB64 = buildComfyPng().toString('base64');
+
+    const imported = await page.evaluate(async (b64) => {
+        await new Promise((resolve) => {
+            if (window.GenMeta) resolve();
+            else window.addEventListener('load', () => resolve(), { once: true });
+        });
+        createNewProject('moodinfinite');
+        const binary = atob(b64);
+        const bytes = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+        const before = items.length;
+        const file = new File([bytes], 'comfy-cat.png', { type: 'image/png' });
+        processFiles([file], { x: 240, y: 180 });
+        const deadline = Date.now() + 5000;
+        let card = null;
+        while (Date.now() < deadline) {
+            card = items.find((item) => item.genMeta && item.genMeta.prompt && item.genMeta.prompt.includes('un gato'));
+            if (card) break;
+            await new Promise((resolve) => setTimeout(resolve, 30));
+        }
+        const blob = await new Promise((resolve) => {
+            const canvas = document.createElement('canvas');
+            canvas.width = 2;
+            canvas.height = 2;
+            canvas.getContext('2d').fillRect(0, 0, 2, 2);
+            canvas.toBlob(resolve, 'image/jpeg', 0.8);
+        });
+        const jpegCount = items.length;
+        processFiles([new File([blob], 'plain.jpg', { type: 'image/jpeg' })], { x: 40, y: 40 });
+        const jpegDeadline = Date.now() + 4000;
+        while (Date.now() < jpegDeadline && items.length === jpegCount) {
+            await new Promise((resolve) => setTimeout(resolve, 30));
+        }
+        const jpeg = items.find((item) => item.imageId && !item.genMeta && item !== card);
+        const dumped = card ? JSON.stringify(card) : '';
+        return {
+            added: items.length - before,
+            hasGen: !!window.GenMeta,
+            prompt: card && card.genMeta && card.genMeta.prompt,
+            negative: card && card.genMeta && card.genMeta.negativePrompt,
+            model: card && card.genMeta && card.genMeta.model,
+            seed: card && card.genMeta && card.genMeta.seed,
+            loras: card && card.genMeta && card.genMeta.loras,
+            tool: card && card.genMeta && card.genMeta.tool,
+            keys: card && card.genMeta ? Object.keys(card.genMeta) : [],
+            dumpedHasWorkflow: dumped.includes('RAW_WORKFLOW_GRAPH') || dumped.includes('class_type') || dumped.includes('"workflow"'),
+            jpegImported: !!jpeg,
+            jpegMeta: jpeg ? jpeg.genMeta : 'missing-card',
+        };
+    }, pngB64);
+
+    assert.equal(imported.hasGen, true, 'GenMeta module did not load');
+    assert.ok(imported.added >= 1, 'processFiles did not add the PNG');
+    assert.equal(imported.prompt, 'un gato en la azotea');
+    assert.equal(imported.negative, 'borroso, texto');
+    assert.equal(imported.model, 'dreamshaper.safetensors');
+    assert.equal(imported.seed, '424242');
+    assert.deepEqual(imported.loras, ['detalle.safetensors:0.65']);
+    assert.equal(imported.tool, 'ComfyUI');
+    assert.equal(imported.dumpedHasWorkflow, false, 'raw workflow was stored on the card');
+    assert.equal(imported.keys.includes('workflow'), false);
+    assert.equal(imported.jpegImported, true, 'jpeg import did not add a card');
+    assert.equal(imported.jpegMeta, undefined);
+
+    const legacy = await page.evaluate(() => {
+        const payload = JSON.stringify({
+            items: [{ id: 'old-card', type: 'image', x: 20, y: 20, width: 40, height: 40, rotation: 0, opacity: 1 }],
+            cameraOffset: { x: 0, y: 0 },
+            cameraZoom: 1,
+        });
+        loadProject(payload);
+        const item = items.find((entry) => entry.id === 'old-card');
+        selectedItems = [item];
+        onContextMenu({ preventDefault() {}, isFake: true, clientX: 280, clientY: 180 });
+        const opener = document.getElementById('gen-meta-open-btn');
+        opener.focus();
+        openGenMetaPanel(item, opener);
+        const empty = document.getElementById('gen-meta-empty');
+        const prompt = document.getElementById('gen-meta-prompt');
+        prompt.value = 'Z'.repeat(5000);
+        prompt.dispatchEvent(new Event('input', { bubbles: true }));
+        const stored = item.genMeta && item.genMeta.prompt;
+        document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+        return {
+            hadMeta: Object.prototype.hasOwnProperty.call(item, 'genMeta') === false || !!(item.genMeta && item.genMeta.prompt),
+            emptyText: empty.textContent.trim(),
+            emptyHiddenBeforeType: false,
+            shown: empty.textContent.trim(),
+            panelWasOpen: true,
+            promptLength: stored ? stored.length : 0,
+            panelHidden: document.getElementById('gen-meta-panel').hidden,
+            focusId: document.activeElement && document.activeElement.id,
+            genMeta: item.genMeta,
+        };
+    });
+    assert.equal(legacy.shown, 'Sin datos de generación');
+    assert.equal(legacy.promptLength, 4000, 'manual edit did not cap the prompt');
+    assert.equal(legacy.panelHidden, true, 'Escape did not close the generation panel');
+    assert.ok(legacy.focusId === 'gen-meta-open-btn' || legacy.focusId === 'gen-meta-search-input', `focus did not return (${legacy.focusId})`);
+
+    const capped = await page.evaluate(() => {
+        const clean = window.GenMeta.sanitizeGenMeta({
+            prompt: 'P'.repeat(4500),
+            negativePrompt: 'N'.repeat(4500),
+            notes: 'B'.repeat(2500),
+            model: 'M'.repeat(240),
+            tool: 'T'.repeat(240),
+            seed: '1'.repeat(80),
+            date: 'D'.repeat(80),
+            loras: Array.from({ length: 25 }, (_, i) => ('L'.repeat(240)) + i),
+            workflow: { nodes: [{ class_type: 'Nope' }] },
+        });
+        const loaded = JSON.stringify({
+            items: [{
+                id: 'long-card',
+                type: 'image',
+                x: 0,
+                y: 0,
+                width: 10,
+                height: 10,
+                genMeta: { prompt: 'Q'.repeat(4200), tool: 'ComfyUI', notes: 'n'.repeat(2100) },
+            }],
+            cameraOffset: { x: 0, y: 0 },
+            cameraZoom: 1,
+        });
+        loadProject(loaded);
+        const item = items.find((entry) => entry.id === 'long-card');
+        return {
+            prompt: clean.prompt.length,
+            negative: clean.negativePrompt.length,
+            notes: clean.notes.length,
+            model: clean.model.length,
+            tool: clean.tool.length,
+            seed: clean.seed.length,
+            date: clean.date.length,
+            loras: clean.loras.length,
+            loraLen: clean.loras[0].length,
+            workflow: Object.prototype.hasOwnProperty.call(clean, 'workflow'),
+            loadedPrompt: item.genMeta.prompt.length,
+            loadedNotes: item.genMeta.notes.length,
+            loadedTool: item.genMeta.tool,
+        };
+    });
+    assert.equal(capped.prompt, 4000);
+    assert.equal(capped.negative, 4000);
+    assert.equal(capped.notes, 2000);
+    assert.equal(capped.model, 200);
+    assert.equal(capped.tool, 200);
+    assert.equal(capped.seed, 40);
+    assert.equal(capped.date, 40);
+    assert.equal(capped.loras, 20);
+    assert.equal(capped.loraLen, 200);
+    assert.equal(capped.workflow, false);
+    assert.equal(capped.loadedPrompt, 4000);
+    assert.equal(capped.loadedNotes, 2000);
+    assert.equal(capped.loadedTool, 'ComfyUI');
+
+    const searchChrome = await page.evaluate(() => {
+        createNewProject('moodinfinite');
+        const bar = document.getElementById('gen-meta-search');
+        const shown = () => !!(bar && !bar.hidden && getComputedStyle(bar).display !== 'none');
+        draw();
+        const empty = shown();
+        items.push({
+            id: 'search-vis-box', type: 'box', color: '#429eff', x: 30, y: 30, width: 60, height: 40,
+            rotation: 0, opacity: 1, scaleX: 1, scaleY: 1, style: 'fill', isPinned: false,
+        });
+        draw();
+        const boxOnly = shown();
+        items.push({
+            id: 'search-vis-image', type: 'image', x: 140, y: 30, width: 48, height: 48,
+            rotation: 0, opacity: 1, scaleX: 1, scaleY: 1,
+        });
+        draw();
+        const withImage = shown();
+        const imageAt = items.findIndex((item) => item.id === 'search-vis-image');
+        if (imageAt >= 0) items.splice(imageAt, 1);
+        draw();
+        const afterRemove = shown();
+        items.push({
+            id: 'search-vis-image', type: 'image', x: 140, y: 30, width: 48, height: 48,
+            rotation: 0, opacity: 1, scaleX: 1, scaleY: 1,
+        });
+        const filledId = activeProjectId;
+        const filled = projects.find((entry) => entry.id === filledId);
+        if (filled && filled.data) filled.data.items = items;
+        createNewProject('moodinfinite');
+        draw();
+        const otherEmpty = shown();
+        switchTab(filledId);
+        draw();
+        const afterTab = shown();
+        loadProject(JSON.stringify({ items: [], cameraOffset: { x: 0, y: 0 }, cameraZoom: 1 }));
+        draw();
+        const loadedEmpty = shown();
+        loadProject(JSON.stringify({
+            items: [{ id: 'loaded-image', type: 'image', x: 8, y: 8, width: 24, height: 24, rotation: 0, opacity: 1 }],
+            cameraOffset: { x: 0, y: 0 },
+            cameraZoom: 1,
+        }));
+        draw();
+        const loadedImage = shown();
+        const nested = moodboardHasImageCard([{ type: 'group', items: [{ type: 'image', id: 'nested' }] }]);
+        const nestedMiss = moodboardHasImageCard([{ type: 'group', items: [{ type: 'text', id: 'note' }] }, { type: 'box', id: 'sq' }]);
+        const previousStyle = document.documentElement.getAttribute('data-style') || 'flat';
+        const styleSample = (style) => {
+            document.documentElement.setAttribute('data-style', style);
+            if (document.body) document.body.setAttribute('data-style', style);
+            openGenShareDialog(document.getElementById('save-project-btn'));
+            const cancel = getComputedStyle(document.getElementById('gen-share-cancel'));
+            const confirmBtn = getComputedStyle(document.getElementById('gen-share-confirm'));
+            const other = getComputedStyle(document.getElementById('cancel-new-btn'));
+            const body = getComputedStyle(document.body);
+            const result = {
+                cancel: cancel.fontFamily,
+                confirm: confirmBtn.fontFamily,
+                other: other.fontFamily,
+                body: body.fontFamily,
+                cancelWeight: cancel.fontWeight,
+                otherWeight: other.fontWeight,
+            };
+            closeGenShareDialog();
+            return result;
+        };
+        const fonts = { flat: styleSample('flat'), glass: styleSample('glass') };
+        document.documentElement.setAttribute('data-style', previousStyle);
+        if (document.body) document.body.setAttribute('data-style', previousStyle);
+        return { empty, boxOnly, withImage, afterRemove, otherEmpty, afterTab, loadedEmpty, loadedImage, nested, nestedMiss, fonts };
+    });
+    assert.equal(searchChrome.empty, false, 'search bar stayed visible on an empty moodboard');
+    assert.equal(searchChrome.boxOnly, false, 'search bar showed for a board with no image card');
+    assert.equal(searchChrome.withImage, true, 'search bar stayed hidden after an image card was added');
+    assert.equal(searchChrome.afterRemove, false, 'search bar stayed visible after the image card was removed');
+    assert.equal(searchChrome.otherEmpty, false, 'search bar stayed visible after switching to an empty moodboard');
+    assert.equal(searchChrome.afterTab, true, 'search bar stayed hidden after switching back to a moodboard with an image');
+    assert.equal(searchChrome.loadedEmpty, false, 'search bar stayed visible after loading an empty project');
+    assert.equal(searchChrome.loadedImage, true, 'search bar stayed hidden after loading a project with an image');
+    assert.equal(searchChrome.nested, true);
+    assert.equal(searchChrome.nestedMiss, false);
+    for (const style of ['flat', 'glass']) {
+        const sample = searchChrome.fonts[style];
+        const firstFamily = (value) => String(value || '').split(',')[0].replace(/["']/g, '').trim().toLowerCase();
+        assert.equal(sample.cancel, sample.body, `${style} Cancelar font ${sample.cancel} !== body ${sample.body}`);
+        assert.equal(sample.confirm, sample.body, `${style} Exportar font ${sample.confirm} !== body ${sample.body}`);
+        assert.equal(sample.cancel, sample.other, `${style} share button font ${sample.cancel} !== other modal button ${sample.other}`);
+        assert.notEqual(firstFamily(sample.cancel), 'arial', `${style} share button used Arial (${sample.cancel})`);
+        assert.equal(sample.cancelWeight, sample.otherWeight);
+    }
+
+    const filtered = await page.evaluate(async () => {
+        createNewProject('moodinfinite');
+        cameraOffset = { x: 0, y: 0 };
+        cameraZoom = 1;
+        const paint = (color) => new Promise((resolve) => {
+            const canvas = document.createElement('canvas');
+            canvas.width = 80;
+            canvas.height = 80;
+            const g = canvas.getContext('2d');
+            g.fillStyle = color;
+            g.fillRect(0, 0, 80, 80);
+            const img = new Image();
+            img.onload = () => resolve(img);
+            img.src = canvas.toDataURL('image/png');
+        });
+        const red = await paint('#ff0000');
+        const blue = await paint('#0000ff');
+        items.length = 0;
+        selectedItems = [];
+        items.push(
+            {
+                id: 'card-red', type: 'image', x: 40, y: 40, width: 80, height: 80,
+                rotation: 0, opacity: 1, scaleX: 1, scaleY: 1, img: red,
+                genMeta: { prompt: 'gato azul', model: 'sdxl', loras: ['furry:0.5'], tool: 'ComfyUI' },
+            },
+            {
+                id: 'card-blue', type: 'image', x: 240, y: 40, width: 80, height: 80,
+                rotation: 0, opacity: 1, scaleX: 1, scaleY: 1, img: blue,
+                genMeta: { prompt: 'ciudad de noche', model: 'flux-dev', loras: ['neon:1'], tool: 'ComfyUI' },
+            },
+            {
+                id: 'card-plain', type: 'image', x: 440, y: 40, width: 80, height: 80,
+                rotation: 0, opacity: 1, scaleX: 1, scaleY: 1, img: red,
+            },
+        );
+        const sample = () => {
+            draw();
+            const ctx = document.getElementById('moodboard-canvas').getContext('2d');
+            const pixel = (x, y) => {
+                const data = ctx.getImageData(x, y, 1, 1).data;
+                return [data[0], data[1], data[2], data[3]];
+            };
+            return {
+                red: pixel(80, 80),
+                blue: pixel(280, 80),
+                plain: pixel(480, 80),
+                states: {
+                    red: genMetaFilterState(items.find((item) => item.id === 'card-red')),
+                    blue: genMetaFilterState(items.find((item) => item.id === 'card-blue')),
+                    plain: genMetaFilterState(items.find((item) => item.id === 'card-plain')),
+                },
+            };
+        };
+        const input = document.getElementById('gen-meta-search-input');
+        const field = document.getElementById('gen-meta-search-field');
+        const setQuery = (value, which) => {
+            field.value = which;
+            field.dispatchEvent(new Event('change', { bubbles: true }));
+            input.value = value;
+            input.dispatchEvent(new Event('input', { bubbles: true }));
+            return sample();
+        };
+        const byPrompt = setQuery('gato', 'all');
+        const byModel = setQuery('flux', 'model');
+        const byLora = setQuery('neon', 'lora');
+        const promptFieldMiss = setQuery('gato', 'model');
+        input.focus();
+        input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+        const cleared = {
+            value: input.value,
+            query: genMetaQuery,
+            states: sample().states,
+        };
+        document.getElementById('gen-meta-search-clear').click();
+        return { byPrompt, byModel, byLora, promptFieldMiss, cleared };
+    });
+
+    const dimmed = (pixel) => pixel[3] < 120;
+    const solid = (pixel) => pixel[3] > 200;
+    assert.equal(filtered.byPrompt.states.red, 'match');
+    assert.equal(filtered.byPrompt.states.blue, 'dim');
+    assert.equal(filtered.byPrompt.states.plain, 'dim');
+    assert.ok(solid(filtered.byPrompt.red) && filtered.byPrompt.red[0] > 200, `prompt match was not painted ${filtered.byPrompt.red}`);
+    assert.ok(dimmed(filtered.byPrompt.blue), `model card was not dimmed for a prompt query ${filtered.byPrompt.blue}`);
+    assert.equal(filtered.byModel.states.blue, 'match');
+    assert.equal(filtered.byModel.states.red, 'dim');
+    assert.ok(solid(filtered.byModel.blue) && filtered.byModel.blue[2] > 200, `model match was not painted ${filtered.byModel.blue}`);
+    assert.equal(filtered.byLora.states.blue, 'match');
+    assert.equal(filtered.byLora.states.red, 'dim');
+    assert.equal(filtered.promptFieldMiss.states.red, 'dim');
+    assert.equal(filtered.promptFieldMiss.states.blue, 'dim');
+    assert.equal(filtered.cleared.value, '');
+    assert.equal(filtered.cleared.query, '');
+    assert.equal(filtered.cleared.states.red, 'idle');
+    assert.equal(filtered.cleared.states.blue, 'idle');
+
+    const shared = await page.evaluate(async () => {
+        createNewProject('moodinfinite');
+        items.length = 0;
+        items.push({
+            id: 'share-card',
+            type: 'image',
+            x: 10,
+            y: 10,
+            width: 30,
+            height: 30,
+            rotation: 0,
+            opacity: 1,
+            scaleX: 1,
+            scaleY: 1,
+            genMeta: {
+                prompt: 'secreto compartido',
+                negativePrompt: 'no texto',
+                model: 'modelo-x',
+                seed: '9',
+                loras: ['lora-x:0.4'],
+                tool: 'ComfyUI',
+                notes: 'nota privada',
+            },
+        });
+        const active = projects.find((entry) => entry.id === activeProjectId);
+        active.data.items = items;
+        const box = document.getElementById('gen-share-include');
+        const initialChecked = box.checked;
+        const initialAttr = box.hasAttribute('checked');
+        openGenShareDialog(document.getElementById('export-share-mood-btn'));
+        const openedChecked = document.getElementById('gen-share-include').checked;
+
+        window.__downloads = [];
+        const origClick = HTMLAnchorElement.prototype.click;
+        URL.revokeObjectURL = () => {};
+        HTMLAnchorElement.prototype.click = function () {
+            window.__downloads.push({ download: this.download || '', href: this.href || '' });
+        };
+        const readZip = async () => {
+            const href = window.__downloads.at(-1) && window.__downloads.at(-1).href;
+            const buf = await (await fetch(href)).arrayBuffer();
+            const zip = await window.JSZip.loadAsync(buf);
+            const name = Object.keys(zip.files).find((entry) => entry.endsWith('data.json'));
+            return name ? await zip.files[name].async('string') : '';
+        };
+        document.getElementById('gen-share-confirm').click();
+        for (let i = 0; i < 80 && !window.__downloads.length; i++) {
+            await new Promise((resolve) => setTimeout(resolve, 25));
+        }
+        const off = await readZip();
+        window.__downloads = [];
+        openGenShareDialog(document.getElementById('save-project-btn'));
+        document.getElementById('gen-share-include').checked = true;
+        document.getElementById('gen-share-confirm').click();
+        for (let i = 0; i < 80 && !window.__downloads.length; i++) {
+            await new Promise((resolve) => setTimeout(resolve, 25));
+        }
+        const on = await readZip();
+        window.__downloads = [];
+        saveProject();
+        for (let i = 0; i < 80 && !window.__downloads.length; i++) {
+            await new Promise((resolve) => setTimeout(resolve, 25));
+        }
+        const normal = await readZip();
+        await saveToBrowser();
+        const stored = await window.localforage.getItem('moodinfinite_projects');
+        const savedBoard = stored.find((entry) => entry.id === activeProjectId);
+        const savedMeta = savedBoard && savedBoard.data && savedBoard.data.items && savedBoard.data.items[0] && savedBoard.data.items[0].genMeta;
+
+        const paint = await new Promise((resolve) => {
+            const canvas = document.createElement('canvas');
+            canvas.width = 4;
+            canvas.height = 4;
+            canvas.getContext('2d').fillRect(0, 0, 4, 4);
+            const img = new Image();
+            img.onload = () => resolve(img);
+            img.src = canvas.toDataURL('image/png');
+        });
+        items[0].img = paint;
+        window.__downloads = [];
+        saveAsPng();
+        const pngHref = window.__downloads.at(-1) ? window.__downloads.at(-1).href : '';
+        const pngText = pngHref ? atob(pngHref.split(',')[1] || '') : '';
+        const sheet = buildMoodflowSheetHtml({
+            name: 'Hoja',
+            data: { frames: [{ id: 'f', title: 'Plano', description: 'Acción', image: null, meta: { duration: '3s' }, genMeta: { prompt: 'secreto compartido' } }] },
+        });
+        const pdf = buildStoryflowPdf({
+            name: 'Hoja',
+            data: { frames: [{ id: 'f', title: 'Plano', description: 'Acción', image: null, meta: { duration: '3s' }, genMeta: { prompt: 'secreto compartido' } }] },
+        }, 'October 15, 2026');
+        const pdfText = pdf.output('arraybuffer');
+        const pdfLatin = new TextDecoder('latin1').decode(pdfText);
+
+        HTMLAnchorElement.prototype.click = origClick;
+        return {
+            initialChecked,
+            initialAttr,
+            openedChecked,
+            label: document.querySelector('.gen-share-check').textContent.replace(/\s+/g, ' ').trim(),
+            off: off.includes('genMeta') || off.includes('secreto compartido'),
+            on: on.includes('secreto compartido') && on.includes('modelo-x') && on.includes('lora-x:0.4'),
+            normal: normal.includes('secreto compartido') && normal.includes('"genMeta"'),
+            savedPrompt: savedMeta && savedMeta.prompt,
+            pngHasSecret: pngText.includes('secreto compartido'),
+            sheetHasSecret: sheet.includes('secreto compartido'),
+            pdfHasSecret: pdfLatin.includes('secreto compartido'),
+        };
+    });
+
+    assert.equal(shared.initialChecked, false);
+    assert.equal(shared.initialAttr, false);
+    assert.equal(shared.openedChecked, false);
+    assert.ok(shared.label.includes('Incluir datos de generación'));
+    assert.equal(shared.off, false, 'share export kept genMeta while the checkbox was off');
+    assert.equal(shared.on, true, 'share export dropped genMeta while the checkbox was on');
+    assert.equal(shared.normal, true, 'normal save dropped genMeta');
+    assert.equal(shared.savedPrompt, 'secreto compartido');
+    assert.equal(shared.pngHasSecret, false, 'PNG export embedded genMeta');
+    assert.equal(shared.sheetHasSecret, false, 'sheet export embedded genMeta');
+    assert.equal(shared.pdfHasSecret, false, 'PDF export embedded genMeta');
+    console.log('Generation metadata stage 1 passed.');
 }
