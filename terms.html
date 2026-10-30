@@ -1,0 +1,410 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Terms of Service / Términos del Servicio — Moodinfinite</title>
+    <link rel="icon" type="image/png" href="_branding/_png/moodinfinite__Iso_small.png">
+    <style>
+        :root {
+            --bg-page: #0d0d0d;
+            --bg-card: #18191f;
+            --bg-card-subtle: #1f2029;
+            --border-color: rgba(255, 255, 255, 0.1);
+            --border-highlight: rgba(66, 158, 255, 0.35);
+            --accent: #429eff;
+            --accent-hover: #70b5ff;
+            --accent-bg: rgba(66, 158, 255, 0.1);
+            --text-strong: #f8fafc;
+            --text-body: #cbd5e1;
+            --text-muted: #94a3b8;
+            --code-bg: #121318;
+            --shadow: 0 16px 36px rgba(0, 0, 0, 0.45);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Inter", Helvetica, Arial, sans-serif;
+            background-color: var(--bg-page);
+            color: var(--text-body);
+            line-height: 1.65;
+            padding: 2rem 1rem 4rem;
+            min-height: 100vh;
+        }
+
+        a {
+            color: var(--accent);
+            text-decoration: none;
+            transition: color 0.15s ease, text-decoration-color 0.15s ease;
+        }
+
+        a:hover {
+            color: var(--accent-hover);
+            text-decoration: underline;
+        }
+
+        .page-container {
+            max-width: 880px;
+            margin: 0 auto;
+        }
+
+        /* Top Header */
+        .header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 1rem;
+            padding: 1rem 1.5rem;
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 14px;
+            margin-bottom: 2rem;
+            box-shadow: var(--shadow);
+        }
+
+        .brand-link {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.75rem;
+            text-decoration: none;
+            color: var(--text-strong);
+            font-weight: 700;
+            font-size: 1.15rem;
+            letter-spacing: -0.02em;
+        }
+
+        .brand-logo {
+            height: 36px;
+            width: auto;
+            display: block;
+            object-fit: contain;
+        }
+
+        .header-nav {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            flex-wrap: wrap;
+        }
+
+        .nav-btn {
+            display: inline-flex;
+            align-items: center;
+            padding: 0.4rem 0.85rem;
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+            background: var(--bg-card-subtle);
+            color: var(--text-body);
+            font-size: 0.85rem;
+            font-weight: 500;
+            transition: all 0.15s ease;
+            text-decoration: none;
+        }
+
+        .nav-btn:hover {
+            background: var(--border-color);
+            color: var(--text-strong);
+            text-decoration: none;
+        }
+
+        .nav-btn.primary {
+            background: var(--accent);
+            color: #ffffff;
+            border-color: var(--accent);
+        }
+
+        .nav-btn.primary:hover {
+            background: var(--accent-hover);
+            border-color: var(--accent-hover);
+            color: #ffffff;
+        }
+
+        /* Quick switcher banner */
+        .lang-switch-bar {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.75rem;
+            padding: 0.75rem 1rem;
+            background: rgba(66, 158, 255, 0.08);
+            border: 1px solid var(--border-highlight);
+            border-radius: 10px;
+            margin-bottom: 2rem;
+            font-size: 0.9rem;
+            text-align: center;
+        }
+
+        .lang-switch-bar a {
+            font-weight: 600;
+        }
+
+        /* Document Article */
+        .document-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 14px;
+            padding: 2.25rem;
+            box-shadow: var(--shadow);
+            margin-bottom: 2.5rem;
+        }
+
+        .doc-header {
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .doc-badge {
+            display: inline-block;
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: var(--accent);
+            background: var(--accent-bg);
+            padding: 0.25rem 0.65rem;
+            border-radius: 999px;
+            border: 1px solid var(--border-highlight);
+            margin-bottom: 0.75rem;
+        }
+
+        h1 {
+            color: var(--text-strong);
+            font-size: 1.85rem;
+            font-weight: 700;
+            line-height: 1.25;
+            margin-bottom: 0.5rem;
+        }
+
+        .meta-date {
+            color: var(--text-muted);
+            font-size: 0.85rem;
+        }
+
+        h2 {
+            color: var(--text-strong);
+            font-size: 1.25rem;
+            font-weight: 600;
+            margin: 2rem 0 0.85rem;
+            padding-bottom: 0.35rem;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        h3 {
+            color: var(--text-strong);
+            font-size: 1.05rem;
+            font-weight: 600;
+            margin: 1.25rem 0 0.5rem;
+        }
+
+        p {
+            margin-bottom: 1rem;
+        }
+
+        ul, ol {
+            margin: 0.5rem 0 1.25rem 1.5rem;
+        }
+
+        li {
+            margin-bottom: 0.5rem;
+        }
+
+        code {
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+            font-size: 0.88em;
+            background: var(--code-bg);
+            color: #93c5fd;
+            padding: 0.15rem 0.4rem;
+            border-radius: 4px;
+            border: 1px solid rgba(255, 255, 255, 0.06);
+        }
+
+        .highlight-callout {
+            background: var(--code-bg);
+            border-left: 4px solid var(--accent);
+            border-top: 1px solid var(--border-color);
+            border-right: 1px solid var(--border-color);
+            border-bottom: 1px solid var(--border-color);
+            border-radius: 0 8px 8px 0;
+            padding: 1.25rem;
+            margin: 1.5rem 0;
+            color: var(--text-strong);
+        }
+
+        .highlight-callout strong {
+            color: #ffffff;
+        }
+
+        .footer {
+            text-align: center;
+            font-size: 0.85rem;
+            color: var(--text-muted);
+            padding-top: 1rem;
+        }
+
+        .footer a {
+            color: var(--text-body);
+        }
+
+        .footer a:hover {
+            color: var(--accent);
+        }
+
+        @media (max-width: 640px) {
+            body {
+                padding: 1rem 0.5rem 2rem;
+            }
+            .document-card {
+                padding: 1.5rem 1rem;
+            }
+            h1 {
+                font-size: 1.5rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="page-container">
+        <!-- Header -->
+        <header class="header">
+            <a href="/" class="brand-link" title="Moodinfinite Homepage">
+                <img src="_branding/_png/moodinfinite__Logotipo_alpha.png" alt="Moodinfinite Logo" class="brand-logo" onerror="this.style.display='none';">
+                <span>Moodinfinite</span>
+            </a>
+            <nav class="header-nav">
+                <a href="/" class="nav-btn primary">&larr; Back to App</a>
+                <a href="privacy.html" class="nav-btn">Privacy Policy</a>
+                <a href="#es" class="nav-btn">Español</a>
+                <a href="#en" class="nav-btn">English</a>
+            </nav>
+        </header>
+
+        <!-- Quick language selector bar -->
+        <div class="lang-switch-bar">
+            <span>Language / Idioma:</span>
+            <a href="#en">English (US)</a> · <a href="#es">Español (ES)</a>
+        </div>
+
+        <!-- ================================================================= -->
+        <!-- ENGLISH SECTION                                                   -->
+        <!-- ================================================================= -->
+        <article id="en" class="document-card">
+            <header class="doc-header">
+                <span class="doc-badge">English</span>
+                <h1>Terms of Service</h1>
+                <p class="meta-date">Last updated: October 29, 2026 · Effective Date: October 29, 2026</p>
+            </header>
+
+            <p>Welcome to <strong>Moodinfinite</strong> (<a href="index.html">https://moodinfinite.com</a>). By accessing, browsing, or using this web application, you agree to these Terms of Service. If you do not agree with any part of these terms, please do not use the application.</p>
+
+            <h2>1. Use of the Free Web Application</h2>
+            <p>Moodinfinite is provided as a free, open, client-side digital canvas and moodboard application designed to organize creative ideas, images, notes, tasks, and visual concepts. There are no mandatory subscriptions, paywalls, or fees to access the core application features.</p>
+
+            <h2>2. User Content & Intellectual Property Ownership</h2>
+            <div class="highlight-callout">
+                <p><strong>You retain 100% of all rights, ownership, and copyright over your boards, images, files, sketches, and content.</strong></p>
+            </div>
+            <p>Moodinfinite claims <strong>zero ownership or rights</strong> over any content you create, paste, upload, or arrange in the application. Because Moodinfinite runs 100% client-side directly in your browser, your content remains entirely on your personal device and/or in your private Google Drive account.</p>
+
+            <h2>3. Optional Google Drive Synchronization</h2>
+            <p>Moodinfinite provides an optional integration with Google Drive for backup and cross-device synchronization:</p>
+            <ul>
+                <li>Google Drive integration is strictly optional. You are free to use Moodinfinite entirely locally and export/import project files manually.</li>
+                <li>When enabled, Google Drive sync is used at your own discretion and responsibility. You are responsible for maintaining the security of your Google Account and ensuring you have adequate Google Drive storage space.</li>
+                <li>Moodinfinite creates and manages only its dedicated folder (<code>Moodinfinite</code>) and its project files (<code>.mood</code> files), as described in our <a href="privacy.html">Privacy Policy</a>.</li>
+                <li>You may disconnect your Google Account from Moodinfinite or revoke permissions at any time via <a href="https://myaccount.google.com/permissions" target="_blank" rel="noopener noreferrer">https://myaccount.google.com/permissions</a>.</li>
+            </ul>
+
+            <h2>4. Open Source License (GNU General Public License v3)</h2>
+            <p>Moodinfinite is free and open-source software. The source code of Moodinfinite is licensed under the <strong>GNU General Public License v3.0 (GPLv3)</strong>.</p>
+            <p>You can inspect, review, fork, contribute to, and audit the full source code on GitHub at:</p>
+            <p><a href="https://github.com/davidbrum25/moodinfinite" target="_blank" rel="noopener noreferrer"><strong>https://github.com/davidbrum25/moodinfinite</strong></a></p>
+            <p>Under the GPLv3 license, you are free to run, study, share, and modify the software in accordance with the terms of the GNU General Public License as published by the Free Software Foundation.</p>
+
+            <h2>5. Disclaimer of Warranties ("As-Is") & Limitation of Liability</h2>
+            <div class="highlight-callout">
+                <p><strong>MOODINFINITE IS PROVIDED "AS IS" AND "AS AVAILABLE", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, AND NONINFRINGEMENT.</strong></p>
+            </div>
+            <p>In no event shall the author, copyright holders, or contributors be liable for any claim, damages, data loss, interruption of service, or other liability, whether in an action of contract, tort or otherwise, arising from, out of or in connection with the software or the use or other dealings in the software.</p>
+            <p>Because Moodinfinite stores data locally in your browser (IndexedDB / localStorage), you are encouraged to periodically export backup copies of your important boards using the "Save Project" (Ctrl+S / .mood file export) feature.</p>
+
+            <h2>6. Privacy Policy</h2>
+            <p>Your privacy is important to us. Please review our <a href="privacy.html">Privacy Policy</a> to understand how client-side storage and optional Google OAuth permissions are handled.</p>
+
+            <h2>7. Contact Information</h2>
+            <p>If you have any questions, feedback, or inquiries regarding these Terms of Service, please contact the developer:</p>
+            <ul>
+                <li><strong>Author:</strong> H. David Brum</li>
+                <li><strong>Email:</strong> <a href="mailto:davidbrum@gmail.com">davidbrum@gmail.com</a></li>
+                <li><strong>Project Repository:</strong> <a href="https://github.com/davidbrum25/moodinfinite" target="_blank" rel="noopener noreferrer">https://github.com/davidbrum25/moodinfinite</a></li>
+            </ul>
+        </article>
+
+        <!-- ================================================================= -->
+        <!-- SPANISH SECTION                                                   -->
+        <!-- ================================================================= -->
+        <article id="es" class="document-card">
+            <header class="doc-header">
+                <span class="doc-badge">Español</span>
+                <h1>Términos del Servicio</h1>
+                <p class="meta-date">Última actualización: 29 de octubre de 2026 · Fecha de entrada en vigor: 29 de octubre de 2026</p>
+            </header>
+
+            <p>Bienvenido a <strong>Moodinfinite</strong> (<a href="index.html">https://moodinfinite.com</a>). Al acceder, navegar o utilizar esta aplicación web, aceptas los presentes Términos del Servicio. Si no estás de acuerdo con alguna parte de estos términos, te solicitamos no utilizar la aplicación.</p>
+
+            <h2>1. Uso de la aplicación web gratuita</h2>
+            <p>Moodinfinite se ofrece como una aplicación web libre y gratuita, ejecutada del lado del cliente, diseñada como lienzo digital y herramienta de moodboards para organizar ideas creativas, imágenes, notas, tareas y conceptos visuales. No requiere suscripciones, pagos ni tarifas para acceder a sus funciones principales.</p>
+
+            <h2>2. Propiedad intelectual y derechos sobre el contenido del usuario</h2>
+            <div class="highlight-callout">
+                <p><strong>El usuario conserva el 100% de los derechos, propiedad y autoría sobre sus tableros, imágenes, archivos, notas y contenidos.</strong></p>
+            </div>
+            <p>Moodinfinite <strong>no reclama ninguna propiedad ni derecho</strong> sobre el material que crees, pegues, subas o enlaces dentro de la aplicación. Al ser una aplicación 100% del lado del cliente, todo tu contenido permanece únicamente en tu dispositivo local y/o en tu cuenta privada de Google Drive.</p>
+
+            <h2>3. Sincronización opcional con Google Drive</h2>
+            <p>Moodinfinite incluye una integración opcional con Google Drive para respaldo y sincronización entre dispositivos:</p>
+            <ul>
+                <li>La sincronización con Google Drive es totalmente opcional. Puedes usar Moodinfinite de forma 100% local y exportar o importar tus archivos de proyecto manualmente.</li>
+                <li>El uso de la sincronización en la nube se realiza bajo la propia responsabilidad y discreción del usuario. El usuario es responsable de mantener la seguridad de su cuenta de Google y de disponer de espacio de almacenamiento suficiente.</li>
+                <li>Moodinfinite únicamente crea y gestiona su propia carpeta designada (<code>Moodinfinite</code>) y sus propios archivos de proyecto (<code>.mood</code>), tal como se detalla en nuestra <a href="privacy.html">Política de Privacidad</a>.</li>
+                <li>Puedes desconectar tu cuenta o revocar el acceso en cualquier momento desde <a href="https://myaccount.google.com/permissions" target="_blank" rel="noopener noreferrer">https://myaccount.google.com/permissions</a>.</li>
+            </ul>
+
+            <h2>4. Licencia de código abierto (GNU General Public License v3)</h2>
+            <p>Moodinfinite es software libre y de código abierto. El código fuente de Moodinfinite está licenciado bajo la <strong>GNU General Public License v3.0 (GPLv3)</strong>.</p>
+            <p>Puedes consultar, auditar, clonar y contribuir al código fuente completo en GitHub:</p>
+            <p><a href="https://github.com/davidbrum25/moodinfinite" target="_blank" rel="noopener noreferrer"><strong>https://github.com/davidbrum25/moodinfinite</strong></a></p>
+            <p>Bajo la licencia GPLv3, tienes la libertad de ejecutar, estudiar, compartir y modificar el software conforme a los términos de la Licencia Pública General de GNU publicada por la Free Software Foundation.</p>
+
+            <h2>5. Exclusión de garantías ("Tal Cual") y limitación de responsabilidad</h2>
+            <div class="highlight-callout">
+                <p><strong>MOODINFINITE SE PROPORCIONA "TAL CUAL" Y "SEGÚN DISPONIBILIDAD", SIN GARANTÍAS DE NINGÚN TIPO, EXPRESAS O IMPLÍCITAS, INCLUYENDO PERO SIN LIMITARSE A GARANTÍAS DE COMERCIABILIDAD, ADECUACIÓN PARA UN PROPÓSITO PARTICULAR O NO INFRACCIÓN.</strong></p>
+            </div>
+            <p>En ningún caso el autor, los titulares de derechos o los colaboradores serán responsables por reclamos, pérdidas de datos, daños o interrupciones que surjan del uso o la imposibilidad de uso del software.</p>
+            <p>Dado que Moodinfinite almacena tus datos de forma local en el navegador (IndexedDB / localStorage), se recomienda realizar respaldos periódicos de tus tableros importantes mediante la función "Guardar Proyecto" (Ctrl+S / descarga de archivos .mood).</p>
+
+            <h2>6. Política de Privacidad</h2>
+            <p>Tu privacidad es fundamental. Te invitamos a consultar nuestra <a href="privacy.html">Política de Privacidad</a> para conocer todos los detalles sobre el almacenamiento local y los permisos de Google OAuth.</p>
+
+            <h2>7. Contacto</h2>
+            <p>Para cualquier duda, comentario o consulta referente a estos Términos del Servicio, puedes contactar al desarrollador:</p>
+            <ul>
+                <li><strong>Autor:</strong> H. David Brum</li>
+                <li><strong>Correo electrónico:</strong> <a href="mailto:davidbrum@gmail.com">davidbrum@gmail.com</a></li>
+                <li><strong>Repositorio del proyecto:</strong> <a href="https://github.com/davidbrum25/moodinfinite" target="_blank" rel="noopener noreferrer">https://github.com/davidbrum25/moodinfinite</a></li>
+            </ul>
+        </article>
+
+        <!-- Footer -->
+        <footer class="footer">
+            <p>&copy; 2026 Moodinfinite · <a href="index.html">Moodinfinite App</a> · <a href="privacy.html">Privacy Policy</a> · <a href="terms.html">Terms of Service</a></p>
+        </footer>
+    </div>
+</body>
+</html>
