@@ -2289,6 +2289,7 @@ try {
     await assertMoodflowArtistAll(page);
     await assertTabNamesNoCollision(page);
     await assertGenMetaStage1(page);
+    await assertOAuthLegalPagesAndLinks(page);
 
     const lateErrors = pageErrors.filter(isFirstParty);
     assert.deepEqual(lateErrors, [], `first-party errors:\n${lateErrors.join('\n')}`);
@@ -4611,7 +4612,7 @@ async function assertRound3GanttPrompt(page) {
         const outside = document.querySelector('.gantt-today-line');
         const todayDate = ganttToday();
         project.data.viewStartDate = ganttFormatDate(new Date(todayDate.getFullYear(), todayDate.getMonth(), 1));
-        project.data.viewEndDate = ganttFormatDate(ganttAddDays(todayDate, 5));
+        project.data.viewEndDate = ganttFormatDate(new Date(todayDate.getFullYear(), todayDate.getMonth() + 1, 0));
         project.data.zoomLevel = 'month';
         renderGanttView(project);
         const line = document.querySelector('.gantt-today-line');
@@ -7480,4 +7481,196 @@ async function assertGenMetaStage1(page) {
     assert.equal(shared.sheetHasSecret, false, 'sheet export embedded genMeta');
     assert.equal(shared.pdfHasSecret, false, 'PDF export embedded genMeta');
     console.log('Generation metadata stage 1 passed.');
+}
+
+async function assertOAuthLegalPagesAndLinks(page) {
+    console.log('Testing OAuth legal pages and links...');
+
+    // 1. Files existence on disk
+    const privacyPath = path.join(ROOT, 'privacy.html');
+    const termsPath = path.join(ROOT, 'terms.html');
+    assert.equal(existsSync(privacyPath), true, 'privacy.html must exist');
+    assert.equal(existsSync(termsPath), true, 'terms.html must exist');
+
+    const privacyContent = readFileSync(privacyPath, 'utf8');
+    const termsContent = readFileSync(termsPath, 'utf8');
+
+    // 2. privacy.html content requirements:
+    // - Limited Use sentence verbatim
+    const limitedUseSentence = "Moodinfinite's use and transfer to any other app of information received from Google APIs will adhere to the Google API Services User Data Policy, including the Limited Use requirements.";
+    assert.ok(privacyContent.includes(limitedUseSentence), 'privacy.html must contain the verbatim Limited Use sentence');
+
+    // - Scopes mentioned: drive.file, openid, email, profile
+    assert.ok(privacyContent.includes('drive.file'), 'privacy.html must mention drive.file scope');
+    assert.ok(privacyContent.includes('openid'), 'privacy.html must mention openid scope');
+    assert.ok(privacyContent.includes('email'), 'privacy.html must mention email scope');
+    assert.ok(privacyContent.includes('profile'), 'privacy.html must mention profile scope');
+
+    // - Policy and revocation links
+    assert.ok(privacyContent.includes('https://developers.google.com/terms/api-services-user-data-policy'), 'privacy.html must link to Google API Services User Data Policy');
+    assert.ok(privacyContent.includes('https://myaccount.google.com/permissions'), 'privacy.html must link to Google account permissions');
+    assert.ok(privacyContent.includes('davidbrum@gmail.com'), 'privacy.html must include contact email davidbrum@gmail.com');
+    assert.ok(privacyContent.includes('terms.html'), 'privacy.html must link to terms.html');
+
+    // - Client-side & local storage explanation
+    assert.ok(privacyContent.includes('IndexedDB') && privacyContent.includes('localStorage'), 'privacy.html must mention IndexedDB and localStorage');
+    assert.ok(privacyContent.toLowerCase().includes('client-side'), 'privacy.html must mention client-side architecture');
+
+    // 3. terms.html content requirements:
+    assert.ok(termsContent.includes('GPL') || termsContent.includes('General Public License'), 'terms.html must mention GPLv3 license');
+    assert.ok(termsContent.includes('https://github.com/davidbrum25/moodinfinite'), 'terms.html must link to github repo');
+    assert.ok(termsContent.includes('davidbrum@gmail.com'), 'terms.html must include contact email');
+    assert.ok(termsContent.includes('privacy.html'), 'terms.html must link to privacy.html');
+    assert.ok(termsContent.includes('index.html') || termsContent.includes('href="/"'), 'terms.html must link to index.html');
+    assert.ok(termsContent.includes('AS IS') || termsContent.includes('as-is') || termsContent.includes('"AS IS"'), 'terms.html must contain as-is disclaimer');
+
+    // 4. In-page DOM link checks
+    // Check #help-modal links
+    const helpLinks = await page.evaluate(() => {
+        const modal = document.getElementById('help-modal');
+        if (!modal) return { hasPrivacy: false, hasTerms: false };
+        const privacyLink = modal.querySelector('a[href="/privacy.html"], a[href="privacy.html"]');
+        const termsLink = modal.querySelector('a[href="/terms.html"], a[href="terms.html"]');
+        return {
+            hasPrivacy: !!privacyLink,
+            hasTerms: !!termsLink,
+            privacyHref: privacyLink ? privacyLink.getAttribute('href') : '',
+            termsHref: termsLink ? termsLink.getAttribute('href') : '',
+        };
+    });
+    assert.equal(helpLinks.hasPrivacy, true, '#help-modal must contain a link to privacy.html');
+    assert.equal(helpLinks.hasTerms, true, '#help-modal must contain a link to terms.html');
+    assert.equal(helpLinks.privacyHref, '/privacy.html');
+    assert.equal(helpLinks.termsHref, '/terms.html');
+
+    // Check #cloud-user-menu links
+    const cloudLinks = await page.evaluate(() => {
+        const legalDiv = document.querySelector('#cloud-user-menu .cloud-menu-legal');
+        if (!legalDiv) return { hasDiv: false, hasPrivacy: false, hasTerms: false };
+        const privacyLink = legalDiv.querySelector('a[href="/privacy.html"], a[href="privacy.html"]');
+        const termsLink = legalDiv.querySelector('a[href="/terms.html"], a[href="terms.html"]');
+        return {
+            hasDiv: true,
+            hasPrivacy: !!privacyLink,
+            hasTerms: !!termsLink,
+            privacyHref: privacyLink ? privacyLink.getAttribute('href') : '',
+            termsHref: termsLink ? termsLink.getAttribute('href') : '',
+        };
+    });
+    assert.equal(cloudLinks.hasDiv, true, '#cloud-user-menu must contain .cloud-menu-legal');
+    assert.equal(cloudLinks.hasPrivacy, true, '.cloud-menu-legal must contain privacy link');
+    assert.equal(cloudLinks.hasTerms, true, '.cloud-menu-legal must contain terms link');
+    assert.equal(cloudLinks.privacyHref, '/privacy.html');
+    assert.equal(cloudLinks.termsHref, '/terms.html');
+
+    // 5. Check always-visible legal pill at 1280x720 and 390x844
+    await page.evaluate(() => {
+        const mb = projects.find((p) => p.type === 'moodinfinite');
+        if (mb && typeof switchTab === 'function') switchTab(mb.id);
+    });
+
+    const checkPillAtViewport = async (vp) => {
+        await page.setViewport(vp);
+        await page.waitForFunction(
+            (w, h) => window.innerWidth === w && window.innerHeight === h,
+            {},
+            vp.width,
+            vp.height
+        );
+        await settleForHitTest(page);
+
+        return await page.evaluate(() => {
+            const pill = document.getElementById('legal-links-pill');
+            if (!pill) return { exists: false };
+
+            const r = pill.getBoundingClientRect();
+            const cs = getComputedStyle(pill);
+            const visible = cs.display !== 'none' && cs.visibility !== 'hidden' && parseFloat(cs.opacity) > 0;
+            const nonzero = r.width > 0 && r.height > 0;
+
+            const privacyA = pill.querySelector('a[href="privacy.html"], a[href="/privacy.html"]');
+            const termsA = pill.querySelector('a[href="terms.html"], a[href="/terms.html"]');
+
+            const isOverlap = (r1, r2) => {
+                if (!r1 || !r2) return false;
+                if (r1.width <= 0 || r1.height <= 0 || r2.width <= 0 || r2.height <= 0) return false;
+                return !(r1.right <= r2.left || r1.left >= r2.right || r1.bottom <= r2.top || r1.top >= r2.bottom);
+            };
+
+            const controlsToCheck = [
+                'canvas-zoom-readout',
+                'canvas-fit-view-btn',
+                'left-bar',
+                'cloud-sync-indicator',
+            ];
+
+            const overlaps = {};
+            for (const id of controlsToCheck) {
+                const el = document.getElementById(id);
+                if (el) {
+                    const elCs = getComputedStyle(el);
+                    if (elCs.display !== 'none' && elCs.visibility !== 'hidden' && !el.hidden) {
+                        const elR = el.getBoundingClientRect();
+                        if (isOverlap(r, elR)) {
+                            overlaps[id] = { pill: r, control: elR };
+                        }
+                    }
+                }
+            }
+
+            return {
+                exists: true,
+                visible,
+                nonzero,
+                rect: { left: r.left, top: r.top, right: r.right, bottom: r.bottom, width: r.width, height: r.height },
+                hasPrivacyA: !!privacyA,
+                hasTermsA: !!termsA,
+                privacyHref: privacyA ? privacyA.getAttribute('href') : '',
+                termsHref: termsA ? termsA.getAttribute('href') : '',
+                overlaps,
+                insideViewport: r.left >= 0 && r.right <= window.innerWidth && r.top >= 0 && r.bottom <= window.innerHeight,
+            };
+        });
+    };
+
+    // Test at 1280x720
+    const desktopCheck = await checkPillAtViewport({ width: 1280, height: 720, isMobile: false, hasTouch: false });
+    assert.equal(desktopCheck.exists, true, '#legal-links-pill must exist');
+    assert.equal(desktopCheck.visible, true, '#legal-links-pill must be visible at 1280x720');
+    assert.equal(desktopCheck.nonzero, true, '#legal-links-pill must have nonzero dimensions at 1280x720');
+    assert.equal(desktopCheck.insideViewport, true, '#legal-links-pill must be inside viewport at 1280x720');
+    assert.equal(desktopCheck.hasPrivacyA, true, '#legal-links-pill must contain privacy.html link');
+    assert.equal(desktopCheck.hasTermsA, true, '#legal-links-pill must contain terms.html link');
+    assert.equal(desktopCheck.privacyHref, 'privacy.html');
+    assert.equal(desktopCheck.termsHref, 'terms.html');
+    assert.deepEqual(desktopCheck.overlaps, {}, `Pill overlaps controls at 1280x720: ${JSON.stringify(desktopCheck.overlaps)}`);
+
+    // Test at 390x844
+    const mobileCheck = await checkPillAtViewport({ width: 390, height: 844, deviceScaleFactor: 1, isMobile: true, hasTouch: true });
+    assert.equal(mobileCheck.exists, true, '#legal-links-pill must exist');
+    assert.equal(mobileCheck.visible, true, '#legal-links-pill must be visible at 390x844');
+    assert.equal(mobileCheck.nonzero, true, '#legal-links-pill must have nonzero dimensions at 390x844');
+    assert.equal(mobileCheck.insideViewport, true, '#legal-links-pill must be inside viewport at 390x844');
+    assert.deepEqual(mobileCheck.overlaps, {}, `Pill overlaps controls at 390x844: ${JSON.stringify(mobileCheck.overlaps)}`);
+
+    // Test @media print hiding
+    await page.emulateMediaType('print');
+    const printDisplay = await page.evaluate(() => {
+        const pill = document.getElementById('legal-links-pill');
+        return pill ? getComputedStyle(pill).display : '';
+    });
+    await page.emulateMediaType('screen');
+    assert.equal(printDisplay, 'none', '#legal-links-pill must have display: none in print media');
+
+    // Test serving HTTP status 200 for /privacy.html and /terms.html
+    const privacyStatus = await rawStatus(PORT, '/privacy.html');
+    assert.equal(privacyStatus, 200, '/privacy.html must respond with HTTP 200');
+    const termsStatus = await rawStatus(PORT, '/terms.html');
+    assert.equal(termsStatus, 200, '/terms.html must respond with HTTP 200');
+
+    // Restore desktop viewport
+    await page.setViewport({ width: 1280, height: 800, deviceScaleFactor: 1, isMobile: false, hasTouch: false });
+    await page.waitForFunction(() => window.innerWidth === 1280);
+
+    console.log('OAuth legal pages and links passed.');
 }

@@ -1,68 +1,538 @@
 <!DOCTYPE html>
-<html lang="es">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Política de Privacidad - Moodinfinite</title>
+    <title>Privacy Policy / Política de Privacidad — Moodinfinite</title>
+    <link rel="icon" type="image/png" href="_branding/_png/moodinfinite__Iso_small.png">
     <style>
+        :root {
+            --bg-page: #0d0d0d;
+            --bg-card: #18191f;
+            --bg-card-subtle: #1f2029;
+            --border-color: rgba(255, 255, 255, 0.1);
+            --border-highlight: rgba(66, 158, 255, 0.35);
+            --accent: #429eff;
+            --accent-hover: #70b5ff;
+            --accent-bg: rgba(66, 158, 255, 0.1);
+            --text-strong: #f8fafc;
+            --text-body: #cbd5e1;
+            --text-muted: #94a3b8;
+            --code-bg: #121318;
+            --shadow: 0 16px 36px rgba(0, 0, 0, 0.45);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
         body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-            line-height: 1.6;
-            color: #e0e0e0;
-            background-color: #121212;
-            max-width: 800px;
-            margin: 0 auto;
-            padding: 2rem 1rem;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Inter", Helvetica, Arial, sans-serif;
+            background-color: var(--bg-page);
+            color: var(--text-body);
+            line-height: 1.65;
+            padding: 2rem 1rem 4rem;
+            min-height: 100vh;
         }
-        h1, h2 {
-            color: #ffffff;
-            border-bottom: 1px solid #333;
-            padding-bottom: 0.3rem;
-        }
+
         a {
-            color: #bb86fc;
+            color: var(--accent);
+            text-decoration: none;
+            transition: color 0.15s ease, text-decoration-color 0.15s ease;
         }
-        .container {
-            background-color: #1e1e1e;
-            padding: 2rem;
+
+        a:hover {
+            color: var(--accent-hover);
+            text-decoration: underline;
+        }
+
+        .page-container {
+            max-width: 880px;
+            margin: 0 auto;
+        }
+
+        /* Top Header */
+        .header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 1rem;
+            padding: 1rem 1.5rem;
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 14px;
+            margin-bottom: 2rem;
+            box-shadow: var(--shadow);
+        }
+
+        .brand-link {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.75rem;
+            text-decoration: none;
+            color: var(--text-strong);
+            font-weight: 700;
+            font-size: 1.15rem;
+            letter-spacing: -0.02em;
+        }
+
+        .brand-logo {
+            height: 36px;
+            width: auto;
+            display: block;
+            object-fit: contain;
+        }
+
+        .header-nav {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            flex-wrap: wrap;
+        }
+
+        .nav-btn {
+            display: inline-flex;
+            align-items: center;
+            padding: 0.4rem 0.85rem;
             border-radius: 8px;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+            border: 1px solid var(--border-color);
+            background: var(--bg-card-subtle);
+            color: var(--text-body);
+            font-size: 0.85rem;
+            font-weight: 500;
+            transition: all 0.15s ease;
+            text-decoration: none;
+        }
+
+        .nav-btn:hover {
+            background: var(--border-color);
+            color: var(--text-strong);
+            text-decoration: none;
+        }
+
+        .nav-btn.primary {
+            background: var(--accent);
+            color: #ffffff;
+            border-color: var(--accent);
+        }
+
+        .nav-btn.primary:hover {
+            background: var(--accent-hover);
+            border-color: var(--accent-hover);
+            color: #ffffff;
+        }
+
+        /* Quick switcher banner */
+        .lang-switch-bar {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.75rem;
+            padding: 0.75rem 1rem;
+            background: rgba(66, 158, 255, 0.08);
+            border: 1px solid var(--border-highlight);
+            border-radius: 10px;
+            margin-bottom: 2rem;
+            font-size: 0.9rem;
+            text-align: center;
+        }
+
+        .lang-switch-bar a {
+            font-weight: 600;
+        }
+
+        /* Document Article */
+        .document-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 14px;
+            padding: 2.25rem;
+            box-shadow: var(--shadow);
+            margin-bottom: 2.5rem;
+        }
+
+        .doc-header {
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .doc-badge {
+            display: inline-block;
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: var(--accent);
+            background: var(--accent-bg);
+            padding: 0.25rem 0.65rem;
+            border-radius: 999px;
+            border: 1px solid var(--border-highlight);
+            margin-bottom: 0.75rem;
+        }
+
+        h1 {
+            color: var(--text-strong);
+            font-size: 1.85rem;
+            font-weight: 700;
+            line-height: 1.25;
+            margin-bottom: 0.5rem;
+        }
+
+        .meta-date {
+            color: var(--text-muted);
+            font-size: 0.85rem;
+        }
+
+        h2 {
+            color: var(--text-strong);
+            font-size: 1.25rem;
+            font-weight: 600;
+            margin: 2rem 0 0.85rem;
+            padding-bottom: 0.35rem;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        h3 {
+            color: var(--text-strong);
+            font-size: 1.05rem;
+            font-weight: 600;
+            margin: 1.25rem 0 0.5rem;
+        }
+
+        p {
+            margin-bottom: 1rem;
+        }
+
+        ul, ol {
+            margin: 0.5rem 0 1.25rem 1.5rem;
+        }
+
+        li {
+            margin-bottom: 0.5rem;
+        }
+
+        code {
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+            font-size: 0.88em;
+            background: var(--code-bg);
+            color: #93c5fd;
+            padding: 0.15rem 0.4rem;
+            border-radius: 4px;
+            border: 1px solid rgba(255, 255, 255, 0.06);
+        }
+
+        .highlight-callout {
+            background: var(--code-bg);
+            border-left: 4px solid var(--accent);
+            border-top: 1px solid var(--border-color);
+            border-right: 1px solid var(--border-color);
+            border-bottom: 1px solid var(--border-color);
+            border-radius: 0 8px 8px 0;
+            padding: 1.25rem;
+            margin: 1.5rem 0;
+            color: var(--text-strong);
+        }
+
+        .highlight-callout strong {
+            color: #ffffff;
+        }
+
+        .scope-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 1.25rem 0 1.5rem;
+            font-size: 0.9rem;
+        }
+
+        .scope-table th, .scope-table td {
+            text-align: left;
+            padding: 0.75rem 1rem;
+            border: 1px solid var(--border-color);
+        }
+
+        .scope-table th {
+            background: var(--bg-card-subtle);
+            color: var(--text-strong);
+            font-weight: 600;
+        }
+
+        .scope-table td {
+            background: var(--bg-card);
+        }
+
+        .scope-table tr:hover td {
+            background: rgba(255, 255, 255, 0.02);
+        }
+
+        .divider {
+            height: 1px;
+            background: var(--border-color);
+            margin: 3rem 0;
+        }
+
+        .footer {
+            text-align: center;
+            font-size: 0.85rem;
+            color: var(--text-muted);
+            padding-top: 1rem;
+        }
+
+        .footer a {
+            color: var(--text-body);
+        }
+
+        .footer a:hover {
+            color: var(--accent);
+        }
+
+        @media (max-width: 640px) {
+            body {
+                padding: 1rem 0.5rem 2rem;
+            }
+            .document-card {
+                padding: 1.5rem 1rem;
+            }
+            h1 {
+                font-size: 1.5rem;
+            }
+            .scope-table {
+                display: block;
+                overflow-x: auto;
+            }
         }
     </style>
 </head>
 <body>
-    <div class="container">
-        <h1>Política de Privacidad</h1>
-        <p><em>Última actualización: 22 de julio de 2026</em></p>
+    <div class="page-container">
+        <!-- Header -->
+        <header class="header">
+            <a href="/" class="brand-link" title="Moodinfinite Homepage">
+                <img src="_branding/_png/moodinfinite__Logotipo_alpha.png" alt="Moodinfinite Logo" class="brand-logo" onerror="this.style.display='none';">
+                <span>Moodinfinite</span>
+            </a>
+            <nav class="header-nav">
+                <a href="/" class="nav-btn primary">&larr; Back to App</a>
+                <a href="terms.html" class="nav-btn">Terms of Service</a>
+                <a href="#es" class="nav-btn">Español</a>
+                <a href="#en" class="nav-btn">English</a>
+            </nav>
+        </header>
 
-        <p>En <strong>Moodinfinite</strong> respetamos tu privacidad y nos comprometemos a proteger la información personal que compartes con nosotros.</p>
+        <!-- Quick language selector bar -->
+        <div class="lang-switch-bar">
+            <span>Language / Idioma:</span>
+            <a href="#en">English (US)</a> · <a href="#es">Español (ES)</a>
+        </div>
 
-        <h2>1. Información que recopilamos</h2>
-        <p>Cuando utilizas la autenticación de Google para iniciar sesión en Moodinfinite, únicamente accedemos a la información básica de tu perfil proporcionada por el servicio de autenticación de Google (OAuth 2.0):</p>
-        <ul>
-            <li>Nombre y apellido</li>
-            <li>Dirección de correo electrónico</li>
-            <li>Imagen de perfil público</li>
-        </ul>
+        <!-- ================================================================= -->
+        <!-- ENGLISH SECTION                                                   -->
+        <!-- ================================================================= -->
+        <article id="en" class="document-card">
+            <header class="doc-header">
+                <span class="doc-badge">English</span>
+                <h1>Privacy Policy</h1>
+                <p class="meta-date">Last updated: October 29, 2026 · Effective Date: October 29, 2026</p>
+            </header>
 
-        <h2>2. Uso de la información</h2>
-        <p>La información recopilada se utiliza exclusivamente para:</p>
-        <ul>
-            <li>Autenticar tu identidad y darte acceso a la aplicación.</li>
-            <li>Personalizar tu experiencia de usuario dentro de Moodinfinite.</li>
-        </ul>
-        <p><strong>No vendemos, alquilamos ni compartimos</strong> tu información personal con terceros bajo ninguna circunstancia.</p>
+            <p>Welcome to <strong>Moodinfinite</strong> (<a href="/">https://moodinfinite.com</a>). At Moodinfinite, we strongly believe that your creative work, visual boards, thoughts, and personal information belong entirely to you. This Privacy Policy transparently details how Moodinfinite operates, what data is accessed, and how your privacy is protected.</p>
 
-        <h2>3. Almacenamiento de datos</h2>
-        <p>Moodinfinite no almacena tus credenciales ni contraseñas. Toda la autenticación es gestionada directamente de forma segura por los servidores de Google.</p>
+            <h2>1. 100% Client-Side Architecture & Data Storage</h2>
+            <p><strong>Moodinfinite is a 100% client-side web application.</strong></p>
+            <ul>
+                <li><strong>No proprietary application servers:</strong> Moodinfinite does not operate backend database servers that collect, store, track, or process your boards, projects, media files, or personal information.</li>
+                <li><strong>Local browser storage:</strong> All your boards, settings, color palettes, and sketches are saved directly on your own device using standard browser storage APIs (<code>IndexedDB</code> and <code>localStorage</code>).</li>
+                <li><strong>No account creation required:</strong> You can use the complete core feature set of Moodinfinite entirely offline and locally without ever providing an email address or creating an account.</li>
+            </ul>
 
-        <h2>4. Tus derechos y control de datos</h2>
-        <p>Puedes revocar el acceso de Moodinfinite a tu cuenta de Google en cualquier momento desde la configuración de seguridad de tu cuenta de Google en <a href="https://myaccount.google.com/permissions" target="_blank" rel="noopener">Google Account Permissions</a>.</p>
+            <h2>2. Google Identity Services & Drive Integration (cloud.js)</h2>
+            <p>To provide optional cloud backup and cross-device synchronization, Moodinfinite allows you to connect your personal Google Account directly from your browser using Google Identity Services (GIS) and the Google Drive REST API v3.</p>
+            <p>Every Google OAuth scope requested by Moodinfinite (configured in <code>cloud.js</code>) is explicitly enumerated below:</p>
 
-        <h2>5. Contacto</h2>
-        <p>Si tienes alguna pregunta o inquietud sobre esta Política de Privacidad, puedes contactarnos a través de nuestro repositorio oficial o sitio web principal.</p>
+            <table class="scope-table">
+                <thead>
+                    <tr>
+                        <th style="width: 35%;">OAuth Scope</th>
+                        <th style="width: 25%;">Sensitivity</th>
+                        <th style="width: 40%;">Purpose & Usage</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><code>openid</code></td>
+                        <td>Non-sensitive</td>
+                        <td>Used strictly to authenticate your Google identity client-side.</td>
+                    </tr>
+                    <tr>
+                        <td><code>email</code></td>
+                        <td>Non-sensitive</td>
+                        <td>Used solely to display your connected account email address in the sync dropdown menu so you know which Google account is active.</td>
+                    </tr>
+                    <tr>
+                        <td><code>profile</code></td>
+                        <td>Non-sensitive</td>
+                        <td>Used solely to display your public display name and avatar photo in the sync menu.</td>
+                    </tr>
+                    <tr>
+                        <td><code>https://www.googleapis.com/auth/drive.file</code></td>
+                        <td>Non-sensitive / Limited</td>
+                        <td>Per-file access permission that <strong>only</strong> allows Moodinfinite to create, read, update, and delete files and the specific dedicated folder (<code>Moodinfinite</code>) that Moodinfinite itself created in your Google Drive (specifically <code>.mood</code> files). Moodinfinite has <strong>zero access</strong> to any other file, photo, doc, or folder in your Google Drive.</td>
+                    </tr>
+                </tbody>
+            </table>
 
-        <p><a href="index.html">&larr; Volver a Moodinfinite</a></p>
+            <h3>Summary of Google User Data Usage:</h3>
+            <ul>
+                <li>The scopes <code>openid</code>, <code>email</code>, and <code>profile</code> are used only to show the connected account's name, email, and avatar in the sync menu.</li>
+                <li>The scope <code>https://www.googleapis.com/auth/drive.file</code> is a non-sensitive, limited permission that only lets Moodinfinite create, read, update and delete the files and the folder (<code>Moodinfinite</code>) that the app itself created in the user's Google Drive (<code>.mood</code> files); it provides no access to any other file or folder in the user's Drive.</li>
+                <li>Your Google OAuth access tokens are held ephemerally in browser session memory and are never transmitted to any third-party server or external recipient.</li>
+            </ul>
+
+            <h2>3. Google API Services User Data Policy — Limited Use Disclosure</h2>
+            <div class="highlight-callout">
+                <p><strong>Moodinfinite's use and transfer to any other app of information received from Google APIs will adhere to the Google API Services User Data Policy, including the Limited Use requirements.</strong></p>
+                <p style="margin-top: 0.5rem; font-size: 0.88rem;">Read the full policy at: <a href="https://developers.google.com/terms/api-services-user-data-policy" target="_blank" rel="noopener noreferrer">https://developers.google.com/terms/api-services-user-data-policy</a></p>
+            </div>
+            <p>In accordance with the Google Limited Use requirements:</p>
+            <ul>
+                <li>We do not transfer your Google data to any third-party tool, database, or service.</li>
+                <li>We do not use your Google data or board contents for advertising, marketing, profiling, or data brokerage.</li>
+                <li>We do not use Google user data to train, fine-tune, or develop artificial intelligence (AI) or machine learning (ML) models.</li>
+                <li>No humans read your data unless you explicitly request technical support and share a file directly with us.</li>
+            </ul>
+
+            <h2>4. Third-Party Services & Assets</h2>
+            <p>Moodinfinite loads standard client-side assets required for UI rendering, such as open-source icon fonts (Iconify) and font families. These providers may receive standard HTTP requests (such as your IP address and browser User-Agent) necessary to deliver web assets. Moodinfinite does not share your boards or personal data with any advertising networks.</p>
+
+            <h2>5. How to Revoke Access & Control Your Data</h2>
+            <p>You have full, autonomous control over your data at any time:</p>
+            <ul>
+                <li><strong>Disconnect from Moodinfinite:</strong> Click the Google account menu in Moodinfinite and select <em>Sign Out</em>. This immediately clears all authentication tokens from your local session.</li>
+                <li><strong>Revoke Google Account Permissions:</strong> You can completely revoke Moodinfinite's access to your Google Account at any time directly through Google's security management console at <a href="https://myaccount.google.com/permissions" target="_blank" rel="noopener noreferrer">https://myaccount.google.com/permissions</a>.</li>
+                <li><strong>Delete Local Data:</strong> Clear your browser storage (IndexedDB and localStorage) for this website at any time via your browser developer tools or settings to permanently wipe all local boards.</li>
+                <li><strong>Delete Cloud Backups:</strong> Open your Google Drive and delete any <code>.mood</code> files or the <code>Moodinfinite</code> folder whenever you desire.</li>
+            </ul>
+
+            <h2>6. Terms of Service</h2>
+            <p>For terms regarding the use of Moodinfinite, please see our <a href="terms.html">Terms of Service</a>.</p>
+
+            <h2>7. Contact Information</h2>
+            <p>If you have any questions, concerns, or requests regarding this Privacy Policy or your data, please contact the developer:</p>
+            <ul>
+                <li><strong>Developer:</strong> H. David Brum</li>
+                <li><strong>Email:</strong> <a href="mailto:davidbrum@gmail.com">davidbrum@gmail.com</a></li>
+                <li><strong>Source Code Repository:</strong> <a href="https://github.com/davidbrum25/moodinfinite" target="_blank" rel="noopener noreferrer">https://github.com/davidbrum25/moodinfinite</a></li>
+            </ul>
+        </article>
+
+        <!-- ================================================================= -->
+        <!-- SPANISH SECTION                                                   -->
+        <!-- ================================================================= -->
+        <article id="es" class="document-card">
+            <header class="doc-header">
+                <span class="doc-badge">Español</span>
+                <h1>Política de Privacidad</h1>
+                <p class="meta-date">Última actualización: 29 de octubre de 2026 · Fecha de entrada en vigor: 29 de octubre de 2026</p>
+            </header>
+
+            <p>Bienvenido a <strong>Moodinfinite</strong> (<a href="/">https://moodinfinite.com</a>). En Moodinfinite creemos firmemente que tu trabajo creativo, tableros visuales, notas e información personal te pertenecen al 100%. Esta Política de Privacidad describe de manera transparente cómo opera Moodinfinite, a qué datos accede y cómo se protege tu privacidad.</p>
+
+            <h2>1. Arquitectura 100% del lado del cliente y almacenamiento local</h2>
+            <p><strong>Moodinfinite es una aplicación web que se ejecuta al 100% en el navegador del usuario (client-side).</strong></p>
+            <ul>
+                <li><strong>Sin servidores propios de almacenamiento:</strong> Moodinfinite no cuenta con servidores ni bases de datos propietarias donde se alojen, recopilen o rastreen tus tableros, proyectos, archivos multimedia o datos personales.</li>
+                <li><strong>Almacenamiento local en tu navegador:</strong> Todos tus tableros, configuraciones, paletas de color y bocetos se almacenan directamente en tu propio dispositivo mediante las APIs nativas del navegador (<code>IndexedDB</code> y <code>localStorage</code>).</li>
+                <li><strong>Sin necesidad de registro ni cuenta:</strong> Puedes utilizar las funciones principales de Moodinfinite de forma totalmente local y sin conexión, sin tener que proporcionar un correo electrónico ni crear una cuenta.</li>
+            </ul>
+
+            <h2>2. Servicios de Google Identity e integración con Google Drive (cloud.js)</h2>
+            <p>Para ofrecer una función opcional de respaldo en la nube y sincronización entre dispositivos, Moodinfinite te permite conectar tu cuenta personal de Google directamente desde tu navegador utilizando Google Identity Services (GIS) y la API REST de Google Drive v3.</p>
+            <p>A continuación se declaran de forma explícita todos los permisos (scopes) solicitados en el código de <code>cloud.js</code>:</p>
+
+            <table class="scope-table">
+                <thead>
+                    <tr>
+                        <th style="width: 35%;">Permiso (OAuth Scope)</th>
+                        <th style="width: 25%;">Sensibilidad</th>
+                        <th style="width: 40%;">Propósito y uso</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><code>openid</code></td>
+                        <td>No sensible</td>
+                        <td>Se utiliza estrictamente para autenticar tu identidad de Google de forma local en el navegador.</td>
+                    </tr>
+                    <tr>
+                        <td><code>email</code></td>
+                        <td>No sensible</td>
+                        <td>Se utiliza exclusivamente para mostrar la dirección de correo electrónico de la cuenta conectada en el menú desplegable de sincronización.</td>
+                    </tr>
+                    <tr>
+                        <td><code>profile</code></td>
+                        <td>No sensible</td>
+                        <td>Se utiliza exclusivamente para mostrar el nombre y la foto de perfil pública en el menú de sincronización.</td>
+                    </tr>
+                    <tr>
+                        <td><code>https://www.googleapis.com/auth/drive.file</code></td>
+                        <td>No sensible / Limitado</td>
+                        <td>Permiso específico por archivo que <strong>únicamente</strong> permite a Moodinfinite crear, leer, actualizar y eliminar los archivos y la carpeta específica (<code>Moodinfinite</code>) creados por la propia aplicación en tu Google Drive (archivos <code>.mood</code>). Moodinfinite <strong>no tiene acceso</strong> a ningún otro archivo, foto, documento o carpeta de tu Google Drive.</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h3>Resumen del uso de los datos de Google:</h3>
+            <ul>
+                <li>Los permisos <code>openid</code>, <code>email</code> y <code>profile</code> se utilizan únicamente para mostrar el nombre, correo electrónico y avatar de la cuenta conectada en el menú de sincronización.</li>
+                <li>El permiso <code>https://www.googleapis.com/auth/drive.file</code> es un permiso limitado y no sensible que únicamente permite a Moodinfinite crear, leer, actualizar y eliminar los archivos y la carpeta (<code>Moodinfinite</code>) que la propia aplicación creó en el Google Drive del usuario (archivos <code>.mood</code>); no tiene acceso a ningún otro archivo o carpeta del Drive del usuario.</li>
+                <li>Los tokens de acceso de Google OAuth se mantienen de forma efímera en la memoria de la sesión de tu navegador y nunca se transmiten a servidores de terceros ni a destinatarios externos.</li>
+            </ul>
+
+            <h2>3. Política de datos del usuario de los servicios API de Google — Cláusula de Uso Limitado</h2>
+            <div class="highlight-callout">
+                <p><strong>Moodinfinite's use and transfer to any other app of information received from Google APIs will adhere to the Google API Services User Data Policy, including the Limited Use requirements.</strong></p>
+                <p style="margin-top: 0.5rem; font-size: 0.9rem; color: var(--text-body);"><em>Traducción: El uso y transferencia por parte de Moodinfinite a cualquier otra aplicación de la información recibida a través de las APIs de Google se apegará a la Política de Datos de Usuario de los Servicios de las APIs de Google, incluidos los requisitos de Uso Limitado.</em></p>
+                <p style="margin-top: 0.5rem; font-size: 0.88rem;">Consulta la política oficial de Google en: <a href="https://developers.google.com/terms/api-services-user-data-policy" target="_blank" rel="noopener noreferrer">https://developers.google.com/terms/api-services-user-data-policy</a></p>
+            </div>
+            <p>En conformidad con los requisitos de Uso Limitado de Google:</p>
+            <ul>
+                <li>No transferimos tus datos de Google a herramientas, bases de datos o servicios de terceros.</li>
+                <li>No utilizamos tus datos de Google ni el contenido de tus tableros para publicidad, mercadotecnia ni comercialización de datos.</li>
+                <li>No utilizamos los datos de los usuarios de Google para entrenar o ajustar modelos de inteligencia artificial (IA) o aprendizaje automático (ML).</li>
+                <li>Ningún ser humano lee tus datos a menos que solicites asistencia técnica explícitamente y decidas compartir un archivo con nosotros.</li>
+            </ul>
+
+            <h2>4. Servicios de terceros y recursos externos</h2>
+            <p>Moodinfinite carga recursos visuales estándar como fuentes e iconos de código abierto (Iconify) para su interfaz. Estos servicios reciben únicamente solicitudes HTTP técnicas habituales (como dirección IP y User-Agent) necesarias para entregar dichos recursos. Moodinfinite no comparte datos con redes publicitarias.</p>
+
+            <h2>5. Cómo revocar el acceso y gestionar tus datos</h2>
+            <p>Tienes el control total de tu información en todo momento:</p>
+            <ul>
+                <li><strong>Cerrar sesión en Moodinfinite:</strong> Haz clic en el menú de cuenta de Google en Moodinfinite y selecciona <em>Sign Out</em>. Esto eliminará de inmediato las credenciales de tu sesión local.</li>
+                <li><strong>Revocar permisos desde Google:</strong> Puedes revocar el acceso de Moodinfinite a tu cuenta de Google en cualquier momento desde la página de seguridad de tu cuenta de Google en <a href="https://myaccount.google.com/permissions" target="_blank" rel="noopener noreferrer">https://myaccount.google.com/permissions</a>.</li>
+                <li><strong>Eliminar datos locales:</strong> Puedes borrar los datos locales (IndexedDB y localStorage) en cualquier momento desde las herramientas de tu navegador para eliminar permanentemente tus tableros almacenados en el dispositivo.</li>
+                <li><strong>Eliminar respaldos en Google Drive:</strong> Puedes ingresar a tu Google Drive y eliminar la carpeta <code>Moodinfinite</code> o cualquiera de tus archivos <code>.mood</code> cuando lo desees.</li>
+            </ul>
+
+            <h2>6. Términos del Servicio</h2>
+            <p>Para consultar las condiciones de uso de Moodinfinite, visita nuestros <a href="terms.html">Términos del Servicio</a>.</p>
+
+            <h2>7. Contacto</h2>
+            <p>Si tienes preguntas, dudas o solicitudes relacionadas con esta Política de Privacidad o con tus datos, puedes comunicarte con el desarrollador:</p>
+            <ul>
+                <li><strong>Desarrollador:</strong> H. David Brum</li>
+                <li><strong>Correo electrónico:</strong> <a href="mailto:davidbrum@gmail.com">davidbrum@gmail.com</a></li>
+                <li><strong>Repositorio del código fuente:</strong> <a href="https://github.com/davidbrum25/moodinfinite" target="_blank" rel="noopener noreferrer">https://github.com/davidbrum25/moodinfinite</a></li>
+            </ul>
+        </article>
+
+        <!-- Footer -->
+        <footer class="footer">
+            <p>&copy; 2026 Moodinfinite · <a href="/">Moodinfinite App</a> · <a href="privacy.html">Privacy Policy</a> · <a href="terms.html">Terms of Service</a></p>
+        </footer>
     </div>
 </body>
 </html>

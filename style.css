@@ -1545,6 +1545,58 @@
             pointer-events: none;
         }
 
+        #legal-links-pill,
+        .legal-links-pill {
+            position: absolute;
+            right: 8.5rem;
+            bottom: 1rem;
+            z-index: 40;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.4rem;
+            padding: 0 0.65rem;
+            height: 2rem;
+            background: var(--bg-ui);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid var(--border-color);
+            border-radius: 999px;
+            font-size: 0.72rem;
+            line-height: 1;
+            color: var(--text-color-light);
+            opacity: 0.55;
+            transition: opacity 0.2s ease, border-color 0.2s ease, background 0.2s ease;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+            pointer-events: auto;
+            user-select: none;
+            box-sizing: border-box;
+            white-space: nowrap;
+        }
+
+        #legal-links-pill:hover,
+        .legal-links-pill:hover {
+            opacity: 1;
+            border-color: var(--switch-bg-checked);
+        }
+
+        .legal-links-pill a {
+            color: var(--text-color);
+            text-decoration: none;
+            font-weight: 500;
+            transition: color 0.15s ease;
+        }
+
+        .legal-links-pill a:hover {
+            color: var(--switch-bg-checked);
+            text-decoration: underline;
+        }
+
+        .legal-links-pill-sep {
+            color: var(--text-color-light);
+            user-select: none;
+            opacity: 0.6;
+        }
+
         #canvas-minimap {
             position: absolute;
             right: 1rem;
@@ -3376,6 +3428,12 @@
                 right: 5.75rem;
             }
 
+            #legal-links-pill,
+            .legal-links-pill {
+                bottom: calc(var(--bottom-toolbar-height, 66px) + 1.75rem + var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px)) + 92px);
+                right: 8.5rem;
+            }
+
             .separator {
                 margin: .1rem .25rem;
             }
@@ -3867,7 +3925,8 @@
             #storyflow-scroll-start-btn, #storyflow-add-frame-btn,
             #storyflow-stats-bar, #storyflow-fullscreen, #storyflow-script-view,
             .story-manage-artists, .story-apply-artist-all, .story-card-duplicate-btn,
-            .story-card-move-left-btn, .story-card-move-right-btn {
+            .story-card-move-left-btn, .story-card-move-right-btn,
+            #legal-links-pill, .legal-links-pill, #canvas-fit-view-btn, #canvas-zoom-readout, #canvas-minimap {
                 display: none !important;
             }
 
@@ -4485,6 +4544,33 @@
 
         .cloud-menu-item--danger:hover {
             background: rgba(239, 68, 68, 0.1);
+        }
+
+        .cloud-menu-legal {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+            padding: 0.45rem 0.6rem 0.2rem;
+            font-size: 0.72rem;
+            color: var(--text-color-light);
+            user-select: none;
+        }
+
+        .cloud-menu-legal a {
+            color: var(--text-color-light);
+            text-decoration: none;
+            transition: color 0.15s ease;
+        }
+
+        .cloud-menu-legal a:hover {
+            color: var(--switch-bg-checked);
+            text-decoration: underline;
+        }
+
+        .cloud-menu-legal-sep {
+            opacity: 0.5;
+            user-select: none;
         }
 
         /* ─── CLOUD MODALS (conflict + picker) ──────────────────────────── */
@@ -7003,7 +7089,8 @@ html[data-style="flat"] #canvas-empty-guide .canvas-empty-title {
 html[data-style="flat"] #canvas-empty-guide,
 html[data-style="flat"] #canvas-template-picker button,
 html[data-style="flat"] #canvas-fit-view-btn,
-html[data-style="flat"] #canvas-zoom-readout {
+html[data-style="flat"] #canvas-zoom-readout,
+html[data-style="flat"] .legal-links-pill {
     border-radius: 0 !important;
     box-shadow: none !important;
 }
