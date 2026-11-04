@@ -748,6 +748,10 @@ function renderTabs() {
             if (pinLabel) {
                 pinLabel.textContent = project.pinned ? 'Unpin' : 'Pin to Start';
             }
+            const renameBtn = document.getElementById('rename-tab-btn');
+            if (renameBtn) {
+                renameBtn.style.display = project.pinned ? 'none' : '';
+            }
             showAndPositionMenu(menu, e);
         });
 
@@ -2234,8 +2238,13 @@ function setupEventListeners() {
     if (renameTabBtn) renameTabBtn.addEventListener('click', () => {
         const id = tabContextMenu.dataset.tabId;
         if (id) {
+            const project = projects.find(p => p.id.toString() === id.toString());
+            if (project && project.pinned) {
+                tabContextMenu.style.display = 'none';
+                return;
+            }
             const tab = document.querySelector(`.tab-item[data-id='${id}']`);
-            if (tab) {
+            if (tab && !tab.classList.contains('pinned')) {
                 const nameSpan = tab.querySelector('.tab-name'), nameInput = tab.querySelector('.tab-name-input');
                 if (nameSpan) nameSpan.style.display = 'none';
                 if (nameInput) {

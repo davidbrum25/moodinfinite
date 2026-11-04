@@ -2292,6 +2292,7 @@ try {
     await assertOAuthLegalPagesAndLinks(page);
     await assertMoodpromptReorderAndCollapse(page);
     await assertMoodlistItemWrappingAndClamp(page);
+    await assertPinnedTabContextMenuHidesRename(page);
 
     const lateErrors = pageErrors.filter(isFirstParty);
     assert.deepEqual(lateErrors, [], `first-party errors:\n${lateErrors.join('\n')}`);
@@ -8138,4 +8139,101 @@ async function assertMoodlistItemWrappingAndClamp(page) {
     assert.ok(afterReload.longScrollHeight > afterReload.longClientHeight + initial.lineHeight);
 
     console.log('Moodlist item wrapping and clamp passed.');
+}
+
+async function assertPinnedTabContextMenuHidesRename(page) {
+    console.log('Testing pinned tab context menu hides Rename...');
+    await page.setViewport({ width: 1280, height: 800, deviceScaleFactor: 1, isMobile: false, hasTouch: false });
+
+    const menuState = await page.evaluate(() => {
+        createNewProject('moodinfinite');
+        const firstBoard = projects.find((p) => p.id === activeProjectId);
+        firstBoard.name = 'Board To Pin';
+        firstBoard.pinned = false;
+
+        createNewProject('moodinfinite');
+        const secondBoard = projects.find((p) => p.id === activeProjectId);
+        secondBoard.name = 'Board To Rename';
+        secondBoard.pinned = false;
+
+        renderTabs();
+
+        // Pin firstBoard through the context menu (#pin-tab-btn)
+        const firstTabBeforePin = document.querySelector(`#tabs-list .tab-item[data-id="${firstBoard.id}"]`);
+        firstTabBeforePin.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 160, clientY: 24 }));
+        document.getElementById('pin-tab-btn').click();
+
+        // Open context menu on pinned tab -> #rename-tab-btn not visible
+        const pinnedTab = document.querySelector(`#tabs-list .tab-item[data-id="${firstBoard.id}"]`);
+        pinnedTab.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 160, clientY: 24 }));
+        const renameBtn = document.getElementById('rename-tab-btn');
+        const pinnedRenameStyleDisplay = renameBtn.style.display;
+        const pinnedRenameComputedDisplay = getComputedStyle(renameBtn).display;
+        const pinnedRenameVisible = pinnedRenameComputedDisplay !== 'none' && renameBtn.offsetParent !== null;
+
+        // Open context menu on unpinned tab -> #rename-tab-btn visible and clicking it shows input
+        const unpinnedTab = document.querySelector(`#tabs-list .tab-item[data-id="${secondBoard.id}"]`);
+        unpinnedTab.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 220, clientY: 24 }));
+        const unpinnedRenameStyleDisplay = renameBtn.style.display;
+        const unpinnedRenameComputedDisplay = getComputedStyle(renameBtn).display;
+        const unpinnedRenameVisible = unpinnedRenameComputedDisplay !== 'none' && renameBtn.getBoundingClientRect().height > 0;
+
+        renameBtn.click();
+        const nameInput = unpinnedTab.querySelector('.tab-name-input');
+        const nameSpan = unpinnedTab.querySelector('.tab-name');
+        const inputVisible = nameInput.style.display === 'block' && getComputedStyle(nameInput).display !== 'none';
+        const spanHidden = nameSpan.style.display === 'none';
+        const inputFocused = document.activeElement === nameInput;
+
+        return {
+            firstId: firstBoard.id,
+            secondId: secondBoard.id,
+            firstPinned: !!firstBoard.pinned && pinnedTab.classList.contains('pinned'),
+            pinnedRenameStyleDisplay,
+            pinnedRenameComputedDisplay,
+            pinnedRenameVisible,
+            unpinnedRenameStyleDisplay,
+            unpinnedRenameComputedDisplay,
+            unpinnedRenameVisible,
+            inputVisible,
+            spanHidden,
+            inputFocused,
+        };
+    });
+
+    assert.equal(menuState.firstPinned, true, 'first board should be pinned via #pin-tab-btn');
+    assert.equal(menuState.pinnedRenameStyleDisplay, 'none', '#rename-tab-btn style.display must be none on pinned tab');
+    assert.equal(menuState.pinnedRenameComputedDisplay, 'none', '#rename-tab-btn computed display must be none on pinned tab');
+    assert.equal(menuState.pinnedRenameVisible, false, '#rename-tab-btn must not be visible on pinned tab');
+    assert.equal(menuState.unpinnedRenameStyleDisplay, '', '#rename-tab-btn style.display must be restored on unpinned tab');
+    assert.equal(menuState.unpinnedRenameVisible, true, '#rename-tab-btn must be visible on unpinned tab');
+    assert.equal(menuState.inputVisible, true, 'clicking #rename-tab-btn on unpinned tab must show .tab-name-input');
+    assert.equal(menuState.spanHidden, true, 'clicking #rename-tab-btn on unpinned tab must hide .tab-name');
+    assert.equal(menuState.inputFocused, true, 'clicking #rename-tab-btn on unpinned tab must focus .tab-name-input');
+
+    const newTabName = 'Renamed Unpinned Board';
+    await page.keyboard.type(newTabName);
+    await page.keyboard.press('Enter');
+
+    const afterRename = await page.evaluate((id) => {
+        const project = projects.find((p) => p.id === id);
+        const tab = document.querySelector(`#tabs-list .tab-item[data-id="${id}"]`);
+        const nameSpan = tab.querySelector('.tab-name');
+        const nameInput = tab.querySelector('.tab-name-input');
+        return {
+            projectName: project ? project.name : '',
+            spanText: nameSpan ? nameSpan.textContent : '',
+            tabTitle: tab ? tab.title : '',
+            inputDisplay: nameInput ? nameInput.style.display : '',
+            spanDisplay: nameSpan ? nameSpan.style.display : '',
+        };
+    }, menuState.secondId);
+
+    assert.equal(afterRename.projectName, newTabName, 'typing and pressing Enter must update project.name');
+    assert.equal(afterRename.spanText, newTabName, 'typing and pressing Enter must update .tab-name text');
+    assert.equal(afterRename.tabTitle, newTabName, 'typing and pressing Enter must update .tab-item title');
+    assert.equal(afterRename.inputDisplay, 'none', '.tab-name-input must hide after Enter');
+    assert.equal(afterRename.spanDisplay, '', '.tab-name must be restored after Enter');
+
+    console.log('Pinned tab context menu hides Rename passed.');
 }
