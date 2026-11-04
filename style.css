@@ -181,6 +181,11 @@
         .tabs-list-container.can-scroll-right::after {
             opacity: 1;
             visibility: visible;
+            pointer-events: none;
+        }
+
+        .scroll-indicator > * {
+            pointer-events: none;
         }
 
         .tabs-list {

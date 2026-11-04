@@ -787,12 +787,16 @@ function renderTabs() {
         });
 
         tab.addEventListener('dragstart', (e) => {
-            e.dataTransfer.setData('text/plain', project.id.toString());
-            e.dataTransfer.effectAllowed = 'move';
+            if (e.dataTransfer) {
+                e.dataTransfer.setData('text/plain', project.id.toString());
+                e.dataTransfer.effectAllowed = 'move';
+            }
+            tab.classList.add('dragging');
             setTimeout(() => { tab.classList.add('dragging'); }, 0);
         });
 
         tab.addEventListener('dragend', () => {
+            if (typeof stopTabDragAutoScroll === 'function') stopTabDragAutoScroll();
             const draggingElem = document.querySelector('.tab-item.dragging');
             if (draggingElem) { draggingElem.classList.remove('dragging'); }
         });
@@ -1925,6 +1929,152 @@ function getDragAfterElement(container, x) {
         }
     }, { offset: Number.NEGATIVE_INFINITY }).element;
 }
+
+let tabDragAutoScrollTimer = null;
+let tabDragAutoScrollDir = 0;
+let tabDragLastClientX = null;
+const TAB_DRAG_EDGE_ZONE = 40;
+const TAB_DRAG_SCROLL_STEP = 10;
+const TAB_DRAG_SCROLL_INTERVAL_MS = 16;
+
+function getEffectiveTabDragClientX(e) {
+    if (!e) return 0;
+    const target = e.target instanceof Element ? e.target : null;
+    const rightInd = target && target.closest ? target.closest('#scroll-right-indicator, .scroll-indicator.right') : null;
+    if (rightInd) {
+        const r = rightInd.getBoundingClientRect();
+        return (e.clientX !== 0 || e.clientY !== 0) ? Math.max(e.clientX, r.right - 2) : (r.right - 2);
+    }
+    const leftInd = target && target.closest ? target.closest('#scroll-left-indicator, .scroll-indicator.left') : null;
+    if (leftInd) {
+        const r = leftInd.getBoundingClientRect();
+        return (e.clientX !== 0 || e.clientY !== 0) ? Math.min(e.clientX, r.left + 2) : (r.left + 2);
+    }
+    if (e.clientX !== 0 || e.clientY !== 0) {
+        return e.clientX;
+    }
+    if (target) {
+        const r = target.getBoundingClientRect();
+        if (r.width > 0) return r.left + r.width / 2;
+    }
+    return e.clientX || 0;
+}
+
+function updateDraggedTabPosition(clientX) {
+    if (!tabsList) return;
+    const draggingTab = document.querySelector('.tab-item.dragging');
+    if (!draggingTab) return;
+    const afterElement = getDragAfterElement(tabsList, clientX);
+    if (afterElement == null) {
+        tabsList.appendChild(draggingTab);
+    } else if (afterElement !== draggingTab) {
+        tabsList.insertBefore(draggingTab, afterElement);
+    }
+}
+
+function stopTabDragAutoScroll() {
+    tabDragAutoScrollDir = 0;
+    tabDragLastClientX = null;
+    if (tabDragAutoScrollTimer !== null) {
+        clearInterval(tabDragAutoScrollTimer);
+        tabDragAutoScrollTimer = null;
+    }
+}
+
+function stepTabDragAutoScroll() {
+    if (!tabsList || !tabDragAutoScrollDir) {
+        stopTabDragAutoScroll();
+        return;
+    }
+    const draggingTab = document.querySelector('.tab-item.dragging');
+    if (!draggingTab) {
+        stopTabDragAutoScroll();
+        return;
+    }
+    const maxScroll = Math.max(0, tabsList.scrollWidth - tabsList.clientWidth);
+    if (maxScroll > 0) {
+        const nextScroll = Math.max(0, Math.min(maxScroll, tabsList.scrollLeft + tabDragAutoScrollDir * TAB_DRAG_SCROLL_STEP));
+        if (nextScroll !== tabsList.scrollLeft) {
+            tabsList.scrollLeft = nextScroll;
+            updateScrollIndicators();
+        }
+    }
+    if (typeof tabDragLastClientX === 'number' && !isNaN(tabDragLastClientX)) {
+        updateDraggedTabPosition(tabDragLastClientX);
+    }
+}
+
+function startTabDragAutoScroll(dir, clientX) {
+    if (typeof clientX === 'number' && !isNaN(clientX)) {
+        tabDragLastClientX = clientX;
+    }
+    if (!dir) {
+        stopTabDragAutoScroll();
+        return;
+    }
+    tabDragAutoScrollDir = dir;
+    if (tabDragAutoScrollTimer === null) {
+        tabDragAutoScrollTimer = setInterval(stepTabDragAutoScroll, TAB_DRAG_SCROLL_INTERVAL_MS);
+    }
+}
+
+function getTabDragAutoScrollDir(e, clientX) {
+    const target = e && e.target instanceof Element ? e.target : null;
+    if (target && target.closest) {
+        if (target.closest('#scroll-left-indicator, .scroll-indicator.left')) return -1;
+        if (target.closest('#scroll-right-indicator, .scroll-indicator.right')) return 1;
+    }
+    const container = (tabsList && tabsList.closest('.tabs-list-container')) || tabsList;
+    if (!container) return 0;
+    const rect = container.getBoundingClientRect();
+    if (rect.width <= 0) return 0;
+    if (clientX <= rect.left + TAB_DRAG_EDGE_ZONE) return -1;
+    if (clientX >= rect.right - TAB_DRAG_EDGE_ZONE) return 1;
+    return 0;
+}
+
+function handleTabDragOver(e) {
+    e.preventDefault();
+    if (e._tabDragOverHandled) return;
+    e._tabDragOverHandled = true;
+    const draggingTab = document.querySelector('.tab-item.dragging');
+    if (!draggingTab || !tabsList) return;
+    if (e.dataTransfer) {
+        e.dataTransfer.dropEffect = 'move';
+    }
+    const clientX = getEffectiveTabDragClientX(e);
+    updateDraggedTabPosition(clientX);
+    const dir = getTabDragAutoScrollDir(e, clientX);
+    if (dir !== 0) {
+        startTabDragAutoScroll(dir, clientX);
+    } else {
+        stopTabDragAutoScroll();
+    }
+}
+
+function commitTabDrop(e) {
+    e.preventDefault();
+    stopTabDragAutoScroll();
+    if (e._tabDropCommitted) return;
+    const draggingTab = document.querySelector('.tab-item.dragging');
+    const rawData = e.dataTransfer ? e.dataTransfer.getData('text/plain') : '';
+    const parsedData = parseInt(rawData, 10);
+    const t = !isNaN(parsedData) ? parsedData : (draggingTab ? parseInt(draggingTab.dataset.id, 10) : NaN);
+    if (isNaN(t) || !projects.some(p => p.id === t)) return;
+    e._tabDropCommitted = true;
+    if (draggingTab) {
+        draggingTab.classList.remove('dragging');
+    }
+    const o = Array.from(tabsList.querySelectorAll('.tab-item')).map(el => parseInt(el.dataset.id));
+    projects.sort((a, b) => o.indexOf(a.id) - o.indexOf(b.id));
+    projects.sort((a, b) => {
+        if (a.pinned && !b.pinned) return -1;
+        if (!a.pinned && b.pinned) return 1;
+        return 0;
+    });
+    renderTabs();
+    scheduleAutoSave();
+}
 function showAndPositionMenu(menu, event) { menu.style.display = 'block'; const menuWidth = menu.offsetWidth, menuHeight = menu.offsetHeight, screenWidth = window.innerWidth, screenHeight = window.innerHeight, padding = 8; let left = event.clientX, top = event.clientY; if (left + menuWidth > screenWidth - padding) { left = screenWidth - menuWidth - padding } if (top + menuHeight > screenHeight - padding) { top = screenHeight - menuHeight - padding } left = Math.max(padding, left); top = Math.max(padding, top); menu.style.left = `${left}px`; menu.style.top = `${top}px` }
 
 function saveSettings() {
@@ -1993,21 +2143,15 @@ function applySettingsToUI() {
 }
 
 function setupEventListeners() {
-    tabsList.addEventListener('dragover', e => { e.preventDefault(); const t = document.querySelector('.tab-item.dragging'); if (!t) return; const o = getDragAfterElement(tabsList, e.clientX); if (o == null) { tabsList.appendChild(t) } else { tabsList.insertBefore(t, o) } });
-    tabsList.addEventListener('drop', e => { 
-        e.preventDefault(); 
-        const t = parseInt(e.dataTransfer.getData('text/plain')); 
-        if (isNaN(t)) return; 
-        const o = Array.from(tabsList.querySelectorAll('.tab-item')).map(e => parseInt(e.dataset.id)); 
-        projects.sort((a, b) => o.indexOf(a.id) - o.indexOf(b.id)); 
-        projects.sort((a, b) => {
-            if (a.pinned && !b.pinned) return -1;
-            if (!a.pinned && b.pinned) return 1;
-            return 0;
-        });
-        renderTabs();
-        scheduleAutoSave();
+    tabsList.addEventListener('dragover', handleTabDragOver);
+    tabsList.addEventListener('drop', commitTabDrop);
+    tabsList.addEventListener('dragleave', (e) => {
+        const container = tabsList.closest('.tabs-list-container');
+        if (e.relatedTarget && ((container && container.contains(e.relatedTarget)) || tabsList.contains(e.relatedTarget))) return;
+        stopTabDragAutoScroll();
     });
+    document.addEventListener('dragend', stopTabDragAutoScroll);
+    document.addEventListener('drop', stopTabDragAutoScroll);
     const nativeScrollLeftDesc = Object.getOwnPropertyDescriptor(Element.prototype, 'scrollLeft');
     if (tabsList && nativeScrollLeftDesc && nativeScrollLeftDesc.get && nativeScrollLeftDesc.set) {
         let updatingScrollLeft = false;
@@ -2049,6 +2193,12 @@ function setupEventListeners() {
     bindHorizontalWheel(tabsList);
     const tabsListContainer = document.querySelector('.tabs-list-container');
     if (tabsListContainer && tabsList) {
+        tabsListContainer.addEventListener('dragover', handleTabDragOver);
+        tabsListContainer.addEventListener('drop', commitTabDrop);
+        tabsListContainer.addEventListener('dragleave', (e) => {
+            if (e.relatedTarget && tabsListContainer.contains(e.relatedTarget)) return;
+            stopTabDragAutoScroll();
+        });
         tabsListContainer.addEventListener('wheel', (e) => {
             if (e.defaultPrevented) return;
             if (tabsList.scrollWidth > tabsList.clientWidth) {
@@ -2074,7 +2224,7 @@ function setupEventListeners() {
 
         tabsList.addEventListener('mousedown', (e) => {
             if (e.button !== 0 && e.button !== 1) return;
-            if (e.target.closest('.tab-close-btn') || e.target.closest('.tab-name-input')) return;
+            if (e.target.closest('.tab-item') || e.target.closest('.tab-close-btn') || e.target.closest('.tab-name-input')) return;
             if (tabsList.scrollWidth <= tabsList.clientWidth) return;
             isTabPointerDown = true;
             isTabDragScrolling = false;
@@ -2142,6 +2292,12 @@ function setupEventListeners() {
                 scrollLeftByStep();
             }
         });
+        leftScrollIndicator.addEventListener('dragover', handleTabDragOver);
+        leftScrollIndicator.addEventListener('drop', commitTabDrop);
+        leftScrollIndicator.addEventListener('dragleave', (e) => {
+            if (e.relatedTarget && leftScrollIndicator.contains(e.relatedTarget)) return;
+            stopTabDragAutoScroll();
+        });
     }
     if (rightScrollIndicator) {
         const scrollRightByStep = () => {
@@ -2155,6 +2311,12 @@ function setupEventListeners() {
                 e.preventDefault();
                 scrollRightByStep();
             }
+        });
+        rightScrollIndicator.addEventListener('dragover', handleTabDragOver);
+        rightScrollIndicator.addEventListener('drop', commitTabDrop);
+        rightScrollIndicator.addEventListener('dragleave', (e) => {
+            if (e.relatedTarget && rightScrollIndicator.contains(e.relatedTarget)) return;
+            stopTabDragAutoScroll();
         });
     }
     tabsList.addEventListener('dblclick', e => { if (e.target === tabsList) createNewProject('moodinfinite'); });
