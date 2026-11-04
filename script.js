@@ -10361,16 +10361,49 @@ function renderStoryflowView(project) {
             if (frame.image) {
                 miniframe.style.backgroundImage = `url(${frame.image})`;
             }
-            if (frame.meta && frame.meta.status === 'approved') {
+            const status = frame && frame.meta ? frame.meta.status : null;
+            const isApproved = status === 'approved';
+            const isWip = status === 'wip';
+            if (isApproved) {
                 miniframe.classList.add('status-approved');
-            } else if (frame.meta && frame.meta.status === 'wip') {
+            } else if (isWip) {
                 miniframe.classList.add('status-wip');
             } else {
                 miniframe.classList.add('status-not-started');
             }
+
+            const thumb = document.createElement('div');
+            thumb.className = 'minimap-frame-thumb';
+            if (frame.image) {
+                thumb.style.backgroundImage = `url(${frame.image})`;
+            }
+
+            const lightsGroup = document.createElement('div');
+            lightsGroup.className = 'minimap-status-lights';
+            lightsGroup.setAttribute('role', 'group');
+            lightsGroup.setAttribute('aria-label', 'Status');
+
+            const approvedLight = document.createElement('span');
+            approvedLight.className = `minimap-status-light light-approved status-approved-light ${isApproved ? 'on is-on' : 'off is-off'}`;
+            approvedLight.dataset.status = 'approved';
+            const approvedLabel = `Approved: ${isApproved ? 'on' : 'off'}`;
+            approvedLight.setAttribute('aria-label', approvedLabel);
+            approvedLight.title = approvedLabel;
+
+            const wipLight = document.createElement('span');
+            wipLight.className = `minimap-status-light light-wip status-wip-light ${isWip ? 'on is-on' : 'off is-off'}`;
+            wipLight.dataset.status = 'wip';
+            const wipLabel = `WIP: ${isWip ? 'on' : 'off'}`;
+            wipLight.setAttribute('aria-label', wipLabel);
+            wipLight.title = wipLabel;
+
+            lightsGroup.append(approvedLight, wipLight);
+            miniframe.append(thumb, lightsGroup);
             minimapTrack.appendChild(miniframe);
         });
-        
+        if (typeof updateStoryflowMinimapViewport === 'function') {
+            updateStoryflowMinimapViewport();
+        }
         setTimeout(() => {
             if (typeof updateStoryflowMinimapViewport === 'function') {
                 updateStoryflowMinimapViewport();

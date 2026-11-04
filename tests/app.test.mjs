@@ -2293,6 +2293,7 @@ try {
     await assertMoodpromptReorderAndCollapse(page);
     await assertMoodlistItemWrappingAndClamp(page);
     await assertPinnedTabContextMenuHidesRename(page);
+    await assertStoryflowMinimapStatusLights(page);
 
     const lateErrors = pageErrors.filter(isFirstParty);
     assert.deepEqual(lateErrors, [], `first-party errors:\n${lateErrors.join('\n')}`);
@@ -8236,4 +8237,144 @@ async function assertPinnedTabContextMenuHidesRename(page) {
     assert.equal(afterRename.spanDisplay, '', '.tab-name must be restored after Enter');
 
     console.log('Pinned tab context menu hides Rename passed.');
+}
+
+async function assertStoryflowMinimapStatusLights(page) {
+    console.log('Testing Storyflow minimap status lights...');
+    await page.setViewport({ width: 1280, height: 800, deviceScaleFactor: 1, isMobile: false, hasTouch: false });
+
+    const readMinimapState = () => page.evaluate(() => {
+        const frames = [...document.querySelectorAll('#storyflow-minimap-track .minimap-frame')];
+        return frames.map((miniframe) => {
+            const group = miniframe.querySelector('.minimap-status-lights');
+            const thumb = miniframe.querySelector('.minimap-frame-thumb');
+            const lights = group ? [...group.querySelectorAll('.minimap-status-light')] : [];
+            const thumbRect = thumb ? thumb.getBoundingClientRect() : null;
+            const groupRect = group ? group.getBoundingClientRect() : null;
+            const afterBg = getComputedStyle(miniframe, '::after').backgroundColor;
+            return {
+                classes: [...miniframe.classList],
+                afterBg,
+                groupRole: group ? group.getAttribute('role') : null,
+                groupAriaLabel: group ? group.getAttribute('aria-label') : null,
+                belowThumb: !!(thumbRect && groupRect && groupRect.top >= thumbRect.bottom - 1),
+                lights: lights.map((light) => {
+                    const style = getComputedStyle(light);
+                    return {
+                        classes: [...light.classList],
+                        status: light.dataset.status,
+                        ariaLabel: light.getAttribute('aria-label'),
+                        title: light.getAttribute('title'),
+                        text: light.textContent,
+                        bg: style.backgroundColor,
+                        opacity: parseFloat(style.opacity),
+                        radius: style.borderRadius,
+                        boxShadow: style.boxShadow,
+                    };
+                }),
+            };
+        });
+    });
+
+    await page.evaluate(() => {
+        createNewProject('storyflow');
+        const project = projects.find((p) => p.id === activeProjectId);
+        project.data.frames = [
+            { id: 'sf-1', title: 'Frame 1', image: null, description: '', meta: { duration: '3s', camera: '', audio: '', artist: '', status: 'approved' } },
+            { id: 'sf-2', title: 'Frame 2', image: null, description: '', meta: { duration: '3s', camera: '', audio: '', artist: '', status: 'wip' } },
+            { id: 'sf-3', title: 'Frame 3', image: null, description: '', meta: { duration: '3s', camera: '', audio: '', artist: '' } },
+        ];
+        renderStoryflowView(project);
+    });
+
+    const initial = await readMinimapState();
+    assert.equal(initial.length, 3, 'expected 3 minimap frames');
+
+    // Existing status classes and tint overlay remain on .minimap-frame
+    assert.ok(initial[0].classes.includes('status-approved'), 'frame 0 must keep status-approved on .minimap-frame');
+    assert.ok(!initial[0].classes.includes('status-wip'), 'frame 0 must not have status-wip');
+    assert.ok(initial[1].classes.includes('status-wip'), 'frame 1 must keep status-wip on .minimap-frame');
+    assert.ok(!initial[1].classes.includes('status-approved'), 'frame 1 must not have status-approved');
+    assert.ok(initial[2].classes.includes('status-not-started'), 'frame 2 must keep status-not-started on .minimap-frame');
+    assert.ok(!initial[2].classes.includes('status-approved') && !initial[2].classes.includes('status-wip'), 'frame 2 must not have approved or wip class');
+
+    for (let i = 0; i < 3; i++) {
+        assert.equal(initial[i].groupRole, 'group', `frame ${i} status lights container must have role="group"`);
+        assert.equal(initial[i].groupAriaLabel, 'Status', `frame ${i} status lights container must have aria-label="Status"`);
+        assert.equal(initial[i].belowThumb, true, `frame ${i} status lights must sit below the thumbnail`);
+        assert.equal(initial[i].lights.length, 2, `frame ${i} must have 2 status lights`);
+        for (const light of initial[i].lights) {
+            assert.equal(light.text, '', 'status light must be colour only with no visible text');
+            assert.equal(light.radius, '50%', 'status light must be round');
+            assert.notEqual(light.boxShadow, 'none', 'status light must have a box-shadow ring');
+        }
+    }
+
+    // Frame 0: approved on, wip off
+    assert.ok(initial[0].lights[0].classes.includes('on') && initial[0].lights[0].classes.includes('is-on'), 'frame 0 approved light must have on class');
+    assert.ok(!initial[0].lights[0].classes.includes('off'), 'frame 0 approved light must not have off class');
+    assert.equal(initial[0].lights[0].ariaLabel, 'Approved: on');
+    assert.equal(initial[0].lights[0].title, 'Approved: on');
+    assert.equal(initial[0].lights[0].bg, 'rgb(212, 163, 89)');
+    assert.ok(initial[0].lights[1].classes.includes('off') && initial[0].lights[1].classes.includes('is-off'), 'frame 0 wip light must have off class');
+    assert.equal(initial[0].lights[1].ariaLabel, 'WIP: off');
+    assert.equal(initial[0].lights[1].title, 'WIP: off');
+
+    // Frame 1: approved off, wip on
+    assert.ok(initial[1].lights[0].classes.includes('off') && initial[1].lights[0].classes.includes('is-off'), 'frame 1 approved light must have off class');
+    assert.equal(initial[1].lights[0].ariaLabel, 'Approved: off');
+    assert.equal(initial[1].lights[0].title, 'Approved: off');
+    assert.ok(initial[1].lights[1].classes.includes('on') && initial[1].lights[1].classes.includes('is-on'), 'frame 1 wip light must have on class');
+    assert.ok(!initial[1].lights[1].classes.includes('off'), 'frame 1 wip light must not have off class');
+    assert.equal(initial[1].lights[1].ariaLabel, 'WIP: on');
+    assert.equal(initial[1].lights[1].title, 'WIP: on');
+    assert.equal(initial[1].lights[1].bg, 'rgb(37, 137, 189)');
+
+    // Frame 2: both off
+    assert.ok(initial[2].lights[0].classes.includes('off') && initial[2].lights[0].classes.includes('is-off'), 'frame 2 approved light must have off class');
+    assert.equal(initial[2].lights[0].ariaLabel, 'Approved: off');
+    assert.ok(initial[2].lights[1].classes.includes('off') && initial[2].lights[1].classes.includes('is-off'), 'frame 2 wip light must have off class');
+    assert.equal(initial[2].lights[1].ariaLabel, 'WIP: off');
+
+    // Toggle statuses via card toggle buttons:
+    // Frame 0: click WIP -> becomes wip
+    // Frame 1: click WIP -> becomes none
+    // Frame 2: click Approved -> becomes approved
+    await page.evaluate(() => {
+        const cards = () => [...document.querySelectorAll('#storyflow-scroll-area .story-card')];
+        // Toggle frame 0 to WIP (second .story-toggle-btn in card 0)
+        cards()[0].querySelectorAll('.story-toggle-btn')[1].click();
+        // Toggle frame 1 off WIP (second .story-toggle-btn in card 1)
+        cards()[1].querySelectorAll('.story-toggle-btn')[1].click();
+        // Toggle frame 2 to Approved (first .story-toggle-btn in card 2)
+        cards()[2].querySelectorAll('.story-toggle-btn')[0].click();
+    });
+
+    const afterToggle = await readMinimapState();
+    assert.equal(afterToggle.length, 3);
+
+    // Frame 0 is now wip
+    assert.ok(afterToggle[0].classes.includes('status-wip'), 'frame 0 must update to status-wip on .minimap-frame');
+    assert.ok(!afterToggle[0].classes.includes('status-approved'), 'frame 0 must drop status-approved');
+    assert.ok(afterToggle[0].lights[0].classes.includes('off'), 'frame 0 approved light must now be off');
+    assert.equal(afterToggle[0].lights[0].ariaLabel, 'Approved: off');
+    assert.ok(afterToggle[0].lights[1].classes.includes('on'), 'frame 0 wip light must now be on');
+    assert.equal(afterToggle[0].lights[1].ariaLabel, 'WIP: on');
+
+    // Frame 1 is now none
+    assert.ok(afterToggle[1].classes.includes('status-not-started'), 'frame 1 must update to status-not-started');
+    assert.ok(!afterToggle[1].classes.includes('status-wip'), 'frame 1 must drop status-wip');
+    assert.ok(afterToggle[1].lights[0].classes.includes('off'), 'frame 1 approved light must be off');
+    assert.equal(afterToggle[1].lights[0].ariaLabel, 'Approved: off');
+    assert.ok(afterToggle[1].lights[1].classes.includes('off'), 'frame 1 wip light must now be off');
+    assert.equal(afterToggle[1].lights[1].ariaLabel, 'WIP: off');
+
+    // Frame 2 is now approved
+    assert.ok(afterToggle[2].classes.includes('status-approved'), 'frame 2 must update to status-approved on .minimap-frame');
+    assert.ok(afterToggle[2].lights[0].classes.includes('on'), 'frame 2 approved light must now be on');
+    assert.equal(afterToggle[2].lights[0].ariaLabel, 'Approved: on');
+    assert.ok(afterToggle[2].lights[1].classes.includes('off'), 'frame 2 wip light must be off');
+    assert.equal(afterToggle[2].lights[1].ariaLabel, 'WIP: off');
+
+    console.log('Storyflow minimap status lights passed.');
 }
