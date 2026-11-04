@@ -2290,6 +2290,7 @@ try {
     await assertTabNamesNoCollision(page);
     await assertGenMetaStage1(page);
     await assertOAuthLegalPagesAndLinks(page);
+    await assertDesktopNarrowTopbar(page);
 
     const lateErrors = pageErrors.filter(isFirstParty);
     assert.deepEqual(lateErrors, [], `first-party errors:\n${lateErrors.join('\n')}`);
@@ -6551,7 +6552,7 @@ async function assertMultiResolutionAndQoLFixes(page) {
             if (typeof updateScrollIndicators === 'function') updateScrollIndicators();
             if (typeof updateHScrollOverflowHints === 'function') updateHScrollOverflowHints();
             const ids = ['save-png-btn', 'print-btn', 'copy-to-clipboard-btn', 'palette-btn', 'cloud-login-btn'];
-            if (window.innerWidth <= 1100) ids.push('mobile-tabs-btn');
+            if (window.innerWidth <= 768) ids.push('mobile-tabs-btn');
             return ids.map((id) => {
                 const el = document.getElementById(id);
                 if (!el) return { id, missing: true };
@@ -7673,4 +7674,222 @@ async function assertOAuthLegalPagesAndLinks(page) {
     await page.waitForFunction(() => window.innerWidth === 1280);
 
     console.log('OAuth legal pages and links passed.');
+}
+
+async function assertDesktopNarrowTopbar(page) {
+    console.log('Testing desktop narrow topbar (1024, 1280, 1440) and 390 mobile...');
+
+    await page.evaluate(() => {
+        window.__savedProjectsBeforeNarrowTopbar = projects;
+        window.__savedActiveBeforeNarrowTopbar = activeProjectId;
+        projects = [];
+        const types = ['moodinfinite', 'moodprompt', 'colorseeker', 'storyflow', 'moodgantt', 'moodlist'];
+        for (let i = 0; i < 14; i++) {
+            createNewProject(types[i % types.length]);
+        }
+        const firstMoodinfinite = projects.find((p) => p.type === 'moodinfinite') || projects[0];
+        if (firstMoodinfinite) switchTab(firstMoodinfinite.id);
+    });
+
+    const desktopViewports = [
+        { width: 1024, height: 768 },
+        { width: 1280, height: 800 },
+        { width: 1440, height: 900 },
+    ];
+
+    for (const vp of desktopViewports) {
+        await page.setViewport({ width: vp.width, height: vp.height, deviceScaleFactor: 1, isMobile: false, hasTouch: false });
+        await page.waitForFunction((w, h) => window.innerWidth === w && window.innerHeight === h, {}, vp.width, vp.height);
+
+        const stateAtStart = await page.evaluate(() => {
+            const firstBoard = projects.find((p) => p.type === 'moodinfinite') || projects[0];
+            if (firstBoard) switchTab(firstBoard.id);
+            const list = document.getElementById('tabs-list');
+            const container = document.querySelector('.tabs-list-container');
+            list.scrollLeft = 0;
+            if (typeof updateScrollIndicators === 'function') updateScrollIndicators();
+
+            const rightIds = ['save-png-btn', 'print-btn', 'copy-to-clipboard-btn', 'palette-btn', 'cloud-login-btn'];
+            const leftIds = [
+                'app-logo',
+                'load-project-btn',
+                'save-project-btn',
+                'add-moodinfinite-tab-btn',
+                'add-moodprompt-tab-btn',
+                'add-colorseeker-tab-btn',
+                'add-storyflow-tab-btn',
+                'add-moodgantt-tab-btn',
+                'add-moodlist-tab-btn',
+                'undo-btn',
+                'redo-btn',
+            ];
+
+            const mapRect = (id) => {
+                const el = document.getElementById(id);
+                if (!el) return { id, missing: true };
+                const rect = el.getBoundingClientRect();
+                const cs = getComputedStyle(el);
+                return {
+                    id,
+                    left: rect.left,
+                    top: rect.top,
+                    right: rect.right,
+                    bottom: rect.bottom,
+                    width: rect.width,
+                    height: rect.height,
+                    display: cs.display,
+                    visibility: cs.visibility,
+                };
+            };
+
+            const leftArrow = document.getElementById('scroll-left-indicator');
+            const rightArrow = document.getElementById('scroll-right-indicator');
+            const leftArrowCs = leftArrow ? getComputedStyle(leftArrow) : null;
+            const rightArrowCs = rightArrow ? getComputedStyle(rightArrow) : null;
+            const mobileBtn = document.getElementById('mobile-tabs-btn');
+            const mobileBtnCs = mobileBtn ? getComputedStyle(mobileBtn) : null;
+
+            return {
+                vw: window.innerWidth,
+                vh: window.innerHeight,
+                docScrollWidth: document.documentElement.scrollWidth,
+                docClientWidth: document.documentElement.clientWidth,
+                rightBtns: rightIds.map(mapRect),
+                leftBtns: leftIds.map(mapRect),
+                listScrollWidth: list.scrollWidth,
+                listClientWidth: list.clientWidth,
+                listScrollLeft: list.scrollLeft,
+                leftArrowVisible: !!(
+                    leftArrow &&
+                    leftArrow.classList.contains('visible') &&
+                    leftArrowCs.display !== 'none' &&
+                    leftArrowCs.visibility !== 'hidden' &&
+                    parseFloat(leftArrowCs.opacity) > 0
+                ),
+                rightArrowVisible: !!(
+                    rightArrow &&
+                    rightArrow.classList.contains('visible') &&
+                    rightArrowCs.display !== 'none' &&
+                    rightArrowCs.visibility !== 'hidden' &&
+                    parseFloat(rightArrowCs.opacity) > 0
+                ),
+                containerCanRight: container ? container.classList.contains('can-scroll-right') : false,
+                containerCanLeft: container ? container.classList.contains('can-scroll-left') : false,
+                mobileBtnDisplay: mobileBtnCs ? mobileBtnCs.display : 'none',
+            };
+        });
+
+        assert.ok(
+            stateAtStart.docScrollWidth <= stateAtStart.docClientWidth,
+            `${vp.width}x${vp.height}: documentElement has horizontal overflow (${stateAtStart.docScrollWidth} > ${stateAtStart.docClientWidth})`
+        );
+        assert.equal(stateAtStart.mobileBtnDisplay, 'none', `${vp.width}x${vp.height}: #mobile-tabs-btn must be hidden on desktop`);
+        assert.ok(
+            stateAtStart.listScrollWidth > stateAtStart.listClientWidth,
+            `${vp.width}x${vp.height}: #tabs-list scrollWidth (${stateAtStart.listScrollWidth}) should exceed clientWidth (${stateAtStart.listClientWidth})`
+        );
+        assert.equal(stateAtStart.rightArrowVisible, true, `${vp.width}x${vp.height}: right arrow should be visible at scrollLeft 0`);
+        assert.equal(stateAtStart.leftArrowVisible, false, `${vp.width}x${vp.height}: left arrow should be hidden at scrollLeft 0`);
+        assert.equal(stateAtStart.containerCanRight, true, `${vp.width}x${vp.height}: container should have can-scroll-right at scrollLeft 0`);
+        assert.equal(stateAtStart.containerCanLeft, false, `${vp.width}x${vp.height}: container should not have can-scroll-left at scrollLeft 0`);
+
+        for (const btn of [...stateAtStart.rightBtns, ...stateAtStart.leftBtns]) {
+            assert.ok(!btn.missing, `${vp.width}x${vp.height}: missing #${btn.id}`);
+            assert.notEqual(btn.display, 'none', `${vp.width}x${vp.height}: #${btn.id} has display:none`);
+            assert.notEqual(btn.visibility, 'hidden', `${vp.width}x${vp.height}: #${btn.id} has visibility:hidden`);
+            assert.ok(btn.width > 0 && btn.height > 0, `${vp.width}x${vp.height}: #${btn.id} has 0 size (${btn.width}x${btn.height})`);
+            assert.ok(btn.left >= 0, `${vp.width}x${vp.height}: #${btn.id} left (${btn.left}) < 0`);
+            assert.ok(btn.right <= stateAtStart.vw, `${vp.width}x${vp.height}: #${btn.id} right (${btn.right}) > vw (${stateAtStart.vw})`);
+            assert.ok(btn.top >= 0, `${vp.width}x${vp.height}: #${btn.id} top (${btn.top}) < 0`);
+            assert.ok(btn.bottom <= stateAtStart.vh, `${vp.width}x${vp.height}: #${btn.id} bottom (${btn.bottom}) > vh (${stateAtStart.vh})`);
+        }
+
+        // Switch to the last board and verify active tab is scrolled into the tabs container's visible rect
+        const stateAtLast = await page.evaluate(() => {
+            const lastBoard = projects[projects.length - 1];
+            switchTab(lastBoard.id);
+            const list = document.getElementById('tabs-list');
+            const container = document.querySelector('.tabs-list-container');
+            const activeTab = list.querySelector('.tab-item.active');
+            const containerRect = container.getBoundingClientRect();
+            const listRect = list.getBoundingClientRect();
+            const tabRect = activeTab ? activeTab.getBoundingClientRect() : null;
+            const leftArrow = document.getElementById('scroll-left-indicator');
+            const rightArrow = document.getElementById('scroll-right-indicator');
+            return {
+                hasActive: !!activeTab,
+                activeId: activeTab ? Number(activeTab.dataset.id) : null,
+                expectedId: lastBoard.id,
+                containerRect: { left: containerRect.left, right: containerRect.right, width: containerRect.width },
+                listRect: { left: listRect.left, right: listRect.right, width: listRect.width },
+                tabRect: tabRect ? { left: tabRect.left, right: tabRect.right, width: tabRect.width } : null,
+                leftArrowVisible: !!(leftArrow && leftArrow.classList.contains('visible')),
+                rightArrowVisible: !!(rightArrow && rightArrow.classList.contains('visible')),
+                docScrollWidth: document.documentElement.scrollWidth,
+                docClientWidth: document.documentElement.clientWidth,
+            };
+        });
+
+        assert.equal(stateAtLast.hasActive, true, `${vp.width}x${vp.height}: active tab should exist`);
+        assert.equal(stateAtLast.activeId, stateAtLast.expectedId, `${vp.width}x${vp.height}: active tab should match last board`);
+        assert.ok(
+            stateAtLast.tabRect.left >= stateAtLast.containerRect.left - 1 &&
+            stateAtLast.tabRect.right <= stateAtLast.containerRect.right + 1,
+            `${vp.width}x${vp.height}: active tab rect (${JSON.stringify(stateAtLast.tabRect)}) not inside tabs container rect (${JSON.stringify(stateAtLast.containerRect)})`
+        );
+        assert.equal(stateAtLast.leftArrowVisible, true, `${vp.width}x${vp.height}: left arrow should be visible at last board`);
+        assert.equal(stateAtLast.rightArrowVisible, false, `${vp.width}x${vp.height}: right arrow should be hidden at last board`);
+        assert.ok(
+            stateAtLast.docScrollWidth <= stateAtLast.docClientWidth,
+            `${vp.width}x${vp.height}: documentElement overflow after switching to last board`
+        );
+    }
+
+    // Mobile 390 viewport check: layout unchanged in behaviour (mobile-tabs-btn visible)
+    await page.setViewport({ width: 390, height: 844, deviceScaleFactor: 1, isMobile: true, hasTouch: true });
+    await page.waitForFunction(() => window.innerWidth === 390 && window.innerHeight === 844);
+    const mobileState = await page.evaluate(() => {
+        if (typeof updateHScrollOverflowHints === 'function') updateHScrollOverflowHints();
+        const mobileBtn = document.getElementById('mobile-tabs-btn');
+        const mobileBtnCs = mobileBtn ? getComputedStyle(mobileBtn) : null;
+        const mobileBtnRect = mobileBtn ? mobileBtn.getBoundingClientRect() : null;
+        const container = document.querySelector('.tabs-list-container');
+        const containerCs = container ? getComputedStyle(container) : null;
+        return {
+            mobileBtnVisible: !!(
+                mobileBtn &&
+                mobileBtnCs &&
+                mobileBtnCs.display !== 'none' &&
+                mobileBtnCs.visibility !== 'hidden' &&
+                mobileBtnRect.width > 0 &&
+                mobileBtnRect.height > 0
+            ),
+            tabsContainerDisplay: containerCs ? containerCs.display : null,
+            docScrollWidth: document.documentElement.scrollWidth,
+            docClientWidth: document.documentElement.clientWidth,
+        };
+    });
+    assert.equal(mobileState.mobileBtnVisible, true, '390px mobile: #mobile-tabs-btn must be visible');
+    assert.equal(mobileState.tabsContainerDisplay, 'none', '390px mobile: .tabs-list-container must be hidden');
+    assert.ok(
+        mobileState.docScrollWidth <= mobileState.docClientWidth,
+        `390px mobile: documentElement horizontal overflow (${mobileState.docScrollWidth} > ${mobileState.docClientWidth})`
+    );
+
+    // Restore state and desktop viewport
+    await page.setViewport({ width: 1280, height: 800, deviceScaleFactor: 1, isMobile: false, hasTouch: false });
+    await page.waitForFunction(() => window.innerWidth === 1280);
+    await page.evaluate(() => {
+        if (window.__savedProjectsBeforeNarrowTopbar) {
+            projects = window.__savedProjectsBeforeNarrowTopbar;
+            activeProjectId = window.__savedActiveBeforeNarrowTopbar;
+            renderTabs();
+            delete window.__savedProjectsBeforeNarrowTopbar;
+            delete window.__savedActiveBeforeNarrowTopbar;
+        }
+        const board = projects.find((p) => p.type === 'moodinfinite') || projects[0];
+        if (board) switchTab(board.id);
+    });
+
+    console.log('Desktop narrow topbar and 390 mobile passed.');
 }

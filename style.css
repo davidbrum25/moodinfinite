@@ -90,7 +90,7 @@
             height: 100%;
             width: 100%;
             min-width: 0;
-            overflow-x: auto;
+            overflow: hidden;
             scrollbar-width: none;
             -ms-overflow-style: none;
         }
@@ -98,6 +98,9 @@
             display: none;
         }
         #tabs-bar > .h-scroll-track > * {
+            flex-shrink: 0;
+        }
+        #tabs-bar > .h-scroll-track > div[style*="margin-left: auto"] {
             flex-shrink: 0;
         }
 
@@ -129,26 +132,74 @@
 
         .tabs-list-container {
             position: relative;
-            flex-grow: 1;
+            flex: 1 1 auto;
+            min-width: 0;
+            height: 100%;
             overflow: hidden;
             display: flex;
             align-items: center;
         }
 
         #tabs-bar > .h-scroll-track > .tabs-list-container {
-            flex: 1 1 0%;
-            min-width: 60px;
+            flex: 1 1 auto;
+            min-width: 0;
             overflow: hidden;
         }
 
+        .tabs-list-container::before,
+        .tabs-list-container::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            width: 36px;
+            pointer-events: none;
+            opacity: 0;
+            visibility: hidden;
+            z-index: 9;
+        }
+
+        .tabs-list-container::before {
+            left: 0;
+            background: linear-gradient(to right, var(--bg-ui, #24201B) 45%, transparent 100%);
+        }
+
+        .tabs-list-container::after {
+            right: 0;
+            background: linear-gradient(to left, var(--bg-ui, #24201B) 45%, transparent 100%);
+        }
+
+        html[data-style="glass"] .tabs-list-container::before {
+            background: linear-gradient(to right, rgba(13, 13, 13, 0.92) 40%, transparent 100%);
+        }
+
+        html[data-style="glass"] .tabs-list-container::after {
+            background: linear-gradient(to left, rgba(13, 13, 13, 0.92) 40%, transparent 100%);
+        }
+
+        .tabs-list-container.can-scroll-left::before,
+        .tabs-list-container.can-scroll-right::after {
+            opacity: 1;
+            visibility: visible;
+        }
+
         .tabs-list {
+            position: relative;
             display: flex;
             height: 100%;
-            flex-grow: 1;
+            flex: 1 1 auto;
+            min-width: 0;
+            width: 100%;
             align-items: flex-end;
             overflow-x: auto;
+            overflow-y: hidden;
             -ms-overflow-style: none;
             scrollbar-width: none;
+        }
+
+        .tabs-list.dragging-scroll {
+            cursor: grabbing;
+            user-select: none;
         }
 
         .tabs-list::-webkit-scrollbar {
@@ -158,28 +209,49 @@
         .scroll-indicator {
             position: absolute;
             top: 0;
-            bottom: 1px;
-            width: 40px;
+            bottom: 0;
+            width: 36px;
+            display: flex;
+            align-items: center;
+            color: var(--text-color);
             pointer-events: none;
             opacity: 0;
-            transition: opacity 0.2s ease-in-out;
+            visibility: hidden;
             z-index: 10;
+            user-select: none;
         }
 
         .scroll-indicator.visible {
             opacity: 1;
+            visibility: visible;
             pointer-events: auto;
             cursor: pointer;
         }
 
+        .scroll-indicator:hover {
+            color: var(--text-color-strong, #ffffff);
+        }
+
         .scroll-indicator.left {
             left: 0;
-            background: linear-gradient(to right, rgba(13, 13, 13, 1), transparent);
+            justify-content: flex-start;
+            padding-left: 6px;
+            background: linear-gradient(to right, var(--bg-ui, #24201B) 55%, transparent 100%);
         }
 
         .scroll-indicator.right {
             right: 0;
-            background: linear-gradient(to left, rgba(13, 13, 13, 1), transparent);
+            justify-content: flex-end;
+            padding-right: 6px;
+            background: linear-gradient(to left, var(--bg-ui, #24201B) 55%, transparent 100%);
+        }
+
+        html[data-style="glass"] .scroll-indicator.left {
+            background: linear-gradient(to right, rgba(13, 13, 13, 0.95) 45%, transparent 100%);
+        }
+
+        html[data-style="glass"] .scroll-indicator.right {
+            background: linear-gradient(to left, rgba(13, 13, 13, 0.95) 45%, transparent 100%);
         }
 
         .tab-item {
@@ -3186,51 +3258,8 @@
             flex-shrink: 0;
         }
 
-        /* --- TABLET & COMPACT DESKTOP TOP BAR (<= 1100px) --- */
-        @media (max-width: 1100px) {
-            #mobile-tabs-btn {
-                display: flex;
-            }
-
-            #tabs-bar::before,
-            #tabs-bar::after {
-                content: '';
-                position: absolute;
-                top: 0;
-                bottom: 0;
-                width: 2.25rem;
-                pointer-events: none;
-                z-index: 6;
-                opacity: 0;
-                transition: opacity 0.2s ease;
-                background-repeat: no-repeat;
-            }
-
-            #tabs-bar::before {
-                left: 0;
-                background-image:
-                    linear-gradient(to right, rgba(13, 13, 13, 0.92) 0%, rgba(13, 13, 13, 0.5) 45%, transparent 100%),
-                    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='15 18 9 12 15 6'/%3E%3C/svg%3E");
-                background-position: left center, left 0.35rem center;
-                background-size: 100% 100%, 12px 12px;
-            }
-
-            #tabs-bar::after {
-                right: 0;
-                background-image:
-                    linear-gradient(to left, rgba(13, 13, 13, 0.92) 0%, rgba(13, 13, 13, 0.5) 45%, transparent 100%),
-                    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='9 18 15 12 9 6'/%3E%3C/svg%3E");
-                background-position: right center, right 0.35rem center;
-                background-size: 100% 100%, 12px 12px;
-            }
-
-            #tabs-bar.can-scroll-left::before,
-            #tabs-bar.can-scroll-right::after {
-                opacity: 1;
-            }
-        }
-
-        @media (max-width: 1100px) and (min-width: 769px) {
+        /* --- COMPACT DESKTOP TOP BAR (769px - 1023px) --- */
+        @media (max-width: 1023px) and (min-width: 769px) {
             #tabs-bar {
                 padding: 0 6px;
                 gap: 2px;
@@ -3238,13 +3267,7 @@
 
             #tabs-bar > .h-scroll-track {
                 gap: 2px;
-                overflow-x: auto;
-                scrollbar-width: none;
-                -ms-overflow-style: none;
-            }
-
-            #tabs-bar > .h-scroll-track::-webkit-scrollbar {
-                display: none;
+                overflow: hidden;
             }
 
             #tabs-bar .tab-add-btn,
@@ -3257,6 +3280,7 @@
 
             #tabs-bar > .h-scroll-track > div[style*="margin-left: auto"] {
                 gap: 2px !important;
+                flex-shrink: 0;
             }
 
             #tabs-bar .separator,
@@ -3266,7 +3290,7 @@
             }
 
             #tabs-bar > .h-scroll-track > .tabs-list-container {
-                min-width: 60px;
+                min-width: 0;
             }
 
             .tabs-list {
@@ -3278,15 +3302,20 @@
                 font-size: 0.8rem;
                 max-width: 120px;
             }
-
-            #mobile-tabs-btn {
-                display: flex;
-                margin-left: 2px;
-            }
         }
 
         /* --- MOBILE & TABLET RESPONSIVENESS --- */
         @media (max-width: 768px) {
+
+            #tabs-bar > .h-scroll-track {
+                overflow-x: auto;
+                scrollbar-width: none;
+                -ms-overflow-style: none;
+            }
+
+            #tabs-bar > .h-scroll-track::-webkit-scrollbar {
+                display: none;
+            }
 
             /* Hide desktop tabs and show mobile button */
             .tabs-list-container {
@@ -7003,9 +7032,11 @@ html[data-style="flat"] :focus-visible {
 html[data-style="flat"][data-page-tone="light"] :focus-visible {
     outline-color: #7A5C22;
 }
-html[data-style="flat"] .scroll-indicator.left,
+html[data-style="flat"] .scroll-indicator.left {
+    background: linear-gradient(to right, var(--bg-ui, #24201B) 55%, transparent 100%);
+}
 html[data-style="flat"] .scroll-indicator.right {
-    background: none;
+    background: linear-gradient(to left, var(--bg-ui, #24201B) 55%, transparent 100%);
 }
 html[data-style="flat"] #tabs-bar::before,
 html[data-style="flat"] #left-bar::before {
