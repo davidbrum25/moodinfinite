@@ -2290,6 +2290,7 @@ try {
     await assertTabNamesNoCollision(page);
     await assertGenMetaStage1(page);
     await assertOAuthLegalPagesAndLinks(page);
+    await assertMoodpromptReorderAndCollapse(page);
 
     const lateErrors = pageErrors.filter(isFirstParty);
     assert.deepEqual(lateErrors, [], `first-party errors:\n${lateErrors.join('\n')}`);
@@ -7673,4 +7674,264 @@ async function assertOAuthLegalPagesAndLinks(page) {
     await page.waitForFunction(() => window.innerWidth === 1280);
 
     console.log('OAuth legal pages and links passed.');
+}
+
+async function assertMoodpromptReorderAndCollapse(page) {
+    console.log('Testing Moodprompt drag-and-drop reorder and collapse/expand...');
+    await page.setViewport({ width: 1280, height: 800, deviceScaleFactor: 1, isMobile: false, hasTouch: false });
+
+    const reorderCheck = await page.evaluate(async () => {
+        (0, eval)('moodpromptFilterPlatform = "all"');
+        (0, eval)('moodpromptSearchQuery = ""');
+        createNewProject('moodprompt');
+        const project = projects.find((p) => p.id === activeProjectId);
+        project.data.prompts = [
+            { id: 'mp-1', title: 'Alpha Prompt', platform: 'midjourney', mediaType: 'image', image1: null, image2: null, text: 'First body', tags: [], collapsed: false },
+            { id: 'mp-2', title: 'Beta Prompt', platform: 'flux', mediaType: 'image', image1: null, image2: null, text: 'Second body', tags: [], collapsed: false },
+            { id: 'mp-3', title: 'Gamma Prompt', platform: 'sora', mediaType: 'video', image1: null, image2: null, text: 'Third body', tags: [], collapsed: false },
+        ];
+        renderMoodpromptView(project);
+
+        const list = document.querySelector('#moodprompt-container .prompt-list');
+        const cards = [...list.querySelectorAll('.prompt-card')];
+
+        // Verify dragstart on textarea/input is prevented
+        const textarea = cards[0].querySelector('.prompt-text-area');
+        const blockedEvt = new DragEvent('dragstart', { bubbles: true, cancelable: true, dataTransfer: new DataTransfer() });
+        textarea.dispatchEvent(blockedEvt);
+        const textareaDragBlocked = blockedEvt.defaultPrevented && !cards[0].classList.contains('dragging');
+
+        // Start dragging card 0 ('mp-1')
+        const dt = new DataTransfer();
+        dt.setData('text/plain', 'mp-1');
+        cards[0].dispatchEvent(new DragEvent('dragstart', { bubbles: true, cancelable: true, dataTransfer: dt }));
+
+        // Hover over top half of card 1 ('mp-2') -> indicator before card 1
+        const rect1 = cards[1].getBoundingClientRect();
+        cards[1].dispatchEvent(new DragEvent('dragover', {
+            bubbles: true,
+            cancelable: true,
+            clientY: rect1.top + 4,
+            dataTransfer: dt,
+        }));
+        const indBefore = list.querySelector('.prompt-drop-indicator');
+        const indicatorBeforeInfo = indBefore ? {
+            exists: true,
+            position: indBefore.dataset.position,
+            targetId: indBefore.dataset.targetId,
+            nextId: indBefore.nextElementSibling ? indBefore.nextElementSibling.dataset.promptId : null,
+            height: indBefore.getBoundingClientRect().height,
+        } : { exists: false };
+
+        // Dragleave list -> indicator removed
+        list.dispatchEvent(new DragEvent('dragleave', { bubbles: true, cancelable: true, relatedTarget: document.body }));
+        const indicatorAfterLeave = !!list.querySelector('.prompt-drop-indicator');
+
+        // Hover over bottom half of card 2 ('mp-3') -> indicator after card 2 (at end)
+        const rect2 = cards[2].getBoundingClientRect();
+        cards[2].dispatchEvent(new DragEvent('dragover', {
+            bubbles: true,
+            cancelable: true,
+            clientY: rect2.bottom - 4,
+            dataTransfer: dt,
+        }));
+        const indAfter = list.querySelector('.prompt-drop-indicator');
+        const indicatorAfterInfo = indAfter ? {
+            exists: true,
+            position: indAfter.dataset.position,
+            targetId: indAfter.dataset.targetId,
+            prevId: indAfter.previousElementSibling ? indAfter.previousElementSibling.dataset.promptId : null,
+        } : { exists: false };
+
+        // Drop at end (after card 2)
+        cards[2].dispatchEvent(new DragEvent('drop', {
+            bubbles: true,
+            cancelable: true,
+            clientY: rect2.bottom - 4,
+            dataTransfer: dt,
+        }));
+        const indicatorAfterDrop = !!list.querySelector('.prompt-drop-indicator');
+
+        const titlesAfterMoveToEnd = [...list.querySelectorAll('.prompt-title-input')].map((el) => el.value);
+        const numbersAfterMoveToEnd = [...list.querySelectorAll('.prompt-number')].map((el) => el.textContent.trim());
+        const dataOrderAfterMoveToEnd = project.data.prompts.map((p) => p.title);
+
+        await saveToBrowser();
+        return {
+            projectId: project.id,
+            textareaDragBlocked,
+            indicatorBeforeInfo,
+            indicatorAfterLeave,
+            indicatorAfterInfo,
+            indicatorAfterDrop,
+            titlesAfterMoveToEnd,
+            numbersAfterMoveToEnd,
+            dataOrderAfterMoveToEnd,
+        };
+    });
+
+    assert.equal(reorderCheck.textareaDragBlocked, true, 'dragging from textarea should be blocked');
+    assert.equal(reorderCheck.indicatorBeforeInfo.exists, true, 'drop indicator must appear during dragover');
+    assert.equal(reorderCheck.indicatorBeforeInfo.position, 'before');
+    assert.equal(reorderCheck.indicatorBeforeInfo.targetId, 'mp-2');
+    assert.equal(reorderCheck.indicatorBeforeInfo.nextId, 'mp-2');
+    assert.ok(reorderCheck.indicatorBeforeInfo.height > 0, 'drop indicator must have visible height');
+    assert.equal(reorderCheck.indicatorAfterLeave, false, 'drop indicator must be removed on dragleave');
+    assert.equal(reorderCheck.indicatorAfterInfo.exists, true, 'drop indicator must appear at end during dragover');
+    assert.equal(reorderCheck.indicatorAfterInfo.position, 'after');
+    assert.equal(reorderCheck.indicatorAfterInfo.targetId, 'mp-3');
+    assert.equal(reorderCheck.indicatorAfterInfo.prevId, 'mp-3');
+    assert.equal(reorderCheck.indicatorAfterDrop, false, 'drop indicator must be removed after drop');
+    assert.deepEqual(reorderCheck.titlesAfterMoveToEnd, ['Beta Prompt', 'Gamma Prompt', 'Alpha Prompt']);
+    assert.deepEqual(reorderCheck.numbersAfterMoveToEnd, ['1.', '2.', '3.']);
+    assert.deepEqual(reorderCheck.dataOrderAfterMoveToEnd, ['Beta Prompt', 'Gamma Prompt', 'Alpha Prompt']);
+
+    // Reload and verify order survives
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await page.waitForFunction(
+        (id) => window.projects && window.projects.some((p) => p.id === id),
+        { timeout: 15000 },
+        reorderCheck.projectId
+    );
+
+    const collapseAndExportCheck = await page.evaluate(async (projectId) => {
+        switchTab(projectId);
+        const project = projects.find((p) => p.id === projectId);
+        const titlesAfterReload = [...document.querySelectorAll('#moodprompt-container .prompt-title-input')].map((el) => el.value);
+        const numbersAfterReload = [...document.querySelectorAll('#moodprompt-container .prompt-number')].map((el) => el.textContent.trim());
+
+        const collapseAllBtn = document.getElementById('moodprompt-collapse-all-btn');
+        const expandAllBtn = document.getElementById('moodprompt-expand-all-btn');
+        const hasToolbarBtns = !!collapseAllBtn && !!expandAllBtn;
+
+        const bodyStates = () => [...document.querySelectorAll('#moodprompt-container .prompt-card')].map((card) => {
+            const body = card.querySelector('.prompt-body');
+            const title = card.querySelector('.prompt-title-input');
+            return {
+                collapsedClass: card.classList.contains('collapsed'),
+                bodyHidden: body.hidden || getComputedStyle(body).display === 'none',
+                titleVisible: getComputedStyle(title).display !== 'none',
+            };
+        });
+
+        // Collapse all
+        collapseAllBtn.click();
+        const afterCollapseAll = bodyStates();
+        const dataAfterCollapseAll = project.data.prompts.map((p) => !!p.collapsed);
+
+        // Expand all
+        expandAllBtn.click();
+        const afterExpandAll = bodyStates();
+        const dataAfterExpandAll = project.data.prompts.map((p) => !!p.collapsed);
+
+        // Individually collapse card 0 via chevron and card 2 via header click
+        const cards = [...document.querySelectorAll('#moodprompt-container .prompt-card')];
+        cards[0].querySelector('.prompt-collapse-btn').click();
+        cards[2].querySelector('.prompt-header').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+        const afterIndividualToggle = bodyStates();
+        const dataAfterIndividual = project.data.prompts.map((p) => !!p.collapsed);
+
+        // Ensure existing textarea maximize button still works on expanded card 1
+        const maxBtn = cards[1].querySelector('.prompt-body button[title="Expand/Collapse"]');
+        const textarea = cards[1].querySelector('.prompt-text-area');
+        const heightBeforeMax = textarea.style.height;
+        maxBtn.click();
+        const iconAfterMax = maxBtn.innerHTML.includes('minimize-2');
+        maxBtn.click();
+        const heightAfterRestore = textarea.style.height;
+
+        await saveToBrowser();
+        return {
+            titlesAfterReload,
+            numbersAfterReload,
+            hasToolbarBtns,
+            afterCollapseAll,
+            dataAfterCollapseAll,
+            afterExpandAll,
+            dataAfterExpandAll,
+            afterIndividualToggle,
+            dataAfterIndividual,
+            heightBeforeMax,
+            iconAfterMax,
+            heightAfterRestore,
+        };
+    }, reorderCheck.projectId);
+
+    assert.deepEqual(collapseAndExportCheck.titlesAfterReload, ['Beta Prompt', 'Gamma Prompt', 'Alpha Prompt']);
+    assert.deepEqual(collapseAndExportCheck.numbersAfterReload, ['1.', '2.', '3.']);
+    assert.equal(collapseAndExportCheck.hasToolbarBtns, true, 'Collapse all and Expand all buttons must exist');
+    assert.deepEqual(collapseAndExportCheck.dataAfterCollapseAll, [true, true, true]);
+    assert.equal(collapseAndExportCheck.afterCollapseAll.every((s) => s.collapsedClass && s.bodyHidden && s.titleVisible), true, 'Collapse all must hide all bodies and keep titles visible');
+    assert.deepEqual(collapseAndExportCheck.dataAfterExpandAll, [false, false, false]);
+    assert.equal(collapseAndExportCheck.afterExpandAll.every((s) => !s.collapsedClass && !s.bodyHidden && s.titleVisible), true, 'Expand all must show all bodies');
+    assert.deepEqual(collapseAndExportCheck.dataAfterIndividual, [true, false, true]);
+    assert.deepEqual(collapseAndExportCheck.afterIndividualToggle.map((s) => s.bodyHidden), [true, false, true]);
+    assert.equal(collapseAndExportCheck.heightBeforeMax, '150px');
+    assert.equal(collapseAndExportCheck.iconAfterMax, true, 'existing textarea maximize button should still toggle');
+    assert.equal(collapseAndExportCheck.heightAfterRestore, '150px');
+
+    // Reload and verify collapsed state persists, then test .mood export/import
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await page.waitForFunction(
+        (id) => window.projects && window.projects.some((p) => p.id === id),
+        { timeout: 15000 },
+        reorderCheck.projectId
+    );
+
+    const persistedAndImported = await page.evaluate(async (projectId) => {
+        switchTab(projectId);
+        const project = projects.find((p) => p.id === projectId);
+        const reloadedCollapsedData = project.data.prompts.map((p) => !!p.collapsed);
+        const reloadedDomHidden = [...document.querySelectorAll('#moodprompt-container .prompt-card .prompt-body')].map(
+            (b) => b.hidden || getComputedStyle(b).display === 'none'
+        );
+
+        // Export via saveProject() (.mood zip) and re-import via loadFileAsNewTab
+        window.__mpDownloads = [];
+        const origClick = HTMLAnchorElement.prototype.click;
+        const origRevoke = URL.revokeObjectURL;
+        URL.revokeObjectURL = () => {};
+        HTMLAnchorElement.prototype.click = function () {
+            window.__mpDownloads.push({ download: this.download || '', href: this.href || '' });
+        };
+        let exportedJson = '';
+        try {
+            saveProject();
+            for (let i = 0; i < 80 && !window.__mpDownloads.length; i++) {
+                await new Promise((r) => setTimeout(r, 25));
+            }
+            const href = window.__mpDownloads.at(-1) && window.__mpDownloads.at(-1).href;
+            const buf = await (await fetch(href)).arrayBuffer();
+            const zip = await window.JSZip.loadAsync(buf);
+            const entry = Object.keys(zip.files).find((k) => k.endsWith('data.json'));
+            exportedJson = entry ? await zip.files[entry].async('string') : '';
+        } finally {
+            HTMLAnchorElement.prototype.click = origClick;
+            URL.revokeObjectURL = origRevoke;
+        }
+
+        loadFileAsNewTab(exportedJson, 'MoodpromptRoundtrip.mood');
+        const importedProject = projects.find((p) => p.id === activeProjectId);
+        const importedTitles = importedProject.data.prompts.map((p) => p.title);
+        const importedCollapsedData = importedProject.data.prompts.map((p) => !!p.collapsed);
+        const importedDomHidden = [...document.querySelectorAll('#moodprompt-container .prompt-card .prompt-body')].map(
+            (b) => b.hidden || getComputedStyle(b).display === 'none'
+        );
+
+        return {
+            reloadedCollapsedData,
+            reloadedDomHidden,
+            importedTitles,
+            importedCollapsedData,
+            importedDomHidden,
+        };
+    }, reorderCheck.projectId);
+
+    assert.deepEqual(persistedAndImported.reloadedCollapsedData, [true, false, true]);
+    assert.deepEqual(persistedAndImported.reloadedDomHidden, [true, false, true]);
+    assert.deepEqual(persistedAndImported.importedTitles, ['Beta Prompt', 'Gamma Prompt', 'Alpha Prompt']);
+    assert.deepEqual(persistedAndImported.importedCollapsedData, [true, false, true]);
+    assert.deepEqual(persistedAndImported.importedDomHidden, [true, false, true]);
+
+    console.log('Moodprompt drag-and-drop reorder and collapse/expand passed.');
 }

@@ -386,6 +386,14 @@
             cursor: default;
         }
 
+        .moodprompt-top-bar button.stats-item {
+            background: transparent;
+            border: none;
+            padding: 0;
+            font-family: inherit;
+            cursor: pointer;
+        }
+
         .moodprompt-top-bar .bar-input {
             background: transparent;
             border: none;
@@ -460,6 +468,51 @@
 
         .prompt-card.dragging {
             opacity: 0.5;
+        }
+
+        .prompt-card.collapsed {
+            gap: 0;
+            padding: 0.9rem 1.5rem;
+            contain-intrinsic-size: 850px 72px;
+        }
+
+        .prompt-card.collapsed .prompt-body {
+            display: none !important;
+        }
+
+        .prompt-drop-indicator {
+            width: 100%;
+            max-width: 850px;
+            height: 3px;
+            margin: calc(-0.75rem - 1.5px) 0;
+            background: var(--switch-bg-checked);
+            border-radius: 2px;
+            pointer-events: none;
+            flex-shrink: 0;
+        }
+
+        .prompt-drag-handle {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--text-color-light);
+            cursor: grab;
+            margin-right: 0.25rem;
+            flex-shrink: 0;
+            user-select: none;
+        }
+
+        .prompt-drag-handle:active {
+            cursor: grabbing;
+        }
+
+        .prompt-collapse-btn {
+            flex-shrink: 0;
+            margin-right: 0.25rem;
+        }
+
+        .prompt-collapse-btn:hover {
+            color: var(--switch-bg-checked);
         }
 
         .prompt-header {
