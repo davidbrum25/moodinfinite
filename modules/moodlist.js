@@ -411,7 +411,7 @@ function _moodlistItemInner(item, index, total) {
             </span>
             <div class="ml-card-item-body">
                 <textarea class="ml-card-item-text" rows="1">${_escapeHtml(item.text || '')}</textarea>
-                <button type="button" class="ml-card-item-more" hidden>Ver más</button>
+                <button type="button" class="ml-card-item-more" hidden>Show more</button>
             </div>
             <button class="ml-card-item-del" title="Delete item" tabindex="-1">
                 <iconify-icon icon="lucide:x" width="12" height="12"></iconify-icon>
@@ -809,7 +809,7 @@ function _syncItemTextLayout(itemEl) {
         field.scrollTop = 0;
         if (moreBtn) {
             moreBtn.hidden = true;
-            moreBtn.textContent = 'Ver más';
+            moreBtn.textContent = 'Show more';
             moreBtn.setAttribute('aria-expanded', 'false');
         }
         return;
@@ -820,7 +820,7 @@ function _syncItemTextLayout(itemEl) {
 
     if (moreBtn) {
         moreBtn.hidden = false;
-        moreBtn.textContent = isExpanded ? 'Ver menos' : 'Ver más';
+        moreBtn.textContent = isExpanded ? 'Show less' : 'Show more';
         moreBtn.setAttribute('aria-expanded', isExpanded ? 'true' : 'false');
     }
 

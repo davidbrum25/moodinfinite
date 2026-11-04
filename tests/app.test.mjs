@@ -7940,7 +7940,7 @@ async function assertMoodpromptReorderAndCollapse(page) {
 }
 
 async function assertMoodlistItemWrappingAndClamp(page) {
-    console.log('Testing Moodlist item wrapping, 4-line clamp, Ver más/Ver menos, and focus/blur edit...');
+    console.log('Testing Moodlist item wrapping, 4-line clamp, Show more/Show less, and focus/blur edit...');
     await page.setViewport({ width: 1280, height: 800, deviceScaleFactor: 1, isMobile: false, hasTouch: false });
 
     const longText = [
@@ -7995,10 +7995,10 @@ async function assertMoodlistItemWrappingAndClamp(page) {
     }, longText);
 
     assert.equal(initial.overflowWrap, 'anywhere', 'long item text should have overflow-wrap: anywhere');
-    assert.equal(initial.shortMoreVisible, false, 'short item must not show Ver más toggle');
+    assert.equal(initial.shortMoreVisible, false, 'short item must not show Show more toggle');
     assert.ok(initial.shortClientHeight <= initial.lineHeight * 1.6, `short item height (${initial.shortClientHeight}) should be ~1 line (${initial.lineHeight})`);
-    assert.equal(initial.longMoreVisible, true, 'long item must show Ver más toggle');
-    assert.equal(initial.longMoreText, 'Ver más');
+    assert.equal(initial.longMoreVisible, true, 'long item must show Show more toggle');
+    assert.equal(initial.longMoreText, 'Show more');
     assert.ok(
         Math.abs(initial.longClientHeight - initial.lineHeight * 4) <= 6,
         `long item clientHeight (${initial.longClientHeight}) should be ~4 lines (${initial.lineHeight * 4})`
@@ -8008,7 +8008,7 @@ async function assertMoodlistItemWrappingAndClamp(page) {
         `long item scrollHeight (${initial.longScrollHeight}) should exceed clamped clientHeight (${initial.longClientHeight})`
     );
 
-    // Click "Ver más" -> full height and "Ver menos"
+    // Click "Show more" -> full height and "Show less"
     const afterExpand = await page.evaluate(() => {
         const rows = [...document.querySelectorAll('#moodlist-container .ml-card-item')];
         const shortRow = rows[0];
@@ -8026,16 +8026,16 @@ async function assertMoodlistItemWrappingAndClamp(page) {
         };
     });
 
-    assert.equal(afterExpand.longMoreText, 'Ver menos', 'expanded item toggle should read Ver menos');
+    assert.equal(afterExpand.longMoreText, 'Show less', 'expanded item toggle should read Show less');
     assert.ok(afterExpand.longClientHeight > initial.longClientHeight + initial.lineHeight, 'expanded height must exceed clamped height');
     assert.ok(
         afterExpand.longScrollHeight <= afterExpand.longClientHeight + 1,
         `expanded item should show full text (scrollHeight=${afterExpand.longScrollHeight}, clientHeight=${afterExpand.longClientHeight})`
     );
     assert.equal(afterExpand.shortMoreVisible, false, 'expanding long item must not affect short item');
-    assert.equal(afterExpand.checked, false, 'clicking Ver más must not toggle item checked state');
+    assert.equal(afterExpand.checked, false, 'clicking Show more must not toggle item checked state');
 
-    // Click "Ver menos" -> clamped again and "Ver más"
+    // Click "Show less" -> clamped again and "Show more"
     const afterCollapse = await page.evaluate(() => {
         const longRow = document.querySelectorAll('#moodlist-container .ml-card-item')[1];
         const longField = longRow.querySelector('.ml-card-item-text');
@@ -8048,7 +8048,7 @@ async function assertMoodlistItemWrappingAndClamp(page) {
         };
     });
 
-    assert.equal(afterCollapse.longMoreText, 'Ver más', 'collapsed item toggle should read Ver más');
+    assert.equal(afterCollapse.longMoreText, 'Show more', 'collapsed item toggle should read Show more');
     assert.ok(
         Math.abs(afterCollapse.longClientHeight - initial.longClientHeight) <= 2,
         `collapsed clientHeight (${afterCollapse.longClientHeight}) should return to clamped height (${initial.longClientHeight})`
@@ -8131,8 +8131,8 @@ async function assertMoodlistItemWrappingAndClamp(page) {
 
     assert.equal(afterReload.storedText, editedText, 'edited item text must persist in project data after reload');
     assert.equal(afterReload.domValue, editedText, 'edited item text must render in DOM after reload');
-    assert.equal(afterReload.longMoreVisible, true, 'clamped long item must still show Ver más after reload');
-    assert.equal(afterReload.longMoreText, 'Ver más');
+    assert.equal(afterReload.longMoreVisible, true, 'clamped long item must still show Show more after reload');
+    assert.equal(afterReload.longMoreText, 'Show more');
     assert.ok(
         Math.abs(afterReload.longClientHeight - initial.longClientHeight) <= 4,
         `reloaded long item should be clamped to ~4 lines (${afterReload.longClientHeight})`
