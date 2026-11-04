@@ -2291,6 +2291,7 @@ try {
     await assertGenMetaStage1(page);
     await assertOAuthLegalPagesAndLinks(page);
     await assertMoodpromptReorderAndCollapse(page);
+    await assertMoodlistItemWrappingAndClamp(page);
 
     const lateErrors = pageErrors.filter(isFirstParty);
     assert.deepEqual(lateErrors, [], `first-party errors:\n${lateErrors.join('\n')}`);
@@ -7934,4 +7935,207 @@ async function assertMoodpromptReorderAndCollapse(page) {
     assert.deepEqual(persistedAndImported.importedDomHidden, [true, false, true]);
 
     console.log('Moodprompt drag-and-drop reorder and collapse/expand passed.');
+}
+
+async function assertMoodlistItemWrappingAndClamp(page) {
+    console.log('Testing Moodlist item wrapping, 4-line clamp, Ver más/Ver menos, and focus/blur edit...');
+    await page.setViewport({ width: 1280, height: 800, deviceScaleFactor: 1, isMobile: false, hasTouch: false });
+
+    const longText = [
+        'Long checklist item with an unbroken token',
+        'superlongunbrokentoken_'.repeat(6),
+        'and several detailed sentences so that the item wraps across well over four visible lines inside the moodlist card body when rendered on screen.',
+        'Second sentence adding more wrapped content to verify four-line clamping and expansion.',
+        'Third sentence ensuring at least eight wrapped lines in standard desktop card width.',
+    ].join(' ');
+
+    const initial = await page.evaluate((longItemText) => {
+        createNewProject('moodlist');
+        const project = projects.find((p) => p.id === activeProjectId);
+        project.data.cards = [{
+            id: 'ml-wrap-card',
+            title: 'Wrap Test Card',
+            color: '',
+            pinned: false,
+            image: null,
+            items: [
+                { id: 'ml-short-item', text: 'Short item', checked: false },
+                { id: 'ml-long-item', text: longItemText, checked: false },
+            ],
+        }];
+        renderMoodlistView(project);
+
+        const rows = [...document.querySelectorAll('#moodlist-container .ml-card-item')];
+        const shortRow = rows[0];
+        const longRow = rows[1];
+        const shortField = shortRow.querySelector('.ml-card-item-text');
+        const longField = longRow.querySelector('.ml-card-item-text');
+        const shortMore = shortRow.querySelector('.ml-card-item-more');
+        const longMore = longRow.querySelector('.ml-card-item-more');
+
+        const cs = getComputedStyle(longField);
+        const lineHeight = parseFloat(cs.lineHeight);
+        const shortMoreVisible = !!shortMore && !shortMore.hidden && getComputedStyle(shortMore).display !== 'none';
+        const longMoreVisible = !!longMore && !longMore.hidden && getComputedStyle(longMore).display !== 'none' && longMore.getBoundingClientRect().height > 0;
+
+        return {
+            projectId: project.id,
+            tagName: longField.tagName,
+            overflowWrap: cs.overflowWrap,
+            lineHeight,
+            shortClientHeight: shortField.clientHeight,
+            shortMoreVisible,
+            longClientHeight: longField.clientHeight,
+            longScrollHeight: longField.scrollHeight,
+            longMoreVisible,
+            longMoreText: longMore ? longMore.textContent.trim() : '',
+        };
+    }, longText);
+
+    assert.equal(initial.overflowWrap, 'anywhere', 'long item text should have overflow-wrap: anywhere');
+    assert.equal(initial.shortMoreVisible, false, 'short item must not show Ver más toggle');
+    assert.ok(initial.shortClientHeight <= initial.lineHeight * 1.6, `short item height (${initial.shortClientHeight}) should be ~1 line (${initial.lineHeight})`);
+    assert.equal(initial.longMoreVisible, true, 'long item must show Ver más toggle');
+    assert.equal(initial.longMoreText, 'Ver más');
+    assert.ok(
+        Math.abs(initial.longClientHeight - initial.lineHeight * 4) <= 6,
+        `long item clientHeight (${initial.longClientHeight}) should be ~4 lines (${initial.lineHeight * 4})`
+    );
+    assert.ok(
+        initial.longScrollHeight > initial.longClientHeight + initial.lineHeight,
+        `long item scrollHeight (${initial.longScrollHeight}) should exceed clamped clientHeight (${initial.longClientHeight})`
+    );
+
+    // Click "Ver más" -> full height and "Ver menos"
+    const afterExpand = await page.evaluate(() => {
+        const rows = [...document.querySelectorAll('#moodlist-container .ml-card-item')];
+        const shortRow = rows[0];
+        const longRow = rows[1];
+        const longField = longRow.querySelector('.ml-card-item-text');
+        const longMore = longRow.querySelector('.ml-card-item-more');
+        const shortMore = shortRow.querySelector('.ml-card-item-more');
+        longMore.click();
+        return {
+            longClientHeight: longField.clientHeight,
+            longScrollHeight: longField.scrollHeight,
+            longMoreText: longMore.textContent.trim(),
+            shortMoreVisible: !!shortMore && !shortMore.hidden && getComputedStyle(shortMore).display !== 'none',
+            checked: longRow.classList.contains('checked'),
+        };
+    });
+
+    assert.equal(afterExpand.longMoreText, 'Ver menos', 'expanded item toggle should read Ver menos');
+    assert.ok(afterExpand.longClientHeight > initial.longClientHeight + initial.lineHeight, 'expanded height must exceed clamped height');
+    assert.ok(
+        afterExpand.longScrollHeight <= afterExpand.longClientHeight + 1,
+        `expanded item should show full text (scrollHeight=${afterExpand.longScrollHeight}, clientHeight=${afterExpand.longClientHeight})`
+    );
+    assert.equal(afterExpand.shortMoreVisible, false, 'expanding long item must not affect short item');
+    assert.equal(afterExpand.checked, false, 'clicking Ver más must not toggle item checked state');
+
+    // Click "Ver menos" -> clamped again and "Ver más"
+    const afterCollapse = await page.evaluate(() => {
+        const longRow = document.querySelectorAll('#moodlist-container .ml-card-item')[1];
+        const longField = longRow.querySelector('.ml-card-item-text');
+        const longMore = longRow.querySelector('.ml-card-item-more');
+        longMore.click();
+        return {
+            longClientHeight: longField.clientHeight,
+            longScrollHeight: longField.scrollHeight,
+            longMoreText: longMore.textContent.trim(),
+        };
+    });
+
+    assert.equal(afterCollapse.longMoreText, 'Ver más', 'collapsed item toggle should read Ver más');
+    assert.ok(
+        Math.abs(afterCollapse.longClientHeight - initial.longClientHeight) <= 2,
+        `collapsed clientHeight (${afterCollapse.longClientHeight}) should return to clamped height (${initial.longClientHeight})`
+    );
+    assert.ok(afterCollapse.longScrollHeight > afterCollapse.longClientHeight + initial.lineHeight);
+
+    // Focusing the long item shows full text (scrollHeight <= clientHeight + 1) and editing saves after blur/reload
+    const editedText = `${longText} Edited tail value.`;
+    const focusAndEdit = await page.evaluate((nextText) => {
+        const longRow = document.querySelectorAll('#moodlist-container .ml-card-item')[1];
+        const longField = longRow.querySelector('.ml-card-item-text');
+        longField.focus();
+        const focusedClientHeight = longField.clientHeight;
+        const focusedScrollHeight = longField.scrollHeight;
+
+        longField.value = nextText;
+        longField.dispatchEvent(new Event('input', { bubbles: true }));
+        const editedScrollHeight = longField.scrollHeight;
+        const editedClientHeight = longField.clientHeight;
+
+        longField.blur();
+        const blurredClientHeight = longField.clientHeight;
+        const blurredScrollHeight = longField.scrollHeight;
+
+        return {
+            focusedClientHeight,
+            focusedScrollHeight,
+            editedClientHeight,
+            editedScrollHeight,
+            blurredClientHeight,
+            blurredScrollHeight,
+        };
+    }, editedText);
+
+    assert.ok(
+        focusAndEdit.focusedScrollHeight <= focusAndEdit.focusedClientHeight + 1,
+        `focusing long item must show full text (scrollHeight=${focusAndEdit.focusedScrollHeight}, clientHeight=${focusAndEdit.focusedClientHeight})`
+    );
+    assert.ok(
+        focusAndEdit.editedScrollHeight <= focusAndEdit.editedClientHeight + 1,
+        `editing long item must auto-grow to full text while focused (scrollHeight=${focusAndEdit.editedScrollHeight}, clientHeight=${focusAndEdit.editedClientHeight})`
+    );
+    assert.ok(
+        Math.abs(focusAndEdit.blurredClientHeight - initial.longClientHeight) <= 2,
+        `blurring long item must clamp it back to 4 lines (${focusAndEdit.blurredClientHeight} vs ${initial.longClientHeight})`
+    );
+
+    await page.waitForFunction(
+        async (expected) => {
+            const saved = await window.localforage.getItem('moodinfinite_projects');
+            return JSON.stringify(saved || []).includes(expected);
+        },
+        { timeout: 8000 },
+        'Edited tail value.'
+    );
+
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await page.waitForFunction(
+        (id) => window.projects && window.projects.some((p) => p.id === id),
+        { timeout: 15000 },
+        initial.projectId
+    );
+
+    const afterReload = await page.evaluate((projectId) => {
+        switchTab(projectId);
+        const project = projects.find((p) => p.id === projectId);
+        const rows = [...document.querySelectorAll('#moodlist-container .ml-card-item')];
+        const longRow = rows[1];
+        const longField = longRow.querySelector('.ml-card-item-text');
+        const longMore = longRow.querySelector('.ml-card-item-more');
+        return {
+            storedText: project.data.cards[0].items[1].text,
+            domValue: longField.value,
+            longClientHeight: longField.clientHeight,
+            longScrollHeight: longField.scrollHeight,
+            longMoreVisible: !!longMore && !longMore.hidden && getComputedStyle(longMore).display !== 'none',
+            longMoreText: longMore ? longMore.textContent.trim() : '',
+        };
+    }, initial.projectId);
+
+    assert.equal(afterReload.storedText, editedText, 'edited item text must persist in project data after reload');
+    assert.equal(afterReload.domValue, editedText, 'edited item text must render in DOM after reload');
+    assert.equal(afterReload.longMoreVisible, true, 'clamped long item must still show Ver más after reload');
+    assert.equal(afterReload.longMoreText, 'Ver más');
+    assert.ok(
+        Math.abs(afterReload.longClientHeight - initial.longClientHeight) <= 4,
+        `reloaded long item should be clamped to ~4 lines (${afterReload.longClientHeight})`
+    );
+    assert.ok(afterReload.longScrollHeight > afterReload.longClientHeight + initial.lineHeight);
+
+    console.log('Moodlist item wrapping and clamp passed.');
 }

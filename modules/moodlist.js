@@ -122,6 +122,10 @@ function renderMoodlistView(project) {
         grid = document.createElement('div');
         grid.className = 'ml-grid';
         container.appendChild(grid);
+        if (typeof ResizeObserver !== 'undefined') {
+            const ro = new ResizeObserver(() => _syncAllMoodlistItemLayouts(grid));
+            ro.observe(grid);
+        }
 
         /* ── Search + filter ─────────────────────────────────────────────── */
         const searchField = topBar.querySelector('.ml-search');
@@ -157,6 +161,10 @@ function renderMoodlistView(project) {
             if (e.target.closest('.ml-color-picker, .ml-color-btn, .ml-card-color-btn')) return;
             document.querySelectorAll('.ml-color-picker').forEach((picker) => { picker.style.display = 'none'; });
         });
+    }
+    if (!window._mlResizeBound) {
+        window._mlResizeBound = true;
+        window.addEventListener('resize', () => _syncAllMoodlistItemLayouts());
     }
 
     renderMoodlistCards(project, grid);
@@ -350,6 +358,7 @@ function renderMoodlistCards(project, grid) {
     }
 
     rest.forEach(card => grid.appendChild(_buildCard(card, project, grid)));
+    _syncAllMoodlistItemLayouts(grid);
 }
 
 function _moodlistIndentOf(item, index) {
@@ -400,7 +409,10 @@ function _moodlistItemInner(item, index, total) {
             <span class="ml-card-checkbox">
                 <iconify-icon icon="${item.checked ? 'lucide:check-square' : 'lucide:square'}" width="15" height="15"></iconify-icon>
             </span>
-            <input type="text" class="ml-card-item-text" value="${_escapeAttr(item.text || '')}">
+            <div class="ml-card-item-body">
+                <textarea class="ml-card-item-text" rows="1">${_escapeHtml(item.text || '')}</textarea>
+                <button type="button" class="ml-card-item-more" hidden>Ver más</button>
+            </div>
             <button class="ml-card-item-del" title="Delete item" tabindex="-1">
                 <iconify-icon icon="lucide:x" width="12" height="12"></iconify-icon>
             </button>`;
@@ -495,7 +507,7 @@ function _wireCard(el, card, project, grid) {
         _wireItemIndent(itemEl, item, card, project, grid);
         _wireItemMove(itemEl, item, card, project, grid);
         itemEl.addEventListener('click', (e) => {
-            if (e.target.closest('.ml-card-item-del') || e.target.closest('.ml-item-due') || e.target.closest('.ml-due-wrap') || e.target.closest('.ml-indent-btn') || e.target.closest('.ml-item-move') || e.target.closest('.ml-card-item-text') || e.target.closest('.ml-drag-handle')) return;
+            if (e.target.closest('.ml-card-item-del') || e.target.closest('.ml-item-due') || e.target.closest('.ml-due-wrap') || e.target.closest('.ml-indent-btn') || e.target.closest('.ml-item-move') || e.target.closest('.ml-card-item-text') || e.target.closest('.ml-card-item-more') || e.target.closest('.ml-card-item-body') || e.target.closest('.ml-drag-handle')) return;
             if (item) {
                 item.checked = !item.checked;
                 scheduleAutoSave();
@@ -560,7 +572,7 @@ function _wireCard(el, card, project, grid) {
             _wireItemIndent(row, newItem, card, project, grid);
             _wireItemMove(row, newItem, card, project, grid);
             row.addEventListener('click', (e) => {
-                if (e.target.closest('.ml-card-item-del') || e.target.closest('.ml-item-due') || e.target.closest('.ml-due-wrap') || e.target.closest('.ml-indent-btn') || e.target.closest('.ml-item-move') || e.target.closest('.ml-card-item-text') || e.target.closest('.ml-drag-handle')) return;
+                if (e.target.closest('.ml-card-item-del') || e.target.closest('.ml-item-due') || e.target.closest('.ml-due-wrap') || e.target.closest('.ml-indent-btn') || e.target.closest('.ml-item-move') || e.target.closest('.ml-card-item-text') || e.target.closest('.ml-card-item-more') || e.target.closest('.ml-card-item-body') || e.target.closest('.ml-drag-handle')) return;
                 newItem.checked = !newItem.checked;
                 row.classList.toggle('checked', newItem.checked);
                 row.querySelector('.ml-card-checkbox iconify-icon').setAttribute('icon',
@@ -574,6 +586,7 @@ function _wireCard(el, card, project, grid) {
                 scheduleAutoSave();
             });
             itemsContainer.insertBefore(row, input);
+            _syncItemTextLayout(row);
 
             // 3. Clear field, keep focus
             inp.value = '';
@@ -700,8 +713,8 @@ function _wireDragDrop(container, card, project, grid) {
     const markHandle = (e) => {
         pointerOnHandle = !!e.target.closest('.ml-drag-handle');
     };
-    container.addEventListener('pointerdown', markHandle);
-    container.addEventListener('mousedown', markHandle);
+    container.addEventListener('pointerdown', markHandle, true);
+    container.addEventListener('mousedown', markHandle, true);
     container.addEventListener('click', (e) => {
         if (e.target.closest('.ml-drag-handle')) e.stopPropagation();
     }, true);
@@ -767,17 +780,119 @@ function _escapeHtml(str) {
         .replace(/>/g,'&gt;')
         .replace(/"/g,'&quot;');
 }
+const ML_ITEM_MAX_LINES = 4;
+
+function _syncItemTextLayout(itemEl) {
+    if (!itemEl) return;
+    const field = itemEl.querySelector('.ml-card-item-text');
+    const moreBtn = itemEl.querySelector('.ml-card-item-more');
+    if (!field) return;
+
+    const cs = getComputedStyle(field);
+    const fontSize = parseFloat(cs.fontSize) || 14.08;
+    const lineHeight = parseFloat(cs.lineHeight) || (fontSize * 1.4);
+    if (!lineHeight || field.clientWidth === 0) return;
+
+    const oneLineHeight = Math.ceil(lineHeight);
+    const maxClampedHeight = Math.round(lineHeight * ML_ITEM_MAX_LINES);
+
+    field.style.maxHeight = 'none';
+    field.style.height = `${oneLineHeight}px`;
+    const fullHeight = Math.max(oneLineHeight, field.scrollHeight);
+
+    const overflows = fullHeight > maxClampedHeight + Math.round(lineHeight * 0.35);
+    const isEditing = document.activeElement === field || itemEl.classList.contains('is-editing');
+
+    if (!overflows) {
+        itemEl.classList.remove('is-clamped', 'is-expanded', 'has-overflow');
+        field.style.height = `${fullHeight}px`;
+        field.scrollTop = 0;
+        if (moreBtn) {
+            moreBtn.hidden = true;
+            moreBtn.textContent = 'Ver más';
+            moreBtn.setAttribute('aria-expanded', 'false');
+        }
+        return;
+    }
+
+    itemEl.classList.add('has-overflow');
+    const isExpanded = itemEl.classList.contains('is-expanded');
+
+    if (moreBtn) {
+        moreBtn.hidden = false;
+        moreBtn.textContent = isExpanded ? 'Ver menos' : 'Ver más';
+        moreBtn.setAttribute('aria-expanded', isExpanded ? 'true' : 'false');
+    }
+
+    if (isEditing || isExpanded) {
+        itemEl.classList.remove('is-clamped');
+        field.style.height = `${fullHeight}px`;
+    } else {
+        itemEl.classList.add('is-clamped');
+        field.style.height = `${maxClampedHeight}px`;
+    }
+    field.scrollTop = 0;
+}
+
+function _syncAllMoodlistItemLayouts(root) {
+    const scope = root || document.getElementById('moodlist-container');
+    if (!scope) return;
+    scope.querySelectorAll('.ml-card-item').forEach((itemEl) => {
+        _syncItemTextLayout(itemEl);
+    });
+}
+
 function _wireItemText(itemEl, item) {
     const field = itemEl.querySelector('.ml-card-item-text');
-    if (!field || !item || field.tagName !== 'INPUT') return;
+    if (!field || !item || (field.tagName !== 'TEXTAREA' && field.tagName !== 'INPUT')) return;
+    if (field.value !== (item.text || '')) field.value = item.text || '';
     const stop = (e) => e.stopPropagation();
     field.addEventListener('pointerdown', stop);
     field.addEventListener('mousedown', stop);
     field.addEventListener('click', stop);
+    field.addEventListener('focus', () => {
+        itemEl.classList.add('is-editing');
+        _syncItemTextLayout(itemEl);
+    });
+    field.addEventListener('blur', () => {
+        itemEl.classList.remove('is-editing');
+        item.text = field.value;
+        _syncItemTextLayout(itemEl);
+        scheduleAutoSave();
+        if (typeof saveToBrowser === 'function') saveToBrowser();
+    });
+    field.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            field.blur();
+        }
+    });
     field.addEventListener('input', () => {
         item.text = field.value;
+        _syncItemTextLayout(itemEl);
         scheduleAutoSave();
     });
+    field.addEventListener('change', () => {
+        item.text = field.value;
+        _syncItemTextLayout(itemEl);
+        scheduleAutoSave();
+    });
+    const moreBtn = itemEl.querySelector('.ml-card-item-more');
+    if (moreBtn) {
+        moreBtn.addEventListener('pointerdown', stop);
+        moreBtn.addEventListener('mousedown', stop);
+        moreBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            const nextExpanded = !itemEl.classList.contains('is-expanded');
+            itemEl.classList.toggle('is-expanded', nextExpanded);
+            if (!nextExpanded && document.activeElement === field) {
+                field.blur();
+            }
+            _syncItemTextLayout(itemEl);
+        });
+    }
+    _syncItemTextLayout(itemEl);
 }
 
 function _wireItemDue(itemEl, item) {
