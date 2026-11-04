@@ -2294,6 +2294,8 @@ try {
     await assertMoodlistItemWrappingAndClamp(page);
     await assertPinnedTabContextMenuHidesRename(page);
     await assertStoryflowMinimapStatusLights(page);
+    await assertDesktopNarrowTopbar(page);
+    await assertTabDragReorderOverflow(page);
 
     const lateErrors = pageErrors.filter(isFirstParty);
     assert.deepEqual(lateErrors, [], `first-party errors:\n${lateErrors.join('\n')}`);
@@ -6555,7 +6557,7 @@ async function assertMultiResolutionAndQoLFixes(page) {
             if (typeof updateScrollIndicators === 'function') updateScrollIndicators();
             if (typeof updateHScrollOverflowHints === 'function') updateHScrollOverflowHints();
             const ids = ['save-png-btn', 'print-btn', 'copy-to-clipboard-btn', 'palette-btn', 'cloud-login-btn'];
-            if (window.innerWidth <= 1100) ids.push('mobile-tabs-btn');
+            if (window.innerWidth <= 768) ids.push('mobile-tabs-btn');
             return ids.map((id) => {
                 const el = document.getElementById(id);
                 if (!el) return { id, missing: true };
@@ -8377,4 +8379,655 @@ async function assertStoryflowMinimapStatusLights(page) {
     assert.equal(afterToggle[2].lights[1].ariaLabel, 'WIP: off');
 
     console.log('Storyflow minimap status lights passed.');
+}
+
+async function assertDesktopNarrowTopbar(page) {
+    console.log('Testing desktop narrow topbar (1024, 1280, 1440) and 390 mobile...');
+
+    await page.evaluate(() => {
+        window.__savedProjectsBeforeNarrowTopbar = projects;
+        window.__savedActiveBeforeNarrowTopbar = activeProjectId;
+        projects = [];
+        const types = ['moodinfinite', 'moodprompt', 'colorseeker', 'storyflow', 'moodgantt', 'moodlist'];
+        for (let i = 0; i < 14; i++) {
+            createNewProject(types[i % types.length]);
+        }
+        const firstMoodinfinite = projects.find((p) => p.type === 'moodinfinite') || projects[0];
+        if (firstMoodinfinite) switchTab(firstMoodinfinite.id);
+    });
+
+    const desktopViewports = [
+        { width: 1024, height: 768 },
+        { width: 1280, height: 800 },
+        { width: 1440, height: 900 },
+    ];
+
+    for (const vp of desktopViewports) {
+        await page.setViewport({ width: vp.width, height: vp.height, deviceScaleFactor: 1, isMobile: false, hasTouch: false });
+        await page.waitForFunction((w, h) => window.innerWidth === w && window.innerHeight === h, {}, vp.width, vp.height);
+
+        const stateAtStart = await page.evaluate(() => {
+            const firstBoard = projects.find((p) => p.type === 'moodinfinite') || projects[0];
+            if (firstBoard) switchTab(firstBoard.id);
+            const list = document.getElementById('tabs-list');
+            const container = document.querySelector('.tabs-list-container');
+            list.scrollLeft = 0;
+            if (typeof updateScrollIndicators === 'function') updateScrollIndicators();
+
+            const rightIds = ['save-png-btn', 'print-btn', 'copy-to-clipboard-btn', 'palette-btn', 'cloud-login-btn'];
+            const leftIds = [
+                'app-logo',
+                'load-project-btn',
+                'save-project-btn',
+                'add-moodinfinite-tab-btn',
+                'add-moodprompt-tab-btn',
+                'add-colorseeker-tab-btn',
+                'add-storyflow-tab-btn',
+                'add-moodgantt-tab-btn',
+                'add-moodlist-tab-btn',
+                'undo-btn',
+                'redo-btn',
+            ];
+
+            const mapRect = (id) => {
+                const el = document.getElementById(id);
+                if (!el) return { id, missing: true };
+                const rect = el.getBoundingClientRect();
+                const cs = getComputedStyle(el);
+                return {
+                    id,
+                    left: rect.left,
+                    top: rect.top,
+                    right: rect.right,
+                    bottom: rect.bottom,
+                    width: rect.width,
+                    height: rect.height,
+                    display: cs.display,
+                    visibility: cs.visibility,
+                };
+            };
+
+            const leftArrow = document.getElementById('scroll-left-indicator');
+            const rightArrow = document.getElementById('scroll-right-indicator');
+            const leftArrowCs = leftArrow ? getComputedStyle(leftArrow) : null;
+            const rightArrowCs = rightArrow ? getComputedStyle(rightArrow) : null;
+            const mobileBtn = document.getElementById('mobile-tabs-btn');
+            const mobileBtnCs = mobileBtn ? getComputedStyle(mobileBtn) : null;
+
+            return {
+                vw: window.innerWidth,
+                vh: window.innerHeight,
+                docScrollWidth: document.documentElement.scrollWidth,
+                docClientWidth: document.documentElement.clientWidth,
+                rightBtns: rightIds.map(mapRect),
+                leftBtns: leftIds.map(mapRect),
+                listScrollWidth: list.scrollWidth,
+                listClientWidth: list.clientWidth,
+                listScrollLeft: list.scrollLeft,
+                leftArrowVisible: !!(
+                    leftArrow &&
+                    leftArrow.classList.contains('visible') &&
+                    leftArrowCs.display !== 'none' &&
+                    leftArrowCs.visibility !== 'hidden' &&
+                    parseFloat(leftArrowCs.opacity) > 0
+                ),
+                rightArrowVisible: !!(
+                    rightArrow &&
+                    rightArrow.classList.contains('visible') &&
+                    rightArrowCs.display !== 'none' &&
+                    rightArrowCs.visibility !== 'hidden' &&
+                    parseFloat(rightArrowCs.opacity) > 0
+                ),
+                containerCanRight: container ? container.classList.contains('can-scroll-right') : false,
+                containerCanLeft: container ? container.classList.contains('can-scroll-left') : false,
+                mobileBtnDisplay: mobileBtnCs ? mobileBtnCs.display : 'none',
+            };
+        });
+
+        assert.ok(
+            stateAtStart.docScrollWidth <= stateAtStart.docClientWidth,
+            `${vp.width}x${vp.height}: documentElement has horizontal overflow (${stateAtStart.docScrollWidth} > ${stateAtStart.docClientWidth})`
+        );
+        assert.equal(stateAtStart.mobileBtnDisplay, 'none', `${vp.width}x${vp.height}: #mobile-tabs-btn must be hidden on desktop`);
+        assert.ok(
+            stateAtStart.listScrollWidth > stateAtStart.listClientWidth,
+            `${vp.width}x${vp.height}: #tabs-list scrollWidth (${stateAtStart.listScrollWidth}) should exceed clientWidth (${stateAtStart.listClientWidth})`
+        );
+        assert.equal(stateAtStart.rightArrowVisible, true, `${vp.width}x${vp.height}: right arrow should be visible at scrollLeft 0`);
+        assert.equal(stateAtStart.leftArrowVisible, false, `${vp.width}x${vp.height}: left arrow should be hidden at scrollLeft 0`);
+        assert.equal(stateAtStart.containerCanRight, true, `${vp.width}x${vp.height}: container should have can-scroll-right at scrollLeft 0`);
+        assert.equal(stateAtStart.containerCanLeft, false, `${vp.width}x${vp.height}: container should not have can-scroll-left at scrollLeft 0`);
+
+        for (const btn of [...stateAtStart.rightBtns, ...stateAtStart.leftBtns]) {
+            assert.ok(!btn.missing, `${vp.width}x${vp.height}: missing #${btn.id}`);
+            assert.notEqual(btn.display, 'none', `${vp.width}x${vp.height}: #${btn.id} has display:none`);
+            assert.notEqual(btn.visibility, 'hidden', `${vp.width}x${vp.height}: #${btn.id} has visibility:hidden`);
+            assert.ok(btn.width > 0 && btn.height > 0, `${vp.width}x${vp.height}: #${btn.id} has 0 size (${btn.width}x${btn.height})`);
+            assert.ok(btn.left >= 0, `${vp.width}x${vp.height}: #${btn.id} left (${btn.left}) < 0`);
+            assert.ok(btn.right <= stateAtStart.vw, `${vp.width}x${vp.height}: #${btn.id} right (${btn.right}) > vw (${stateAtStart.vw})`);
+            assert.ok(btn.top >= 0, `${vp.width}x${vp.height}: #${btn.id} top (${btn.top}) < 0`);
+            assert.ok(btn.bottom <= stateAtStart.vh, `${vp.width}x${vp.height}: #${btn.id} bottom (${btn.bottom}) > vh (${stateAtStart.vh})`);
+        }
+
+        // Switch to the last board and verify active tab is scrolled into the tabs container's visible rect
+        const stateAtLast = await page.evaluate(() => {
+            const lastBoard = projects[projects.length - 1];
+            switchTab(lastBoard.id);
+            const list = document.getElementById('tabs-list');
+            const container = document.querySelector('.tabs-list-container');
+            const activeTab = list.querySelector('.tab-item.active');
+            const containerRect = container.getBoundingClientRect();
+            const listRect = list.getBoundingClientRect();
+            const tabRect = activeTab ? activeTab.getBoundingClientRect() : null;
+            const leftArrow = document.getElementById('scroll-left-indicator');
+            const rightArrow = document.getElementById('scroll-right-indicator');
+            return {
+                hasActive: !!activeTab,
+                activeId: activeTab ? Number(activeTab.dataset.id) : null,
+                expectedId: lastBoard.id,
+                containerRect: { left: containerRect.left, right: containerRect.right, width: containerRect.width },
+                listRect: { left: listRect.left, right: listRect.right, width: listRect.width },
+                tabRect: tabRect ? { left: tabRect.left, right: tabRect.right, width: tabRect.width } : null,
+                leftArrowVisible: !!(leftArrow && leftArrow.classList.contains('visible')),
+                rightArrowVisible: !!(rightArrow && rightArrow.classList.contains('visible')),
+                docScrollWidth: document.documentElement.scrollWidth,
+                docClientWidth: document.documentElement.clientWidth,
+            };
+        });
+
+        assert.equal(stateAtLast.hasActive, true, `${vp.width}x${vp.height}: active tab should exist`);
+        assert.equal(stateAtLast.activeId, stateAtLast.expectedId, `${vp.width}x${vp.height}: active tab should match last board`);
+        assert.ok(
+            stateAtLast.tabRect.left >= stateAtLast.containerRect.left - 1 &&
+            stateAtLast.tabRect.right <= stateAtLast.containerRect.right + 1,
+            `${vp.width}x${vp.height}: active tab rect (${JSON.stringify(stateAtLast.tabRect)}) not inside tabs container rect (${JSON.stringify(stateAtLast.containerRect)})`
+        );
+        assert.equal(stateAtLast.leftArrowVisible, true, `${vp.width}x${vp.height}: left arrow should be visible at last board`);
+        assert.equal(stateAtLast.rightArrowVisible, false, `${vp.width}x${vp.height}: right arrow should be hidden at last board`);
+        assert.ok(
+            stateAtLast.docScrollWidth <= stateAtLast.docClientWidth,
+            `${vp.width}x${vp.height}: documentElement overflow after switching to last board`
+        );
+    }
+
+    // Mobile 390 viewport check: layout unchanged in behaviour (mobile-tabs-btn visible)
+    await page.setViewport({ width: 390, height: 844, deviceScaleFactor: 1, isMobile: true, hasTouch: true });
+    await page.waitForFunction(() => window.innerWidth === 390 && window.innerHeight === 844);
+    const mobileState = await page.evaluate(() => {
+        if (typeof updateHScrollOverflowHints === 'function') updateHScrollOverflowHints();
+        const mobileBtn = document.getElementById('mobile-tabs-btn');
+        const mobileBtnCs = mobileBtn ? getComputedStyle(mobileBtn) : null;
+        const mobileBtnRect = mobileBtn ? mobileBtn.getBoundingClientRect() : null;
+        const container = document.querySelector('.tabs-list-container');
+        const containerCs = container ? getComputedStyle(container) : null;
+        return {
+            mobileBtnVisible: !!(
+                mobileBtn &&
+                mobileBtnCs &&
+                mobileBtnCs.display !== 'none' &&
+                mobileBtnCs.visibility !== 'hidden' &&
+                mobileBtnRect.width > 0 &&
+                mobileBtnRect.height > 0
+            ),
+            tabsContainerDisplay: containerCs ? containerCs.display : null,
+            docScrollWidth: document.documentElement.scrollWidth,
+            docClientWidth: document.documentElement.clientWidth,
+        };
+    });
+    assert.equal(mobileState.mobileBtnVisible, true, '390px mobile: #mobile-tabs-btn must be visible');
+    assert.equal(mobileState.tabsContainerDisplay, 'none', '390px mobile: .tabs-list-container must be hidden');
+    assert.ok(
+        mobileState.docScrollWidth <= mobileState.docClientWidth,
+        `390px mobile: documentElement horizontal overflow (${mobileState.docScrollWidth} > ${mobileState.docClientWidth})`
+    );
+
+    // Restore state and desktop viewport
+    await page.setViewport({ width: 1280, height: 800, deviceScaleFactor: 1, isMobile: false, hasTouch: false });
+    await page.waitForFunction(() => window.innerWidth === 1280);
+    await page.evaluate(() => {
+        if (window.__savedProjectsBeforeNarrowTopbar) {
+            projects = window.__savedProjectsBeforeNarrowTopbar;
+            activeProjectId = window.__savedActiveBeforeNarrowTopbar;
+            renderTabs();
+            delete window.__savedProjectsBeforeNarrowTopbar;
+            delete window.__savedActiveBeforeNarrowTopbar;
+        }
+        const board = projects.find((p) => p.type === 'moodinfinite') || projects[0];
+        if (board) switchTab(board.id);
+    });
+
+    console.log('Desktop narrow topbar and 390 mobile passed.');
+}
+
+async function assertTabDragReorderOverflow(page) {
+    await page.setViewport({ width: 1024, height: 800, deviceScaleFactor: 1, isMobile: false, hasTouch: false });
+    await page.waitForFunction(() => window.innerWidth === 1024 && window.innerHeight === 800);
+
+    const setupInfo = await page.evaluate(() => {
+        window.__savedProjectsBeforeTabDrag = projects.slice();
+        window.__savedActiveBeforeTabDrag = activeProjectId;
+        projects = [];
+        for (let i = 0; i < 14; i++) {
+            createNewProject('moodinfinite');
+        }
+        if (projects[0]) {
+            switchTab(projects[0].id);
+        }
+        const list = document.getElementById('tabs-list');
+        if (list) list.scrollLeft = 0;
+        if (typeof updateScrollIndicators === 'function') updateScrollIndicators();
+        const tabs = Array.from(document.querySelectorAll('#tabs-list .tab-item'));
+        const r0 = tabs[0].getBoundingClientRect();
+        const r2 = tabs[2].getBoundingClientRect();
+        return {
+            tabCount: tabs.length,
+            scrollWidth: list ? list.scrollWidth : 0,
+            clientWidth: list ? list.clientWidth : 0,
+            scrollLeft: list ? list.scrollLeft : -1,
+            tab0: { x: r0.left + r0.width / 2, y: r0.top + r0.height / 2 },
+            tab2: { x: r2.right - 4, y: r2.top + r2.height / 2 },
+        };
+    });
+
+    assert.equal(setupInfo.tabCount, 14, '1024px tab drag test: expected 14 boards');
+    assert.ok(
+        setupInfo.scrollWidth > setupInfo.clientWidth,
+        `1024px tab drag test: #tabs-list must overflow (${setupInfo.scrollWidth} <= ${setupInfo.clientWidth})`
+    );
+
+    // 1. Drive real mouse events via page.mouse (down / move in 20 steps / up)
+    await page.mouse.move(setupInfo.tab0.x, setupInfo.tab0.y);
+    await page.mouse.down();
+    await page.mouse.move(setupInfo.tab2.x, setupInfo.tab2.y, { steps: 20 });
+    const duringRealMouse = await page.evaluate(() => {
+        const list = document.getElementById('tabs-list');
+        return {
+            hasDraggingScroll: list ? list.classList.contains('dragging-scroll') : false,
+            scrollLeft: list ? list.scrollLeft : -1,
+        };
+    });
+    await page.mouse.up();
+    assert.equal(
+        duringRealMouse.hasDraggingScroll,
+        false,
+        'page.mouse drag over tab must not add .dragging-scroll to #tabs-list'
+    );
+    assert.equal(
+        duringRealMouse.scrollLeft,
+        0,
+        'page.mouse drag over tab must not change #tabs-list scrollLeft'
+    );
+
+    // 2. Assert the logic directly: mousedown on tab 0 + window mousemove 40px does NOT trigger drag-scroll,
+    // and synthetic DragEvent sequence (dragstart on tab 0, dragover+drop on tab 2 with shared DataTransfer, dragend)
+    // reorders projects.
+    const directResult = await page.evaluate(async () => {
+        renderTabs();
+        const list = document.getElementById('tabs-list');
+        list.scrollLeft = 0;
+        const tabs = Array.from(list.querySelectorAll('.tab-item'));
+        const tab0 = tabs[0];
+        const r0 = tab0.getBoundingClientRect();
+        const startX = r0.left + r0.width / 2;
+        const startY = r0.top + r0.height / 2;
+
+        tab0.dispatchEvent(new MouseEvent('mousedown', {
+            bubbles: true,
+            cancelable: true,
+            button: 0,
+            clientX: startX,
+            clientY: startY,
+        }));
+        window.dispatchEvent(new MouseEvent('mousemove', {
+            bubbles: true,
+            cancelable: true,
+            button: 0,
+            clientX: startX - 40,
+            clientY: startY,
+        }));
+        const hasDraggingScrollOnTabMove = list.classList.contains('dragging-scroll');
+        const scrollLeftOnTabMove = list.scrollLeft;
+        window.dispatchEvent(new MouseEvent('mouseup', {
+            bubbles: true,
+            cancelable: true,
+            button: 0,
+            clientX: startX - 40,
+            clientY: startY,
+        }));
+
+        const orderBefore = projects.map((p) => p.id);
+        const currentTabs = Array.from(list.querySelectorAll('.tab-item'));
+        const dragTab = currentTabs[0];
+        const targetTab = currentTabs[2];
+        const rTarget = targetTab.getBoundingClientRect();
+        const dropX = rTarget.right - 2;
+        const dropY = rTarget.top + rTarget.height / 2;
+
+        const dt = new DataTransfer();
+        dragTab.dispatchEvent(new DragEvent('dragstart', {
+            bubbles: true,
+            cancelable: true,
+            dataTransfer: dt,
+            clientX: startX,
+            clientY: startY,
+        }));
+        await new Promise((resolve) => setTimeout(resolve, 10));
+        dragTab.classList.add('dragging');
+
+        targetTab.dispatchEvent(new DragEvent('dragover', {
+            bubbles: true,
+            cancelable: true,
+            dataTransfer: dt,
+            clientX: dropX,
+            clientY: dropY,
+        }));
+        targetTab.dispatchEvent(new DragEvent('drop', {
+            bubbles: true,
+            cancelable: true,
+            dataTransfer: dt,
+            clientX: dropX,
+            clientY: dropY,
+        }));
+        dragTab.dispatchEvent(new DragEvent('dragend', {
+            bubbles: true,
+            cancelable: true,
+            dataTransfer: dt,
+            clientX: dropX,
+            clientY: dropY,
+        }));
+
+        const orderAfter = projects.map((p) => p.id);
+        return {
+            hasDraggingScrollOnTabMove,
+            scrollLeftOnTabMove,
+            orderBefore,
+            orderAfter,
+        };
+    });
+
+    assert.equal(
+        directResult.hasDraggingScrollOnTabMove,
+        false,
+        'mousedown on tab 0 + mousemove 40px must NOT add .dragging-scroll'
+    );
+    assert.equal(
+        directResult.scrollLeftOnTabMove,
+        0,
+        'mousedown on tab 0 + mousemove 40px must NOT change scrollLeft'
+    );
+    assert.notDeepEqual(
+        directResult.orderAfter,
+        directResult.orderBefore,
+        'synthetic DragEvent sequence must change projects order'
+    );
+    assert.equal(
+        directResult.orderAfter[2],
+        directResult.orderBefore[0],
+        'tab 0 project id must move to index 2 after dropping on tab 2'
+    );
+    assert.equal(
+        directResult.orderAfter[0],
+        directResult.orderBefore[1],
+        'former tab 1 project id must shift to index 0'
+    );
+
+    // 3. Verify drag-scroll still works when starting from an empty area of #tabs-list
+    const emptyAreaResult = await page.evaluate(() => {
+        const list = document.getElementById('tabs-list');
+        const prevPaddingLeft = list.style.paddingLeft;
+        list.style.paddingLeft = '120px';
+        list.scrollLeft = 0;
+        if (typeof updateScrollIndicators === 'function') updateScrollIndicators();
+
+        const listRect = list.getBoundingClientRect();
+        const emptyX = listRect.left + 40;
+        const emptyY = listRect.top + listRect.height / 2;
+        const hitEl = document.elementFromPoint(emptyX, emptyY);
+        const hitIsTabsList = hitEl === list;
+
+        const scrollBefore = list.scrollLeft;
+        list.dispatchEvent(new MouseEvent('mousedown', {
+            bubbles: true,
+            cancelable: true,
+            button: 0,
+            clientX: emptyX,
+            clientY: emptyY,
+        }));
+        window.dispatchEvent(new MouseEvent('mousemove', {
+            bubbles: true,
+            cancelable: true,
+            button: 0,
+            clientX: emptyX - 60,
+            clientY: emptyY,
+        }));
+        const hasClassDuring = list.classList.contains('dragging-scroll');
+        const scrollAfterMove = list.scrollLeft;
+
+        window.dispatchEvent(new MouseEvent('mouseup', {
+            bubbles: true,
+            cancelable: true,
+            button: 0,
+            clientX: emptyX - 60,
+            clientY: emptyY,
+        }));
+        const hasClassAfterUp = list.classList.contains('dragging-scroll');
+
+        list.style.paddingLeft = prevPaddingLeft;
+        list.scrollLeft = 0;
+        if (typeof updateScrollIndicators === 'function') updateScrollIndicators();
+
+        return {
+            hitIsTabsList,
+            scrollBefore,
+            scrollAfterMove,
+            hasClassDuring,
+            hasClassAfterUp,
+        };
+    });
+
+    assert.equal(
+        emptyAreaResult.hitIsTabsList,
+        true,
+        'empty trailing spot inside #tabs-list should hit #tabs-list itself'
+    );
+    assert.equal(
+        emptyAreaResult.hasClassDuring,
+        true,
+        'mousedown on empty #tabs-list area + mousemove -60px must add .dragging-scroll'
+    );
+    assert.ok(
+        emptyAreaResult.scrollAfterMove > emptyAreaResult.scrollBefore,
+        `mousedown on empty #tabs-list area + mousemove -60px must increase scrollLeft (${emptyAreaResult.scrollBefore} -> ${emptyAreaResult.scrollAfterMove})`
+    );
+    assert.equal(
+        emptyAreaResult.hasClassAfterUp,
+        false,
+        'mouseup after empty-area drag-scroll must remove .dragging-scroll'
+    );
+
+    // 4. Synthetic DragEvent sequence where dragover/drop happen on #scroll-right-indicator
+    const indicatorDropResult = await page.evaluate(async () => {
+        renderTabs();
+        const list = document.getElementById('tabs-list');
+        list.scrollLeft = 0;
+        if (typeof updateScrollIndicators === 'function') updateScrollIndicators();
+
+        const orderBefore = projects.map((p) => p.id);
+        const currentTabs = Array.from(list.querySelectorAll('.tab-item'));
+        const tab0 = currentTabs[0];
+        const tab1 = currentTabs[1];
+        const rightIndicator = document.getElementById('scroll-right-indicator');
+
+        const r0 = tab0.getBoundingClientRect();
+        const r1 = tab1.getBoundingClientRect();
+        const rInd = rightIndicator.getBoundingClientRect();
+        const startX = r0.left + r0.width / 2;
+        const startY = r0.top + r0.height / 2;
+        const tab1X = r1.right - 2;
+        const tab1Y = r1.top + r1.height / 2;
+        const indX = rInd.left + rInd.width / 2;
+        const indY = rInd.top + rInd.height / 2;
+
+        const dt = new DataTransfer();
+        tab0.dispatchEvent(new DragEvent('dragstart', {
+            bubbles: true,
+            cancelable: true,
+            dataTransfer: dt,
+            clientX: startX,
+            clientY: startY,
+        }));
+        await new Promise((resolve) => setTimeout(resolve, 10));
+        tab0.classList.add('dragging');
+
+        tab1.dispatchEvent(new DragEvent('dragover', {
+            bubbles: true,
+            cancelable: true,
+            dataTransfer: dt,
+            clientX: tab1X,
+            clientY: tab1Y,
+        }));
+        rightIndicator.dispatchEvent(new DragEvent('dragover', {
+            bubbles: true,
+            cancelable: true,
+            dataTransfer: dt,
+            clientX: indX,
+            clientY: indY,
+        }));
+        rightIndicator.dispatchEvent(new DragEvent('drop', {
+            bubbles: true,
+            cancelable: true,
+            dataTransfer: dt,
+            clientX: indX,
+            clientY: indY,
+        }));
+        tab0.dispatchEvent(new DragEvent('dragend', {
+            bubbles: true,
+            cancelable: true,
+            dataTransfer: dt,
+            clientX: indX,
+            clientY: indY,
+        }));
+
+        const orderAfterDrop = projects.map((p) => p.id);
+        renderTabs();
+        const orderAfterRender = projects.map((p) => p.id);
+        const domOrderAfterRender = Array.from(list.querySelectorAll('.tab-item')).map((el) => Number(el.dataset.id));
+
+        return {
+            orderBefore,
+            orderAfterDrop,
+            orderAfterRender,
+            domOrderAfterRender,
+        };
+    });
+
+    assert.notDeepEqual(
+        indicatorDropResult.orderAfterDrop,
+        indicatorDropResult.orderBefore,
+        'dragover+drop on #scroll-right-indicator must change projects order'
+    );
+    assert.notEqual(
+        indicatorDropResult.orderAfterDrop[0],
+        indicatorDropResult.orderBefore[0],
+        'tab 0 must move away from index 0 after dropping on #scroll-right-indicator'
+    );
+    assert.deepEqual(
+        indicatorDropResult.orderAfterRender,
+        indicatorDropResult.orderAfterDrop,
+        'projects order must persist after renderTabs()'
+    );
+    assert.deepEqual(
+        indicatorDropResult.domOrderAfterRender,
+        indicatorDropResult.orderAfterDrop,
+        'rendered tab DOM order must match committed projects order after renderTabs()'
+    );
+
+    // 5. Holding dragover on #scroll-right-indicator (~300ms between dragovers) auto-scrolls #tabs-list
+    const autoScrollResult = await page.evaluate(async () => {
+        renderTabs();
+        const list = document.getElementById('tabs-list');
+        list.scrollLeft = 0;
+        if (typeof updateScrollIndicators === 'function') updateScrollIndicators();
+
+        const currentTabs = Array.from(list.querySelectorAll('.tab-item'));
+        const tab0 = currentTabs[0];
+        const rightIndicator = document.getElementById('scroll-right-indicator');
+        const r0 = tab0.getBoundingClientRect();
+        const rInd = rightIndicator.getBoundingClientRect();
+        const startX = r0.left + r0.width / 2;
+        const startY = r0.top + r0.height / 2;
+        const indX = rInd.left + rInd.width / 2;
+        const indY = rInd.top + rInd.height / 2;
+
+        const scrollBefore = list.scrollLeft;
+        const dt = new DataTransfer();
+        tab0.dispatchEvent(new DragEvent('dragstart', {
+            bubbles: true,
+            cancelable: true,
+            dataTransfer: dt,
+            clientX: startX,
+            clientY: startY,
+        }));
+        await new Promise((resolve) => setTimeout(resolve, 10));
+        tab0.classList.add('dragging');
+
+        rightIndicator.dispatchEvent(new DragEvent('dragover', {
+            bubbles: true,
+            cancelable: true,
+            dataTransfer: dt,
+            clientX: indX,
+            clientY: indY,
+        }));
+        await new Promise((resolve) => setTimeout(resolve, 320));
+        rightIndicator.dispatchEvent(new DragEvent('dragover', {
+            bubbles: true,
+            cancelable: true,
+            dataTransfer: dt,
+            clientX: indX,
+            clientY: indY,
+        }));
+        const scrollAfterHold = list.scrollLeft;
+
+        rightIndicator.dispatchEvent(new DragEvent('drop', {
+            bubbles: true,
+            cancelable: true,
+            dataTransfer: dt,
+            clientX: indX,
+            clientY: indY,
+        }));
+        tab0.dispatchEvent(new DragEvent('dragend', {
+            bubbles: true,
+            cancelable: true,
+            dataTransfer: dt,
+            clientX: indX,
+            clientY: indY,
+        }));
+
+        return {
+            scrollBefore,
+            scrollAfterHold,
+        };
+    });
+
+    assert.ok(
+        autoScrollResult.scrollAfterHold > autoScrollResult.scrollBefore,
+        `dragover held on #scroll-right-indicator for ~300ms must increase #tabs-list scrollLeft (${autoScrollResult.scrollBefore} -> ${autoScrollResult.scrollAfterHold})`
+    );
+
+    // Restore state and desktop viewport
+    await page.setViewport({ width: 1280, height: 800, deviceScaleFactor: 1, isMobile: false, hasTouch: false });
+    await page.waitForFunction(() => window.innerWidth === 1280);
+    await page.evaluate(() => {
+        if (window.__savedProjectsBeforeTabDrag) {
+            projects = window.__savedProjectsBeforeTabDrag;
+            activeProjectId = window.__savedActiveBeforeTabDrag;
+            renderTabs();
+            delete window.__savedProjectsBeforeTabDrag;
+            delete window.__savedActiveBeforeTabDrag;
+        }
+        const board = projects.find((p) => p.type === 'moodinfinite') || projects[0];
+        if (board) switchTab(board.id);
+    });
+
+    console.log('Tab drag reorder on overflow passed.');
 }
