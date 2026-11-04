@@ -783,6 +783,10 @@ function renderTabs() {
             if (pinLabel) {
                 pinLabel.textContent = project.pinned ? 'Unpin' : 'Pin to Start';
             }
+            const renameBtn = document.getElementById('rename-tab-btn');
+            if (renameBtn) {
+                renameBtn.style.display = project.pinned ? 'none' : '';
+            }
             showAndPositionMenu(menu, e);
         });
 
@@ -809,6 +813,36 @@ function renderTabs() {
 
 let moodpromptFilterPlatform = 'all';
 let moodpromptSearchQuery = '';
+let moodpromptDraggedId = null;
+
+function clearMoodpromptDropIndicator(listEl) {
+    const scope = listEl || document;
+    scope.querySelectorAll('.prompt-drop-indicator').forEach(el => el.remove());
+    scope.querySelectorAll('.prompt-card.drag-over-before, .prompt-card.drag-over-after').forEach(el => {
+        el.classList.remove('drag-over-before', 'drag-over-after');
+    });
+}
+
+function resolveMoodpromptDropTarget(promptList, e) {
+    const cards = Array.from(promptList.querySelectorAll('.prompt-card'));
+    if (!cards.length) return null;
+    const directCard = e.target && e.target.closest ? e.target.closest('.prompt-card') : null;
+    if (directCard && promptList.contains(directCard)) {
+        const rect = directCard.getBoundingClientRect();
+        const midY = rect.top + rect.height / 2;
+        const position = e.clientY < midY ? 'before' : 'after';
+        return { targetCard: directCard, targetId: directCard.dataset.promptId, position };
+    }
+    for (const card of cards) {
+        const rect = card.getBoundingClientRect();
+        const midY = rect.top + rect.height / 2;
+        if (e.clientY < midY) {
+            return { targetCard: card, targetId: card.dataset.promptId, position: 'before' };
+        }
+    }
+    const lastCard = cards[cards.length - 1];
+    return { targetCard: lastCard, targetId: lastCard.dataset.promptId, position: 'after' };
+}
 
 function showToastDeprecated(message) {
     let container = document.getElementById('toast-container');
@@ -1065,6 +1099,41 @@ function renderMoodpromptView(project) {
             copyBoardPlainText(currentProject);
         };
 
+        // 5b. Collapse All / Expand All Prompts
+        const collapseAllBtnItem = document.createElement('button');
+        collapseAllBtnItem.type = 'button';
+        collapseAllBtnItem.id = 'moodprompt-collapse-all-btn';
+        collapseAllBtnItem.className = 'stats-item moodprompt-collapse-all-btn';
+        collapseAllBtnItem.style.cursor = 'pointer';
+        collapseAllBtnItem.title = 'Collapse all';
+        collapseAllBtnItem.setAttribute('aria-label', 'Collapse all');
+        collapseAllBtnItem.innerHTML = `<iconify-icon icon="lucide:chevrons-up" width="16" height="16"></iconify-icon> <span>Collapse all</span>`;
+        collapseAllBtnItem.onclick = () => {
+            const currentProject = projects.find(p => p.id === activeProjectId) || project;
+            if (!currentProject || !currentProject.data || !Array.isArray(currentProject.data.prompts)) return;
+            currentProject.data.prompts.forEach(p => { p.collapsed = true; });
+            renderMoodpromptView(currentProject);
+            saveToBrowser();
+            scheduleAutoSave();
+        };
+
+        const expandAllBtnItem = document.createElement('button');
+        expandAllBtnItem.type = 'button';
+        expandAllBtnItem.id = 'moodprompt-expand-all-btn';
+        expandAllBtnItem.className = 'stats-item moodprompt-expand-all-btn';
+        expandAllBtnItem.style.cursor = 'pointer';
+        expandAllBtnItem.title = 'Expand all';
+        expandAllBtnItem.setAttribute('aria-label', 'Expand all');
+        expandAllBtnItem.innerHTML = `<iconify-icon icon="lucide:chevrons-down" width="16" height="16"></iconify-icon> <span>Expand all</span>`;
+        expandAllBtnItem.onclick = () => {
+            const currentProject = projects.find(p => p.id === activeProjectId) || project;
+            if (!currentProject || !currentProject.data || !Array.isArray(currentProject.data.prompts)) return;
+            currentProject.data.prompts.forEach(p => { p.collapsed = false; });
+            renderMoodpromptView(currentProject);
+            saveToBrowser();
+            scheduleAutoSave();
+        };
+
         // 6. Variables Item
         const varBtnItem = document.createElement('div');
         varBtnItem.className = 'stats-item';
@@ -1076,7 +1145,7 @@ function renderMoodpromptView(project) {
             openVariableManager(currentProject);
         };
 
-        topBar.append(addBtnItem, filterItem, searchItem, countItem, copyAllBtnItem, varBtnItem);
+        topBar.append(addBtnItem, filterItem, searchItem, countItem, copyAllBtnItem, collapseAllBtnItem, expandAllBtnItem, varBtnItem);
         moodpromptContainer.appendChild(topBar);
 
         scrollArea = document.createElement('div');
@@ -1090,25 +1159,96 @@ function renderMoodpromptView(project) {
         promptList.className = 'prompt-list';
         scrollArea.appendChild(promptList);
 
-        promptList.addEventListener('dragover', (e) => { e.preventDefault(); });
+        promptList.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
+            const resolved = resolveMoodpromptDropTarget(promptList, e);
+            if (!resolved) {
+                clearMoodpromptDropIndicator(promptList);
+                return;
+            }
+            const { targetCard, targetId, position } = resolved;
+            promptList.querySelectorAll('.prompt-card.drag-over-before, .prompt-card.drag-over-after').forEach(el => {
+                el.classList.remove('drag-over-before', 'drag-over-after');
+            });
+            targetCard.classList.add(position === 'before' ? 'drag-over-before' : 'drag-over-after');
+
+            let indicator = promptList.querySelector('.prompt-drop-indicator');
+            if (!indicator) {
+                indicator = document.createElement('div');
+                indicator.className = 'prompt-drop-indicator';
+            }
+            indicator.dataset.targetId = String(targetId || '');
+            indicator.dataset.position = position;
+            if (position === 'before') {
+                promptList.insertBefore(indicator, targetCard);
+            } else {
+                promptList.insertBefore(indicator, targetCard.nextSibling);
+            }
+        });
+        promptList.addEventListener('dragleave', (e) => {
+            if (!e.relatedTarget || !promptList.contains(e.relatedTarget)) {
+                clearMoodpromptDropIndicator(promptList);
+            }
+        });
+        promptList.addEventListener('dragend', () => {
+            moodpromptDraggedId = null;
+            clearMoodpromptDropIndicator(promptList);
+            promptList.querySelectorAll('.prompt-card.dragging').forEach(el => el.classList.remove('dragging'));
+        });
         promptList.addEventListener('drop', (e) => {
             e.preventDefault();
             const currentProject = projects.find(p => p.id === activeProjectId) || project;
-            const draggedId = e.dataTransfer.getData('text/plain');
-            const dropTargetCard = e.target.closest('.prompt-card');
-            if (!dropTargetCard || !draggedId) return;
+            const transferId = e.dataTransfer ? e.dataTransfer.getData('text/plain') : '';
+            const draggedId = transferId || moodpromptDraggedId || '';
+            const indicator = promptList.querySelector('.prompt-drop-indicator');
+            const dropTargetCard = e.target && e.target.closest ? e.target.closest('.prompt-card') : null;
+
+            let targetId = '';
+            let position = 'before';
+
+            if (e.clientY > 0) {
+                const resolved = resolveMoodpromptDropTarget(promptList, e);
+                if (resolved) {
+                    targetId = resolved.targetId;
+                    position = resolved.position;
+                }
+            } else if (indicator && indicator.dataset.targetId) {
+                targetId = indicator.dataset.targetId;
+                position = indicator.dataset.position || 'before';
+            } else if (dropTargetCard) {
+                targetId = dropTargetCard.dataset.promptId;
+                position = 'before';
+            } else {
+                const cards = promptList.querySelectorAll('.prompt-card');
+                if (cards.length) {
+                    targetId = cards[cards.length - 1].dataset.promptId;
+                    position = 'after';
+                }
+            }
+
+            clearMoodpromptDropIndicator(promptList);
+            moodpromptDraggedId = null;
+
+            if (!targetId || !draggedId) return;
             const prompts = currentProject.data.prompts;
-            const oldIndex = prompts.findIndex(p => String(p.id) === draggedId);
-            if (oldIndex < 0 || String(prompts[oldIndex].id) === dropTargetCard.dataset.promptId) return;
+            const oldIndex = prompts.findIndex(p => String(p.id) === String(draggedId));
+            if (oldIndex < 0) return;
+            if (String(prompts[oldIndex].id) === String(targetId)) {
+                renderMoodpromptView(currentProject);
+                return;
+            }
             const [movedPrompt] = prompts.splice(oldIndex, 1);
-            const newIndex = prompts.findIndex(p => String(p.id) === dropTargetCard.dataset.promptId);
+            const newIndex = prompts.findIndex(p => String(p.id) === String(targetId));
             if (newIndex < 0) {
                 prompts.push(movedPrompt);
             } else {
-                prompts.splice(newIndex, 0, movedPrompt);
+                const insertIndex = position === 'after' ? newIndex + 1 : newIndex;
+                prompts.splice(insertIndex, 0, movedPrompt);
             }
             renderMoodpromptView(currentProject);
             saveToBrowser();
+            scheduleAutoSave();
         });
     }
 
@@ -1171,8 +1311,49 @@ function createPromptCard(project, prompt, index) {
     card.draggable = true;
     card.dataset.promptId = String(prompt.id);
 
-    card.addEventListener('dragstart', (e) => { e.dataTransfer.setData('text/plain', String(prompt.id)); card.classList.add('dragging'); });
-    card.addEventListener('dragend', () => { card.classList.remove('dragging'); });
+    let dragBlockedByControl = false;
+    const isInteractiveDragBlock = (target) => {
+        if (!(target instanceof Element)) return false;
+        return !!target.closest('textarea, input, select, button, .image-upload-slot, .prompt-tag');
+    };
+    card.addEventListener('mousedown', (e) => {
+        if (isInteractiveDragBlock(e.target)) {
+            dragBlockedByControl = true;
+            card.draggable = false;
+        } else {
+            dragBlockedByControl = false;
+            card.draggable = true;
+        }
+    });
+    card.addEventListener('mouseup', () => {
+        dragBlockedByControl = false;
+        card.draggable = true;
+    });
+    card.addEventListener('mouseleave', () => {
+        if (!card.classList.contains('dragging')) {
+            dragBlockedByControl = false;
+            card.draggable = true;
+        }
+    });
+    card.addEventListener('dragstart', (e) => {
+        if (dragBlockedByControl || isInteractiveDragBlock(e.target)) {
+            e.preventDefault();
+            return;
+        }
+        moodpromptDraggedId = String(prompt.id);
+        if (e.dataTransfer) {
+            e.dataTransfer.effectAllowed = 'move';
+            e.dataTransfer.setData('text/plain', String(prompt.id));
+        }
+        card.classList.add('dragging');
+    });
+    card.addEventListener('dragend', () => {
+        moodpromptDraggedId = null;
+        dragBlockedByControl = false;
+        card.draggable = true;
+        card.classList.remove('dragging');
+        clearMoodpromptDropIndicator(card.parentElement);
+    });
 
     const header = document.createElement('div');
     header.className = 'prompt-header';
@@ -1180,6 +1361,18 @@ function createPromptCard(project, prompt, index) {
     titleContainer.style.display = 'flex';
     titleContainer.style.alignItems = 'center';
     titleContainer.style.width = '100%';
+    titleContainer.style.minWidth = '0';
+
+    const dragHandle = document.createElement('span');
+    dragHandle.className = 'prompt-drag-handle';
+    dragHandle.title = 'Drag to reorder';
+    dragHandle.setAttribute('aria-hidden', 'true');
+    dragHandle.innerHTML = `<iconify-icon icon="lucide:grip-vertical" width="16" height="16"></iconify-icon>`;
+
+    const collapseBtn = document.createElement('button');
+    collapseBtn.type = 'button';
+    collapseBtn.className = 'tab-add-btn prompt-collapse-btn';
+
     const numberSpan = document.createElement('span');
     numberSpan.className = 'prompt-number';
     numberSpan.textContent = `${index + 1}.`;
@@ -1193,7 +1386,7 @@ function createPromptCard(project, prompt, index) {
     };
     titleInput.addEventListener('input', rememberTitle);
     titleInput.addEventListener('change', rememberTitle);
-    titleContainer.append(numberSpan, titleInput);
+    titleContainer.append(dragHandle, collapseBtn, numberSpan, titleInput);
     const controls = document.createElement('div');
     controls.className = 'prompt-controls';
     const platformSelectWrapper = document.createElement('div');
@@ -1457,6 +1650,34 @@ function createPromptCard(project, prompt, index) {
     contentRow.append(imagesContainer, textWrapper);
     
     body.append(contentRow, tagsWrapper);
+
+    const applyCollapsedState = () => {
+        const isCollapsed = !!prompt.collapsed;
+        card.classList.toggle('collapsed', isCollapsed);
+        card.dataset.collapsed = isCollapsed ? 'true' : 'false';
+        body.hidden = isCollapsed;
+        body.style.display = isCollapsed ? 'none' : 'flex';
+        collapseBtn.title = isCollapsed ? 'Expand card' : 'Collapse card';
+        collapseBtn.setAttribute('aria-label', isCollapsed ? 'Expand card' : 'Collapse card');
+        collapseBtn.setAttribute('aria-expanded', isCollapsed ? 'false' : 'true');
+        collapseBtn.innerHTML = `<iconify-icon icon="${isCollapsed ? 'lucide:chevron-right' : 'lucide:chevron-down'}" width="18" height="18"></iconify-icon>`;
+    };
+    const toggleCollapsed = () => {
+        prompt.collapsed = !prompt.collapsed;
+        applyCollapsedState();
+        saveToBrowser();
+        scheduleAutoSave();
+    };
+    collapseBtn.onclick = (e) => {
+        e.stopPropagation();
+        toggleCollapsed();
+    };
+    header.addEventListener('click', (e) => {
+        if (e.target.closest('input, select, button, textarea, .media-type-toggle, .platform-select-wrapper, .prompt-drag-handle')) return;
+        toggleCollapsed();
+    });
+    applyCollapsedState();
+
     card.append(header, body);
     return card;
 }
@@ -2339,8 +2560,13 @@ function setupEventListeners() {
     if (renameTabBtn) renameTabBtn.addEventListener('click', () => {
         const id = tabContextMenu.dataset.tabId;
         if (id) {
+            const project = projects.find(p => p.id.toString() === id.toString());
+            if (project && project.pinned) {
+                tabContextMenu.style.display = 'none';
+                return;
+            }
             const tab = document.querySelector(`.tab-item[data-id='${id}']`);
-            if (tab) {
+            if (tab && !tab.classList.contains('pinned')) {
                 const nameSpan = tab.querySelector('.tab-name'), nameInput = tab.querySelector('.tab-name-input');
                 if (nameSpan) nameSpan.style.display = 'none';
                 if (nameInput) {
@@ -6576,7 +6802,7 @@ function loadFileAsNewTab(fileContent, fileName) {
         const name = getDeduplicatedTabName(rawName);
         if (data.prompts && Array.isArray(data.prompts)) {
             const newId = nextProjectId();
-            const newProject = { id: newId, type: 'moodprompt', name: name, data: { prompts: data.prompts, canvasBackgroundColor: data.canvasBackgroundColor || '#0d0d0d' } };
+            const newProject = { id: newId, type: 'moodprompt', name: name, data: { ...data, prompts: data.prompts, canvasBackgroundColor: data.canvasBackgroundColor || '#0d0d0d' } };
             projects.push(newProject);
             renderTabs();
             switchTab(newId);
@@ -10457,16 +10683,49 @@ function renderStoryflowView(project) {
             if (frame.image) {
                 miniframe.style.backgroundImage = `url(${frame.image})`;
             }
-            if (frame.meta && frame.meta.status === 'approved') {
+            const status = frame && frame.meta ? frame.meta.status : null;
+            const isApproved = status === 'approved';
+            const isWip = status === 'wip';
+            if (isApproved) {
                 miniframe.classList.add('status-approved');
-            } else if (frame.meta && frame.meta.status === 'wip') {
+            } else if (isWip) {
                 miniframe.classList.add('status-wip');
             } else {
                 miniframe.classList.add('status-not-started');
             }
+
+            const thumb = document.createElement('div');
+            thumb.className = 'minimap-frame-thumb';
+            if (frame.image) {
+                thumb.style.backgroundImage = `url(${frame.image})`;
+            }
+
+            const lightsGroup = document.createElement('div');
+            lightsGroup.className = 'minimap-status-lights';
+            lightsGroup.setAttribute('role', 'group');
+            lightsGroup.setAttribute('aria-label', 'Status');
+
+            const approvedLight = document.createElement('span');
+            approvedLight.className = `minimap-status-light light-approved status-approved-light ${isApproved ? 'on is-on' : 'off is-off'}`;
+            approvedLight.dataset.status = 'approved';
+            const approvedLabel = `Approved: ${isApproved ? 'on' : 'off'}`;
+            approvedLight.setAttribute('aria-label', approvedLabel);
+            approvedLight.title = approvedLabel;
+
+            const wipLight = document.createElement('span');
+            wipLight.className = `minimap-status-light light-wip status-wip-light ${isWip ? 'on is-on' : 'off is-off'}`;
+            wipLight.dataset.status = 'wip';
+            const wipLabel = `WIP: ${isWip ? 'on' : 'off'}`;
+            wipLight.setAttribute('aria-label', wipLabel);
+            wipLight.title = wipLabel;
+
+            lightsGroup.append(approvedLight, wipLight);
+            miniframe.append(thumb, lightsGroup);
             minimapTrack.appendChild(miniframe);
         });
-        
+        if (typeof updateStoryflowMinimapViewport === 'function') {
+            updateStoryflowMinimapViewport();
+        }
         setTimeout(() => {
             if (typeof updateStoryflowMinimapViewport === 'function') {
                 updateStoryflowMinimapViewport();

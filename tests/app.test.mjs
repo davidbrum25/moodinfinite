@@ -2290,6 +2290,10 @@ try {
     await assertTabNamesNoCollision(page);
     await assertGenMetaStage1(page);
     await assertOAuthLegalPagesAndLinks(page);
+    await assertMoodpromptReorderAndCollapse(page);
+    await assertMoodlistItemWrappingAndClamp(page);
+    await assertPinnedTabContextMenuHidesRename(page);
+    await assertStoryflowMinimapStatusLights(page);
     await assertDesktopNarrowTopbar(page);
     await assertTabDragReorderOverflow(page);
 
@@ -7675,6 +7679,706 @@ async function assertOAuthLegalPagesAndLinks(page) {
     await page.waitForFunction(() => window.innerWidth === 1280);
 
     console.log('OAuth legal pages and links passed.');
+}
+
+async function assertMoodpromptReorderAndCollapse(page) {
+    console.log('Testing Moodprompt drag-and-drop reorder and collapse/expand...');
+    await page.setViewport({ width: 1280, height: 800, deviceScaleFactor: 1, isMobile: false, hasTouch: false });
+
+    const reorderCheck = await page.evaluate(async () => {
+        (0, eval)('moodpromptFilterPlatform = "all"');
+        (0, eval)('moodpromptSearchQuery = ""');
+        createNewProject('moodprompt');
+        const project = projects.find((p) => p.id === activeProjectId);
+        project.data.prompts = [
+            { id: 'mp-1', title: 'Alpha Prompt', platform: 'midjourney', mediaType: 'image', image1: null, image2: null, text: 'First body', tags: [], collapsed: false },
+            { id: 'mp-2', title: 'Beta Prompt', platform: 'flux', mediaType: 'image', image1: null, image2: null, text: 'Second body', tags: [], collapsed: false },
+            { id: 'mp-3', title: 'Gamma Prompt', platform: 'sora', mediaType: 'video', image1: null, image2: null, text: 'Third body', tags: [], collapsed: false },
+        ];
+        renderMoodpromptView(project);
+
+        const list = document.querySelector('#moodprompt-container .prompt-list');
+        const cards = [...list.querySelectorAll('.prompt-card')];
+
+        // Verify dragstart on textarea/input is prevented
+        const textarea = cards[0].querySelector('.prompt-text-area');
+        const blockedEvt = new DragEvent('dragstart', { bubbles: true, cancelable: true, dataTransfer: new DataTransfer() });
+        textarea.dispatchEvent(blockedEvt);
+        const textareaDragBlocked = blockedEvt.defaultPrevented && !cards[0].classList.contains('dragging');
+
+        // Start dragging card 0 ('mp-1')
+        const dt = new DataTransfer();
+        dt.setData('text/plain', 'mp-1');
+        cards[0].dispatchEvent(new DragEvent('dragstart', { bubbles: true, cancelable: true, dataTransfer: dt }));
+
+        // Hover over top half of card 1 ('mp-2') -> indicator before card 1
+        const rect1 = cards[1].getBoundingClientRect();
+        cards[1].dispatchEvent(new DragEvent('dragover', {
+            bubbles: true,
+            cancelable: true,
+            clientY: rect1.top + 4,
+            dataTransfer: dt,
+        }));
+        const indBefore = list.querySelector('.prompt-drop-indicator');
+        const indicatorBeforeInfo = indBefore ? {
+            exists: true,
+            position: indBefore.dataset.position,
+            targetId: indBefore.dataset.targetId,
+            nextId: indBefore.nextElementSibling ? indBefore.nextElementSibling.dataset.promptId : null,
+            height: indBefore.getBoundingClientRect().height,
+        } : { exists: false };
+
+        // Dragleave list -> indicator removed
+        list.dispatchEvent(new DragEvent('dragleave', { bubbles: true, cancelable: true, relatedTarget: document.body }));
+        const indicatorAfterLeave = !!list.querySelector('.prompt-drop-indicator');
+
+        // Hover over bottom half of card 2 ('mp-3') -> indicator after card 2 (at end)
+        const rect2 = cards[2].getBoundingClientRect();
+        cards[2].dispatchEvent(new DragEvent('dragover', {
+            bubbles: true,
+            cancelable: true,
+            clientY: rect2.bottom - 4,
+            dataTransfer: dt,
+        }));
+        const indAfter = list.querySelector('.prompt-drop-indicator');
+        const indicatorAfterInfo = indAfter ? {
+            exists: true,
+            position: indAfter.dataset.position,
+            targetId: indAfter.dataset.targetId,
+            prevId: indAfter.previousElementSibling ? indAfter.previousElementSibling.dataset.promptId : null,
+        } : { exists: false };
+
+        // Drop at end (after card 2)
+        cards[2].dispatchEvent(new DragEvent('drop', {
+            bubbles: true,
+            cancelable: true,
+            clientY: rect2.bottom - 4,
+            dataTransfer: dt,
+        }));
+        const indicatorAfterDrop = !!list.querySelector('.prompt-drop-indicator');
+
+        const titlesAfterMoveToEnd = [...list.querySelectorAll('.prompt-title-input')].map((el) => el.value);
+        const numbersAfterMoveToEnd = [...list.querySelectorAll('.prompt-number')].map((el) => el.textContent.trim());
+        const dataOrderAfterMoveToEnd = project.data.prompts.map((p) => p.title);
+
+        await saveToBrowser();
+        return {
+            projectId: project.id,
+            textareaDragBlocked,
+            indicatorBeforeInfo,
+            indicatorAfterLeave,
+            indicatorAfterInfo,
+            indicatorAfterDrop,
+            titlesAfterMoveToEnd,
+            numbersAfterMoveToEnd,
+            dataOrderAfterMoveToEnd,
+        };
+    });
+
+    assert.equal(reorderCheck.textareaDragBlocked, true, 'dragging from textarea should be blocked');
+    assert.equal(reorderCheck.indicatorBeforeInfo.exists, true, 'drop indicator must appear during dragover');
+    assert.equal(reorderCheck.indicatorBeforeInfo.position, 'before');
+    assert.equal(reorderCheck.indicatorBeforeInfo.targetId, 'mp-2');
+    assert.equal(reorderCheck.indicatorBeforeInfo.nextId, 'mp-2');
+    assert.ok(reorderCheck.indicatorBeforeInfo.height > 0, 'drop indicator must have visible height');
+    assert.equal(reorderCheck.indicatorAfterLeave, false, 'drop indicator must be removed on dragleave');
+    assert.equal(reorderCheck.indicatorAfterInfo.exists, true, 'drop indicator must appear at end during dragover');
+    assert.equal(reorderCheck.indicatorAfterInfo.position, 'after');
+    assert.equal(reorderCheck.indicatorAfterInfo.targetId, 'mp-3');
+    assert.equal(reorderCheck.indicatorAfterInfo.prevId, 'mp-3');
+    assert.equal(reorderCheck.indicatorAfterDrop, false, 'drop indicator must be removed after drop');
+    assert.deepEqual(reorderCheck.titlesAfterMoveToEnd, ['Beta Prompt', 'Gamma Prompt', 'Alpha Prompt']);
+    assert.deepEqual(reorderCheck.numbersAfterMoveToEnd, ['1.', '2.', '3.']);
+    assert.deepEqual(reorderCheck.dataOrderAfterMoveToEnd, ['Beta Prompt', 'Gamma Prompt', 'Alpha Prompt']);
+
+    // Reload and verify order survives
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await page.waitForFunction(
+        (id) => window.projects && window.projects.some((p) => p.id === id),
+        { timeout: 15000 },
+        reorderCheck.projectId
+    );
+
+    const collapseAndExportCheck = await page.evaluate(async (projectId) => {
+        switchTab(projectId);
+        const project = projects.find((p) => p.id === projectId);
+        const titlesAfterReload = [...document.querySelectorAll('#moodprompt-container .prompt-title-input')].map((el) => el.value);
+        const numbersAfterReload = [...document.querySelectorAll('#moodprompt-container .prompt-number')].map((el) => el.textContent.trim());
+
+        const collapseAllBtn = document.getElementById('moodprompt-collapse-all-btn');
+        const expandAllBtn = document.getElementById('moodprompt-expand-all-btn');
+        const hasToolbarBtns = !!collapseAllBtn && !!expandAllBtn;
+
+        const bodyStates = () => [...document.querySelectorAll('#moodprompt-container .prompt-card')].map((card) => {
+            const body = card.querySelector('.prompt-body');
+            const title = card.querySelector('.prompt-title-input');
+            return {
+                collapsedClass: card.classList.contains('collapsed'),
+                bodyHidden: body.hidden || getComputedStyle(body).display === 'none',
+                titleVisible: getComputedStyle(title).display !== 'none',
+            };
+        });
+
+        // Collapse all
+        collapseAllBtn.click();
+        const afterCollapseAll = bodyStates();
+        const dataAfterCollapseAll = project.data.prompts.map((p) => !!p.collapsed);
+
+        // Expand all
+        expandAllBtn.click();
+        const afterExpandAll = bodyStates();
+        const dataAfterExpandAll = project.data.prompts.map((p) => !!p.collapsed);
+
+        // Individually collapse card 0 via chevron and card 2 via header click
+        const cards = [...document.querySelectorAll('#moodprompt-container .prompt-card')];
+        cards[0].querySelector('.prompt-collapse-btn').click();
+        cards[2].querySelector('.prompt-header').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+        const afterIndividualToggle = bodyStates();
+        const dataAfterIndividual = project.data.prompts.map((p) => !!p.collapsed);
+
+        // Ensure existing textarea maximize button still works on expanded card 1
+        const maxBtn = cards[1].querySelector('.prompt-body button[title="Expand/Collapse"]');
+        const textarea = cards[1].querySelector('.prompt-text-area');
+        const heightBeforeMax = textarea.style.height;
+        maxBtn.click();
+        const iconAfterMax = maxBtn.innerHTML.includes('minimize-2');
+        maxBtn.click();
+        const heightAfterRestore = textarea.style.height;
+
+        await saveToBrowser();
+        return {
+            titlesAfterReload,
+            numbersAfterReload,
+            hasToolbarBtns,
+            afterCollapseAll,
+            dataAfterCollapseAll,
+            afterExpandAll,
+            dataAfterExpandAll,
+            afterIndividualToggle,
+            dataAfterIndividual,
+            heightBeforeMax,
+            iconAfterMax,
+            heightAfterRestore,
+        };
+    }, reorderCheck.projectId);
+
+    assert.deepEqual(collapseAndExportCheck.titlesAfterReload, ['Beta Prompt', 'Gamma Prompt', 'Alpha Prompt']);
+    assert.deepEqual(collapseAndExportCheck.numbersAfterReload, ['1.', '2.', '3.']);
+    assert.equal(collapseAndExportCheck.hasToolbarBtns, true, 'Collapse all and Expand all buttons must exist');
+    assert.deepEqual(collapseAndExportCheck.dataAfterCollapseAll, [true, true, true]);
+    assert.equal(collapseAndExportCheck.afterCollapseAll.every((s) => s.collapsedClass && s.bodyHidden && s.titleVisible), true, 'Collapse all must hide all bodies and keep titles visible');
+    assert.deepEqual(collapseAndExportCheck.dataAfterExpandAll, [false, false, false]);
+    assert.equal(collapseAndExportCheck.afterExpandAll.every((s) => !s.collapsedClass && !s.bodyHidden && s.titleVisible), true, 'Expand all must show all bodies');
+    assert.deepEqual(collapseAndExportCheck.dataAfterIndividual, [true, false, true]);
+    assert.deepEqual(collapseAndExportCheck.afterIndividualToggle.map((s) => s.bodyHidden), [true, false, true]);
+    assert.equal(collapseAndExportCheck.heightBeforeMax, '150px');
+    assert.equal(collapseAndExportCheck.iconAfterMax, true, 'existing textarea maximize button should still toggle');
+    assert.equal(collapseAndExportCheck.heightAfterRestore, '150px');
+
+    // Reload and verify collapsed state persists, then test .mood export/import
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await page.waitForFunction(
+        (id) => window.projects && window.projects.some((p) => p.id === id),
+        { timeout: 15000 },
+        reorderCheck.projectId
+    );
+
+    const persistedAndImported = await page.evaluate(async (projectId) => {
+        switchTab(projectId);
+        const project = projects.find((p) => p.id === projectId);
+        const reloadedCollapsedData = project.data.prompts.map((p) => !!p.collapsed);
+        const reloadedDomHidden = [...document.querySelectorAll('#moodprompt-container .prompt-card .prompt-body')].map(
+            (b) => b.hidden || getComputedStyle(b).display === 'none'
+        );
+
+        // Export via saveProject() (.mood zip) and re-import via loadFileAsNewTab
+        window.__mpDownloads = [];
+        const origClick = HTMLAnchorElement.prototype.click;
+        const origRevoke = URL.revokeObjectURL;
+        URL.revokeObjectURL = () => {};
+        HTMLAnchorElement.prototype.click = function () {
+            window.__mpDownloads.push({ download: this.download || '', href: this.href || '' });
+        };
+        let exportedJson = '';
+        try {
+            saveProject();
+            for (let i = 0; i < 80 && !window.__mpDownloads.length; i++) {
+                await new Promise((r) => setTimeout(r, 25));
+            }
+            const href = window.__mpDownloads.at(-1) && window.__mpDownloads.at(-1).href;
+            const buf = await (await fetch(href)).arrayBuffer();
+            const zip = await window.JSZip.loadAsync(buf);
+            const entry = Object.keys(zip.files).find((k) => k.endsWith('data.json'));
+            exportedJson = entry ? await zip.files[entry].async('string') : '';
+        } finally {
+            HTMLAnchorElement.prototype.click = origClick;
+            URL.revokeObjectURL = origRevoke;
+        }
+
+        loadFileAsNewTab(exportedJson, 'MoodpromptRoundtrip.mood');
+        const importedProject = projects.find((p) => p.id === activeProjectId);
+        const importedTitles = importedProject.data.prompts.map((p) => p.title);
+        const importedCollapsedData = importedProject.data.prompts.map((p) => !!p.collapsed);
+        const importedDomHidden = [...document.querySelectorAll('#moodprompt-container .prompt-card .prompt-body')].map(
+            (b) => b.hidden || getComputedStyle(b).display === 'none'
+        );
+
+        return {
+            reloadedCollapsedData,
+            reloadedDomHidden,
+            importedTitles,
+            importedCollapsedData,
+            importedDomHidden,
+        };
+    }, reorderCheck.projectId);
+
+    assert.deepEqual(persistedAndImported.reloadedCollapsedData, [true, false, true]);
+    assert.deepEqual(persistedAndImported.reloadedDomHidden, [true, false, true]);
+    assert.deepEqual(persistedAndImported.importedTitles, ['Beta Prompt', 'Gamma Prompt', 'Alpha Prompt']);
+    assert.deepEqual(persistedAndImported.importedCollapsedData, [true, false, true]);
+    assert.deepEqual(persistedAndImported.importedDomHidden, [true, false, true]);
+
+    console.log('Moodprompt drag-and-drop reorder and collapse/expand passed.');
+}
+
+async function assertMoodlistItemWrappingAndClamp(page) {
+    console.log('Testing Moodlist item wrapping, 4-line clamp, Show more/Show less, and focus/blur edit...');
+    await page.setViewport({ width: 1280, height: 800, deviceScaleFactor: 1, isMobile: false, hasTouch: false });
+
+    const longText = [
+        'Long checklist item with an unbroken token',
+        'superlongunbrokentoken_'.repeat(6),
+        'and several detailed sentences so that the item wraps across well over four visible lines inside the moodlist card body when rendered on screen.',
+        'Second sentence adding more wrapped content to verify four-line clamping and expansion.',
+        'Third sentence ensuring at least eight wrapped lines in standard desktop card width.',
+    ].join(' ');
+
+    const initial = await page.evaluate((longItemText) => {
+        createNewProject('moodlist');
+        const project = projects.find((p) => p.id === activeProjectId);
+        project.data.cards = [{
+            id: 'ml-wrap-card',
+            title: 'Wrap Test Card',
+            color: '',
+            pinned: false,
+            image: null,
+            items: [
+                { id: 'ml-short-item', text: 'Short item', checked: false },
+                { id: 'ml-long-item', text: longItemText, checked: false },
+            ],
+        }];
+        renderMoodlistView(project);
+
+        const rows = [...document.querySelectorAll('#moodlist-container .ml-card-item')];
+        const shortRow = rows[0];
+        const longRow = rows[1];
+        const shortField = shortRow.querySelector('.ml-card-item-text');
+        const longField = longRow.querySelector('.ml-card-item-text');
+        const shortMore = shortRow.querySelector('.ml-card-item-more');
+        const longMore = longRow.querySelector('.ml-card-item-more');
+
+        const cs = getComputedStyle(longField);
+        const lineHeight = parseFloat(cs.lineHeight);
+        const shortMoreVisible = !!shortMore && !shortMore.hidden && getComputedStyle(shortMore).display !== 'none';
+        const longMoreVisible = !!longMore && !longMore.hidden && getComputedStyle(longMore).display !== 'none' && longMore.getBoundingClientRect().height > 0;
+
+        return {
+            projectId: project.id,
+            tagName: longField.tagName,
+            overflowWrap: cs.overflowWrap,
+            lineHeight,
+            shortClientHeight: shortField.clientHeight,
+            shortMoreVisible,
+            longClientHeight: longField.clientHeight,
+            longScrollHeight: longField.scrollHeight,
+            longMoreVisible,
+            longMoreText: longMore ? longMore.textContent.trim() : '',
+        };
+    }, longText);
+
+    assert.equal(initial.overflowWrap, 'anywhere', 'long item text should have overflow-wrap: anywhere');
+    assert.equal(initial.shortMoreVisible, false, 'short item must not show Show more toggle');
+    assert.ok(initial.shortClientHeight <= initial.lineHeight * 1.6, `short item height (${initial.shortClientHeight}) should be ~1 line (${initial.lineHeight})`);
+    assert.equal(initial.longMoreVisible, true, 'long item must show Show more toggle');
+    assert.equal(initial.longMoreText, 'Show more');
+    assert.ok(
+        Math.abs(initial.longClientHeight - initial.lineHeight * 4) <= 6,
+        `long item clientHeight (${initial.longClientHeight}) should be ~4 lines (${initial.lineHeight * 4})`
+    );
+    assert.ok(
+        initial.longScrollHeight > initial.longClientHeight + initial.lineHeight,
+        `long item scrollHeight (${initial.longScrollHeight}) should exceed clamped clientHeight (${initial.longClientHeight})`
+    );
+
+    // Click "Show more" -> full height and "Show less"
+    const afterExpand = await page.evaluate(() => {
+        const rows = [...document.querySelectorAll('#moodlist-container .ml-card-item')];
+        const shortRow = rows[0];
+        const longRow = rows[1];
+        const longField = longRow.querySelector('.ml-card-item-text');
+        const longMore = longRow.querySelector('.ml-card-item-more');
+        const shortMore = shortRow.querySelector('.ml-card-item-more');
+        longMore.click();
+        return {
+            longClientHeight: longField.clientHeight,
+            longScrollHeight: longField.scrollHeight,
+            longMoreText: longMore.textContent.trim(),
+            shortMoreVisible: !!shortMore && !shortMore.hidden && getComputedStyle(shortMore).display !== 'none',
+            checked: longRow.classList.contains('checked'),
+        };
+    });
+
+    assert.equal(afterExpand.longMoreText, 'Show less', 'expanded item toggle should read Show less');
+    assert.ok(afterExpand.longClientHeight > initial.longClientHeight + initial.lineHeight, 'expanded height must exceed clamped height');
+    assert.ok(
+        afterExpand.longScrollHeight <= afterExpand.longClientHeight + 1,
+        `expanded item should show full text (scrollHeight=${afterExpand.longScrollHeight}, clientHeight=${afterExpand.longClientHeight})`
+    );
+    assert.equal(afterExpand.shortMoreVisible, false, 'expanding long item must not affect short item');
+    assert.equal(afterExpand.checked, false, 'clicking Show more must not toggle item checked state');
+
+    // Click "Show less" -> clamped again and "Show more"
+    const afterCollapse = await page.evaluate(() => {
+        const longRow = document.querySelectorAll('#moodlist-container .ml-card-item')[1];
+        const longField = longRow.querySelector('.ml-card-item-text');
+        const longMore = longRow.querySelector('.ml-card-item-more');
+        longMore.click();
+        return {
+            longClientHeight: longField.clientHeight,
+            longScrollHeight: longField.scrollHeight,
+            longMoreText: longMore.textContent.trim(),
+        };
+    });
+
+    assert.equal(afterCollapse.longMoreText, 'Show more', 'collapsed item toggle should read Show more');
+    assert.ok(
+        Math.abs(afterCollapse.longClientHeight - initial.longClientHeight) <= 2,
+        `collapsed clientHeight (${afterCollapse.longClientHeight}) should return to clamped height (${initial.longClientHeight})`
+    );
+    assert.ok(afterCollapse.longScrollHeight > afterCollapse.longClientHeight + initial.lineHeight);
+
+    // Focusing the long item shows full text (scrollHeight <= clientHeight + 1) and editing saves after blur/reload
+    const editedText = `${longText} Edited tail value.`;
+    const focusAndEdit = await page.evaluate((nextText) => {
+        const longRow = document.querySelectorAll('#moodlist-container .ml-card-item')[1];
+        const longField = longRow.querySelector('.ml-card-item-text');
+        longField.focus();
+        const focusedClientHeight = longField.clientHeight;
+        const focusedScrollHeight = longField.scrollHeight;
+
+        longField.value = nextText;
+        longField.dispatchEvent(new Event('input', { bubbles: true }));
+        const editedScrollHeight = longField.scrollHeight;
+        const editedClientHeight = longField.clientHeight;
+
+        longField.blur();
+        const blurredClientHeight = longField.clientHeight;
+        const blurredScrollHeight = longField.scrollHeight;
+
+        return {
+            focusedClientHeight,
+            focusedScrollHeight,
+            editedClientHeight,
+            editedScrollHeight,
+            blurredClientHeight,
+            blurredScrollHeight,
+        };
+    }, editedText);
+
+    assert.ok(
+        focusAndEdit.focusedScrollHeight <= focusAndEdit.focusedClientHeight + 1,
+        `focusing long item must show full text (scrollHeight=${focusAndEdit.focusedScrollHeight}, clientHeight=${focusAndEdit.focusedClientHeight})`
+    );
+    assert.ok(
+        focusAndEdit.editedScrollHeight <= focusAndEdit.editedClientHeight + 1,
+        `editing long item must auto-grow to full text while focused (scrollHeight=${focusAndEdit.editedScrollHeight}, clientHeight=${focusAndEdit.editedClientHeight})`
+    );
+    assert.ok(
+        Math.abs(focusAndEdit.blurredClientHeight - initial.longClientHeight) <= 2,
+        `blurring long item must clamp it back to 4 lines (${focusAndEdit.blurredClientHeight} vs ${initial.longClientHeight})`
+    );
+
+    await page.waitForFunction(
+        async (expected) => {
+            const saved = await window.localforage.getItem('moodinfinite_projects');
+            return JSON.stringify(saved || []).includes(expected);
+        },
+        { timeout: 8000 },
+        'Edited tail value.'
+    );
+
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await page.waitForFunction(
+        (id) => window.projects && window.projects.some((p) => p.id === id),
+        { timeout: 15000 },
+        initial.projectId
+    );
+
+    const afterReload = await page.evaluate((projectId) => {
+        switchTab(projectId);
+        const project = projects.find((p) => p.id === projectId);
+        const rows = [...document.querySelectorAll('#moodlist-container .ml-card-item')];
+        const longRow = rows[1];
+        const longField = longRow.querySelector('.ml-card-item-text');
+        const longMore = longRow.querySelector('.ml-card-item-more');
+        return {
+            storedText: project.data.cards[0].items[1].text,
+            domValue: longField.value,
+            longClientHeight: longField.clientHeight,
+            longScrollHeight: longField.scrollHeight,
+            longMoreVisible: !!longMore && !longMore.hidden && getComputedStyle(longMore).display !== 'none',
+            longMoreText: longMore ? longMore.textContent.trim() : '',
+        };
+    }, initial.projectId);
+
+    assert.equal(afterReload.storedText, editedText, 'edited item text must persist in project data after reload');
+    assert.equal(afterReload.domValue, editedText, 'edited item text must render in DOM after reload');
+    assert.equal(afterReload.longMoreVisible, true, 'clamped long item must still show Show more after reload');
+    assert.equal(afterReload.longMoreText, 'Show more');
+    assert.ok(
+        Math.abs(afterReload.longClientHeight - initial.longClientHeight) <= 4,
+        `reloaded long item should be clamped to ~4 lines (${afterReload.longClientHeight})`
+    );
+    assert.ok(afterReload.longScrollHeight > afterReload.longClientHeight + initial.lineHeight);
+
+    console.log('Moodlist item wrapping and clamp passed.');
+}
+
+async function assertPinnedTabContextMenuHidesRename(page) {
+    console.log('Testing pinned tab context menu hides Rename...');
+    await page.setViewport({ width: 1280, height: 800, deviceScaleFactor: 1, isMobile: false, hasTouch: false });
+
+    const menuState = await page.evaluate(() => {
+        createNewProject('moodinfinite');
+        const firstBoard = projects.find((p) => p.id === activeProjectId);
+        firstBoard.name = 'Board To Pin';
+        firstBoard.pinned = false;
+
+        createNewProject('moodinfinite');
+        const secondBoard = projects.find((p) => p.id === activeProjectId);
+        secondBoard.name = 'Board To Rename';
+        secondBoard.pinned = false;
+
+        renderTabs();
+
+        // Pin firstBoard through the context menu (#pin-tab-btn)
+        const firstTabBeforePin = document.querySelector(`#tabs-list .tab-item[data-id="${firstBoard.id}"]`);
+        firstTabBeforePin.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 160, clientY: 24 }));
+        document.getElementById('pin-tab-btn').click();
+
+        // Open context menu on pinned tab -> #rename-tab-btn not visible
+        const pinnedTab = document.querySelector(`#tabs-list .tab-item[data-id="${firstBoard.id}"]`);
+        pinnedTab.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 160, clientY: 24 }));
+        const renameBtn = document.getElementById('rename-tab-btn');
+        const pinnedRenameStyleDisplay = renameBtn.style.display;
+        const pinnedRenameComputedDisplay = getComputedStyle(renameBtn).display;
+        const pinnedRenameVisible = pinnedRenameComputedDisplay !== 'none' && renameBtn.offsetParent !== null;
+
+        // Open context menu on unpinned tab -> #rename-tab-btn visible and clicking it shows input
+        const unpinnedTab = document.querySelector(`#tabs-list .tab-item[data-id="${secondBoard.id}"]`);
+        unpinnedTab.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 220, clientY: 24 }));
+        const unpinnedRenameStyleDisplay = renameBtn.style.display;
+        const unpinnedRenameComputedDisplay = getComputedStyle(renameBtn).display;
+        const unpinnedRenameVisible = unpinnedRenameComputedDisplay !== 'none' && renameBtn.getBoundingClientRect().height > 0;
+
+        renameBtn.click();
+        const nameInput = unpinnedTab.querySelector('.tab-name-input');
+        const nameSpan = unpinnedTab.querySelector('.tab-name');
+        const inputVisible = nameInput.style.display === 'block' && getComputedStyle(nameInput).display !== 'none';
+        const spanHidden = nameSpan.style.display === 'none';
+        const inputFocused = document.activeElement === nameInput;
+
+        return {
+            firstId: firstBoard.id,
+            secondId: secondBoard.id,
+            firstPinned: !!firstBoard.pinned && pinnedTab.classList.contains('pinned'),
+            pinnedRenameStyleDisplay,
+            pinnedRenameComputedDisplay,
+            pinnedRenameVisible,
+            unpinnedRenameStyleDisplay,
+            unpinnedRenameComputedDisplay,
+            unpinnedRenameVisible,
+            inputVisible,
+            spanHidden,
+            inputFocused,
+        };
+    });
+
+    assert.equal(menuState.firstPinned, true, 'first board should be pinned via #pin-tab-btn');
+    assert.equal(menuState.pinnedRenameStyleDisplay, 'none', '#rename-tab-btn style.display must be none on pinned tab');
+    assert.equal(menuState.pinnedRenameComputedDisplay, 'none', '#rename-tab-btn computed display must be none on pinned tab');
+    assert.equal(menuState.pinnedRenameVisible, false, '#rename-tab-btn must not be visible on pinned tab');
+    assert.equal(menuState.unpinnedRenameStyleDisplay, '', '#rename-tab-btn style.display must be restored on unpinned tab');
+    assert.equal(menuState.unpinnedRenameVisible, true, '#rename-tab-btn must be visible on unpinned tab');
+    assert.equal(menuState.inputVisible, true, 'clicking #rename-tab-btn on unpinned tab must show .tab-name-input');
+    assert.equal(menuState.spanHidden, true, 'clicking #rename-tab-btn on unpinned tab must hide .tab-name');
+    assert.equal(menuState.inputFocused, true, 'clicking #rename-tab-btn on unpinned tab must focus .tab-name-input');
+
+    const newTabName = 'Renamed Unpinned Board';
+    await page.keyboard.type(newTabName);
+    await page.keyboard.press('Enter');
+
+    const afterRename = await page.evaluate((id) => {
+        const project = projects.find((p) => p.id === id);
+        const tab = document.querySelector(`#tabs-list .tab-item[data-id="${id}"]`);
+        const nameSpan = tab.querySelector('.tab-name');
+        const nameInput = tab.querySelector('.tab-name-input');
+        return {
+            projectName: project ? project.name : '',
+            spanText: nameSpan ? nameSpan.textContent : '',
+            tabTitle: tab ? tab.title : '',
+            inputDisplay: nameInput ? nameInput.style.display : '',
+            spanDisplay: nameSpan ? nameSpan.style.display : '',
+        };
+    }, menuState.secondId);
+
+    assert.equal(afterRename.projectName, newTabName, 'typing and pressing Enter must update project.name');
+    assert.equal(afterRename.spanText, newTabName, 'typing and pressing Enter must update .tab-name text');
+    assert.equal(afterRename.tabTitle, newTabName, 'typing and pressing Enter must update .tab-item title');
+    assert.equal(afterRename.inputDisplay, 'none', '.tab-name-input must hide after Enter');
+    assert.equal(afterRename.spanDisplay, '', '.tab-name must be restored after Enter');
+
+    console.log('Pinned tab context menu hides Rename passed.');
+}
+
+async function assertStoryflowMinimapStatusLights(page) {
+    console.log('Testing Storyflow minimap status lights...');
+    await page.setViewport({ width: 1280, height: 800, deviceScaleFactor: 1, isMobile: false, hasTouch: false });
+
+    const readMinimapState = () => page.evaluate(() => {
+        const frames = [...document.querySelectorAll('#storyflow-minimap-track .minimap-frame')];
+        return frames.map((miniframe) => {
+            const group = miniframe.querySelector('.minimap-status-lights');
+            const thumb = miniframe.querySelector('.minimap-frame-thumb');
+            const lights = group ? [...group.querySelectorAll('.minimap-status-light')] : [];
+            const thumbRect = thumb ? thumb.getBoundingClientRect() : null;
+            const groupRect = group ? group.getBoundingClientRect() : null;
+            const afterBg = getComputedStyle(miniframe, '::after').backgroundColor;
+            return {
+                classes: [...miniframe.classList],
+                afterBg,
+                groupRole: group ? group.getAttribute('role') : null,
+                groupAriaLabel: group ? group.getAttribute('aria-label') : null,
+                belowThumb: !!(thumbRect && groupRect && groupRect.top >= thumbRect.bottom - 1),
+                lights: lights.map((light) => {
+                    const style = getComputedStyle(light);
+                    return {
+                        classes: [...light.classList],
+                        status: light.dataset.status,
+                        ariaLabel: light.getAttribute('aria-label'),
+                        title: light.getAttribute('title'),
+                        text: light.textContent,
+                        bg: style.backgroundColor,
+                        opacity: parseFloat(style.opacity),
+                        radius: style.borderRadius,
+                        boxShadow: style.boxShadow,
+                    };
+                }),
+            };
+        });
+    });
+
+    await page.evaluate(() => {
+        createNewProject('storyflow');
+        const project = projects.find((p) => p.id === activeProjectId);
+        project.data.frames = [
+            { id: 'sf-1', title: 'Frame 1', image: null, description: '', meta: { duration: '3s', camera: '', audio: '', artist: '', status: 'approved' } },
+            { id: 'sf-2', title: 'Frame 2', image: null, description: '', meta: { duration: '3s', camera: '', audio: '', artist: '', status: 'wip' } },
+            { id: 'sf-3', title: 'Frame 3', image: null, description: '', meta: { duration: '3s', camera: '', audio: '', artist: '' } },
+        ];
+        renderStoryflowView(project);
+    });
+
+    const initial = await readMinimapState();
+    assert.equal(initial.length, 3, 'expected 3 minimap frames');
+
+    // Existing status classes and tint overlay remain on .minimap-frame
+    assert.ok(initial[0].classes.includes('status-approved'), 'frame 0 must keep status-approved on .minimap-frame');
+    assert.ok(!initial[0].classes.includes('status-wip'), 'frame 0 must not have status-wip');
+    assert.ok(initial[1].classes.includes('status-wip'), 'frame 1 must keep status-wip on .minimap-frame');
+    assert.ok(!initial[1].classes.includes('status-approved'), 'frame 1 must not have status-approved');
+    assert.ok(initial[2].classes.includes('status-not-started'), 'frame 2 must keep status-not-started on .minimap-frame');
+    assert.ok(!initial[2].classes.includes('status-approved') && !initial[2].classes.includes('status-wip'), 'frame 2 must not have approved or wip class');
+
+    for (let i = 0; i < 3; i++) {
+        assert.equal(initial[i].groupRole, 'group', `frame ${i} status lights container must have role="group"`);
+        assert.equal(initial[i].groupAriaLabel, 'Status', `frame ${i} status lights container must have aria-label="Status"`);
+        assert.equal(initial[i].belowThumb, true, `frame ${i} status lights must sit below the thumbnail`);
+        assert.equal(initial[i].lights.length, 2, `frame ${i} must have 2 status lights`);
+        for (const light of initial[i].lights) {
+            assert.equal(light.text, '', 'status light must be colour only with no visible text');
+            assert.equal(light.radius, '50%', 'status light must be round');
+            assert.notEqual(light.boxShadow, 'none', 'status light must have a box-shadow ring');
+        }
+    }
+
+    // Frame 0: approved on, wip off
+    assert.ok(initial[0].lights[0].classes.includes('on') && initial[0].lights[0].classes.includes('is-on'), 'frame 0 approved light must have on class');
+    assert.ok(!initial[0].lights[0].classes.includes('off'), 'frame 0 approved light must not have off class');
+    assert.equal(initial[0].lights[0].ariaLabel, 'Approved: on');
+    assert.equal(initial[0].lights[0].title, 'Approved: on');
+    assert.equal(initial[0].lights[0].bg, 'rgb(212, 163, 89)');
+    assert.ok(initial[0].lights[1].classes.includes('off') && initial[0].lights[1].classes.includes('is-off'), 'frame 0 wip light must have off class');
+    assert.equal(initial[0].lights[1].ariaLabel, 'WIP: off');
+    assert.equal(initial[0].lights[1].title, 'WIP: off');
+
+    // Frame 1: approved off, wip on
+    assert.ok(initial[1].lights[0].classes.includes('off') && initial[1].lights[0].classes.includes('is-off'), 'frame 1 approved light must have off class');
+    assert.equal(initial[1].lights[0].ariaLabel, 'Approved: off');
+    assert.equal(initial[1].lights[0].title, 'Approved: off');
+    assert.ok(initial[1].lights[1].classes.includes('on') && initial[1].lights[1].classes.includes('is-on'), 'frame 1 wip light must have on class');
+    assert.ok(!initial[1].lights[1].classes.includes('off'), 'frame 1 wip light must not have off class');
+    assert.equal(initial[1].lights[1].ariaLabel, 'WIP: on');
+    assert.equal(initial[1].lights[1].title, 'WIP: on');
+    assert.equal(initial[1].lights[1].bg, 'rgb(37, 137, 189)');
+
+    // Frame 2: both off
+    assert.ok(initial[2].lights[0].classes.includes('off') && initial[2].lights[0].classes.includes('is-off'), 'frame 2 approved light must have off class');
+    assert.equal(initial[2].lights[0].ariaLabel, 'Approved: off');
+    assert.ok(initial[2].lights[1].classes.includes('off') && initial[2].lights[1].classes.includes('is-off'), 'frame 2 wip light must have off class');
+    assert.equal(initial[2].lights[1].ariaLabel, 'WIP: off');
+
+    // Toggle statuses via card toggle buttons:
+    // Frame 0: click WIP -> becomes wip
+    // Frame 1: click WIP -> becomes none
+    // Frame 2: click Approved -> becomes approved
+    await page.evaluate(() => {
+        const cards = () => [...document.querySelectorAll('#storyflow-scroll-area .story-card')];
+        // Toggle frame 0 to WIP (second .story-toggle-btn in card 0)
+        cards()[0].querySelectorAll('.story-toggle-btn')[1].click();
+        // Toggle frame 1 off WIP (second .story-toggle-btn in card 1)
+        cards()[1].querySelectorAll('.story-toggle-btn')[1].click();
+        // Toggle frame 2 to Approved (first .story-toggle-btn in card 2)
+        cards()[2].querySelectorAll('.story-toggle-btn')[0].click();
+    });
+
+    const afterToggle = await readMinimapState();
+    assert.equal(afterToggle.length, 3);
+
+    // Frame 0 is now wip
+    assert.ok(afterToggle[0].classes.includes('status-wip'), 'frame 0 must update to status-wip on .minimap-frame');
+    assert.ok(!afterToggle[0].classes.includes('status-approved'), 'frame 0 must drop status-approved');
+    assert.ok(afterToggle[0].lights[0].classes.includes('off'), 'frame 0 approved light must now be off');
+    assert.equal(afterToggle[0].lights[0].ariaLabel, 'Approved: off');
+    assert.ok(afterToggle[0].lights[1].classes.includes('on'), 'frame 0 wip light must now be on');
+    assert.equal(afterToggle[0].lights[1].ariaLabel, 'WIP: on');
+
+    // Frame 1 is now none
+    assert.ok(afterToggle[1].classes.includes('status-not-started'), 'frame 1 must update to status-not-started');
+    assert.ok(!afterToggle[1].classes.includes('status-wip'), 'frame 1 must drop status-wip');
+    assert.ok(afterToggle[1].lights[0].classes.includes('off'), 'frame 1 approved light must be off');
+    assert.equal(afterToggle[1].lights[0].ariaLabel, 'Approved: off');
+    assert.ok(afterToggle[1].lights[1].classes.includes('off'), 'frame 1 wip light must now be off');
+    assert.equal(afterToggle[1].lights[1].ariaLabel, 'WIP: off');
+
+    // Frame 2 is now approved
+    assert.ok(afterToggle[2].classes.includes('status-approved'), 'frame 2 must update to status-approved on .minimap-frame');
+    assert.ok(afterToggle[2].lights[0].classes.includes('on'), 'frame 2 approved light must now be on');
+    assert.equal(afterToggle[2].lights[0].ariaLabel, 'Approved: on');
+    assert.ok(afterToggle[2].lights[1].classes.includes('off'), 'frame 2 wip light must be off');
+    assert.equal(afterToggle[2].lights[1].ariaLabel, 'WIP: off');
+
+    console.log('Storyflow minimap status lights passed.');
 }
 
 async function assertDesktopNarrowTopbar(page) {
