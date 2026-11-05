@@ -1,0 +1,20 @@
+{
+  "version": 1,
+  "task": "generate",
+  "name": "MOSS-Image",
+  "description": "Texto a imagen (oficial: MOSS-Image Text to Image). Requiere ComfyUI 0.42.0 o superior.",
+  "template": "image_moss_image_t2i",
+  "minComfyVersion": "0.42.0",
+  "docs": "https://github.com/Comfy-Org/workflow_templates",
+  "sizeStep": 16,
+  "defaults": {
+    "width": 1024,
+    "height": 1024
+  },
+  "alternatives": {
+    "18:2.clip_name": [
+      "qwen3.5_9b_w4a8_gptq.safetensors",
+      "qwen3.5_9b_int8_convrot.safetensors"
+    ]
+  }
+}

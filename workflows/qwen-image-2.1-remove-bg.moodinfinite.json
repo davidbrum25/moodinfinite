@@ -1,0 +1,18 @@
+{
+  "version": 1,
+  "task": "removeBg",
+  "name": "Qwen Image 2.1 Quitar fondo (Turbo)",
+  "description": "Quita el fondo de la imagen seleccionada (basado en Remove Background: Qwen Image 2.1, con el modelo Turbo).",
+  "template": "image_qwen_image_2_1_background_removal",
+  "docs": "https://docs.comfy.org/tutorials/image/qwen/qwen-image-2-1",
+  "fixedPrompt": "Remove the background, and output a PNG image",
+  "alternatives": {
+    "459:451.unet_name": [
+      "qwen_image_2.1_turbo_int8_convrot.safetensors"
+    ],
+    "459:453.clip_name": [
+      "qwen3vl_8b_int8_convrot.safetensors",
+      "qwen3vl_8b_w4a8.safetensors"
+    ]
+  }
+}

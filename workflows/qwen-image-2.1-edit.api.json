@@ -1,0 +1,225 @@
+{
+  "461": {
+    "inputs": {
+      "filename_prefix": "moodinfinite/qwen_edit",
+      "format": "png",
+      "format.bit_depth": "8-bit",
+      "format.input_color_space": "sRGB",
+      "images": [
+        "459:457",
+        0
+      ]
+    },
+    "class_type": "SaveImageAdvanced",
+    "_meta": {
+      "title": "MI_OUTPUT",
+      "cnr_id": "comfy-core",
+      "ver": "0.43.0"
+    }
+  },
+  "470": {
+    "inputs": {
+      "image": "example.png"
+    },
+    "class_type": "LoadImage",
+    "_meta": {
+      "title": "MI_IMAGE_IN",
+      "cnr_id": "comfy-core",
+      "ver": "0.43.0"
+    }
+  },
+  "459:451": {
+    "inputs": {
+      "unet_name": "qwen_image_2.1_turbo_int8_convrot.safetensors",
+      "weight_dtype": "default"
+    },
+    "class_type": "UNETLoader",
+    "_meta": {
+      "title": "Load Diffusion Model",
+      "cnr_id": "comfy-core",
+      "ver": "0.43.0"
+    }
+  },
+  "459:453": {
+    "inputs": {
+      "clip_name": "qwen3vl_8b_int8_convrot.safetensors",
+      "type": "qwen_image",
+      "device": "default"
+    },
+    "class_type": "CLIPLoader",
+    "_meta": {
+      "title": "Load CLIP",
+      "cnr_id": "comfy-core",
+      "ver": "0.43.0"
+    }
+  },
+  "459:454": {
+    "inputs": {
+      "vae_name": "qwen_image_2.1_vae_bf16.safetensors"
+    },
+    "class_type": "VAELoader",
+    "_meta": {
+      "title": "Load VAE",
+      "cnr_id": "comfy-core",
+      "ver": "0.43.0"
+    }
+  },
+  "459:456": {
+    "inputs": {
+      "width": 1024,
+      "height": 1024,
+      "batch_size": 1
+    },
+    "class_type": "EmptyLatentImage",
+    "_meta": {
+      "title": "Empty Latent Image",
+      "cnr_id": "comfy-core",
+      "ver": "0.43.0"
+    }
+  },
+  "459:457": {
+    "inputs": {
+      "samples": [
+        "459:505",
+        0
+      ],
+      "vae": [
+        "459:454",
+        0
+      ]
+    },
+    "class_type": "VAEDecode",
+    "_meta": {
+      "title": "VAE Decode",
+      "cnr_id": "comfy-core",
+      "ver": "0.43.0"
+    }
+  },
+  "459:469": {
+    "inputs": {
+      "device": "auto",
+      "dtype": "default",
+      "model": [
+        "459:451",
+        0
+      ]
+    },
+    "class_type": "QwenImage21Cache",
+    "_meta": {
+      "title": "Qwen Image 2.1 Cache",
+      "cnr_id": "comfy-core",
+      "ver": "0.43.0"
+    }
+  },
+  "459:474": {
+    "inputs": {
+      "prompt": "",
+      "negative_prompt": "",
+      "resolution": 0,
+      "clip": [
+        "459:453",
+        0
+      ],
+      "images.image_1": [
+        "470",
+        0
+      ],
+      "vae": [
+        "459:454",
+        0
+      ]
+    },
+    "class_type": "TextEncodeQwenImage21",
+    "_meta": {
+      "title": "MI_PROMPT",
+      "cnr_id": "comfy-core",
+      "ver": "0.43.0"
+    }
+  },
+  "459:502": {
+    "inputs": {
+      "sigmas": "1.0, 0.978453, 0.95418, 0.926626, 0.89508, 0.845148, 0.704534, 0.414568, 0"
+    },
+    "class_type": "ManualSigmas",
+    "_meta": {
+      "title": "Manual Sigmas (Qwen-Image-2.1-Turbo 8-step schedule)",
+      "cnr_id": "comfy-core",
+      "ver": "0.43.0"
+    }
+  },
+  "459:503": {
+    "inputs": {
+      "sampler_name": "euler"
+    },
+    "class_type": "KSamplerSelect",
+    "_meta": {
+      "title": "KSampler Select (euler)",
+      "cnr_id": "comfy-core",
+      "ver": "0.43.0"
+    }
+  },
+  "459:504": {
+    "inputs": {
+      "noise_seed": 0
+    },
+    "class_type": "RandomNoise",
+    "_meta": {
+      "title": "MI_SEED",
+      "cnr_id": "comfy-core",
+      "ver": "0.43.0"
+    }
+  },
+  "459:505": {
+    "inputs": {
+      "noise": [
+        "459:504",
+        0
+      ],
+      "guider": [
+        "459:507",
+        0
+      ],
+      "sampler": [
+        "459:503",
+        0
+      ],
+      "sigmas": [
+        "459:502",
+        0
+      ],
+      "latent_image": [
+        "459:474",
+        2
+      ]
+    },
+    "class_type": "SamplerCustomAdvanced",
+    "_meta": {
+      "title": "Sampler Custom Advanced",
+      "cnr_id": "comfy-core",
+      "ver": "0.43.0"
+    }
+  },
+  "459:507": {
+    "inputs": {
+      "cfg": 1,
+      "model": [
+        "459:469",
+        0
+      ],
+      "positive": [
+        "459:474",
+        0
+      ],
+      "negative": [
+        "459:474",
+        1
+      ]
+    },
+    "class_type": "CFGGuider",
+    "_meta": {
+      "title": "CFG Guider",
+      "cnr_id": "comfy-core",
+      "ver": "0.43.0"
+    }
+  }
+}

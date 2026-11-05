@@ -255,6 +255,9 @@
                 <button id="add-image-btn" title="Add Image (I)" aria-label="Add Image (I)" class="tool-button">
                     <iconify-icon icon="lucide:image" width="20" height="20"></iconify-icon>
                 </button>
+                <button id="ai-generate-btn" title="Generar con IA (G)" aria-label="Generar con IA (G)" class="tool-button">
+                    <iconify-icon icon="lucide:sparkles" width="20" height="20"></iconify-icon>
+                </button>
                 <!-- Video Tools Group -->
                 <div class="tool-group">
                     <button id="add-video-btn" title="Add Video" aria-label="Add Video" class="tool-button">
@@ -924,6 +927,10 @@
             </div>
         </div>
 
+        <button id="cloud-menu-settings" class="cloud-menu-item">
+            <iconify-icon icon="lucide:settings" width="16" height="16"></iconify-icon>
+            Configurar ComfyUI
+        </button>
         <div class="cloud-menu-divider"></div>
         <!-- Storage meter -->
         <div id="cloud-menu-storage" class="cloud-menu-storage" style="display:none;"></div>
@@ -993,6 +1000,8 @@
                 to...</span><iconify-icon icon="lucide:share-2" width="18" height="18"></iconify-icon></div>
         <div class="menu-item" id="copy-for-moodlist-btn" style="display:none"><span class="menu-label">Copy for Moodlist</span><iconify-icon icon="lucide:copy" width="18" height="18"></iconify-icon></div>
         <div class="menu-item" id="context-export-selection-btn" style="display:none"><span class="menu-label">Export selection as PNG</span><iconify-icon icon="lucide:download" width="18" height="18"></iconify-icon></div>
+        <button type="button" class="menu-item" id="context-ai-edit-btn" style="display:none"><span class="menu-label">Editar con IA...</span><iconify-icon icon="lucide:sparkles" width="18" height="18"></iconify-icon></button>
+        <button type="button" class="menu-item" id="context-ai-remove-bg-btn" style="display:none"><span class="menu-label">Quitar fondo (IA)</span><iconify-icon icon="lucide:scissors" width="18" height="18"></iconify-icon></button>
         <button type="button" class="menu-item" id="gen-meta-open-btn" style="display:none"><span class="menu-label">Datos de generación</span><iconify-icon icon="lucide:file-text" width="18" height="18"></iconify-icon></button>
         <button type="button" class="menu-item" id="export-share-mood-btn"><span class="menu-label">Exportar para compartir (.mood)</span><iconify-icon icon="lucide:share" width="18" height="18"></iconify-icon></button>
         <div class="border-t my-2" id="delete-separator" style="border-color:var(--border-color)"></div>
@@ -1479,6 +1488,7 @@
     </div>
 
     <script type="module" src="modules/gen-meta.js"></script>
+    <script type="module" src="modules/comfy-ui.js"></script>
     <script src="script.js"></script>
     <script src="modules/moodlist.js"></script>
     <script src="cloud.js"></script>

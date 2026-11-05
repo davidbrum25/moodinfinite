@@ -6328,6 +6328,12 @@ function onContextMenu(e) {
     const genMetaOpenBtn = document.getElementById('gen-meta-open-btn');
     if (genMetaOpenBtn) genMetaOpenBtn.style.display = isImg ? 'flex' : 'none';
 
+    const aiEditBtn = document.getElementById('context-ai-edit-btn');
+    if (aiEditBtn) aiEditBtn.style.display = isImg ? 'flex' : 'none';
+
+    const aiRemoveBgBtn = document.getElementById('context-ai-remove-bg-btn');
+    if (aiRemoveBgBtn) aiRemoveBgBtn.style.display = isImg ? 'flex' : 'none';
+
     const canConnect = selectedItems.length === 1 && !['connector', 'stroke', 'measure'].includes(selectedItems[0].type);
     contextConnectBtn.style.display = canConnect ? 'flex' : 'none';
 
@@ -7225,7 +7231,7 @@ function handleImageFile(file, callback) {
     }
 }
 
-function processFiles(files, worldPos) {
+function processFiles(files, worldPos, explicitGenMeta = null) {
     Array.from(files).forEach((file, index) => {
         if (!file.type.startsWith('image/')) return;
         const bufferPromise = (file.arrayBuffer ? file.arrayBuffer() : Promise.resolve(null)).catch(() => null);
@@ -7259,10 +7265,15 @@ function processFiles(files, worldPos) {
                         scaleX: 1,
                         scaleY: 1
                     };
-                    if (genMeta) item.genMeta = genMeta;
+                    const finalMeta = explicitGenMeta || genMeta;
+                    if (finalMeta) item.genMeta = finalMeta;
                     addItemToLayeredItems(item);
                     bringSelectedToFront();
                 };
+                if (explicitGenMeta) {
+                    finish(explicitGenMeta);
+                    return;
+                }
                 bufferPromise.then((buf) => {
                     if (!buf || !window.GenMeta || typeof window.GenMeta.readGenMetaFromBuffer !== 'function') {
                         finish(null);
@@ -13875,4 +13886,36 @@ function setupGenMetaUi() {
         });
     }
     syncGenMetaSearchVisibility();
+
+    // ComfyUI integration wires
+    const aiGenBtn = document.getElementById('ai-generate-btn');
+    if (aiGenBtn) {
+        aiGenBtn.addEventListener('click', () => {
+            if (window.MoodComfy) window.MoodComfy.openGenerateDialog('generate');
+        });
+    }
+
+    const aiEditBtn = document.getElementById('context-ai-edit-btn');
+    if (aiEditBtn) {
+        aiEditBtn.addEventListener('click', (ev) => {
+            ev.stopPropagation();
+            if (contextMenu) contextMenu.style.display = 'none';
+            const item = selectedItems.length === 1 && selectedItems[0].type === 'image' ? selectedItems[0] : null;
+            if (item && window.MoodComfy) {
+                window.MoodComfy.openGenerateDialog('edit', item);
+            }
+        });
+    }
+
+    const aiRemoveBgBtn = document.getElementById('context-ai-remove-bg-btn');
+    if (aiRemoveBgBtn) {
+        aiRemoveBgBtn.addEventListener('click', (ev) => {
+            ev.stopPropagation();
+            if (contextMenu) contextMenu.style.display = 'none';
+            const item = selectedItems.length === 1 && selectedItems[0].type === 'image' ? selectedItems[0] : null;
+            if (item && window.MoodComfy) {
+                window.MoodComfy.openGenerateDialog('removeBg', item);
+            }
+        });
+    }
 }

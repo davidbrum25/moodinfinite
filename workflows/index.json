@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "defaults": [
+    {
+      "id": "moss-image-t2i",
+      "task": "generate"
+    },
+    {
+      "id": "qwen-image-2.1-edit",
+      "task": "edit"
+    },
+    {
+      "id": "qwen-image-2.1-remove-bg",
+      "task": "removeBg"
+    }
+  ]
+}

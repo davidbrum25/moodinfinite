@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "task": "edit",
+  "name": "Qwen Image 2.1 Edit (Turbo)",
+  "description": "Edita la imagen seleccionada con una instrucción (oficial: Qwen Image 2.1 Turbo Image Edit, 8 pasos).",
+  "template": "image_qwen_image_2_1_turbo_image_edit",
+  "docs": "https://docs.comfy.org/tutorials/image/qwen/qwen-image-2-1",
+  "alternatives": {
+    "459:451.unet_name": [
+      "qwen_image_2.1_turbo_int8_convrot.safetensors"
+    ],
+    "459:453.clip_name": [
+      "qwen3vl_8b_int8_convrot.safetensors",
+      "qwen3vl_8b_w4a8.safetensors"
+    ]
+  }
+}

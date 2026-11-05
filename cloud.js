@@ -1131,6 +1131,12 @@ const CloudSync = (() => {
             openFromDrive();
         });
 
+        // Menu item: ComfyUI Settings
+        document.getElementById('cloud-menu-settings')?.addEventListener('click', () => {
+            document.getElementById('cloud-user-menu')?.classList.remove('open');
+            if (window.MoodComfy) window.MoodComfy.openSettingsDialog();
+        });
+
         // Menu item: Switch account
         document.getElementById('cloud-menu-switch')?.addEventListener('click', () => {
             document.getElementById('cloud-user-menu')?.classList.remove('open');
