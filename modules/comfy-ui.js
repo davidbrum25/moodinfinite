@@ -356,17 +356,6 @@ class MoodComfyUI {
             this.updateUiGeneratingState(false);
             if (window.showToast) window.showToast('Generación cancelada');
         });
-
-        // Global hotkey 'g' to trigger Generate dialog if not inside an input/textarea
-        window.addEventListener('keydown', (e) => {
-            if ((e.key === 'g' || e.key === 'G') && !e.ctrlKey && !e.metaKey && !e.altKey) {
-                const activeTag = document.activeElement ? document.activeElement.tagName.toLowerCase() : '';
-                if (activeTag !== 'input' && activeTag !== 'textarea' && activeTag !== 'select') {
-                    e.preventDefault();
-                    this.openGenerateDialog('generate');
-                }
-            }
-        });
     }
 
     openSettingsDialog() {
@@ -427,48 +416,11 @@ class MoodComfyUI {
     }
 
     async openGenerateDialog(task = 'generate', targetItem = null) {
-        this.activeTask = task;
-        this.targetSelectedImageItem = targetItem;
-
-        const titleEl = document.getElementById('comfy-gen-title');
-        const targetSection = document.getElementById('comfy-target-image-section');
-        const promptSection = document.getElementById('comfy-prompt-section');
-        const sizeGroup = document.getElementById('comfy-size-group');
-        const submitBtnText = document.getElementById('comfy-submit-btn-text');
-
-        // Configure UI according to task
-        if (task === 'generate') {
-            if (titleEl) titleEl.textContent = 'Generar imagen con IA (ComfyUI)';
-            if (submitBtnText) submitBtnText.textContent = 'Generar';
-            if (targetSection) targetSection.style.display = 'none';
-            if (promptSection) promptSection.style.display = 'block';
-            if (sizeGroup) sizeGroup.style.display = 'block';
-            this.setWorkflowSelectValue(this.client.config.activeWorkflowGenerate || 'moss-image-t2i');
-        } else if (task === 'edit') {
-            if (titleEl) titleEl.textContent = 'Editar imagen con IA (ComfyUI)';
-            if (submitBtnText) submitBtnText.textContent = 'Aplicar Edición';
-            if (targetSection) targetSection.style.display = 'block';
-            if (promptSection) promptSection.style.display = 'block';
-            if (sizeGroup) sizeGroup.style.display = 'none'; // size inherited from original image
-            this.setupTargetPreview(targetItem);
-            this.setWorkflowSelectValue(this.client.config.activeWorkflowEdit || 'qwen-image-2.1-edit');
-        } else if (task === 'removeBg') {
-            if (titleEl) titleEl.textContent = 'Quitar fondo con IA (ComfyUI)';
-            if (submitBtnText) submitBtnText.textContent = 'Quitar Fondo';
-            if (targetSection) targetSection.style.display = 'block';
-            if (promptSection) promptSection.style.display = 'none'; // fixed prompt
-            if (sizeGroup) sizeGroup.style.display = 'none';
-            this.setupTargetPreview(targetItem);
-            this.setWorkflowSelectValue(this.client.config.activeWorkflowRemoveBg || 'qwen-image-2.1-remove-bg');
+        if (targetItem && window.ComfyGenNodeManager) {
+            window.ComfyGenNodeManager.createNodeFromImage(targetItem, task);
+        } else if (window.ComfyGenNodeManager) {
+            window.ComfyGenNodeManager.createGenNodeAtCenter();
         }
-
-        const dialog = document.getElementById('comfy-generate-dialog');
-        if (dialog && typeof dialog.showModal === 'function') {
-            dialog.showModal();
-        }
-
-        await this.checkServerStatus();
-        await this.loadWorkflow(document.getElementById('comfy-wf-select')?.value);
     }
 
     setWorkflowSelectValue(val) {

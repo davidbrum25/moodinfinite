@@ -237,6 +237,47 @@ export function injectWorkflowParams(apiWorkflow, mapping, params = {}) {
 }
 
 /**
+ * Auto-adjusts model references in workflow based on available models in objectInfo
+ * and alternatives specified in sidecar.
+ */
+export function autoAdjustWorkflowModels(apiWorkflow, sidecar, objectInfo) {
+    if (!apiWorkflow || !sidecar || !sidecar.alternatives || !objectInfo) return apiWorkflow;
+    const cloned = JSON.parse(JSON.stringify(apiWorkflow));
+
+    for (const [nodeAndKey, candidates] of Object.entries(sidecar.alternatives)) {
+        const [nid, key] = nodeAndKey.split('.');
+        if (!nid || !key || !cloned[nid] || !cloned[nid].inputs) continue;
+        const node = cloned[nid];
+        const cls = node.class_type;
+        const nodeDef = objectInfo[cls];
+        if (!nodeDef) continue;
+
+        const findOptions = (inputs) => {
+            if (inputs && inputs[key] && Array.isArray(inputs[key]) && Array.isArray(inputs[key][0])) {
+                return inputs[key][0];
+            }
+            return null;
+        };
+
+        const available = findOptions(nodeDef.input?.required) || findOptions(nodeDef.input?.optional);
+        if (!available) continue;
+
+        // If current value is not available, check candidates
+        const currentVal = node.inputs[key];
+        if (!available.includes(currentVal)) {
+            for (const cand of candidates) {
+                if (available.includes(cand)) {
+                    node.inputs[key] = cand;
+                    break;
+                }
+            }
+        }
+    }
+
+    return cloned;
+}
+
+/**
  * Validates class_types and model values against ComfyUI /object_info output.
  * Returns { valid: boolean, missingClasses: [], missingModels: [] }
  */

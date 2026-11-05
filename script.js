@@ -55,7 +55,7 @@ function scheduleAutoSave() {
 }
 
 function storageReplacer(key, val) {
-    if (key === 'img' || key === 'video' || key === '_cachedBox' || key === 'iconImage' || key === '_offscreenCanvas' || key === 'isHidden') return undefined;
+    if (key === 'img' || key === 'video' || key === '_cachedBox' || key === 'iconImage' || key === '_offscreenCanvas' || key === 'isHidden' || key === '_runtime' || key === '_domElement') return undefined;
     if (typeof Element !== 'undefined' && val instanceof Element) return undefined;
     if (typeof OffscreenCanvas !== 'undefined' && val instanceof OffscreenCanvas) return undefined;
     return val;
@@ -1862,7 +1862,9 @@ function toggleMobileTabsPopup() {
 // Initial event listeners moved to setupEventListeners()
 
 const canvas = document.getElementById('moodboard-canvas');
+window.canvas = canvas;
 const ctx = canvas.getContext('2d');
+window.ctx = ctx;
 const imageInput = document.getElementById('image-input');
 const videoInput = document.getElementById('video-input');
 const projectInput = document.getElementById('project-input');
@@ -3735,6 +3737,14 @@ function draw() {
             else if (e.type === 'counter') drawCounterItem(ctx, e);
             else if (e.type === 'reroute') drawRerouteItem(ctx, e);
             else if (e.type === 'connector') drawConnectorItem(e);
+            else if (e.type === 'genNode') {
+                // DOM overlay renders interactive node. Only draw fallback to canvas during PNG export.
+                if ((typeof isExportingPng !== 'undefined' && isExportingPng) || (typeof isExportingToPng !== 'undefined' && isExportingToPng) || ctx !== window.ctx) {
+                    if (window.ComfyGenNodeManager) {
+                        window.ComfyGenNodeManager.drawGenNodeOnCanvas(ctx, e);
+                    }
+                }
+            }
 
             ctx.restore();
         } catch (err) {
@@ -3766,23 +3776,34 @@ function draw() {
     }
 
     if (hoveredItem && (!isDragging || (typeof isDraggingConnector !== 'undefined' && isDraggingConnector))) {
-        const ports = getItemPorts(hoveredItem);
-        ports.forEach(p => {
-            ctx.beginPath();
-            ctx.arc(p.x, p.y, 6 / cameraZoom, 0, Math.PI * 2);
-            ctx.fillStyle = canvasBackgroundColor;
-            ctx.fill();
-            ctx.lineWidth = 2 / cameraZoom;
-            ctx.strokeStyle = accentColor;
-            ctx.stroke();
-        });
+        // GenNodes have square ports on their DOM element, so skip drawing default canvas circles
+        if (hoveredItem.type !== 'genNode') {
+            const ports = getItemPorts(hoveredItem);
+            ports.forEach(p => {
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, 6 / cameraZoom, 0, Math.PI * 2);
+                ctx.fillStyle = canvasBackgroundColor;
+                ctx.fill();
+                ctx.lineWidth = 2 / cameraZoom;
+                ctx.strokeStyle = accentColor;
+                ctx.stroke();
+            });
+        }
     }
 
     if (typeof hoveredPort !== 'undefined' && hoveredPort) {
-        ctx.beginPath();
-        ctx.arc(hoveredPort.x, hoveredPort.y, 8 / cameraZoom, 0, Math.PI * 2);
-        ctx.fillStyle = accentColor;
-        ctx.fill();
+        if (hoveredPort.item && hoveredPort.item.type === 'genNode') {
+            const size = 12 / cameraZoom;
+            ctx.beginPath();
+            ctx.rect(hoveredPort.x - size / 2, hoveredPort.y - size / 2, size, size);
+            ctx.fillStyle = accentColor;
+            ctx.fill();
+        } else {
+            ctx.beginPath();
+            ctx.arc(hoveredPort.x, hoveredPort.y, 8 / cameraZoom, 0, Math.PI * 2);
+            ctx.fillStyle = accentColor;
+            ctx.fill();
+        }
     }
 
     if (isSelectingBox) drawSelectionBox();
@@ -3809,6 +3830,9 @@ function syncCanvasChrome() {
     }
     syncGenMetaSearchVisibility();
     syncCanvasMinimap();
+    if (window.ComfyGenNodeManager && typeof window.ComfyGenNodeManager.syncAllNodes === 'function') {
+        window.ComfyGenNodeManager.syncAllNodes();
+    }
 }
 
 let minimapFrame = null;
@@ -4095,7 +4119,7 @@ if (canvasTemplatePicker) {
     });
 }
 
-function drawSelection(e) { if (e.type === 'reroute') { ctx.save(); ctx.strokeStyle = accentColor; ctx.lineWidth = 2 / cameraZoom; ctx.beginPath(); ctx.arc(e.x, e.y, 12 / cameraZoom, 0, Math.PI * 2); ctx.stroke(); ctx.restore(); return } if (selectedItems.length > 1) { drawSelectionOutline(e); return } if ((e.type === 'arrow' || e.type === 'measure') && !e.isPinned) { const t = 8 / cameraZoom, o = invertColor(canvasBackgroundColor); ctx.save(); ctx.fillStyle = o; ctx.shadowColor = 'rgba(0, 0, 0, 0.4)'; ctx.shadowBlur = 4 / cameraZoom; ctx.beginPath(); ctx.arc(e.startX, e.startY, t, 0, Math.PI * 2); ctx.fill(); if (hoveredArrowHandle === 'start') { ctx.strokeStyle = accentColor; ctx.lineWidth = 2 / cameraZoom; ctx.stroke() } ctx.beginPath(); ctx.arc(e.endX, e.endY, t, 0, Math.PI * 2); ctx.fill(); if (hoveredArrowHandle === 'end') { ctx.strokeStyle = accentColor; ctx.lineWidth = 2 / cameraZoom; ctx.stroke() } ctx.restore(); return } if (e.type === 'stroke') { if (!isDrawing) drawSelectionOutline(e); return } ctx.save(); const t = e.x + e.width / 2, o = e.y + e.height / 2; ctx.translate(t, o); ctx.rotate(e.rotation); ctx.strokeStyle = accentColor; ctx.lineWidth = 2 / cameraZoom; ctx.strokeRect(-e.width / 2, -e.height / 2, e.width, e.height); if (activeGizmo && !e.isPinned) { const t = invertColor(canvasBackgroundColor), o = 8 / cameraZoom; ctx.shadowColor = 'rgba(0, 0, 0, 0.4)'; ctx.shadowBlur = 4 / cameraZoom; ctx.fillStyle = t; ctx.strokeStyle = t; if (activeGizmo === 'scale') { const t = e.width / 2, a = e.height / 2; ctx.beginPath(); ctx.arc(t, a, o, 0, Math.PI * 2); ctx.fill(); if (hoveredGizmo === 'scale') { ctx.strokeStyle = accentColor; ctx.lineWidth = 2 / cameraZoom; ctx.stroke() } } else if (activeGizmo === 'rotate') { const t = e.width / 2, a = -e.height / 2, i = a - 20 / cameraZoom; ctx.beginPath(); ctx.moveTo(t, a); ctx.lineTo(t, i); ctx.stroke(); ctx.beginPath(); ctx.arc(t, i, o, 0, Math.PI * 2); ctx.fill(); if (hoveredGizmo === 'rotate') { ctx.strokeStyle = accentColor; ctx.lineWidth = 2 / cameraZoom; ctx.stroke() } } } ctx.restore() }
+function drawSelection(e) { if (e.type === 'genNode') return; if (e.type === 'reroute') { ctx.save(); ctx.strokeStyle = accentColor; ctx.lineWidth = 2 / cameraZoom; ctx.beginPath(); ctx.arc(e.x, e.y, 12 / cameraZoom, 0, Math.PI * 2); ctx.stroke(); ctx.restore(); return } if (selectedItems.length > 1) { drawSelectionOutline(e); return } if ((e.type === 'arrow' || e.type === 'measure') && !e.isPinned) { const t = 8 / cameraZoom, o = invertColor(canvasBackgroundColor); ctx.save(); ctx.fillStyle = o; ctx.shadowColor = 'rgba(0, 0, 0, 0.4)'; ctx.shadowBlur = 4 / cameraZoom; ctx.beginPath(); ctx.arc(e.startX, e.startY, t, 0, Math.PI * 2); ctx.fill(); if (hoveredArrowHandle === 'start') { ctx.strokeStyle = accentColor; ctx.lineWidth = 2 / cameraZoom; ctx.stroke() } ctx.beginPath(); ctx.arc(e.endX, e.endY, t, 0, Math.PI * 2); ctx.fill(); if (hoveredArrowHandle === 'end') { ctx.strokeStyle = accentColor; ctx.lineWidth = 2 / cameraZoom; ctx.stroke() } ctx.restore(); return } if (e.type === 'stroke') { if (!isDrawing) drawSelectionOutline(e); return } ctx.save(); const t = e.x + e.width / 2, o = e.y + e.height / 2; ctx.translate(t, o); ctx.rotate(e.rotation); ctx.strokeStyle = accentColor; ctx.lineWidth = 2 / cameraZoom; ctx.strokeRect(-e.width / 2, -e.height / 2, e.width, e.height); if (activeGizmo && !e.isPinned) { const t = invertColor(canvasBackgroundColor), o = 8 / cameraZoom; ctx.shadowColor = 'rgba(0, 0, 0, 0.4)'; ctx.shadowBlur = 4 / cameraZoom; ctx.fillStyle = t; ctx.strokeStyle = t; if (activeGizmo === 'scale') { const t = e.width / 2, a = e.height / 2; ctx.beginPath(); ctx.arc(t, a, o, 0, Math.PI * 2); ctx.fill(); if (hoveredGizmo === 'scale') { ctx.strokeStyle = accentColor; ctx.lineWidth = 2 / cameraZoom; ctx.stroke() } } else if (activeGizmo === 'rotate') { const t = e.width / 2, a = -e.height / 2, i = a - 20 / cameraZoom; ctx.beginPath(); ctx.moveTo(t, a); ctx.lineTo(t, i); ctx.stroke(); ctx.beginPath(); ctx.arc(t, i, o, 0, Math.PI * 2); ctx.fill(); if (hoveredGizmo === 'rotate') { ctx.strokeStyle = accentColor; ctx.lineWidth = 2 / cameraZoom; ctx.stroke() } } } ctx.restore() }
 function drawSelectionOutline(e) { ctx.save(); const t = getItemBoundingBox(e); ctx.strokeStyle = accentColor; ctx.lineWidth = 2 / cameraZoom; ctx.setLineDash([6 / cameraZoom, 4 / cameraZoom]); ctx.strokeRect(t.x, t.y, t.width, t.height); ctx.restore() }
 function drawSelectionBox() {
     ctx.save();
@@ -4845,7 +4869,7 @@ function drawTextListItem(e, t) {
 }
 function drawStrokeItem(e, t) { if (t.points.length < 2) return; e.save(); e.strokeStyle = t.color; e.lineWidth = 4 / cameraZoom; e.lineCap = 'round'; e.lineJoin = 'round'; e.beginPath(); e.moveTo(t.points[0].x, t.points[0].y); for (let o = 1; o < t.points.length; o++) { e.lineTo(t.points[o].x, t.points[o].y) } e.stroke(); e.restore() }
 function getItemPorts(e) {
-    if (!['group', 'image', 'video', 'box', 'circle', 'textList', 'comment', 'text', 'reroute'].includes(e.type)) return [];
+    if (!['group', 'image', 'video', 'box', 'circle', 'textList', 'comment', 'text', 'reroute', 'genNode'].includes(e.type)) return [];
     if (e.type === 'reroute') {
         return [
             { side: 'left', x: e.x, y: e.y, item: e },
@@ -4853,6 +4877,66 @@ function getItemPorts(e) {
             { side: 'top', x: e.x, y: e.y, item: e },
             { side: 'bottom', x: e.x, y: e.y, item: e }
         ];
+    }
+    if (e.type === 'genNode') {
+        const w = e.width || 340;
+        const domEl = typeof document !== 'undefined' ? document.getElementById(`gen-dom-${e.id}`) : null;
+        const zoom = window.cameraZoom || 1;
+
+        const isEditWf = e.workflowId === 'qwen-image-2.1-edit';
+        const isRemoveBgWf = e.workflowId === 'qwen-image-2.1-remove-bg';
+        const hasRef = isEditWf || isRemoveBgWf || (e.workflowId && (e.workflowId.includes('edit') || e.workflowId.includes('remove-bg')));
+        const hasPrompt = !isRemoveBgWf;
+
+        let refY = null;
+        let promptY = null;
+        let seedY = null;
+        let nodeHeight = e.height || 340;
+
+        if (domEl) {
+            const rect = domEl.getBoundingClientRect();
+            if (rect.height > 0) {
+                nodeHeight = rect.height / zoom;
+                e.height = Math.round(nodeHeight);
+            }
+            if (hasRef) {
+                const refSec = domEl.querySelector('.gen-node-refs-section');
+                if (refSec && refSec.offsetParent !== null) {
+                    refY = refSec.offsetTop + refSec.offsetHeight / 2;
+                }
+            }
+            if (hasPrompt) {
+                const pWrap = domEl.querySelector('.gen-node-prompt-wrap');
+                if (pWrap && pWrap.offsetParent !== null) {
+                    promptY = pWrap.offsetTop + pWrap.offsetHeight / 2;
+                }
+            }
+            const sRow = domEl.querySelector('.gen-node-seed-row');
+            if (sRow && sRow.offsetParent !== null) {
+                seedY = sRow.offsetTop + sRow.offsetHeight / 2;
+            }
+        }
+
+        // Precise fallbacks if DOM element is not mounted
+        if (hasRef && refY == null) refY = 110;
+        if (hasPrompt && promptY == null) promptY = hasRef ? 190 : 115;
+        if (seedY == null) seedY = hasRef ? (hasPrompt ? 280 : 190) : (hasPrompt ? 195 : 120);
+
+        const ports = [];
+        if (hasRef && refY != null) {
+            ports.push({ side: 'ref-in', x: e.x, y: e.y + refY, item: e, label: 'Image' });
+        }
+        if (hasPrompt && promptY != null) {
+            ports.push({ side: 'prompt-in', x: e.x, y: e.y + promptY, item: e, label: 'Prompt' });
+        }
+        if (seedY != null) {
+            ports.push({ side: 'seed-in', x: e.x, y: e.y + seedY, item: e, label: 'Seed' });
+        }
+
+        const outY = nodeHeight / 2;
+        ports.push({ side: 'out', x: e.x + w, y: e.y + outY, item: e, label: 'Output' });
+
+        return ports;
     }
     const t = e.width * (e.scaleX || 1), o = e.height * (e.scaleY || 1);
     const cx = e.x + e.width / 2, cy = e.y + e.height / 2;
@@ -4874,8 +4958,24 @@ function createSimpleConnector(source, target) {
     let minDist = Infinity;
     let bestS = 'right', bestT = 'left';
 
+    // Intelligent target port matching for genNode
+    if (target.type === 'genNode') {
+        if (source.type === 'image' && portsT.some(p => p.side === 'ref-in')) {
+            bestT = 'ref-in';
+        } else if (['text', 'comment', 'textList'].includes(source.type) && portsT.some(p => p.side === 'prompt-in')) {
+            bestT = 'prompt-in';
+        } else if (source.type === 'counter' && portsT.some(p => p.side === 'seed-in')) {
+            bestT = 'seed-in';
+        }
+    }
+    if (source.type === 'genNode') {
+        bestS = 'out';
+    }
+
     portsS.forEach(ps => {
         portsT.forEach(pt => {
+            if (target.type === 'genNode' && bestT !== 'left' && pt.side !== bestT) return;
+            if (source.type === 'genNode' && ps.side !== 'out') return;
             const d = Math.hypot(ps.x - pt.x, ps.y - pt.y);
             if (d < minDist) {
                 minDist = d;
@@ -4928,7 +5028,11 @@ function findItemAndGroupRecursively(id, arr, currentGroup = null) {
 
 function getGlobalPortPos(item, side, group = null) {
     const ports = getItemPorts(item);
-    const port = ports.find(p => p.side === side);
+    let port = ports.find(p => p.side === side);
+    if (!port && item.type === 'genNode') {
+        if (side === 'left') port = ports.find(p => p.side === 'ref-in' || p.side === 'prompt-in' || p.side === 'seed-in');
+        if (side === 'right') port = ports.find(p => p.side === 'out');
+    }
     if (!port) return null;
     if (!group) return port;
 
@@ -4949,8 +5053,8 @@ function getGlobalPortPos(item, side, group = null) {
 
 function connectorPortDirection(side, item, group) {
     let dx = 0, dy = 0;
-    if (side === 'left') dx = -1;
-    else if (side === 'right') dx = 1;
+    if (side === 'left' || side === 'ref-in' || side === 'prompt-in' || side === 'seed-in') dx = -1;
+    else if (side === 'right' || side === 'out') dx = 1;
     else if (side === 'top') dy = -1;
     else if (side === 'bottom') dy = 1;
     else return { x: 1, y: 0 };
@@ -5495,7 +5599,13 @@ function handleKeyDown(e) {
     if (e.shiftKey && key === 's') { e.preventDefault(); saveAsPng(); return; }
     if (e.shiftKey && key.toLowerCase() === 'a') { e.preventDefault(); setCurrentTool('arrow'); return; }
     if (key === 'a' && !e.shiftKey && !e.ctrlKey && !e.altKey) { e.preventDefault(); setCurrentTool(null); return; }
-    if (key === 'g' && !e.altKey) { e.preventDefault(); showGrid = !showGrid; showGridToggle.checked = showGrid; return; }
+    if (key === 'g' && !e.altKey) {
+        e.preventDefault();
+        if (window.ComfyGenNodeManager) {
+            window.ComfyGenNodeManager.createGenNodeAtCenter();
+        }
+        return;
+    }
     if (key === 't') { e.preventDefault(); setCurrentTool('text'); return; }
     if (key === 'n') { e.preventDefault(); setCurrentTool('comment'); return; }
     if (key === 'k' && !e.ctrlKey) { e.preventDefault(); setCurrentTool('link'); return; }
@@ -6331,8 +6441,23 @@ function onContextMenu(e) {
     const aiEditBtn = document.getElementById('context-ai-edit-btn');
     if (aiEditBtn) aiEditBtn.style.display = isImg ? 'flex' : 'none';
 
-    const aiRemoveBgBtn = document.getElementById('context-ai-remove-bg-btn');
-    if (aiRemoveBgBtn) aiRemoveBgBtn.style.display = isImg ? 'flex' : 'none';
+    const aiRegenerateBtn = document.getElementById('context-ai-regenerate-btn');
+    if (aiRegenerateBtn) {
+        let canRegen = false;
+        if (isImg) {
+            const img = selectedItems[0];
+            if (img.genSourceNodeId || (img.genMeta && (img.genMeta.prompt || img.genMeta.tool))) {
+                canRegen = true;
+            } else if (Array.isArray(items)) {
+                canRegen = items.some(c =>
+                    c && c.type === 'connector' &&
+                    (c.targetId === img.id || c.sourceId === img.id) &&
+                    items.some(n => n && (n.id === c.sourceId || n.id === c.targetId) && n.type === 'genNode')
+                );
+            }
+        }
+        aiRegenerateBtn.style.display = canRegen ? 'flex' : 'none';
+    }
 
     const canConnect = selectedItems.length === 1 && !['connector', 'stroke', 'measure'].includes(selectedItems[0].type);
     contextConnectBtn.style.display = canConnect ? 'flex' : 'none';
@@ -6488,6 +6613,9 @@ async function copyToClipboard() {
         else if (e.type === 'counter') { drawCounterItem(ctx, e) }
         else if (e.type === 'reroute') { drawRerouteItem(ctx, e) }
         else if (e.type === 'connector') { drawConnectorItem(e, ctx) }
+        else if (e.type === 'genNode') {
+            if (window.ComfyGenNodeManager) window.ComfyGenNodeManager.drawGenNodeOnCanvas(ctx, e);
+        }
         ctx.restore()
     };
 
@@ -6566,6 +6694,9 @@ function saveAsPng() {
         else if (e.type === 'counter') { drawCounterItem(ctx, e) }
         else if (e.type === 'reroute') { drawRerouteItem(ctx, e) }
         else if (e.type === 'connector') { drawConnectorItem(e, ctx) }
+        else if (e.type === 'genNode') {
+            if (window.ComfyGenNodeManager) window.ComfyGenNodeManager.drawGenNodeOnCanvas(ctx, e);
+        }
         ctx.restore()
     };
 
@@ -6633,6 +6764,9 @@ function exportSelectionAsPng() {
         else if (e.type === 'counter') { drawCounterItem(ctx, e); }
         else if (e.type === 'reroute') { drawRerouteItem(ctx, e); }
         else if (e.type === 'connector') { drawConnectorItem(e, ctx); }
+        else if (e.type === 'genNode') {
+            if (window.ComfyGenNodeManager) window.ComfyGenNodeManager.drawGenNodeOnCanvas(ctx, e);
+        }
         ctx.restore();
     };
 
@@ -7490,6 +7624,11 @@ function duplicateItems() {
         reattach(e, a);
 
         delete a._cachedBox; a._isDirty = true; a.id = Date.now() + Math.random();
+        if (a.type === 'genNode') {
+            a.id = 'gen_' + Date.now().toString(36) + '_' + Math.random().toString(36).substr(2, 6);
+            a.outputs = [];
+            a._runtime = { status: 'idle', progressPercent: 0, statusText: '', currentPromptId: null, isDirty: false };
+        }
         a.isPinned = !1;
         a.x += o;
         a.y += o;
@@ -8130,6 +8269,46 @@ function updateSelectionToolbar() {
         }
         if (duplicateSelectionBtn) duplicateSelectionBtn.style.display = selectedItems.length > 0 ? 'flex' : 'none';
         if (exportSelectionPngBtn) exportSelectionPngBtn.style.display = selectedItems.length > 0 ? 'flex' : 'none';
+
+        const selRegenBtn = document.getElementById('sel-ai-regenerate-btn');
+        if (selRegenBtn) {
+            let canRegen = false;
+            if (selectedItems.length === 1 && selectedItems[0].type === 'image') {
+                const img = selectedItems[0];
+                if (img.genSourceNodeId || (img.genMeta && (img.genMeta.prompt || img.genMeta.tool))) {
+                    canRegen = true;
+                } else if (Array.isArray(items)) {
+                    canRegen = items.some(c =>
+                        c && c.type === 'connector' &&
+                        (c.targetId === img.id || c.sourceId === img.id) &&
+                        items.some(n => n && (n.id === c.sourceId || n.id === c.targetId) && n.type === 'genNode')
+                    );
+                }
+            }
+            selRegenBtn.style.display = canRegen ? 'flex' : 'none';
+        }
+
+        const isGenNode = selectedItems.length === 1 && selectedItems[0].type === 'genNode';
+        if (isGenNode) {
+            toggleBoxStyleBtn.style.display = 'none';
+            scaleBtn.style.display = 'none';
+            rotateBtn.style.display = 'none';
+            resetTransformBtn.style.display = 'none';
+            flipHorizontalBtn.style.display = 'none';
+            flipVerticalBtn.style.display = 'none';
+            bringFrontBtn.style.display = 'none';
+            sendBackBtn.style.display = 'none';
+            connectBtn.style.display = 'none';
+            groupBtn.style.display = 'none';
+            groupOrderedBtn.style.display = 'none';
+            ungroupBtn.style.display = 'none';
+            if (exportSelectionPngBtn) exportSelectionPngBtn.style.display = 'none';
+            if (selRegenBtn) selRegenBtn.style.display = 'none';
+            pinBtn.style.display = 'flex';
+            if (duplicateSelectionBtn) duplicateSelectionBtn.style.display = 'flex';
+            const delBtn = document.getElementById('delete-selection-btn');
+            if (delBtn) delBtn.style.display = 'flex';
+        }
 
         // Ensure position is updated when toolbar is shown
         updateToolbarPosition();
@@ -12185,10 +12364,84 @@ Object.defineProperty(window, 'projects',         { get: () => projects,        
 Object.defineProperty(window, 'activeProjectId',  { get: () => activeProjectId,  configurable: true });
 Object.defineProperty(window, 'globalImageCache', { get: () => globalImageCache, configurable: true });
 Object.defineProperty(window, 'globalVideoCache', { get: () => globalVideoCache, configurable: true });
-Object.defineProperty(window, 'items',            { get: () => items,            configurable: true });
+Object.defineProperty(window, 'items',            { get: () => items, set: (v) => { items = v; }, configurable: true });
+Object.defineProperty(window, 'selectedItems',    { get: () => selectedItems, set: (v) => { selectedItems = v; updateSelectionToolbar(); }, configurable: true });
 window.serializeItems     = serializeItems;
 window.loadFileFromObject = loadFileFromObject;
 window.showToast          = showToast;
+window.requestUpdate      = requestUpdate;
+window.updateSelectionToolbar = updateSelectionToolbar;
+window.saveStateForUndo   = saveStateForUndo;
+window.scheduleAutoSave   = scheduleAutoSave;
+window.rejoinConnectorsAround = rejoinConnectorsAround;
+window.createSimpleConnector  = createSimpleConnector;
+window.deleteItem         = (itemOrId) => {
+    const id = typeof itemOrId === 'string' ? itemOrId : itemOrId?.id;
+    if (!id) return;
+    const removedIds = new Set([id]);
+    rejoinConnectorsAround(removedIds);
+    items = items.filter(item => item.id !== id);
+    items = items.filter(item => !(item.type === 'connector' && (removedIds.has(item.sourceId) || removedIds.has(item.targetId))));
+    selectedItems = selectedItems.filter(item => item.id !== id);
+    updateSelectionToolbar();
+    updateLeftBarState();
+    saveStateForUndo();
+    requestUpdate();
+};
+
+window.startMovingGenNode = (node, e) => {
+    if (!node) return;
+    if (!selectedItems.includes(node)) {
+        if (e && e.shiftKey) {
+            selectedItems.push(node);
+        } else {
+            selectedItems = [node];
+        }
+    }
+    const loc = getEventLocation(e);
+    const worldPos = screenToWorld(loc);
+    isMovingItems = true;
+    moveStart.x = worldPos.x;
+    moveStart.y = worldPos.y;
+    selectedItems.forEach(si => {
+        si.originalX = si.x;
+        si.originalY = si.y;
+        if (si.type === 'arrow' || si.type === 'measure') {
+            si.originalStartX = si.startX;
+            si.originalStartY = si.startY;
+            si.originalEndX = si.endX;
+            si.originalEndY = si.endY;
+        } else if (si.type === 'stroke') {
+            si.originalPoints = JSON.parse(JSON.stringify(si.points));
+        } else if (si.type === 'group') {
+            si.originalItems = JSON.parse(JSON.stringify(si.items));
+            reattachImages(si, { items: si.originalItems });
+        }
+    });
+    updateSelectionToolbar();
+    updateLeftBarState();
+    requestUpdate();
+
+    const onGenPointerMove = (ev) => {
+        if (isMovingItems) onMouseMove(ev);
+    };
+    const onGenPointerUp = (ev) => {
+        window.removeEventListener('pointermove', onGenPointerMove);
+        window.removeEventListener('pointerup', onGenPointerUp);
+        if (isMovingItems) onMouseUp(ev);
+    };
+    window.addEventListener('pointermove', onGenPointerMove);
+    window.addEventListener('pointerup', onGenPointerUp);
+};
+
+window.openComfySettings = () => {
+    if (window.MoodComfy && typeof window.MoodComfy.openSettingsDialog === 'function') {
+        window.MoodComfy.openSettingsDialog();
+    } else {
+        const dialog = document.getElementById('comfy-settings-dialog');
+        if (dialog && typeof dialog.showModal === 'function') dialog.showModal();
+    }
+};
 
 
 // ══════════════════════════════════════════════════════════════════════════
@@ -13887,11 +14140,13 @@ function setupGenMetaUi() {
     }
     syncGenMetaSearchVisibility();
 
-    // ComfyUI integration wires
+    // ComfyUI integration wires: Canvas Gen Node
     const aiGenBtn = document.getElementById('ai-generate-btn');
     if (aiGenBtn) {
         aiGenBtn.addEventListener('click', () => {
-            if (window.MoodComfy) window.MoodComfy.openGenerateDialog('generate');
+            if (window.ComfyGenNodeManager) {
+                window.ComfyGenNodeManager.createGenNodeAtCenter();
+            }
         });
     }
 
@@ -13901,8 +14156,8 @@ function setupGenMetaUi() {
             ev.stopPropagation();
             if (contextMenu) contextMenu.style.display = 'none';
             const item = selectedItems.length === 1 && selectedItems[0].type === 'image' ? selectedItems[0] : null;
-            if (item && window.MoodComfy) {
-                window.MoodComfy.openGenerateDialog('edit', item);
+            if (item && window.ComfyGenNodeManager) {
+                window.ComfyGenNodeManager.createNodeFromImage(item, 'edit');
             }
         });
     }
@@ -13913,8 +14168,31 @@ function setupGenMetaUi() {
             ev.stopPropagation();
             if (contextMenu) contextMenu.style.display = 'none';
             const item = selectedItems.length === 1 && selectedItems[0].type === 'image' ? selectedItems[0] : null;
-            if (item && window.MoodComfy) {
-                window.MoodComfy.openGenerateDialog('removeBg', item);
+            if (item && window.ComfyGenNodeManager) {
+                window.ComfyGenNodeManager.createNodeFromImage(item, 'removeBg');
+            }
+        });
+    }
+
+    const aiRegenerateBtn = document.getElementById('context-ai-regenerate-btn');
+    if (aiRegenerateBtn) {
+        aiRegenerateBtn.addEventListener('click', (ev) => {
+            ev.stopPropagation();
+            if (contextMenu) contextMenu.style.display = 'none';
+            const item = selectedItems.length === 1 && selectedItems[0].type === 'image' ? selectedItems[0] : null;
+            if (item && window.ComfyGenNodeManager) {
+                window.ComfyGenNodeManager.regenerateImage(item);
+            }
+        });
+    }
+
+    // Selection toolbar regenerate button
+    const selRegenBtn = document.getElementById('sel-ai-regenerate-btn');
+    if (selRegenBtn) {
+        selRegenBtn.addEventListener('click', () => {
+            const item = selectedItems.length === 1 && selectedItems[0].type === 'image' ? selectedItems[0] : null;
+            if (item && window.ComfyGenNodeManager) {
+                window.ComfyGenNodeManager.regenerateImage(item);
             }
         });
     }

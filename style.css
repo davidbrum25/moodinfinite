@@ -8314,3 +8314,437 @@ dialog.comfy-modal-dialog::backdrop {
     transition: width 0.25s ease-out;
 }
 
+/* ==========================================================================
+   ComfyUI Canvas Gen Node (DOM Overlay Styles)
+   ========================================================================== */
+
+.comfy-gen-nodes-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    overflow: hidden;
+    z-index: 4;
+}
+
+.comfy-gen-node-dom {
+    position: absolute;
+    width: 340px;
+    background: #1e293b;
+    border: 1px solid #334155;
+    border-radius: 12px;
+    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.4);
+    color: #f8fafc;
+    pointer-events: auto;
+    display: flex;
+    flex-direction: column;
+    padding: 12px 14px;
+    gap: 10px;
+    box-sizing: border-box;
+    user-select: none;
+    transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.comfy-gen-node-dom.selected {
+    border-color: var(--accent-color, #38bdf8);
+    box-shadow: 0 0 0 2px var(--accent-color, #38bdf8), 0 10px 25px -5px rgba(0, 0, 0, 0.5);
+}
+
+.gen-node-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding-bottom: 8px;
+    border-bottom: 1px solid #334155;
+    cursor: grab;
+}
+
+.gen-node-header:active {
+    cursor: grabbing;
+}
+
+/* Crisp square ports on each corresponding input */
+.gen-port-square {
+    position: absolute;
+    width: 12px;
+    height: 12px;
+    background: #0f172a;
+    border: 2px solid var(--accent-color, #38bdf8);
+    border-radius: 3px;
+    box-sizing: border-box;
+    z-index: 10;
+    pointer-events: none;
+    transition: all 0.15s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    user-select: none;
+}
+
+.gen-port-square.can-add {
+    pointer-events: auto;
+    cursor: pointer;
+}
+
+.gen-port-square.can-add:hover {
+    background: var(--accent-color, #38bdf8);
+    transform: translateY(-50%) scale(1.15);
+}
+
+.gen-port-plus {
+    font-size: 10px;
+    font-weight: 700;
+    line-height: 1;
+    color: var(--accent-color, #38bdf8);
+    pointer-events: none;
+    transform: translateY(-0.5px);
+}
+
+.gen-port-square.can-add:hover .gen-port-plus {
+    color: #0f172a;
+}
+
+.gen-node-refs-section {
+    position: relative;
+}
+.gen-node-refs-section .gen-port-square.gen-port-ref {
+    left: -20px;
+    top: 50%;
+    transform: translateY(-50%);
+}
+
+.gen-node-prompt-wrap {
+    position: relative;
+}
+.gen-node-prompt-wrap .gen-port-square.gen-port-prompt {
+    left: -20px;
+    top: 50%;
+    transform: translateY(-50%);
+}
+
+.gen-node-seed-row {
+    position: relative;
+}
+.gen-node-seed-row .gen-port-square.gen-port-seed {
+    left: -20px;
+    top: 50%;
+    transform: translateY(-50%);
+}
+
+/* Output port on right edge of card */
+.comfy-gen-node-dom .gen-port-square.gen-port-out {
+    right: -6px;
+    top: 50%;
+    transform: translateY(-50%);
+}
+
+.gen-port-square.connected {
+    background: var(--accent-color, #38bdf8);
+    box-shadow: 0 0 8px var(--accent-color, #38bdf8);
+}
+
+.gen-connected-hint {
+    font-size: 0.72rem;
+    color: var(--accent-color, #38bdf8);
+    margin-top: 3px;
+    font-weight: 500;
+}
+
+.gen-batch-input {
+    width: 52px;
+    background: #0f172a;
+    border: 1px solid #334155;
+    border-radius: 6px;
+    color: #f8fafc;
+    padding: 5px 6px;
+    font-size: 0.82rem;
+    font-weight: 600;
+    text-align: center;
+    outline: none;
+    transition: border-color 0.15s;
+}
+
+.gen-batch-input:focus {
+    border-color: var(--accent-color, #38bdf8);
+}
+
+.gen-btn-icon iconify-icon,
+.comfy-gen-node-dom iconify-icon {
+    pointer-events: none;
+}
+
+.gen-node-title-group {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.gen-sparkle {
+    color: var(--accent-color, #38bdf8);
+}
+
+.gen-node-title {
+    font-size: 0.88rem;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+}
+
+.gen-node-tools {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.gen-btn-icon {
+    background: transparent;
+    border: none;
+    color: #94a3b8;
+    padding: 5px;
+    width: 26px;
+    height: 26px;
+    box-sizing: border-box;
+    border-radius: 6px;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.15s, color 0.15s;
+}
+
+.gen-btn-icon:hover {
+    background: #334155;
+    color: #f8fafc;
+}
+
+.gen-btn-icon.active {
+    color: var(--accent-color, #38bdf8);
+    background: rgba(56, 189, 248, 0.15);
+}
+
+.gen-workflow-select,
+.gen-node-size-select,
+.gen-batch-select {
+    width: 100%;
+    background: #0f172a;
+    border: 1px solid #334155;
+    border-radius: 6px;
+    color: #f8fafc;
+    padding: 6px 8px;
+    font-size: 0.82rem;
+    outline: none;
+}
+
+.gen-workflow-select:focus,
+.gen-node-size-select:focus,
+.gen-batch-select:focus {
+    border-color: var(--accent-color, #38bdf8);
+}
+
+.gen-node-refs-section {
+    background: #0f172a;
+    border: 1px dashed #334155;
+    border-radius: 8px;
+    padding: 8px 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.gen-section-label {
+    font-size: 0.72rem;
+    color: #94a3b8;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    font-weight: 600;
+}
+
+.gen-refs-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.gen-ref-thumb-wrap {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.gen-ref-thumb {
+    width: 36px;
+    height: 36px;
+    object-fit: cover;
+    border-radius: 4px;
+    border: 1px solid #334155;
+}
+
+.gen-ref-name {
+    font-size: 0.8rem;
+    color: #cbd5e1;
+    max-width: 200px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.gen-ref-placeholder {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.76rem;
+    color: #64748b;
+}
+
+.gen-node-prompt-wrap {
+    display: flex;
+    flex-direction: column;
+}
+
+.gen-node-prompt {
+    width: 100%;
+    box-sizing: border-box;
+    background: #020617;
+    border: 1px solid #334155;
+    border-radius: 6px;
+    color: #f8fafc;
+    padding: 8px;
+    font-size: 0.82rem;
+    font-family: inherit;
+    resize: vertical;
+    min-height: 55px;
+    outline: none;
+}
+
+.gen-node-prompt:focus {
+    border-color: var(--accent-color, #38bdf8);
+}
+
+.gen-node-controls-row {
+    display: flex;
+    gap: 8px;
+}
+
+.gen-node-controls-row .gen-node-size-select {
+    flex: 2;
+}
+
+.gen-batch-wrap {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 0.75rem;
+    color: #94a3b8;
+}
+
+.gen-batch-wrap .gen-batch-select {
+    padding: 6px 4px;
+}
+
+.gen-node-seed-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.gen-seed-input {
+    flex: 1;
+    background: #0f172a;
+    border: 1px solid #334155;
+    border-radius: 6px;
+    color: #f8fafc;
+    padding: 6px 8px;
+    font-size: 0.8rem;
+    outline: none;
+}
+
+.gen-seed-input:focus {
+    border-color: var(--accent-color, #38bdf8);
+}
+
+.gen-node-progress-wrap {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.gen-progress-bar-bg {
+    width: 100%;
+    height: 6px;
+    background: #0f172a;
+    border-radius: 100px;
+    overflow: hidden;
+}
+
+.gen-progress-bar-fill {
+    height: 100%;
+    background: var(--accent-color, #38bdf8);
+    transition: width 0.2s ease-out;
+}
+
+.gen-progress-text {
+    font-size: 0.74rem;
+    color: #94a3b8;
+    text-align: right;
+}
+
+.gen-node-footer {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-top: 4px;
+}
+
+.gen-submit-btn {
+    flex: 1;
+    background: var(--accent-color, #38bdf8);
+    color: #0f172a;
+    border: none;
+    padding: 8px 12px;
+    border-radius: 6px;
+    font-weight: 600;
+    font-size: 0.85rem;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    transition: filter 0.15s;
+}
+
+.gen-submit-btn:hover:not(:disabled) {
+    filter: brightness(1.1);
+}
+
+.gen-submit-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.gen-submit-btn.gen-btn-offline {
+    background: #f59e0b;
+    color: #0f172a;
+}
+
+.gen-cancel-btn {
+    background: #ef4444;
+    color: #ffffff;
+    border: none;
+    padding: 8px 10px;
+    border-radius: 6px;
+    font-size: 0.8rem;
+    font-weight: 500;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.gen-cancel-btn:hover {
+    background: #dc2626;
+}
+
+

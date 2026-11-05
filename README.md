@@ -1,4 +1,4 @@
-# Moodinfinite v1.2.1
+# Moodinfinite v1.3.0
 
 ![Moodinfinite Logo](https://github.com/davidbrum25/moodinfinite/blob/main/_branding/_png/moodinfinite__Logotipo_alpha.png?raw=true)
 
@@ -70,6 +70,22 @@ Try it live: <https://moodinfinite.pages.dev/> (or <https://davidbrum25.github.i
 * Hover over any element to reveal **4 edge connection ports**. Drag from a port to another element to draw a connector. The route leaves the port you chose, stays beside the two shapes, and does not shoot off the board when those shapes move.
 * **Reroute Nodes:** Double-click a connector line to add a reroute node and reshape the path.
 * **Smart Deletion:** Hold `Ctrl` / `Cmd` while hovering over a wire or reroute node — your cursor changes to a red scissor icon. Click to cut the connection.
+
+### 🎨 ComfyUI AI Generation & Editing Nodes
+
+Moodinfinite connects to a local **ComfyUI** instance (with CORS enabled) to generate and edit images directly on the canvas without leaving your board.
+
+* **On-Canvas Generation Nodes (`G`):** Place full interactive AI generation nodes on your canvas to run text-to-image, image editing, and background removal workflows.
+* **Visual Multi-Port System:**
+  * **Reference Image Port (`ref-in`):** Connect an image node to the left side of the generator for image-to-image or editing models.
+  * **Interactive Prompt Port (`prompt-in`):** Connect any external text note, or click the **`+`** button inside the square port to instantly create and connect a dedicated `PROMPT` note.
+  * **Interactive Seed Port (`seed-in`):** Connect seed notes or counters, or click the **`+`** button to spawn and connect a `Seed` note with randomized or locked values.
+  * **Image Output Port (`out`):** Spawns generated images as independent canvas elements to the right of the node, automatically wired with a router connection.
+* **Batch Controls:** Easily configure batch size (1, 2, 4...) with a numeric stepper; each generation automatically cycles seeds.
+* **Fast Execution (`Ctrl + Enter`):** Press `Ctrl + Enter` inside the prompt textarea to queue generation instantly.
+* **One-Click Re-generation:** Select any generated image on the board and click **Re-generate with AI** in the floating selection toolbar to generate a new variation with a new seed while preserving original workflow parameters.
+* **Tailored Selection Toolbar:** Selecting an Image Generator node displays only relevant actions: **Pin (`P`)**, **Duplicate (`Ctrl+D`)**, and **Delete (`Del`)**, with smooth grid snapping.
+* **Workflow Configuration:** Pre-configured with built-in pipelines (MOSS-Image, Qwen Image 2.1 Edit, Qwen Remove Background) and customizable via the settings gear icon or custom ComfyUI API JSON import.
 
 ### Moodprompt Tabs
 
@@ -174,6 +190,22 @@ If you find this tool useful and want to help me build more, consider supporting
 ---
 
 ## Update Log
+
+### ✨ v1.3.0 — ComfyUI Canvas Generation Nodes (On-Canvas AI Generation & Editing)
+
+* **🖼️ Interactive Image Generator Nodes (`G`):** Generate and edit images directly on the canvas with interactive generation cards instead of modal popups.
+* **🔌 Dynamic Multi-Port Routing:**
+  * **Reference Image Input (`ref-in`):** Connect an image to the left side of the generator for image-to-image or editing models.
+  * **Interactive Prompt Port (`prompt-in`):** Connect external text notes or click the **`+`** button directly inside the port to spawn a linked prompt note on the canvas.
+  * **Interactive Seed Port (`seed-in`):** Connect seed notes or counters, or click the **`+`** button to spawn a linked seed note.
+  * **Image Output Port (`out`):** Generated images appear as separate canvas elements to the right of the node, connected via dynamic router lines.
+* **📦 Batch Generation Stepper:** Configure batch quantities with an arrow stepper control; each batch image cycles seeds automatically.
+* **⌨️ Fast Shortcut (`Ctrl + Enter`):** Press `Ctrl + Enter` while inside the prompt textarea to start generating immediately.
+* **✨ Canvas Image Re-generation:** Select any generated image on canvas and click **Re-generate with AI** to re-run generation with a new seed while preserving original workflow parameters.
+* **🧹 Contextual Submenu:** Selecting an Image Generator node displays only relevant actions: **Pin**, **Duplicate**, and **Delete**, with full grid snapping.
+* **⚙️ Built-in & Custom Workflows:** Includes MOSS-Image Text-to-Image, Qwen Image 2.1 Edit, and Qwen Remove Background, plus custom API workflow JSON import.
+
+---
 
 ### ✨ v1.2.1 (Multi-Resolution Layout, Flat Base Style & QoL Fixes)
 

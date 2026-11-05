@@ -39,9 +39,10 @@ const MIME = {
 };
 
 const server = http.createServer((req, res) => {
-    // Security / COOP headers
+    // Security / COOP / Cache headers
     res.setHeader('Cross-Origin-Opener-Policy', 'same-origin-allow-popups');
     res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('Cache-Control', 'no-cache, must-revalidate');
 
     const parsed   = url.parse(req.url);
     let   pathname = decodeURIComponent(parsed.pathname);

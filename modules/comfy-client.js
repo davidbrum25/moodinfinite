@@ -313,20 +313,74 @@ export class ComfyClient {
     }
 
     /**
-     * Watches prompt execution via WebSocket with fallback to polling /history.
+     * Delete/cancel a specific prompt from the queue
+     */
+    async deleteQueueItem(promptId) {
+        try {
+            await this.fetchWithLna('/queue', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ delete: [promptId] })
+            });
+        } catch (e) {
+            console.warn('[MoodComfy] Failed to delete queue item:', e);
+        }
+    }
+
+    /**
+     * Shared WebSocket connection management to handle multiple concurrent nodes/prompts
+     */
+    ensureSharedWebSocket() {
+        if (this._sharedWs && (this._sharedWs.readyState === WebSocket.OPEN || this._sharedWs.readyState === WebSocket.CONNECTING)) {
+            return this._sharedWs;
+        }
+
+        this._wsListeners = this._wsListeners || new Map();
+
+        try {
+            this._sharedWs = new WebSocket(this.getWsUrl());
+            this._sharedWs.onmessage = (event) => {
+                try {
+                    const msg = JSON.parse(event.data);
+                    for (const listener of this._wsListeners.values()) {
+                        try { listener(msg); } catch (_) {}
+                    }
+                } catch (_) {}
+            };
+            this._sharedWs.onerror = () => {};
+            this._sharedWs.onclose = () => {
+                this._sharedWs = null;
+            };
+        } catch (e) {
+            this._sharedWs = null;
+        }
+        return this._sharedWs;
+    }
+
+    addWsListener(id, callback) {
+        this.ensureSharedWebSocket();
+        if (!this._wsListeners) this._wsListeners = new Map();
+        this._wsListeners.set(id, callback);
+    }
+
+    removeWsListener(id) {
+        if (this._wsListeners) {
+            this._wsListeners.delete(id);
+        }
+    }
+
+    /**
+     * Watches prompt execution using shared WebSocket with fallback to polling /history.
      * onProgress callback receives { value, max, node, promptId }
      */
     watchPrompt(promptId, onProgress) {
         return new Promise((resolve, reject) => {
-            let socket = null;
             let pollingTimer = null;
             let finished = false;
+            const listenerId = 'watch_' + promptId + '_' + Date.now();
 
             const cleanup = () => {
-                if (socket) {
-                    try { socket.close(); } catch (_) {}
-                    socket = null;
-                }
+                this.removeWsListener(listenerId);
                 if (pollingTimer) {
                     clearInterval(pollingTimer);
                     pollingTimer = null;
@@ -353,56 +407,39 @@ export class ComfyClient {
                 }
             };
 
-            // Start WS
-            try {
-                socket = new WebSocket(this.getWsUrl());
-                socket.onmessage = (event) => {
-                    try {
-                        const msg = JSON.parse(event.data);
-                        if (msg.type === 'progress') {
-                            if (onProgress && msg.data) {
-                                onProgress({
-                                    value: msg.data.value,
-                                    max: msg.data.max,
-                                    promptId: msg.data.prompt_id
-                                });
-                            }
-                        } else if (msg.type === 'executing') {
-                            if (msg.data && msg.data.prompt_id === promptId) {
-                                if (msg.data.node === null) {
-                                    // Done!
-                                    finished = true;
-                                    cleanup();
-                                    this.getHistory(promptId).then((h) => resolve(h[promptId])).catch(reject);
-                                } else if (onProgress) {
-                                    onProgress({ node: msg.data.node, promptId });
-                                }
-                            }
-                        } else if (msg.type === 'execution_error') {
-                            if (msg.data && msg.data.prompt_id === promptId) {
-                                finished = true;
-                                cleanup();
-                                reject(new Error(`Error de ejecución: ${msg.data.exception_message || 'ComfyUI Execution Error'}`));
-                            }
-                        }
-                    } catch (_) {}
-                };
-
-                socket.onerror = () => {
-                    // Fall back directly to polling if WS fails
-                    if (!pollingTimer && !finished) {
-                        pollingTimer = setInterval(checkHistory, 1000);
+            // Register shared WS listener
+            this.addWsListener(listenerId, (msg) => {
+                if (finished) return;
+                if (msg.type === 'progress') {
+                    if (onProgress && msg.data) {
+                        onProgress({
+                            value: msg.data.value,
+                            max: msg.data.max,
+                            promptId: msg.data.prompt_id
+                        });
                     }
-                };
-            } catch (e) {
-                // If WS construction threw
-                pollingTimer = setInterval(checkHistory, 1000);
-            }
+                } else if (msg.type === 'executing') {
+                    if (msg.data && msg.data.prompt_id === promptId) {
+                        if (msg.data.node === null) {
+                            // Done!
+                            finished = true;
+                            cleanup();
+                            this.getHistory(promptId).then((h) => resolve(h[promptId])).catch(reject);
+                        } else if (onProgress) {
+                            onProgress({ node: msg.data.node, promptId });
+                        }
+                    }
+                } else if (msg.type === 'execution_error') {
+                    if (msg.data && msg.data.prompt_id === promptId) {
+                        finished = true;
+                        cleanup();
+                        reject(new Error(`Error de ejecución: ${msg.data.exception_message || 'ComfyUI Execution Error'}`));
+                    }
+                }
+            });
 
-            // Also have a safeguard poll every 3s in case WS disconnects silently
-            if (!pollingTimer) {
-                pollingTimer = setInterval(checkHistory, 3000);
-            }
+            // Safeguard poll every 2.5s in case WS disconnects or misses event
+            pollingTimer = setInterval(checkHistory, 2500);
         });
     }
 }
