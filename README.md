@@ -2,7 +2,7 @@
 
 ![Moodinfinite Logo](https://github.com/davidbrum25/moodinfinite/blob/main/_branding/_png/moodinfinite__Logotipo_alpha.png?raw=true)
 
-**A versatile, infinite digital canvas for your ideas. Create moodboards, brainstorm, organize thoughts, and craft the perfect AI prompts.**
+**All-in-one creative workspace in the browser: infinite-canvas moodboards, animatic storyboards, color palettes, AI prompts, Gantt timelines, and checklists — local-first with optional Google Drive sync.**
 
 ---
 
@@ -14,8 +14,35 @@ Try it live: <https://moodinfinite.pages.dev/> (or <https://davidbrum25.github.i
 
 ## Screenshots
 
-![Screenshot of Moodinfinite in action](https://github.com/davidbrum25/moodinfinite/blob/main/_screenshots/preview_1.jpg)
-![Screenshot of Moodinfinite in action](https://github.com/davidbrum25/moodinfinite/blob/main/_screenshots/preview_2.jpg)
+### 01 · Moodinfinite Canvas
+Free-form infinite board with images, video, text, comments, links, drawing, shapes, connectors, eyedropper, measurements, minimap, and starter templates (`Moodboard`, `Flowchart`, `Image grid`).
+
+![Moodinfinite Canvas](https://github.com/davidbrum25/moodinfinite/blob/main/_screenshots/01-canvas-moodboard.webp?raw=true)
+
+### 02 · Moodflow (Storyboard & Animatic)
+Horizontal story frames with artwork, action/dialogue, duration, camera, status, on-frame sketching, Script view, and timed animatic playback.
+
+![Moodflow](https://github.com/davidbrum25/moodinfinite/blob/main/_screenshots/03-moodflow.webp?raw=true)
+
+### 03 · Moodtone (Color Seeker)
+Color palette generator with harmonies, shades, and tones. Lock and reorder swatches, copy hex/CSS in one click, extract from canvas images, or send swatches to the board.
+
+![Moodtone](https://github.com/davidbrum25/moodinfinite/blob/main/_screenshots/02-moodtone.webp?raw=true)
+
+### 04 · Moodprompt (AI Prompts)
+Private prompt library organized by platform (Midjourney, Flux, Sora, etc.), media type, two reference slots, tags, variables, and version history.
+
+![Moodprompt](https://github.com/davidbrum25/moodinfinite/blob/main/_screenshots/05-moodprompt.webp?raw=true)
+
+### 05 · Moodgantt (Planning)
+Timeline with groups, dated task bars, progress tracking, assignees, task dependencies that shift downstream dates, and a today marker.
+
+![Moodgantt](https://github.com/davidbrum25/moodinfinite/blob/main/_screenshots/04-moodgantt.webp?raw=true)
+
+### 06 · Moodlist (Checklists)
+Color-coded checklist cards with pinning, instant search, images, due dates, and nested subtasks to keep production tasks organized.
+
+![Moodlist](https://github.com/davidbrum25/moodinfinite/blob/main/_screenshots/06-moodlist.webp?raw=true)
 
 ---
 
