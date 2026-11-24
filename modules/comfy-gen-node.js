@@ -204,7 +204,7 @@ export class ComfyGenNodeManager {
             sourcePort: 'right',
             targetId: node.id,
             targetPort: 'ref-in',
-            color: window.accentColor || '#38bdf8'
+            color: window.accentColor || '#D4A359'
         };
         if (typeof window.addItemToLayeredItems === 'function') {
             window.addItemToLayeredItems(conn);
@@ -506,7 +506,7 @@ export class ComfyGenNodeManager {
                         sourcePort: 'out',
                         targetId: newItem.id,
                         targetPort: 'left',
-                        color: window.accentColor || '#38bdf8',
+                        color: window.accentColor || '#D4A359',
                         isAutoOutput: true
                     };
 
@@ -996,7 +996,7 @@ export class ComfyGenNodeManager {
             isPinned: false,
             opacity: 1,
             fontFamily: 'Nunito',
-            color: window.accentColor || '#38bdf8',
+            color: window.accentColor || '#D4A359',
             scaleX: 1,
             scaleY: 1
         };
@@ -1008,7 +1008,7 @@ export class ComfyGenNodeManager {
             sourcePort: 'right',
             targetId: node.id,
             targetPort: portType,
-            color: window.accentColor || '#38bdf8'
+            color: window.accentColor || '#D4A359'
         };
 
         if (typeof window.saveStateForUndo === 'function') window.saveStateForUndo();
@@ -1069,61 +1069,51 @@ export class ComfyGenNodeManager {
         ctx.save();
         ctx.translate(node.x, node.y);
 
-        // Body rounded rect
-        ctx.fillStyle = '#1e293b';
-        ctx.strokeStyle = window.selectedItems?.includes(node) ? (window.accentColor || '#38bdf8') : '#334155';
+        // Card body (square corners)
+        ctx.fillStyle = '#24201B';
+        ctx.strokeStyle = window.selectedItems?.includes(node) ? (window.accentColor || '#D4A359') : '#7A6E60';
         ctx.lineWidth = 2;
         ctx.beginPath();
-        if (ctx.roundRect) {
-            ctx.roundRect(0, 0, w, h, 12);
-        } else {
-            ctx.rect(0, 0, w, h);
-        }
+        ctx.rect(0, 0, w, h);
         ctx.fill();
         ctx.stroke();
 
         // Header bar
-        ctx.fillStyle = '#0f172a';
+        ctx.fillStyle = '#1E1B17';
         ctx.beginPath();
-        if (ctx.roundRect) {
-            ctx.roundRect(0, 0, w, 44, [12, 12, 0, 0]);
-        } else {
-            ctx.rect(0, 0, w, 44);
-        }
+        ctx.rect(0, 0, w, 44);
         ctx.fill();
 
         // Title
-        ctx.fillStyle = '#f8fafc';
-        ctx.font = 'bold 14px Nunito, sans-serif';
+        ctx.fillStyle = '#F4F1EA';
+        ctx.font = 'bold 14px "Outfit", sans-serif';
         ctx.textAlign = 'left';
         ctx.textBaseline = 'middle';
         ctx.fillText('✨ Image Generator', 14, 22);
 
         // Workflow chip
-        ctx.fillStyle = '#334155';
+        ctx.fillStyle = '#121110';
         ctx.beginPath();
-        if (ctx.roundRect) ctx.roundRect(14, 54, w - 28, 28, 6);
-        else ctx.rect(14, 54, w - 28, 28);
+        ctx.rect(14, 54, w - 28, 28);
         ctx.fill();
 
-        ctx.fillStyle = '#94a3b8';
-        ctx.font = '12px Nunito, sans-serif';
+        ctx.fillStyle = '#B8AFA0';
+        ctx.font = '12px "Plus Jakarta Sans", sans-serif';
         ctx.fillText(node.workflowId || 'MOSS-Image', 24, 68);
 
         // Prompt box
-        ctx.fillStyle = '#020617';
+        ctx.fillStyle = '#121110';
         ctx.beginPath();
-        if (ctx.roundRect) ctx.roundRect(14, 92, w - 28, 60, 6);
-        else ctx.rect(14, 92, w - 28, 60);
+        ctx.rect(14, 92, w - 28, 60);
         ctx.fill();
 
-        ctx.fillStyle = '#cbd5e1';
-        ctx.font = '12px Nunito, sans-serif';
+        ctx.fillStyle = '#F4F1EA';
+        ctx.font = '12px "Plus Jakarta Sans", sans-serif';
         const promptSnippet = (node.prompt || 'Sin prompt...').slice(0, 60);
         ctx.fillText(promptSnippet, 22, 112);
 
         // Ports visualization (square handles matching DOM indicators)
-        ctx.fillStyle = window.accentColor || '#38bdf8';
+        ctx.fillStyle = window.accentColor || '#D4A359';
         const isEditWf = node.workflowId === 'qwen-image-2.1-edit';
         const isRemoveBgWf = node.workflowId === 'qwen-image-2.1-remove-bg';
         const hasRef = isEditWf || isRemoveBgWf;

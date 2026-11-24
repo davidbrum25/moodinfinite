@@ -1,4 +1,4 @@
-// Screenshots of each board and its notable panels, in flat and glass, on two presets and two viewports.
+// Screenshots of each board and its notable panels on two presets and two viewports.
 // Usage: node tests/style-tabs-capture.mjs <outDir>   (CHROME_PATH=/usr/bin/google-chrome)
 import { spawn } from 'node:child_process';
 import { readFileSync, mkdirSync } from 'node:fs';
@@ -42,7 +42,7 @@ try {
     await page.goto(`http://127.0.0.1:${PORT}/`, { waitUntil: 'load', timeout: 30000 });
     await page.evaluate(() => { try { localStorage.clear(); } catch (e) {} });
     await page.reload({ waitUntil: 'load' });
-    await page.waitForFunction(() => window.projects && typeof createNewProject === 'function' && typeof selectBaseStyle === 'function' && typeof renderStoryflowView === 'function', { timeout: 20000 });
+    await page.waitForFunction(() => window.projects && typeof createNewProject === 'function' && typeof renderStoryflowView === 'function', { timeout: 20000 });
 
     const ids = await page.evaluate((sample) => {
         const mk = (hex) => {
@@ -56,7 +56,7 @@ try {
         createNewProject('moodinfinite');
         const boardId = activeProjectId;
         const mid = screenToWorld({ x: 640, y: 420 });
-        const accent = accentColor || '#429eff';
+        const accent = accentColor || '#D4A359';
         const base = { rotation: 0, isPinned: false, opacity: 1, scaleX: 1, scaleY: 1 };
         items.push(
             { ...base, id: 'cap-note', type: 'text', text: 'Collect the coastal references here.', title: 'Mood', x: mid.x - 280, y: mid.y - 80, width: 220, height: 140, fontSize: 16, fontFamily: 'Nunito', color: accent },
@@ -154,9 +154,8 @@ try {
         });
     }
 
-    async function applyLook(style, preset) {
-        await page.evaluate((style, preset) => {
-            selectBaseStyle(style);
+    async function applyLook(preset) {
+        await page.evaluate((preset) => {
             const palette = colorPalettes[preset];
             projects.forEach((project) => {
                 if (!project.data) project.data = {};
@@ -169,7 +168,7 @@ try {
             gridColor = palette.grid;
             updateUIColors();
             if (typeof draw === 'function') draw();
-        }, style, preset);
+        }, preset);
     }
 
     const scenes = [
@@ -338,28 +337,26 @@ try {
         { width: 1280, height: 800 },
         { width: 390, height: 844 },
     ];
-    for (const style of ['flat', 'glass']) {
-        for (const preset of [1, 4]) {
-            for (const viewport of viewports) {
-                await page.setViewport({ width: viewport.width, height: viewport.height, deviceScaleFactor: 1 });
-                await page.waitForFunction((w) => window.innerWidth === w, {}, viewport.width);
-                await applyLook(style, preset);
-                for (const [name, prepare] of scenes) {
-                    if (name === 'board-minimap' && viewport.width < 800) continue;
-                    await closeFloating();
-                    await prepare();
-                    await shot(page, `${style}-p${preset}-${viewport.width}-${name}.png`);
-                }
-                if (viewport.width < 800) {
-                    await closeFloating();
-                    await page.evaluate(() => {
-                        const popup = document.getElementById('mobile-tabs-popup');
-                        const btn = document.getElementById('mobile-tabs-btn');
-                        if (btn) btn.click();
-                        if (popup && popup.style.display === 'none') popup.style.display = 'block';
-                    });
-                    await shot(page, `${style}-p${preset}-${viewport.width}-mobile-tabs.png`);
-                }
+    for (const preset of [1, 4]) {
+        for (const viewport of viewports) {
+            await page.setViewport({ width: viewport.width, height: viewport.height, deviceScaleFactor: 1 });
+            await page.waitForFunction((w) => window.innerWidth === w, {}, viewport.width);
+            await applyLook(preset);
+            for (const [name, prepare] of scenes) {
+                if (name === 'board-minimap' && viewport.width < 800) continue;
+                await closeFloating();
+                await prepare();
+                await shot(page, `p${preset}-${viewport.width}-${name}.png`);
+            }
+            if (viewport.width < 800) {
+                await closeFloating();
+                await page.evaluate(() => {
+                    const popup = document.getElementById('mobile-tabs-popup');
+                    const btn = document.getElementById('mobile-tabs-btn');
+                    if (btn) btn.click();
+                    if (popup && popup.style.display === 'none') popup.style.display = 'block';
+                });
+                await shot(page, `p${preset}-${viewport.width}-mobile-tabs.png`);
             }
         }
     }

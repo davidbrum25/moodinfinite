@@ -458,9 +458,9 @@ function switchTab(projectId, options) {
 
     if (!newActiveProject) return;
 
-    canvasBackgroundColor = newActiveProject.data.canvasBackgroundColor || '#0d0d0d';
-    accentColor = newActiveProject.data.accentColor || '#429eff';
-    gridColor = newActiveProject.data.gridColor || '#f9f8f6';
+    canvasBackgroundColor = newActiveProject.data.canvasBackgroundColor || '#121110';
+    accentColor = newActiveProject.data.accentColor || '#D4A359';
+    gridColor = newActiveProject.data.gridColor || '#F4F1EA';
 
     if (newActiveProject.type === 'moodinfinite') {
         items = newActiveProject.data.items;
@@ -872,9 +872,9 @@ function openLightbox(src) {
         overlay.id = 'image-lightbox-overlay';
         overlay.className = 'modal-overlay';
         overlay.innerHTML = `
-            <div id="image-lightbox-modal" class="glass-modal" style="width: auto; max-width: 90vw; height: auto; max-height: 90vh; padding: 1rem; position: relative; background: rgba(20,20,20,0.8);">
+            <div id="image-lightbox-modal" class="app-modal" style="width: auto; max-width: 90vw; height: auto; max-height: 90vh; padding: 1rem; position: relative;">
                 <button id="close-lightbox-btn" class="modal-button cancel" style="position: absolute; top: -10px; right: -10px; width: 30px; height: 30px; padding: 0; border-radius: 50%; display: flex; align-items: center; justify-content: center; z-index: 10;">&times;</button>
-                <img id="lightbox-img" src="" alt="Enlarged image preview" style="max-width: 100%; max-height: calc(90vh - 2rem); object-fit: contain; border-radius: 0.5rem; display: block;">
+                <img id="lightbox-img" src="" alt="Enlarged image preview" style="max-width: 100%; max-height: calc(90vh - 2rem); object-fit: contain; display: block;">
             </div>
         `;
         document.body.appendChild(overlay);
@@ -914,7 +914,7 @@ function openVariableManager(project) {
     
     const renderContent = () => {
         let html = `
-            <div class="glass-modal" style="width: 500px; max-width: 90vw;">
+            <div class="app-modal" style="width: 500px; max-width: 90vw;">
                 <h2>Variable Manager</h2>
                 <p style="color: var(--text-color-light); font-size: 0.9rem; margin-bottom: 1rem;">Define variables to use across all prompts in this project. Use {{variable_name}} in your text.</p>
                 <div id="var-list" style="display: flex; flex-direction: column; gap: 0.5rem; margin-bottom: 1rem; max-height: 300px; overflow-y: auto;">
@@ -1917,7 +1917,6 @@ const ganttContextMenu = document.getElementById('gantt-context-menu');
 const showGridToggle = document.getElementById('show-grid-toggle');
 const snapGridToggle = document.getElementById('snap-grid-toggle');
 const dropShadowToggle = document.getElementById('drop-shadow-toggle');
-const uiBlurToggle = document.getElementById('ui-blur-toggle');
 const showNotificationsToggle = document.getElementById('show-notifications-toggle');
 const gridSizeSlider = document.getElementById('grid-size-slider');
 const gridSizeValue = document.getElementById('grid-size-value');
@@ -2056,7 +2055,7 @@ let internalClipboardTimestamp = 0;
 let isMovingItems = false, moveStart = { x: 0, y: 0 };
 let currentTool = null, isDrawing = false;
 let _pickingForElement = null; // 'color' or 'bgColor'
-let defaultCanvasBg = '#0d0d0d', defaultAccent = '#429eff', defaultGridColor = '#f9f8f6';
+let defaultCanvasBg = '#121110', defaultAccent = '#D4A359', defaultGridColor = '#F4F1EA';
 let canvasBackgroundColor = defaultCanvasBg, accentColor = defaultAccent, gridColor = defaultGridColor;
 let isConnectionMode = false;
 let connectionSourceItem = null;
@@ -2067,8 +2066,7 @@ let isSelectingBox = false, selectionBox = { startX: 0, startY: 0, endX: 0, endY
 let currentlyEditingText = null;
 let hoveredItem = null;
 let isDraggingConnector = false, tempConnector = null, hoveredPort = null, hoveredConnector = null;
-let showGrid = true, snapToGrid = true, showDropShadow = true, showNotifications = true, showUiBlur = true;
-let baseStyle = 'flat';
+let showGrid = true, snapToGrid = true, showDropShadow = true, showNotifications = true;
 let gridSize = 50, gridOpacity = 0.05;
 let currentProjectName = 'moodinfinite';
 const HISTORY_LIMIT = 50;
@@ -2133,11 +2131,12 @@ function getIconImage(icon, color) {
 }
 
 const colorPalettes = [
-    { bg: '#0d0d0d', accent: '#429eff', grid: '#ffffff' }, { bg: '#f8f9fa', accent: '#007bff', grid: '#ced4da' },
+    { bg: '#121110', accent: '#D4A359', grid: '#F4F1EA' }, { bg: '#f8f9fa', accent: '#007bff', grid: '#ced4da' },
     { bg: '#fdf6e3', accent: '#cb4b16', grid: '#93a1a1' }, { bg: '#002b36', accent: '#268bd2', grid: '#586e75' },
     { bg: '#2e3440', accent: '#88c0d0', grid: '#4c566a' }, { bg: '#282a36', accent: '#ff79c6', grid: '#44475a' },
     { bg: '#282828', accent: '#fabd2f', grid: '#504945' }, { bg: '#191724', accent: '#eb6f92', grid: '#555169' },
-    { bg: '#2c3d33', accent: '#a7c957', grid: '#6a7d6d' }, { bg: '#bfbfbf', accent: '#fe345c', grid: '#000000' }
+    { bg: '#2c3d33', accent: '#a7c957', grid: '#6a7d6d' }, { bg: '#bfbfbf', accent: '#fe345c', grid: '#000000' },
+    { bg: '#121110', accent: '#2589BD', grid: '#F4F1EA' }
 ];
 
 function getDragAfterElement(container, x) {
@@ -2307,7 +2306,9 @@ function saveSettings() {
         try {
             if (savedSettings) settings = JSON.parse(savedSettings);
         } catch (e) {}
-        Object.assign(settings, { showGrid, snapToGrid, showDropShadow, showNotifications, showUiBlur, gridSize, gridOpacity, baseStyle });
+        delete settings.baseStyle;
+        delete settings.showUiBlur;
+        Object.assign(settings, { showGrid, snapToGrid, showDropShadow, showNotifications, gridSize, gridOpacity });
         localStorage.setItem('moodinfinite-settings', JSON.stringify(settings));
     } catch (error) { console.error("Could not save settings to localStorage:", error); }
 }
@@ -2321,10 +2322,8 @@ function loadSettings() {
             snapToGrid = settings.snapToGrid ?? snapToGrid;
             showDropShadow = settings.showDropShadow ?? showDropShadow;
             showNotifications = settings.showNotifications ?? showNotifications;
-            showUiBlur = settings.showUiBlur ?? showUiBlur;
             gridSize = settings.gridSize ?? gridSize;
             gridOpacity = settings.gridOpacity ?? gridOpacity;
-            if (settings.baseStyle === 'glass' || settings.baseStyle === 'flat') baseStyle = settings.baseStyle;
             defaultCanvasBg = settings.defaultCanvasBg ?? defaultCanvasBg;
             defaultAccent = settings.defaultAccent ?? defaultAccent;
             defaultGridColor = settings.defaultGridColor ?? defaultGridColor;
@@ -2355,8 +2354,6 @@ function applySettingsToUI() {
     showGridToggle.checked = showGrid;
     snapGridToggle.checked = snapToGrid;
     dropShadowToggle.checked = showDropShadow;
-    if (uiBlurToggle) uiBlurToggle.checked = showUiBlur;
-    document.body.classList.toggle('no-blur', !showUiBlur);
     showNotificationsToggle.checked = showNotifications;
     gridSizeSlider.value = gridSize;
     gridSizeValue.textContent = `${gridSize}px`;
@@ -3032,9 +3029,8 @@ canvas.addEventListener('mouseleave', clearHoverStates);
             const newTop = Math.max(screenPadding, Math.min(buttonRect.bottom + 8, window.innerHeight - panelHeight - screenPadding));
             palettePanel.style.left = `${newLeft}px`;
             palettePanel.style.top = `${newTop}px`;
-            syncBaseStyleRadios();
-            const selectedStyle = palettePanel.querySelector('[role="radio"][aria-checked="true"]');
-            if (selectedStyle) selectedStyle.focus();
+            const firstOption = palettePanel.querySelector('.palette-option');
+            if (firstOption) firstOption.focus();
         }
     });
 
@@ -3207,7 +3203,6 @@ canvas.addEventListener('mouseleave', clearHoverStates);
     if (showGridToggle) showGridToggle.addEventListener('change', e => { showGrid = e.target.checked; saveSettings() });
     if (snapGridToggle) snapGridToggle.addEventListener('change', e => { snapToGrid = e.target.checked; saveSettings() });
     if (dropShadowToggle) dropShadowToggle.addEventListener('change', e => { showDropShadow = e.target.checked; saveSettings() });
-    if (uiBlurToggle) uiBlurToggle.addEventListener('change', e => { showUiBlur = e.target.checked; document.body.classList.toggle('no-blur', !showUiBlur); saveSettings() });
     if (showNotificationsToggle) showNotificationsToggle.addEventListener('change', e => { showNotifications = e.target.checked; saveSettings() });
 
     if (gridSizeSlider) gridSizeSlider.addEventListener('input', e => { gridSize = parseInt(e.target.value); gridSizeValue.textContent = `${gridSize}px`; saveSettings() });
@@ -3963,7 +3958,7 @@ function syncCanvasMinimap() {
     const mh = map.height;
     const mctx = map.getContext('2d');
     mctx.clearRect(0, 0, mw, mh);
-    mctx.fillStyle = '#429eff';
+    mctx.fillStyle = accentColor || '#D4A359';
     for (let i = 0; i < items.length; i++) {
         const box = items[i] && items[i]._cachedBox;
         if (!box || box.width <= 0 || box.height <= 0) continue;
@@ -4076,7 +4071,7 @@ if (canvasFitViewBtn) {
 function applyCanvasTemplate(kind) {
     const project = projects.find(p => p.id === activeProjectId);
     if (!project || project.type !== 'moodinfinite' || items.length) return;
-    const accent = accentColor || '#429eff';
+    const accent = accentColor || '#D4A359';
     const stamp = Date.now();
     const mid = screenToWorld({ x: canvas.width / 2, y: canvas.height / 2 });
     const ox = mid.x - 300;
@@ -4186,13 +4181,13 @@ function drawTextItem(ctx, item) {
         if (task) {
             item.title = task.name;
             item.text = `**Status:** ${task.status || 'None'}\n**Progress:** ${task.progress || 0}%\n**Assignee:** ${task.assignee || 'Unassigned'}\n**Dates:** ${task.startDate || 'TBD'} to ${task.endDate || 'TBD'}`;
-            if (task.status === 'done') item.color = '#22c55e';
-            else if (task.status === 'blocked') item.color = '#ef4444';
-            else if (task.status === 'review') item.color = '#f59e0b';
-            else item.color = '#429eff';
+            if (task.status === 'done') item.color = '#D4A359';
+            else if (task.status === 'blocked') item.color = '#E8A0A0';
+            else if (task.status === 'review') item.color = '#2589BD';
+            else item.color = accentColor || '#D4A359';
         } else {
             item.text = "(Gantt Task deleted)";
-            item.color = '#94a3b8';
+            item.color = '#B8AFA0';
         }
     }
 
@@ -4204,23 +4199,13 @@ function drawTextItem(ctx, item) {
     ctx.scale(item.scaleX || 1, item.scaleY || 1);
     ctx.globalAlpha = item.opacity ?? 1;
 
+    // Post-it Card Rendering (sharp square corners, flat surface)
     const x = -item.width / 2;
     const y = -item.height / 2;
 
-    // Post-it Card Rendering. Flat chrome has no drop shadow and square corners.
-    if (!flatChrome()) {
-        ctx.shadowColor = 'rgba(0,0,0,0.15)';
-        ctx.shadowBlur = 10;
-        ctx.shadowOffsetX = 2;
-        ctx.shadowOffsetY = 4;
-    }
-
     // Card Background
     ctx.fillStyle = item.bgColor || '#ffffff';
-    ctx.beginPath();
-    if (ctx.roundRect) ctx.roundRect(x, y, item.width, item.height, shapeRadius(8));
-    else ctx.rect(x, y, item.width, item.height);
-    ctx.fill();
+    ctx.fillRect(x, y, item.width, item.height);
 
     ctx.shadowBlur = 0;
     ctx.shadowOffsetX = 0;
@@ -4228,17 +4213,13 @@ function drawTextItem(ctx, item) {
 
     // Accent Header Strip
     ctx.fillStyle = item.color || accentColor;
-    ctx.beginPath();
-    const radius = shapeRadius(8);
-    if (ctx.roundRect) ctx.roundRect(x, y, item.width, 12, [radius, radius, 0, 0]);
-    else ctx.rect(x, y, item.width, 12);
-    ctx.fill();
+    ctx.fillRect(x, y, item.width, 12);
 
     // Content Drawing
     // Smart Color Logic
     const isDark = getLuminance(item.bgColor || '#ffffff') < 0.5;
-    const textPrimary = isDark ? '#f1f5f9' : '#0f172a';
-    const textSecondary = isDark ? '#cbd5e1' : '#475569';
+    const textPrimary = isDark ? '#F4F1EA' : '#121110';
+    const textSecondary = isDark ? '#B8AFA0' : '#574F45';
     const accentColorLocal = item.color || accentColor;
 
     // Content Drawing
@@ -4433,9 +4414,7 @@ function drawInlineFormattedText(ctx, text, x, y, size, fontFamily, forceBold, d
             ctx.fillStyle = 'rgba(0,0,0,0.15)';
             const bgH = currentSize * 1.35;
             const bgY = y - (currentSize * 0.15);
-            if (ctx.roundRect) ctx.roundRect(currentX - 2, bgY, w + 4, bgH, shapeRadius(4));
-            else ctx.fillRect(currentX - 2, bgY, w + 4, bgH);
-            ctx.fill();
+            ctx.fillRect(currentX - 2, bgY, w + 4, bgH);
             ctx.restore();
         }
 
@@ -4474,7 +4453,7 @@ function wrapText(ctx, text, maxWidth) {
 
 function drawBoxItem(e, t) { e.save(); const o = t.x + t.width / 2, a = t.y + t.height / 2; e.translate(o, a); e.rotate(t.rotation || 0); e.scale(t.scaleX || 1, t.scaleY || 1); if (!t.style || t.style === 'fill') { e.fillStyle = t.color; e.fillRect(-t.width / 2, -t.height / 2, t.width, t.height) } else { e.strokeStyle = t.color; e.lineWidth = 4 / cameraZoom; e.strokeRect(-t.width / 2, -t.height / 2, t.width, t.height) } e.restore() }
 function drawCircleItem(e, t) { e.save(); const o = t.x + t.width / 2, a = t.y + t.height / 2, i = t.width / 2, r = t.height / 2; e.translate(o, a); e.rotate(t.rotation || 0); e.scale(t.scaleX || 1, t.scaleY || 1); e.beginPath(); e.ellipse(0, 0, i, r, 0, 0, Math.PI * 2); if (!t.style || t.style === "fill") { e.fillStyle = t.color; e.fill(); } else { e.strokeStyle = t.color; e.lineWidth = 4 / cameraZoom; e.stroke(); } e.restore(); }
-function drawCommentItem(e, t) { e.save(); const o = t.x + t.width / 2, a = t.y + t.height / 2; e.translate(o, a); e.rotate(t.rotation || 0); e.scale(t.scaleX || 1, t.scaleY || 1); e.globalAlpha = t.opacity ?? 1; e.fillStyle = t.color; e.beginPath(); if (e.roundRect) { e.roundRect(-t.width / 2, -t.height / 2, t.width, t.height, shapeRadius(12 / cameraZoom)); } else { e.rect(-t.width / 2, -t.height / 2, t.width, t.height); } e.fill(); const lum = getLuminance(t.color); const textColor = lum > 0.5 ? '#111111' : '#ffffff'; e.fillStyle = textColor; const i = t.fontStyle || 'normal', r = t.fontWeight || 'bold', s = t.fontFamily || 'Nunito'; e.font = `${i} ${r} ${t.fontSize}px '${s}', sans-serif`; let iconOffset = 0; if (t.icon && t.icon !== 'none') { const img = getIconImage(t.icon, textColor); const iconSize = t.fontSize * 1.2; iconOffset = iconSize + 10; if (img.complete && img.naturalWidth !== 0) { e.drawImage(img, -t.width / 2 + 15, -iconSize / 2, iconSize, iconSize) } } e.textAlign = t.textAlign || 'left'; e.textBaseline = 'top'; const l = t.text.split('\n'); const h = t.fontSize * 1.4; let m = 0; if (e.textAlign === 'left') { m = -t.width / 2 + 15 + iconOffset } else if (e.textAlign === 'right') { m = t.width / 2 - 15 } else { m = iconOffset / 2 } l.forEach((txt, i) => { const yLineStart = -(l.length * h) / 2 + i * h; const yTextTop = yLineStart + (h - t.fontSize) / 2; e.fillText(txt, m, yTextTop); }); e.restore(); }
+function drawCommentItem(e, t) { e.save(); const o = t.x + t.width / 2, a = t.y + t.height / 2; e.translate(o, a); e.rotate(t.rotation || 0); e.scale(t.scaleX || 1, t.scaleY || 1); e.globalAlpha = t.opacity ?? 1; e.fillStyle = t.color; e.fillRect(-t.width / 2, -t.height / 2, t.width, t.height); const lum = getLuminance(t.color); const textColor = lum > 0.5 ? '#111111' : '#ffffff'; e.fillStyle = textColor; const i = t.fontStyle || 'normal', r = t.fontWeight || 'bold', s = t.fontFamily || 'Nunito'; e.font = `${i} ${r} ${t.fontSize}px '${s}', sans-serif`; let iconOffset = 0; if (t.icon && t.icon !== 'none') { const img = getIconImage(t.icon, textColor); const iconSize = t.fontSize * 1.2; iconOffset = iconSize + 10; if (img.complete && img.naturalWidth !== 0) { e.drawImage(img, -t.width / 2 + 15, -iconSize / 2, iconSize, iconSize) } } e.textAlign = t.textAlign || 'left'; e.textBaseline = 'top'; const l = t.text.split('\n'); const h = t.fontSize * 1.4; let m = 0; if (e.textAlign === 'left') { m = -t.width / 2 + 15 + iconOffset } else if (e.textAlign === 'right') { m = t.width / 2 - 15 } else { m = iconOffset / 2 } l.forEach((txt, i) => { const yLineStart = -(l.length * h) / 2 + i * h; const yTextTop = yLineStart + (h - t.fontSize) / 2; e.fillText(txt, m, yTextTop); }); e.restore(); }
 
 function drawImageItem(ctx, item) {
     if (!item.img) return;
@@ -4499,7 +4478,7 @@ function drawImageItem(ctx, item) {
 
     const labelText = item.caption || item.label;
     if (labelText) {
-        ctx.font = `bold ${14 / cameraZoom}px Inter, sans-serif`;
+        ctx.font = `bold ${14 / cameraZoom}px 'Plus Jakarta Sans', sans-serif`;
         const textMetrics = ctx.measureText(labelText);
         const padding = 6 / cameraZoom;
         const labelWidth = textMetrics.width + padding * 2;
@@ -4508,13 +4487,7 @@ function drawImageItem(ctx, item) {
         const labelY = -item.height / 2 + 10 / cameraZoom;
 
         ctx.fillStyle = accentColor;
-        ctx.beginPath();
-        if (ctx.roundRect) {
-            ctx.roundRect(labelX, labelY, labelWidth, labelHeight, shapeRadius(4 / cameraZoom));
-        } else {
-            ctx.rect(labelX, labelY, labelWidth, labelHeight);
-        }
-        ctx.fill();
+        ctx.fillRect(labelX, labelY, labelWidth, labelHeight);
 
         ctx.fillStyle = contrastInk(accentColor);
         ctx.textAlign = 'left';
@@ -4569,13 +4542,13 @@ function drawVideoItem(ctx, item) {
             
             // Draw overlay if paused
             if (item.video.paused) {
-                ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
+                ctx.fillStyle = 'rgba(18, 17, 16, 0.55)';
                 ctx.fillRect(-item.width / 2, -item.height / 2, item.width, item.height);
                 
-                // Draw a beautiful glassmorphic circular play button
+                // Draw a circular play button
                 const btnRadius = Math.min(item.width, item.height) * 0.15;
-                ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
-                ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
+                ctx.fillStyle = 'rgba(36, 32, 27, 0.85)';
+                ctx.strokeStyle = '#D4A359';
                 ctx.lineWidth = 2 / cameraZoom;
                 ctx.beginPath();
                 ctx.arc(0, 0, btnRadius, 0, Math.PI * 2);
@@ -4583,7 +4556,7 @@ function drawVideoItem(ctx, item) {
                 ctx.stroke();
                 
                 // Play triangle
-                ctx.fillStyle = '#ffffff';
+                ctx.fillStyle = '#F4F1EA';
                 ctx.beginPath();
                 const triSize = btnRadius * 0.4;
                 ctx.moveTo(-triSize * 0.3, -triSize * 0.6);
@@ -4595,12 +4568,12 @@ function drawVideoItem(ctx, item) {
         } else if (item._offscreenCanvas) {
             ctx.drawImage(item._offscreenCanvas, -item.width / 2, -item.height / 2, item.width, item.height);
         } else {
-            // Draw a beautiful glassmorphic loading placeholder
-            ctx.fillStyle = 'rgba(20, 20, 20, 0.75)';
+            // Draw loading placeholder
+            ctx.fillStyle = '#121110';
             ctx.fillRect(-item.width / 2, -item.height / 2, item.width, item.height);
             
-            // Rounded glass border
-            ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
+            // Sharp border
+            ctx.strokeStyle = '#7A6E60';
             ctx.lineWidth = 1 / cameraZoom;
             ctx.strokeRect(-item.width / 2, -item.height / 2, item.width, item.height);
             
@@ -4609,22 +4582,22 @@ function drawVideoItem(ctx, item) {
             const time = Date.now() / 1000;
             const pulse = Math.abs(Math.sin(time * 2));
             
-            // Outer pulsing glow
-            ctx.fillStyle = `rgba(66, 158, 255, ${0.1 + pulse * 0.15})`;
+            // Outer pulsing ring
+            ctx.fillStyle = `rgba(212, 163, 89, ${0.1 + pulse * 0.15})`;
             ctx.beginPath();
             ctx.arc(0, 0, pulseRadius * (1 + pulse * 0.2), 0, Math.PI * 2);
             ctx.fill();
             
             // Inner core spinning arc
-            ctx.strokeStyle = 'rgba(66, 158, 255, 0.8)';
+            ctx.strokeStyle = 'rgba(212, 163, 89, 0.85)';
             ctx.lineWidth = 3 / cameraZoom;
             ctx.beginPath();
             ctx.arc(0, 0, pulseRadius, time * 5, time * 5 + Math.PI * 1.5);
             ctx.stroke();
             
             // Loading text or video symbol
-            ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
-            ctx.font = `${11 / cameraZoom}px Inter, sans-serif`;
+            ctx.fillStyle = '#B8AFA0';
+            ctx.font = `${11 / cameraZoom}px 'Plus Jakarta Sans', sans-serif`;
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
             ctx.fillText('LOADING', 0, pulseRadius + 22 / cameraZoom);
@@ -4638,7 +4611,7 @@ function drawVideoItem(ctx, item) {
 
     if (item.label) {
         const labelText = item.label;
-        ctx.font = `bold ${14 / cameraZoom}px Inter, sans-serif`;
+        ctx.font = `bold ${14 / cameraZoom}px 'Plus Jakarta Sans', sans-serif`;
         const textMetrics = ctx.measureText(labelText);
         const padding = 6 / cameraZoom;
         const labelWidth = textMetrics.width + padding * 2;
@@ -4647,13 +4620,7 @@ function drawVideoItem(ctx, item) {
         const labelY = -item.height / 2 + 10 / cameraZoom;
 
         ctx.fillStyle = accentColor;
-        ctx.beginPath();
-        if (ctx.roundRect) {
-            ctx.roundRect(labelX, labelY, labelWidth, labelHeight, shapeRadius(4 / cameraZoom));
-        } else {
-            ctx.rect(labelX, labelY, labelWidth, labelHeight);
-        }
-        ctx.fill();
+        ctx.fillRect(labelX, labelY, labelWidth, labelHeight);
 
         ctx.fillStyle = contrastInk(accentColor);
         ctx.textAlign = 'left';
@@ -4724,7 +4691,7 @@ function drawMeasureItem(ctx, item) {
     const midX = (x1 + x2) / 2;
     const midY = (y1 + y2) / 2;
 
-    ctx.font = `${14 / cameraZoom}px Inter, sans-serif`;
+    ctx.font = `${14 / cameraZoom}px 'Plus Jakarta Sans', sans-serif`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'bottom'; // Place text slightly above the line
 
@@ -4763,13 +4730,7 @@ function drawTextListItem(e, t) {
 
     // Draw Box
     e.fillStyle = t.color;
-    e.beginPath();
-    if (e.roundRect) {
-        e.roundRect(-t.width / 2, -t.height / 2, t.width, t.height, shapeRadius(12 / cameraZoom));
-    } else {
-        e.rect(-t.width / 2, -t.height / 2, t.width, t.height);
-    }
-    e.fill();
+    e.fillRect(-t.width / 2, -t.height / 2, t.width, t.height);
 
     const lum = getLuminance(t.color);
     const textColor = lum > 0.5 ? '#111111' : '#ffffff';
@@ -5311,7 +5272,7 @@ function drawConnectorItem(e, renderCtx) {
     _ctx.beginPath();
     _ctx.moveTo(cleanRoute[0].x, cleanRoute[0].y);
 
-    const cornerRadius = shapeRadius(16 / cameraZoom);
+    const cornerRadius = 0;
     for (let i = 1; i < cleanRoute.length - 1; i++) {
         const pA = cleanRoute[i - 1];
         const pB = cleanRoute[i];
@@ -5375,11 +5336,7 @@ function drawCounterItem(e, t) {
     e.strokeStyle = t.color || accentColor;
     e.lineWidth = 2 / cameraZoom;
     e.beginPath();
-    if (e.roundRect) {
-        e.roundRect(-halfW, -halfH, t.width, t.height, shapeRadius(8 / cameraZoom));
-    } else {
-        e.rect(-halfW, -halfH, t.width, t.height);
-    }
+    e.rect(-halfW, -halfH, t.width, t.height);
     e.fill();
     e.stroke();
 
@@ -6482,9 +6439,9 @@ function resetBoard() {
     e.data.cameraZoom = 1;
     e.data.historyStack = [];
     e.data.historyIndex = -1;
-    e.data.canvasBackgroundColor = '#0d0d0d';
-    e.data.accentColor = '#429eff';
-    e.data.gridColor = '#f9f8f6';
+    e.data.canvasBackgroundColor = '#121110';
+    e.data.accentColor = '#D4A359';
+    e.data.gridColor = '#F4F1EA';
     switchTab(activeProjectId, { force: true });
     saveStateForUndo();
 }
@@ -6551,10 +6508,10 @@ function downloadStructuredBoardPng(project) {
     canvas.width = width;
     canvas.height = pad * 2 + capped.length * lineHeight;
     const ctx = canvas.getContext('2d');
-    ctx.fillStyle = '#0d0d0d';
+    ctx.fillStyle = '#121110';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
-    ctx.fillStyle = '#e2e8f0';
-    ctx.font = '20px Inter, sans-serif';
+    ctx.fillStyle = '#F4F1EA';
+    ctx.font = "20px 'Plus Jakarta Sans', sans-serif";
     ctx.textBaseline = 'top';
     capped.forEach((line, i) => ctx.fillText(line, pad, pad + i * lineHeight));
     const link = document.createElement('a');
@@ -6942,7 +6899,7 @@ function loadFileAsNewTab(fileContent, fileName) {
         const name = getDeduplicatedTabName(rawName);
         if (data.prompts && Array.isArray(data.prompts)) {
             const newId = nextProjectId();
-            const newProject = { id: newId, type: 'moodprompt', name: name, data: { ...data, prompts: data.prompts, canvasBackgroundColor: data.canvasBackgroundColor || '#0d0d0d' } };
+            const newProject = { id: newId, type: 'moodprompt', name: name, data: { ...data, prompts: data.prompts, canvasBackgroundColor: data.canvasBackgroundColor || '#121110' } };
             projects.push(newProject);
             renderTabs();
             switchTab(newId);
@@ -6951,7 +6908,7 @@ function loadFileAsNewTab(fileContent, fileName) {
         }
         if (data.frames && Array.isArray(data.frames)) {
             const newId = nextProjectId();
-            const newProject = { id: newId, type: 'storyflow', name: name, data: { frames: data.frames, canvasBackgroundColor: data.canvasBackgroundColor || '#0d0d0d' } };
+            const newProject = { id: newId, type: 'storyflow', name: name, data: { frames: data.frames, canvasBackgroundColor: data.canvasBackgroundColor || '#121110' } };
             projects.push(newProject);
             renderTabs();
             switchTab(newId);
@@ -7002,7 +6959,7 @@ function loadFileAsNewTab(fileContent, fileName) {
 }
 function loadProject(e) {
     try {
-        const t = JSON.parse(e); const o = projects.find(e => e.id === activeProjectId); if (!o || o.type !== 'moodinfinite') return; o.data.cameraOffset = t.cameraOffset || (t.data && t.data.cameraOffset) || { x: window.innerWidth / 2, y: window.innerHeight / 2 }; o.data.cameraZoom = t.cameraZoom || (t.data && t.data.cameraZoom) || 1; canvasBackgroundColor = t.canvasBackgroundColor || (t.data && t.data.canvasBackgroundColor) || '#0d0d0d'; accentColor = t.accentColor || (t.data && t.data.accentColor) || '#429eff'; gridColor = t.gridColor || (t.data && t.data.gridColor) || '#f9f8f6'; o.data.canvasBackgroundColor = canvasBackgroundColor; o.data.accentColor = accentColor; o.data.gridColor = gridColor; showGrid = t.showGrid ?? (t.data && t.data.showGrid) ?? true; snapToGrid = t.snapToGrid ?? (t.data && t.data.snapToGrid) ?? true; showDropShadow = t.showDropShadow ?? (t.data && t.data.showDropShadow) ?? true; gridSize = t.gridSize || (t.data && t.data.gridSize) || 50; gridOpacity = t.gridOpacity || (t.data && t.data.gridOpacity) || .05; if (t.globalImageCache) { globalImageCache = { ...globalImageCache, ...t.globalImageCache }; }
+        const t = JSON.parse(e); const o = projects.find(e => e.id === activeProjectId); if (!o || o.type !== 'moodinfinite') return; o.data.cameraOffset = t.cameraOffset || (t.data && t.data.cameraOffset) || { x: window.innerWidth / 2, y: window.innerHeight / 2 }; o.data.cameraZoom = t.cameraZoom || (t.data && t.data.cameraZoom) || 1; canvasBackgroundColor = t.canvasBackgroundColor || (t.data && t.data.canvasBackgroundColor) || '#121110'; accentColor = t.accentColor || (t.data && t.data.accentColor) || '#D4A359'; gridColor = t.gridColor || (t.data && t.data.gridColor) || '#F4F1EA'; o.data.canvasBackgroundColor = canvasBackgroundColor; o.data.accentColor = accentColor; o.data.gridColor = gridColor; showGrid = t.showGrid ?? (t.data && t.data.showGrid) ?? true; snapToGrid = t.snapToGrid ?? (t.data && t.data.snapToGrid) ?? true; showDropShadow = t.showDropShadow ?? (t.data && t.data.showDropShadow) ?? true; gridSize = t.gridSize || (t.data && t.data.gridSize) || 50; gridOpacity = t.gridOpacity || (t.data && t.data.gridOpacity) || .05; if (t.globalImageCache) { globalImageCache = { ...globalImageCache, ...t.globalImageCache }; }
         const processedItems = t.items || (t.data && t.data.items) || [];
         restoreImages(processedItems);
         o.data.items = [
@@ -7118,9 +7075,9 @@ window.reloadCurrentProjectFromBlob = async function(blob) {
         if (activeProject.type === 'moodinfinite') {
             // Special handling for moodinfinite global variables
             const t = data;
-            canvasBackgroundColor = t.canvasBackgroundColor || '#0d0d0d';
-            accentColor = t.accentColor || '#429eff';
-            gridColor = t.gridColor || '#f9f8f6';
+            canvasBackgroundColor = t.canvasBackgroundColor || '#121110';
+            accentColor = t.accentColor || '#D4A359';
+            gridColor = t.gridColor || '#F4F1EA';
             showGrid = t.showGrid ?? true;
             snapToGrid = t.snapToGrid ?? true;
             showDropShadow = t.showDropShadow ?? true;
@@ -7810,7 +7767,7 @@ function alignBottom() { if (selectedItems.length < 2) return; const maxY = Math
 function distributeHorizontally() { if (selectedItems.length < 3) return; const sorted = [...selectedItems].sort((a, b) => getItemBoundingBox(a).x - getItemBoundingBox(b).x); const first = getItemBoundingBox(sorted[0]); const last = getItemBoundingBox(sorted[sorted.length - 1]); const totalWidth = sorted.reduce((s, i) => s + getItemBoundingBox(i).width, 0); const gap = (last.x + last.width - first.x - totalWidth) / (sorted.length - 1); let cursor = first.x; sorted.forEach(item => { const bb = getItemBoundingBox(item); moveItem(item, cursor - bb.x, 0); cursor += bb.width + gap; }); saveStateForUndo(); requestUpdate(); }
 function distributeVertically() { if (selectedItems.length < 3) return; const sorted = [...selectedItems].sort((a, b) => getItemBoundingBox(a).y - getItemBoundingBox(b).y); const first = getItemBoundingBox(sorted[0]); const last = getItemBoundingBox(sorted[sorted.length - 1]); const totalHeight = sorted.reduce((s, i) => s + getItemBoundingBox(i).height, 0); const gap = (last.y + last.height - first.y - totalHeight) / (sorted.length - 1); let cursor = first.y; sorted.forEach(item => { const bb = getItemBoundingBox(item); moveItem(item, 0, cursor - bb.y); cursor += bb.height + gap; }); saveStateForUndo(); requestUpdate(); }
 function updateLeftBarState() { const needsTwo = selectedItems.length < 2; const needsThree = selectedItems.length < 3; alignBtn.disabled = needsTwo; const ids = ['align-grid-btn','align-row-btn','align-col-btn','align-left-btn','align-center-h-btn','align-right-btn','align-top-btn','align-middle-v-btn','align-bottom-btn']; ids.forEach(id => { const b = document.getElementById(id); if (b) b.disabled = needsTwo; }); ['distribute-h-btn','distribute-v-btn'].forEach(id => { const b = document.getElementById(id); if (b) b.disabled = needsThree; }); }
-function getContrastColor(hex) { if (hex.indexOf('#') === 0) { hex = hex.slice(1) } if (hex.length === 3) { hex = hex[0] + hex[0] + hex[1] + hex[1] + hex[2] + hex[2] } if (hex.length !== 6) { return '#0d0d0d' } const r = parseInt(hex.slice(0, 2), 16), g = parseInt(hex.slice(2, 4), 16), b = parseInt(hex.slice(4, 6), 16), yiq = ((r * 299) + (g * 587) + (b * 114)) / 1000; return (yiq >= 128) ? '#262626' : '#ffffff' }
+function getContrastColor(hex) { if (hex.indexOf('#') === 0) { hex = hex.slice(1) } if (hex.length === 3) { hex = hex[0] + hex[0] + hex[1] + hex[1] + hex[2] + hex[2] } if (hex.length !== 6) { return '#121110' } const r = parseInt(hex.slice(0, 2), 16), g = parseInt(hex.slice(2, 4), 16), b = parseInt(hex.slice(4, 6), 16), yiq = ((r * 299) + (g * 587) + (b * 114)) / 1000; return (yiq >= 128) ? '#262626' : '#ffffff' }
 function contrastInk(hex) {
     const lum = getLuminance(hex);
     const darkLum = getLuminance('#121110');
@@ -7851,7 +7808,7 @@ function mixHex(a, b, t) {
     return hexFromRgb(A.map((v, i) => v * (1 - t) + B[i] * t));
 }
 function readableFillPair(accent) {
-    const source = parseHexColor(accent) ? accent : '#429eff';
+    const source = parseHexColor(accent) ? accent : '#D4A359';
     const dark = '#121110';
     const light = '#F4F1EA';
     const darkRatio = wcagContrast(dark, source);
@@ -7907,10 +7864,8 @@ function readableInkOn(color, background) {
     }
     return best;
 }
-function chromeBarColor(flat, pageHex) {
-    if (flat) return '#24201B';
-    // Moodlist top bar is rgba(20, 22, 30, 0.9) over the page.
-    return mixHex('#14161E', parseHexColor(pageHex) ? pageHex : '#0d0d0d', 0.1);
+function chromeBarColor() {
+    return '#24201B';
 }
 // Same choice as the active tab close (getContrastColor), then nudged if that
 // pair is still under 4.5 on the painted surface.
@@ -7921,21 +7876,12 @@ function pageContrastInk(background) {
     const toward = wcagContrast('#000000', surface) >= wcagContrast('#ffffff', surface) ? '#000000' : '#ffffff';
     return readableInkOn(toward, surface);
 }
-function ganttChromeSurface(flat, pageHex) {
-    const page = parseHexColor(pageHex) ? pageHex : '#0d0d0d';
-    if (flat) return '#24201B';
-    // #gantt-sidebar and #gantt-date-header use --bg-ui: rgba(35, 38, 51, 0.4).
-    return mixHex('#232633', page, 0.6);
+function ganttChromeSurface() {
+    return '#24201B';
 }
 function ganttTodaySurface(chrome) {
-    // .gantt-col-header.is-today paints rgba(66, 158, 255, 0.12) over the header.
-    return mixHex(chrome, '#429eff', 0.12);
-}
-function flatChrome() {
-    return document.documentElement.dataset.style === 'flat';
-}
-function shapeRadius(px) {
-    return flatChrome() ? 0 : px;
+    // .gantt-col-header.is-today paints rgba(37, 137, 189, 0.16) over the header.
+    return mixHex(chrome, '#2589BD', 0.16);
 }
 // Shared export theme. Dark is the default for the sheet; light is used for print and for PDF pages.
 // Gold text on light backgrounds uses goldText (#7A5C22); #D4A359 is only a rule or fill there.
@@ -7946,7 +7892,7 @@ const MOODFLOW_EXPORT_THEME = Object.freeze({
     dark: Object.freeze({ bg: '#121110', surface: '#24201B', text: '#F4F1EA', muted: '#B8AFA0', gold: '#D4A359', goldText: '#D4A359', cobalt: '#2589BD', onGold: '#121110' }),
     light: Object.freeze({ bg: '#F8F6F0', surface: '#EFEBE0', text: '#121110', muted: '#5C5548', gold: '#D4A359', goldText: '#7A5C22', cobalt: '#1C6A96', onGold: '#121110' }),
     sketchColor: '#ff4d6a',
-    fontsHref: 'https://fonts.googleapis.com/css2?family=Outfit:wght@700;900&family=Plus+Jakarta+Sans:wght@400;500;700&display=swap',
+    fontsHref: 'https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700;800;900&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap',
     headingStack: "'Outfit', 'Segoe UI', Arial, sans-serif",
     bodyStack: "'Plus Jakarta Sans', 'Segoe UI', Arial, sans-serif",
 });
@@ -7958,65 +7904,44 @@ function syncColorInput(input, value) {
 }
 function updateUIColors() {
     const e = document.documentElement.style, t = getContrastColor(canvasBackgroundColor);
-    const flat = baseStyle === 'flat';
-    baseStyle = flat ? 'flat' : 'glass';
-    document.documentElement.setAttribute('data-style', baseStyle);
-    if (document.body) document.body.setAttribute('data-style', baseStyle);
+    const theme = MOODFLOW_EXPORT_THEME.dark;
     e.setProperty('--bg-page', canvasBackgroundColor);
     e.setProperty('--text-color-active-tab', t);
     e.setProperty('--contrast-color-light', hexToRgba(t, 0.6));
-    if (flat) {
-        const theme = MOODFLOW_EXPORT_THEME.dark;
-        e.setProperty('--bg-ui', theme.surface);
-        e.setProperty('--bg-ui-hover', FLAT_UI_CHROME.hover);
-        e.setProperty('--text-color', theme.text);
-        e.setProperty('--text-color-light', theme.muted);
-        e.setProperty('--text-color-strong', theme.text);
-        e.setProperty('--border-color', FLAT_UI_CHROME.border);
-    } else {
-        e.setProperty('--bg-ui', 'rgba(35, 38, 51, 0.4)');
-        e.setProperty('--bg-ui-hover', 'rgba(55, 58, 71, 0.5)');
-        e.setProperty('--text-color', '#e2e8f0');
-        e.setProperty('--text-color-light', '#94a3b8');
-        e.setProperty('--text-color-strong', '#ffffff');
-        e.setProperty('--border-color', 'rgba(255, 255, 255, 0.1)');
-    }
+    e.setProperty('--bg-ui', theme.surface);
+    e.setProperty('--bg-ui-hover', FLAT_UI_CHROME.hover);
+    e.setProperty('--text-color', theme.text);
+    e.setProperty('--text-color-light', theme.muted);
+    e.setProperty('--text-color-strong', theme.text);
+    e.setProperty('--border-color', FLAT_UI_CHROME.border);
     e.setProperty('--switch-bg-checked', accentColor);
     e.setProperty('--on-accent', contrastInk(accentColor));
     const controlPair = readableFillPair(accentColor);
     e.setProperty('--accent-control-bg', controlPair.bg);
     e.setProperty('--accent-control-ink', controlPair.fg);
-    e.setProperty('--accent-on-chrome', readableInkOn(accentColor, chromeBarColor(flat, canvasBackgroundColor)));
+    e.setProperty('--accent-on-chrome', readableInkOn(accentColor, chromeBarColor()));
     const lightPage = t === '#262626';
     document.documentElement.dataset.pageTone = lightPage ? 'light' : 'dark';
-    const pageBg = parseHexColor(canvasBackgroundColor) ? canvasBackgroundColor : '#0d0d0d';
-    const pageInk = flat ? (lightPage ? '#121110' : '#F4F1EA') : t;
-    const pageMuted = flat ? (lightPage ? '#5C5548' : '#B8AFA0') : (lightPage ? '#44403c' : '#94a3b8');
+    const pageBg = parseHexColor(canvasBackgroundColor) ? canvasBackgroundColor : '#121110';
+    const pageInk = lightPage ? '#121110' : '#F4F1EA';
+    const pageMuted = lightPage ? '#5C5548' : '#B8AFA0';
     // #5C5548 on preset 10 (#bfbfbf) is 4.01:1, so muted page ink is measured against the page.
     e.setProperty('--text-on-page', readableInkOn(pageInk, pageBg));
     e.setProperty('--text-on-page-muted', readableInkOn(pageMuted, pageBg));
-    const ganttChrome = ganttChromeSurface(flat, pageBg);
+    const ganttChrome = ganttChromeSurface();
     const ganttToday = ganttTodaySurface(ganttChrome);
-    const ganttMuted = flat ? '#B8AFA0' : '#94a3b8';
+    const ganttMuted = '#B8AFA0';
     e.setProperty('--gantt-empty-ink', pageContrastInk(ganttChrome));
     e.setProperty('--gantt-empty-muted', readableInkOn(ganttMuted, ganttChrome));
     e.setProperty('--gantt-header-ink', pageContrastInk(ganttChrome));
     e.setProperty('--gantt-header-muted', readableInkOn(ganttMuted, ganttChrome));
     e.setProperty('--gantt-today-ink', pageContrastInk(ganttToday));
     e.setProperty('--gantt-today-muted', readableInkOn(ganttMuted, ganttToday));
-    if (flat) {
-        e.setProperty('--ml-text', lightPage ? '#121110' : '#F4F1EA');
-        e.setProperty('--ml-muted', lightPage ? '#5C5548' : '#B8AFA0');
-        e.setProperty('--ml-border', lightPage ? '#6F6456' : '#7A6E60');
-        e.setProperty('--ml-surface', lightPage ? '#ffffff' : '#24201B');
-        e.setProperty('--ml-hover', lightPage ? '#EFEBE0' : '#3A342C');
-    } else {
-        e.setProperty('--ml-text', lightPage ? '#1c1917' : '#e2e8f0');
-        e.setProperty('--ml-muted', lightPage ? '#44403c' : '#94a3b8');
-        e.setProperty('--ml-border', lightPage ? 'rgba(0,0,0,0.16)' : 'rgba(255,255,255,0.12)');
-        e.setProperty('--ml-surface', lightPage ? '#ffffff' : 'rgba(35, 38, 51, 0.72)');
-        e.setProperty('--ml-hover', lightPage ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.06)');
-    }
+    e.setProperty('--ml-text', lightPage ? '#121110' : '#F4F1EA');
+    e.setProperty('--ml-muted', lightPage ? '#5C5548' : '#B8AFA0');
+    e.setProperty('--ml-border', lightPage ? '#6F6456' : '#7A6E60');
+    e.setProperty('--ml-surface', lightPage ? '#ffffff' : '#24201B');
+    e.setProperty('--ml-hover', lightPage ? '#EFEBE0' : '#3A342C');
     canvas.style.backgroundColor = canvasBackgroundColor;
     syncColorInput(bgColorPicker, canvasBackgroundColor);
     syncColorInput(accentColorPicker, accentColor);
@@ -8397,7 +8322,7 @@ function editText(e) {
     if (e.type === 'comment' && e.icon && e.icon !== 'none') {
         paddingWidthAdjust += e.fontSize * 1.2 * cameraZoom + 10;
     }
-    Object.assign(textEditor.style, { display: 'block', left: `${t.x}px`, top: `${t.y}px`, width: `${o}px`, height: 'auto', transform: `rotate(${e.rotation}rad)`, transformOrigin: 'top left', color: e.type === 'comment' ? (getLuminance(e.color) > 0.5 ? '#111' : '#fff') : e.color, backgroundColor: e.type === 'comment' ? e.color : hexToRgba(e.color, .1), borderRadius: e.type === 'comment' && !flatChrome() ? `${12 * cameraZoom}px` : '0px', padding: e.type === 'comment' ? '8px 15px' : '0px', paddingLeft: e.type === 'comment' && e.icon && e.icon !== 'none' ? `${e.fontSize * 1.2 * cameraZoom + 20}px` : (e.type === 'comment' ? '15px' : '0px'), fontSize: `${e.fontSize * cameraZoom}px`, fontFamily: e.fontFamily || 'Nunito', textAlign: e.textAlign || 'center', fontWeight: e.fontWeight || 'bold', fontStyle: e.fontStyle || 'normal', lineHeight: e.type === 'comment' ? '1.4' : 'normal' });
+    Object.assign(textEditor.style, { display: 'block', left: `${t.x}px`, top: `${t.y}px`, width: `${o}px`, height: 'auto', transform: `rotate(${e.rotation}rad)`, transformOrigin: 'top left', color: e.type === 'comment' ? (getLuminance(e.color) > 0.5 ? '#111' : '#fff') : e.color, backgroundColor: e.type === 'comment' ? e.color : hexToRgba(e.color, .1), borderRadius: '0px', padding: e.type === 'comment' ? '8px 15px' : '0px', paddingLeft: e.type === 'comment' && e.icon && e.icon !== 'none' ? `${e.fontSize * 1.2 * cameraZoom + 20}px` : (e.type === 'comment' ? '15px' : '0px'), fontSize: `${e.fontSize * cameraZoom}px`, fontFamily: e.fontFamily || 'Nunito', textAlign: e.textAlign || 'center', fontWeight: e.fontWeight || 'bold', fontStyle: e.fontStyle || 'normal', lineHeight: e.type === 'comment' ? '1.4' : 'normal' });
     textEditor.value = e.text === "Type..." || e.text === "Note..." ? "" : e.text;
     textEditor.focus();
     autoResizeTextEditor();
@@ -8747,87 +8672,11 @@ function ungroupSelectedItems() {
     updateSelectionToolbar();
     updateLeftBarState();
 }
-function syncBaseStyleRadios() {
-    if (!palettePanel) return;
-    const open = palettePanel.classList.contains('open');
-    palettePanel.querySelectorAll('[role="radio"]').forEach((radio) => {
-        const on = radio.dataset.styleOption === baseStyle;
-        radio.setAttribute('aria-checked', on ? 'true' : 'false');
-        radio.tabIndex = open && on ? 0 : -1;
-    });
-}
-function selectBaseStyle(style) {
-    const next = style === 'flat' ? 'flat' : 'glass';
-    if (baseStyle === next) {
-        syncBaseStyleRadios();
-        return;
-    }
-    baseStyle = next;
-    syncBaseStyleRadios();
-    updateUIColors();
-    saveSettings();
-}
-function moveBaseStyle(fromEl, delta) {
-    const radios = [...palettePanel.querySelectorAll('[role="radio"]')];
-    const index = radios.indexOf(fromEl);
-    if (index < 0) return;
-    const next = radios[(index + delta + radios.length) % radios.length];
-    selectBaseStyle(next.dataset.styleOption);
-    next.focus();
-}
-function onBaseStyleKey(e) {
-    if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
-        e.preventDefault();
-        e.stopPropagation();
-        moveBaseStyle(e.currentTarget, 1);
-    } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
-        e.preventDefault();
-        e.stopPropagation();
-        moveBaseStyle(e.currentTarget, -1);
-    } else if (e.key === ' ' || e.key === 'Enter') {
-        e.preventDefault();
-        e.stopPropagation();
-        selectBaseStyle(e.currentTarget.dataset.styleOption);
-    }
-}
 function paletteSupportsPreview(project) {
     return !!(project && (project.type === 'moodinfinite' || project.type === 'moodprompt' || project.type === 'storyflow' || project.type === 'moodlist'));
 }
 function buildPaletteMenu() {
     palettePanel.innerHTML = '';
-
-    const styleGroup = document.createElement('div');
-    styleGroup.className = 'base-style-group';
-    styleGroup.setAttribute('role', 'radiogroup');
-    styleGroup.setAttribute('aria-label', 'Base style');
-    const styleLabel = document.createElement('div');
-    styleLabel.className = 'base-style-label';
-    styleLabel.setAttribute('aria-hidden', 'true');
-    styleLabel.textContent = 'Base style';
-    styleGroup.appendChild(styleLabel);
-    [
-        { id: 'glass', label: 'Glassmorphism' },
-        { id: 'flat', label: 'Flat' },
-    ].forEach((entry) => {
-        const radio = document.createElement('button');
-        radio.type = 'button';
-        radio.className = 'base-style-option';
-        radio.dataset.styleOption = entry.id;
-        radio.setAttribute('role', 'radio');
-        radio.textContent = entry.label;
-        radio.addEventListener('click', () => selectBaseStyle(entry.id));
-        radio.addEventListener('keydown', onBaseStyleKey);
-        styleGroup.appendChild(radio);
-    });
-    palettePanel.appendChild(styleGroup);
-    syncBaseStyleRadios();
-
-    const styleSeparator = document.createElement('div');
-    styleSeparator.className = 'palette-separator';
-    styleSeparator.setAttribute('role', 'separator');
-    styleSeparator.style.borderTop = '1px solid var(--border-color)';
-    styleSeparator.style.margin = '4px 0';
-    palettePanel.appendChild(styleSeparator);
 
     colorPalettes.forEach((palette, index) => {
         const option = document.createElement('div');
@@ -8849,9 +8698,9 @@ function buildPaletteMenu() {
         option.addEventListener('mouseleave', () => {
             const activeProject = projects.find(p => p.id === activeProjectId);
             if (paletteSupportsPreview(activeProject)) {
-                canvasBackgroundColor = activeProject.data.canvasBackgroundColor || '#0d0d0d';
-                accentColor = activeProject.data.accentColor || '#429eff';
-                gridColor = activeProject.data.gridColor || '#f9f8f6';
+                canvasBackgroundColor = activeProject.data.canvasBackgroundColor || '#121110';
+                accentColor = activeProject.data.accentColor || '#D4A359';
+                gridColor = activeProject.data.gridColor || '#F4F1EA';
                 updateUIColors();
             }
         });
@@ -9549,15 +9398,12 @@ function drawLinkItem(ctx, item) {
     const x = -item.width / 2;
     const y = -item.height / 2;
 
-    ctx.fillStyle = flatChrome() ? '#24201B' : 'rgba(30, 30, 30, 0.9)';
+    ctx.fillStyle = '#24201B';
     ctx.strokeStyle = item.color || accentColor;
     ctx.lineWidth = 2 / cameraZoom;
 
-    ctx.beginPath();
-    if (ctx.roundRect) ctx.roundRect(x, y, item.width, item.height, shapeRadius(10 / cameraZoom));
-    else ctx.rect(x, y, item.width, item.height);
-    ctx.fill();
-    ctx.stroke();
+    ctx.fillRect(x, y, item.width, item.height);
+    ctx.strokeRect(x, y, item.width, item.height);
 
     // Icon handling
     if (!item.iconImage && !item.iconLoading) {
@@ -9600,14 +9446,14 @@ function drawLinkItem(ctx, item) {
         ctx.arc(x + padding + iconSize / 2, y + item.height / 2, 8 / cameraZoom, 0, Math.PI * 2);
         ctx.fill();
         ctx.fillStyle = contrastInk(item.color || accentColor);
-        ctx.font = `bold ${10 / cameraZoom}px Inter`;
+        ctx.font = `bold ${10 / cameraZoom}px 'Plus Jakarta Sans', sans-serif`;
         ctx.textAlign = 'center';
         ctx.fillText('L', x + padding + iconSize / 2, y + item.height / 2 + 3 / cameraZoom);
     }
 
     // Text handling
-    ctx.fillStyle = flatChrome() ? '#F4F1EA' : '#ffffff';
-    ctx.font = `500 ${14 / cameraZoom}px Inter, sans-serif`;
+    ctx.fillStyle = '#F4F1EA';
+    ctx.font = `500 ${14 / cameraZoom}px 'Plus Jakarta Sans', sans-serif`;
     ctx.textAlign = 'left';
     ctx.textBaseline = 'middle';
 
@@ -9635,20 +9481,17 @@ function drawLinkItem(ctx, item) {
     ctx.fillText(displayTitle, textX, y + item.height / 2);
 
     // Quick Go button rendering with hover effect
-    ctx.fillStyle = flatChrome() ? (item.isHovered ? '#3A342C' : '#121110') : (item.isHovered ? 'rgba(255, 255, 255, 0.2)' : 'rgba(255, 255, 255, 0.1)');
-    ctx.beginPath();
-    if (ctx.roundRect) ctx.roundRect(btnX, btnY, btnSize, btnSize, shapeRadius(6 / cameraZoom));
-    else ctx.rect(btnX, btnY, btnSize, btnSize);
-    ctx.fill();
+    ctx.fillStyle = item.isHovered ? '#3A342C' : '#121110';
+    ctx.fillRect(btnX, btnY, btnSize, btnSize);
 
-    ctx.strokeStyle = flatChrome() ? '#7A6E60' : (item.isHovered ? 'rgba(255, 255, 255, 0.5)' : 'rgba(255, 255, 255, 0.3)');
+    ctx.strokeStyle = '#7A6E60';
     ctx.lineWidth = 1 / cameraZoom;
-    ctx.stroke();
+    ctx.strokeRect(btnX, btnY, btnSize, btnSize);
 
     // External link icon arrow
     ctx.beginPath();
     ctx.lineWidth = 2 / cameraZoom;
-    ctx.strokeStyle = flatChrome() ? '#F4F1EA' : (item.isHovered ? '#fff' : 'rgba(255, 255, 255, 0.8)');
+    ctx.strokeStyle = '#F4F1EA';
     const arrowPadding = 6 / cameraZoom;
     const ax = btnX + arrowPadding;
     const ay = btnY + btnSize - arrowPadding;
@@ -10465,7 +10308,7 @@ function downloadColorSeekerPalette() {
 
         // Add hex text
         ctx.fillStyle = getContrastTextColor(color);
-        ctx.font = 'bold 40px Inter, sans-serif';
+        ctx.font = "bold 40px 'Outfit', sans-serif";
         ctx.textAlign = 'center';
         ctx.fillText(color.toUpperCase(), i * barWidth + barWidth / 2, h - 60);
     });
@@ -12648,7 +12491,7 @@ function renderGanttView(project) {
     groups.forEach(group => {
         let groupColor = group.color;
         if (!groupColor || groupColor.startsWith('var(')) {
-            groupColor = accentColor || '#429eff';
+            groupColor = accentColor || '#D4A359';
         }
 
         // ── Sidebar group row ──
@@ -12967,7 +12810,7 @@ function renderGanttView(project) {
                 }
                 const { left, width } = geom;
                 const barColor = ganttStatusColor(task, groupColor);
-                const textColor = getContrastColor(barColor.startsWith('#') ? barColor : '#429eff');
+                const textColor = getContrastColor(barColor.startsWith('#') ? barColor : '#D4A359');
                 const bar = document.createElement('div');
                 bar.className = 'gantt-bar';
                 bar.style.left   = left + 'px';
@@ -13213,7 +13056,7 @@ function ganttDrawDependencies(project, rowsArea) {
 
 function ganttAddGroup(project) {
     const id = Date.now();
-    const colors = ['#429eff','#a78bfa','#34d399','#f59e0b','#f87171','#60a5fa','#fb923c'];
+    const colors = ['#D4A359','#2589BD','#7A6E60','#E8A0A0','#58C2F5','#B8AFA0','#C48B3B'];
     const color  = colors[(project.data.groups.length) % colors.length];
     project.data.groups.push({ id, name: 'New Group', color, collapsed: false, tasks: [] });
     renderGanttView(project);

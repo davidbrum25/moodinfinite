@@ -398,7 +398,7 @@ class MoodComfyUI {
             }
             if (box) {
                 box.style.display = 'block';
-                box.innerHTML = `<span style="color: var(--accent-danger, #ef4444);">${err.userMessage || err.message}</span>`;
+                box.innerHTML = `<span style="color: var(--color-error, #E8A0A0);">${err.userMessage || err.message}</span>`;
             }
         }
     }

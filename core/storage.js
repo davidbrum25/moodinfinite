@@ -224,7 +224,7 @@ export function loadFileAsNewTab(fileContent, fileName) {
         const name = fileName.split('.').slice(0, -1).join('.') || 'Loaded Project';
         if (data.prompts && Array.isArray(data.prompts)) {
             const newId = Date.now();
-            const newProject = { id: newId, type: 'moodprompt', name: name, data: { prompts: data.prompts, canvasBackgroundColor: data.state.canvasBackgroundColor || '#0d0d0d' } };
+            const newProject = { id: newId, type: 'moodprompt', name: name, data: { prompts: data.prompts, canvasBackgroundColor: data.state.canvasBackgroundColor || '#121110' } };
             state.projects.push(newProject);
             renderTabs();
             switchTab(newId);
@@ -233,7 +233,7 @@ export function loadFileAsNewTab(fileContent, fileName) {
         }
         if (data.frames && Array.isArray(data.frames)) {
             const newId = Date.now();
-            const newProject = { id: newId, type: 'storyflow', name: name, data: { frames: data.frames, canvasBackgroundColor: data.state.canvasBackgroundColor || '#0d0d0d' } };
+            const newProject = { id: newId, type: 'storyflow', name: name, data: { frames: data.frames, canvasBackgroundColor: data.state.canvasBackgroundColor || '#121110' } };
             state.projects.push(newProject);
             renderTabs();
             switchTab(newId);
@@ -258,7 +258,7 @@ export function loadFileAsNewTab(fileContent, fileName) {
 
 export function loadProject(e) {
     try {
-        const t = JSON.parse(e); const o = state.projects.find(e => e.id === state.activeProjectId); if (!o || o.type !== 'moodinfinite') return; o.data.state.cameraOffset = t.state.cameraOffset || { x: window.innerWidth / 2, y: window.innerHeight / 2 }; o.data.state.cameraZoom = t.state.cameraZoom || 1; state.canvasBackgroundColor = t.state.canvasBackgroundColor || '#0d0d0d'; state.accentColor = t.state.accentColor || '#429eff'; state.gridColor = t.state.gridColor || '#f9f8f6'; o.data.state.canvasBackgroundColor = state.canvasBackgroundColor; o.data.state.accentColor = state.accentColor; o.data.state.gridColor = state.gridColor; state.showGrid = t.state.showGrid ?? true; state.snapToGrid = t.state.snapToGrid ?? true; state.showDropShadow = t.state.showDropShadow ?? true; state.gridSize = t.state.gridSize || 50; state.gridOpacity = t.state.gridOpacity || .05; if (t.state.globalImageCache) { state.globalImageCache = { ...state.globalImageCache, ...t.state.globalImageCache }; }
+        const t = JSON.parse(e); const o = state.projects.find(e => e.id === state.activeProjectId); if (!o || o.type !== 'moodinfinite') return; o.data.state.cameraOffset = t.state.cameraOffset || { x: window.innerWidth / 2, y: window.innerHeight / 2 }; o.data.state.cameraZoom = t.state.cameraZoom || 1; state.canvasBackgroundColor = t.state.canvasBackgroundColor || '#121110'; state.accentColor = t.state.accentColor || '#D4A359'; state.gridColor = t.state.gridColor || '#F4F1EA'; o.data.state.canvasBackgroundColor = state.canvasBackgroundColor; o.data.state.accentColor = state.accentColor; o.data.state.gridColor = state.gridColor; state.showGrid = t.state.showGrid ?? true; state.snapToGrid = t.state.snapToGrid ?? true; state.showDropShadow = t.state.showDropShadow ?? true; state.gridSize = t.state.gridSize || 50; state.gridOpacity = t.state.gridOpacity || .05; if (t.state.globalImageCache) { state.globalImageCache = { ...state.globalImageCache, ...t.state.globalImageCache }; }
         const processedItems = t.state.items || [];
         restoreImages(processedItems);
         o.data.state.items = [

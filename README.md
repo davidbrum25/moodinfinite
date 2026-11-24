@@ -236,7 +236,7 @@ If you find this tool useful and want to help me build more, consider supporting
 
 ### ✨ v1.2.1 (Multi-Resolution Layout, Flat Base Style & QoL Fixes)
 
-* **🎨 Flat & Glassmorphism Base Style:** Switch between **Flat** (default, crisp square surfaces) and **Glassmorphism** directly inside the palette selector, with improved contrast across light and dark presets.
+* **🎨 Unified Sharp Dark UI:** Crisp square dark mineral surfaces (`#121110` canvas, `#24201B` surface, `#D4A359` accent) across the palette selector and every board, with improved contrast across light and dark presets.
 * **🖥️ Full Top Bar Access on All Resolutions:** Fixed the tab container flex sizing and added a compact layout for narrow PC windows (`769px` to `1100px`), keeping all right-side export, print, palette, and cloud buttons reachable even with many open tabs. Enabled the **Open Boards** quick switcher up to `1100px`, clickable scroll indicators, and horizontal mouse-wheel scrolling.
 * **🧰 Unclipped Tool Flyouts & Touch Toggle:** Repositioned left-toolbar group flyouts (`Text`, `Shape`, `Measurement & Counter`, `Arrange`, `View`, `Video`) with viewport-clamped fixed positioning and click/tap toggle support so submenus never clip on `720p`/`768p` screens or mobile devices.
 * **✅ Text List Tool Fix:** Fixed the **Add Text List (`L`)** toolbar button ID binding so clicking the button activates the tool and shows its active state.
@@ -289,7 +289,7 @@ If you find this tool useful and want to help me build more, consider supporting
 
 ### ✨ v0.9.9 — UI Polish & Moodflow Minimap
 
-* **🎨 True Glassmorphism UI:** The topbar menu has been redesigned into a floating, fully transparent glass panel, allowing your canvas to blur beautifully underneath it.
+* **🎨 Unified Topbar UI:** The topbar menu has been redesigned into a clean floating panel for quick access to boards and actions.
 * **🖱️ Moodflow Minimap:** Added a dedicated horizontal scroll minimap timeline for Moodflow tabs. It includes live visual previews of your frames, a draggable camera viewport, and a skip-to-start button for rapid navigation.
 * **↔️ Horizontal Mousewheel Panning:** Scrolling your mouse wheel vertically inside a Moodflow tab now intuitively translates to smooth horizontal panning across your frames.
 * **🎯 Drag-and-Drop Indicators:** When reordering Moodflow cards, the drop zone now dynamically illuminates with your accent color and a subtle scale animation to clearly indicate where the card will be inserted.
@@ -333,7 +333,7 @@ This update brings a massive overhaul to the storage architecture, focusing on r
   * **Auto-Responsive Containers:** Notes now intelligently resize their boundaries to perfectly wrap your text.
   * **Smart Color Adaptive UI:** Background colors can be changed instantly via the selection toolbar. Text color flips automatically for readability.
 * **⌨️ Power-User Hotkeys:** `Ctrl+B` (bold), `Ctrl+I` (italic), `Ctrl+Enter` (save note), `Escape` (discard).
-* **💎 Premium Glassmorphism UI:** Redesigned confirmation modals with glassmorphism, backdrop blur, and a safety confirmation step when closing board tabs.
+* **💎 Redesigned Confirmation Modals:** Clean confirmation dialogs with a safety confirmation step when closing board tabs.
 * **🎨 Default Font (Nunito):** Set as the default for all text-capable elements.
 
 ---

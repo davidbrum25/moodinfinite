@@ -38,13 +38,13 @@ const CloudSync = (() => {
     };
 
     const BOARD_TYPE_COLORS = {
-        'moodinfinite': '#429eff',
+        'moodinfinite': '#D4A359',
         'colorseeker': '#ec4899',
         'storyflow': '#eab308',
         'moodgantt': '#10b981',
         'moodlist': '#8b5cf6',
         'moodprompt': '#f97316',
-        'unknown': '#94a3b8'
+        'unknown': '#B8AFA0'
     };
 
     // ─── STATE ──────────────────────────────────────────────────────────────
@@ -1011,7 +1011,7 @@ const CloudSync = (() => {
             const { appBytes, totalBytes, usedBytes } = await getDriveStorageInfo();
             const appPct  = totalBytes > 0 ? (appBytes  / totalBytes) * 100 : 0;
             const usedPct = totalBytes > 0 ? (usedBytes / totalBytes) * 100 : 0;
-            const barColor = appPct > 80 ? '#ef4444' : appPct > 50 ? '#f59e0b' : '#429eff';
+            const barColor = appPct > 80 ? '#E8A0A0' : appPct > 50 ? '#D4A359' : '#2589BD';
             storageMeter.innerHTML = `
                 <div class="cloud-storage-row">
                     <iconify-icon icon="lucide:database" width="13" height="13"></iconify-icon>
@@ -1019,7 +1019,7 @@ const CloudSync = (() => {
                     <span class="cloud-storage-value">${_fmtBytes(usedBytes)} / ${_fmtBytes(totalBytes)}</span>
                 </div>
                 <div class="cloud-storage-track">
-                    <div class="cloud-storage-bar" style="width:${Math.min(usedPct,100).toFixed(1)}%; background:rgba(148,163,184,0.3);"></div>
+                    <div class="cloud-storage-bar" style="width:${Math.min(usedPct,100).toFixed(1)}%; background:rgba(244,241,234,0.25);"></div>
                     <div class="cloud-storage-bar cloud-storage-bar--app" style="width:${Math.min(appPct,100).toFixed(1)}%; background:${barColor};"></div>
                 </div>
                 <div class="cloud-storage-row" style="margin-top:2px;">

@@ -4366,7 +4366,7 @@ function drawLinkItem(ctx, item) {
     const x = -item.width / 2;
     const y = -item.height / 2;
 
-    // Glassmorphism effect for link container
+    // Surface styling for link container
     ctx.fillStyle = 'rgba(30, 30, 30, 0.9)';
     ctx.strokeStyle = item.color || accentColor;
     ctx.lineWidth = 2 / cameraZoom;

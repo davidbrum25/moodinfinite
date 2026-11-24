@@ -2327,9 +2327,6 @@ try {
         assert.equal(ff.color.inputKept, '#12ab34');
         assert.ok(ff.color.itemPixel[1] > 180, `firefox item color: ${JSON.stringify(ff.color)}`);
         assert.equal(ff.color.barBackdrop, 'none', `firefox left bar still blurs over the color input: ${ff.color.barBackdrop}`);
-        await ffPage.evaluate(() => selectBaseStyle('glass'));
-        const ffGlassBlur = await ffPage.evaluate(() => getComputedStyle(document.getElementById('left-bar')).backdropFilter);
-        assert.equal(ffGlassBlur, 'none', `firefox glass left bar must stay sharp: ${ffGlassBlur}`);
         assert.notEqual(ff.color.appearance, 'none');
         assert.deepEqual(ffErrors.filter(isFirstParty), []);
         await firefox.close();
@@ -5547,7 +5544,7 @@ async function openPalette(page) {
             await page.click('#palette-btn').catch(() => {});
         }
         try {
-            await page.waitForSelector('#palette-panel.open [role="radio"]', { timeout: 3000 });
+            await page.waitForSelector('#palette-panel.open .palette-option', { timeout: 3000 });
             return;
         } catch {
             // Panel failed to open within 3s; retry up to 3 attempts.
@@ -5582,14 +5579,6 @@ async function closePalette(page) {
     });
 }
 
-async function chooseBaseStyle(page, style) {
-    await closePalette(page);
-    await openPalette(page);
-    await page.click(`#palette-panel [data-style-option="${style}"]`);
-    await page.waitForFunction((expected) => document.body.dataset.style === expected, {}, style);
-    await page.waitForFunction(() => !document.getAnimations().some((a) => a.transitionProperty && a.transitionProperty.startsWith('border-radius') || (a.playState === 'running' && a.transitionProperty)));
-}
-
 async function choosePreset(page, index) {
     await openPalette(page);
     await page.waitForSelector('#palette-panel.open .palette-option');
@@ -5599,94 +5588,121 @@ async function choosePreset(page, index) {
 }
 
 async function assertBaseStyle(page) {
-    console.log('Testing base style...');
+    console.log('Testing unified sharp dark theme...');
     assertNoForbiddenNames();
     const errorsBefore = pageErrors.length;
     await page.setViewport({ width: 1280, height: 800, deviceScaleFactor: 1, isMobile: false, hasTouch: false });
-    await page.evaluate(() => {
-        showUiBlur = true;
-        document.body.classList.toggle('no-blur', false);
-        saveSettings();
-    });
 
+    // Static check: no translucent blur theme, backdrop-filter, or removed selectors in tracked product files.
+    const removedPattern = new RegExp(['gl', 'ass', 'morph'].join('') + '|' + ['gl', 'ass', '-modal'].join('') + '|backdrop-filter|ui-blur-toggle|base-style-group', 'i');
+    const productFiles = [
+        'index.html',
+        'style.css',
+        'script.js',
+        'README.md',
+        '404.html',
+        'privacy.html',
+        'terms.html',
+        'modules/comfy-gen-node.js',
+        'modules/comfy-ui.js',
+        'cloud.js',
+        'core/state.js',
+        'core/storage.js',
+        'script.backup.js',
+    ];
+    for (const rel of productFiles) {
+        const content = readFileSync(path.join(ROOT, rel), 'utf8');
+        assert.equal(removedPattern.test(content), false, `removed translucent styling found in ${rel}`);
+    }
+
+    // Boot with empty storage
     await page.evaluate(() => localStorage.removeItem('moodinfinite-settings'));
     await page.reload({ waitUntil: 'domcontentloaded' });
-    const earlyEmpty = await page.evaluate(() => document.body.dataset.style);
-    assert.equal(earlyEmpty, 'flat', 'empty storage should paint flat before the app boots');
-    await page.waitForFunction(() => window.projects && window.projects.length > 0 && typeof selectBaseStyle === 'function' && typeof updateUIColors === 'function', { timeout: 15000 });
+    await page.waitForFunction(() => window.projects && window.projects.length > 0 && typeof updateUIColors === 'function', { timeout: 15000 });
     await page.setViewport({ width: 1280, height: 800, deviceScaleFactor: 1, isMobile: false, hasTouch: false });
-    const initial = await page.evaluate(() => {
-        const bar = getComputedStyle(document.getElementById('tabs-bar'));
-        const bg = getComputedStyle(document.documentElement).getPropertyValue('--bg-ui').trim().toLowerCase();
-        const radios = [...document.querySelectorAll('#palette-panel [role="radio"]')].map((el) => ({
-            style: el.dataset.styleOption,
-            checked: el.getAttribute('aria-checked'),
-        }));
-        return {
-            body: document.body.dataset.style,
-            html: document.documentElement.dataset.style,
-            backdrop: bar.backdropFilter,
-            bg,
-            radios,
-        };
-    });
-    assert.equal(initial.body, 'flat');
-    assert.equal(initial.html, 'flat');
-    assert.equal(initial.backdrop, 'none', `empty storage should not blur the tabs bar: ${initial.backdrop}`);
-    assert.equal(initial.bg, '#24201b');
-    assert.deepEqual(initial.radios, [
-        { style: 'glass', checked: 'false' },
-        { style: 'flat', checked: 'true' },
-    ]);
 
-    await page.evaluate(() => selectBaseStyle('glass'));
-    await chooseBaseStyle(page, 'flat');
-    const flat = await page.evaluate(() => {
+    const radiusIsZero = (value) => value === '0px' || value.split(' ').every((part) => part === '0px');
+    const checkInitial = await page.evaluate(() => {
         const bar = getComputedStyle(document.getElementById('tabs-bar'));
-        const panel = getComputedStyle(document.getElementById('palette-panel'));
-        const bg = getComputedStyle(document.documentElement).getPropertyValue('--bg-ui').trim().toLowerCase();
-        const radios = [...document.querySelectorAll('#palette-panel [role="radio"]')].map((el) => ({
-            style: el.dataset.styleOption,
-            checked: el.getAttribute('aria-checked'),
-        }));
+        const left = getComputedStyle(document.getElementById('left-bar'));
+        const menu = getComputedStyle(document.getElementById('context-menu'));
+        const modal = getComputedStyle(document.querySelector('.app-modal'));
+        const rootStyle = getComputedStyle(document.documentElement);
         return {
-            body: document.body.dataset.style,
-            radiusBar: bar.borderRadius,
-            radiusPanel: panel.borderRadius,
-            backdrop: bar.backdropFilter,
-            bg,
+            hasSelectBaseStyle: typeof selectBaseStyle !== 'undefined',
+            uiBlurToggle: !!document.getElementById('ui-blur-toggle'),
+            baseStyleGroup: !!document.querySelector('#palette-panel .base-style-group'),
+            styleOptions: document.querySelectorAll('#palette-panel [data-style-option]').length,
+            radios: document.querySelectorAll('#palette-panel [role="radio"]').length,
+            legacyModals: document.querySelectorAll('.' + ['gl', 'ass', '-modal'].join('')).length,
+            appModals: document.querySelectorAll('.app-modal').length,
+            bgUi: rootStyle.getPropertyValue('--bg-ui').trim().toLowerCase(),
+            bgPage: rootStyle.getPropertyValue('--bg-page').trim().toLowerCase(),
+            accent: rootStyle.getPropertyValue('--switch-bg-checked').trim().toLowerCase(),
+            colorScheme: rootStyle.colorScheme,
             surface: bar.backgroundColor,
-            stored: JSON.parse(localStorage.getItem('moodinfinite-settings')).baseStyle,
-            radios,
+            chrome: [
+                { name: 'tabs', backdrop: bar.backdropFilter, radius: bar.borderRadius },
+                { name: 'left', backdrop: left.backdropFilter, radius: left.borderRadius },
+                { name: 'menu', backdrop: menu.backdropFilter, radius: menu.borderRadius },
+                { name: 'modal', backdrop: modal.backdropFilter, radius: modal.borderRadius },
+            ],
         };
     });
-    assert.equal(flat.body, 'flat');
-    assert.ok(flat.radiusBar === '0px' || flat.radiusBar.split(' ').every((part) => part === '0px'), flat.radiusBar);
-    assert.ok(flat.radiusPanel === '0px' || flat.radiusPanel.split(' ').every((part) => part === '0px'), flat.radiusPanel);
-    assert.equal(flat.backdrop, 'none');
-    assert.equal(flat.bg, '#24201b');
-    assert.ok(flat.surface === 'rgb(36, 32, 27)' || flat.surface === 'rgba(36, 32, 27, 1)', flat.surface);
-    assert.equal(flat.stored, 'flat');
-    assert.deepEqual(flat.radios, [
-        { style: 'glass', checked: 'false' },
-        { style: 'flat', checked: 'true' },
-    ]);
+    assert.equal(checkInitial.hasSelectBaseStyle, false, 'selectBaseStyle should be removed');
+    assert.equal(checkInitial.uiBlurToggle, false, '#ui-blur-toggle should be removed');
+    assert.equal(checkInitial.baseStyleGroup, false, '.base-style-group should be removed');
+    assert.equal(checkInitial.styleOptions, 0, '[data-style-option] should be removed');
+    assert.equal(checkInitial.radios, 0, 'palette radio options should be removed');
+    assert.equal(checkInitial.legacyModals, 0, 'legacy modal class should be removed');
+    assert.ok(checkInitial.appModals > 0, '.app-modal should be present');
+    assert.equal(checkInitial.bgUi, '#24201b');
+    assert.equal(checkInitial.bgPage, '#121110');
+    assert.equal(checkInitial.accent, '#d4a359');
+    assert.ok(checkInitial.colorScheme.includes('dark'), `expected dark color-scheme, got ${checkInitial.colorScheme}`);
+    assert.ok(checkInitial.surface === 'rgb(36, 32, 27)' || checkInitial.surface === 'rgba(36, 32, 27, 1)', checkInitial.surface);
+    for (const c of checkInitial.chrome) {
+        assert.equal(c.backdrop, 'none', `${c.name} should not use backdrop-filter`);
+        assert.ok(radiusIsZero(c.radius), `${c.name} radius should be 0px, got ${c.radius}`);
+    }
 
+    // Boot with legacy stored theme flags in localStorage and verify they are ignored and cleaned on saveSettings()
+    await page.evaluate(() => {
+        const legacyStyleKey = 'base' + 'Style';
+        const legacyStyleVal = 'gl' + 'ass';
+        const legacyBlurKey = 'showUi' + 'Blur';
+        localStorage.setItem('moodinfinite-settings', JSON.stringify({
+            [legacyStyleKey]: legacyStyleVal,
+            [legacyBlurKey]: true,
+            showGrid: true,
+        }));
+    });
     await page.reload({ waitUntil: 'domcontentloaded' });
-    const early = await page.evaluate(() => document.body.dataset.style);
-    assert.equal(early, 'flat', 'stored flat style was not on the body before the app finished booting');
-    await page.waitForFunction(() => window.projects && window.projects.length > 0 && typeof selectBaseStyle === 'function' && typeof updateUIColors === 'function', { timeout: 15000 });
+    await page.waitForFunction(() => window.projects && window.projects.length > 0 && typeof updateUIColors === 'function', { timeout: 15000 });
     await page.setViewport({ width: 1280, height: 800, deviceScaleFactor: 1, isMobile: false, hasTouch: false });
-    const kept = await page.evaluate(() => ({
-        body: document.body.dataset.style,
-        stored: JSON.parse(localStorage.getItem('moodinfinite-settings')).baseStyle,
-        backdrop: getComputedStyle(document.getElementById('tabs-bar')).backdropFilter,
-        bg: getComputedStyle(document.documentElement).getPropertyValue('--bg-ui').trim().toLowerCase(),
-    }));
-    assert.equal(kept.body, 'flat');
-    assert.equal(kept.stored, 'flat');
-    assert.equal(kept.backdrop, 'none');
-    assert.equal(kept.bg, '#24201b');
+
+    const afterLegacyBoot = await page.evaluate(() => {
+        saveSettings();
+        const stored = JSON.parse(localStorage.getItem('moodinfinite-settings') || '{}');
+        const rootStyle = getComputedStyle(document.documentElement);
+        const bar = getComputedStyle(document.getElementById('tabs-bar'));
+        return {
+            bgUi: rootStyle.getPropertyValue('--bg-ui').trim().toLowerCase(),
+            bgPage: rootStyle.getPropertyValue('--bg-page').trim().toLowerCase(),
+            accent: rootStyle.getPropertyValue('--switch-bg-checked').trim().toLowerCase(),
+            backdrop: bar.backdropFilter,
+            radius: bar.borderRadius,
+            hasLegacyStyle: Object.prototype.hasOwnProperty.call(stored, 'base' + 'Style'),
+            hasLegacyBlur: Object.prototype.hasOwnProperty.call(stored, 'showUi' + 'Blur'),
+        };
+    });
+    assert.equal(afterLegacyBoot.bgUi, '#24201b');
+    assert.equal(afterLegacyBoot.bgPage, '#121110');
+    assert.equal(afterLegacyBoot.accent, '#d4a359');
+    assert.equal(afterLegacyBoot.backdrop, 'none');
+    assert.ok(radiusIsZero(afterLegacyBoot.radius), `tabs bar radius ${afterLegacyBoot.radius}`);
+    assert.equal(afterLegacyBoot.hasLegacyStyle, false, 'saveSettings should strip legacy baseStyle');
+    assert.equal(afterLegacyBoot.hasLegacyBlur, false, 'saveSettings should strip legacy showUiBlur');
 
     const surfaces = await page.evaluate(() => {
         const read = (el) => {
@@ -5737,23 +5753,20 @@ async function assertBaseStyle(page) {
         const menu = read(document.getElementById('context-menu'));
         return { imageSlot, thumb, select, ganttPanel, listCard, tone, menu };
     });
-    const radiusIsZero = (value) => value === '0px' || value.split(' ').every((part) => part === '0px');
     for (const [name, value] of Object.entries(surfaces)) {
-        assert.ok(value, `flat surface missing: ${name}`);
+        assert.ok(value, `surface missing: ${name}`);
         assert.ok(radiusIsZero(value.radius), `${name} radius ${value.radius}`);
         assert.equal(value.blur, 'none', `${name} blur ${value.blur}`);
     }
 
+    // Per-project palette persistence across tabs
     await page.evaluate(() => createNewProject('moodinfinite'));
     const boardA = await page.evaluate(() => activeProjectId);
-    await chooseBaseStyle(page, 'glass');
     await choosePreset(page, 1);
-    const glassPreset = await page.evaluate(() => {
+    const presetA = await page.evaluate(() => {
         const project = projects.find((entry) => entry.id === activeProjectId);
         const style = getComputedStyle(document.documentElement);
         return {
-            id: project.id,
-            style: document.body.dataset.style,
             bg: project.data.canvasBackgroundColor,
             accent: project.data.accentColor,
             grid: project.data.gridColor,
@@ -5761,39 +5774,19 @@ async function assertBaseStyle(page) {
             accentVar: style.getPropertyValue('--switch-bg-checked').trim().toLowerCase(),
         };
     });
-    assert.equal(glassPreset.style, 'glass');
-    assert.equal(glassPreset.bg, '#f8f9fa');
-    assert.equal(glassPreset.accent, '#007bff');
-    assert.equal(glassPreset.grid, '#ced4da');
-    assert.equal(glassPreset.page, '#f8f9fa');
-    assert.equal(glassPreset.accentVar, '#007bff');
-
-    await chooseBaseStyle(page, 'flat');
-    const styleDidNotRecolor = await page.evaluate((id) => {
-        const project = projects.find((entry) => entry.id === id);
-        const style = getComputedStyle(document.documentElement);
-        return {
-            style: document.body.dataset.style,
-            bg: project.data.canvasBackgroundColor,
-            accent: project.data.accentColor,
-            page: style.getPropertyValue('--bg-page').trim().toLowerCase(),
-            accentVar: style.getPropertyValue('--switch-bg-checked').trim().toLowerCase(),
-        };
-    }, boardA);
-    assert.equal(styleDidNotRecolor.style, 'flat');
-    assert.equal(styleDidNotRecolor.bg, '#f8f9fa');
-    assert.equal(styleDidNotRecolor.accent, '#007bff');
-    assert.equal(styleDidNotRecolor.page, '#f8f9fa');
-    assert.equal(styleDidNotRecolor.accentVar, '#007bff');
+    assert.equal(presetA.bg, '#f8f9fa');
+    assert.equal(presetA.accent, '#007bff');
+    assert.equal(presetA.grid, '#ced4da');
+    assert.equal(presetA.page, '#f8f9fa');
+    assert.equal(presetA.accentVar, '#007bff');
 
     await page.evaluate(() => createNewProject('moodinfinite'));
     const boardB = await page.evaluate(() => activeProjectId);
     await choosePreset(page, 4);
-    const flatPreset = await page.evaluate(() => {
+    const presetB = await page.evaluate(() => {
         const project = projects.find((entry) => entry.id === activeProjectId);
         const style = getComputedStyle(document.documentElement);
         return {
-            style: document.body.dataset.style,
             bg: project.data.canvasBackgroundColor,
             accent: project.data.accentColor,
             grid: project.data.gridColor,
@@ -5801,79 +5794,41 @@ async function assertBaseStyle(page) {
             accentVar: style.getPropertyValue('--switch-bg-checked').trim().toLowerCase(),
         };
     });
-    assert.equal(flatPreset.style, 'flat');
-    assert.equal(flatPreset.bg, '#2e3440');
-    assert.equal(flatPreset.accent, '#88c0d0');
-    assert.equal(flatPreset.grid, '#4c566a');
-    assert.equal(flatPreset.page, '#2e3440');
-    assert.equal(flatPreset.accentVar, '#88c0d0');
+    assert.equal(presetB.bg, '#2e3440');
+    assert.equal(presetB.accent, '#88c0d0');
+    assert.equal(presetB.grid, '#4c566a');
+    assert.equal(presetB.page, '#2e3440');
+    assert.equal(presetB.accentVar, '#88c0d0');
 
     await page.evaluate((id) => switchTab(id), boardA);
     const perProject = await page.evaluate(() => {
         const project = projects.find((entry) => entry.id === activeProjectId);
         return {
-            style: document.body.dataset.style,
             bg: project.data.canvasBackgroundColor,
             accent: project.data.accentColor,
+            backdrop: getComputedStyle(document.getElementById('tabs-bar')).backdropFilter,
+            radius: getComputedStyle(document.getElementById('tabs-bar')).borderRadius,
         };
     });
-    assert.equal(perProject.style, 'flat');
     assert.equal(perProject.bg, '#f8f9fa');
     assert.equal(perProject.accent, '#007bff');
+    assert.equal(perProject.backdrop, 'none');
+    assert.ok(radiusIsZero(perProject.radius), perProject.radius);
 
-    await chooseBaseStyle(page, 'glass');
-    const restored = await page.evaluate(() => {
-        const project = projects.find((entry) => entry.id === activeProjectId);
-        return {
-            style: document.body.dataset.style,
-            stored: JSON.parse(localStorage.getItem('moodinfinite-settings')).baseStyle,
-            backdrop: getComputedStyle(document.getElementById('tabs-bar')).backdropFilter,
-            bg: project.data.canvasBackgroundColor,
-            page: getComputedStyle(document.documentElement).getPropertyValue('--bg-page').trim().toLowerCase(),
-        };
-    });
-    assert.equal(restored.style, 'glass');
-    assert.equal(restored.stored, 'glass');
-    assert.notEqual(restored.backdrop, 'none');
-    assert.equal(restored.bg, '#f8f9fa');
-    assert.equal(restored.page, '#f8f9fa');
     await page.evaluate((id) => switchTab(id), boardB);
-    const otherBoard = await page.evaluate(() => {
-        const project = projects.find((entry) => entry.id === activeProjectId);
-        return project.data.accentColor;
-    });
+    const otherBoard = await page.evaluate(() => projects.find((entry) => entry.id === activeProjectId).data.accentColor);
     assert.equal(otherBoard, '#88c0d0');
 
+    // Keyboard open / Escape close & focus restore
     await closePalette(page);
     await openPalette(page);
-    await page.waitForFunction(() => document.activeElement && document.activeElement.getAttribute('role') === 'radio');
-    await page.keyboard.press('ArrowRight');
-    const moved = await page.evaluate(() => ({
-        active: document.activeElement && document.activeElement.dataset.styleOption,
-        flat: document.querySelector('[data-style-option="flat"]').getAttribute('aria-checked'),
-        glass: document.querySelector('[data-style-option="glass"]').getAttribute('aria-checked'),
-        body: document.body.dataset.style,
-    }));
-    assert.equal(moved.active, 'flat');
-    assert.equal(moved.flat, 'true');
-    assert.equal(moved.glass, 'false');
-    assert.equal(moved.body, 'flat');
-    await page.keyboard.press('ArrowLeft');
-    const movedBack = await page.evaluate(() => ({
-        active: document.activeElement && document.activeElement.dataset.styleOption,
-        flat: document.querySelector('[data-style-option="flat"]').getAttribute('aria-checked'),
-        glass: document.querySelector('[data-style-option="glass"]').getAttribute('aria-checked'),
-        body: document.body.dataset.style,
-    }));
-    assert.equal(movedBack.active, 'glass');
-    assert.equal(movedBack.glass, 'true');
-    assert.equal(movedBack.flat, 'false');
-    assert.equal(movedBack.body, 'glass');
+    await page.waitForFunction(() => document.activeElement && document.activeElement.classList.contains('palette-option'));
     await page.keyboard.press('Escape');
     await page.waitForFunction(() => !document.getElementById('palette-panel').classList.contains('open'));
     const refocused = await page.evaluate(() => document.activeElement && document.activeElement.id);
     assert.equal(refocused, 'palette-btn');
 
+    // Hover preview & accessibility metadata
     await openPalette(page);
     const hovered = await page.evaluate(() => {
         const option = document.querySelectorAll('#palette-panel .palette-option')[0];
@@ -5888,110 +5843,64 @@ async function assertBaseStyle(page) {
             role: sample.getAttribute('role'),
             tab: sample.tabIndex,
             label: sample.getAttribute('aria-label'),
-            style: document.body.dataset.style,
         };
     });
-    assert.equal(hovered.during, '#0d0d0d');
+    assert.equal(hovered.during, '#121110');
     assert.equal(hovered.after, '#2e3440');
-    assert.equal(hovered.style, 'glass');
     assert.equal(hovered.role, 'button');
     assert.equal(hovered.tab, 0);
     assert.match(hovered.label, /^Palette 3: background /);
 
-    await page.focus('#palette-panel .palette-option');
-    const optionIndex = 1;
-    await page.evaluate((index) => {
-        document.querySelectorAll('#palette-panel .palette-option')[index].focus();
-    }, optionIndex);
+    // Keyboard Enter selection on palette preset
+    await page.evaluate(() => {
+        document.querySelectorAll('#palette-panel .palette-option')[1].focus();
+    });
     await page.keyboard.press('Enter');
     await page.waitForFunction(() => !document.getElementById('palette-panel').classList.contains('open'));
-    const typed = await page.evaluate(() => {
-        const project = projects.find((entry) => entry.id === activeProjectId);
+    const typed = await page.evaluate(() => projects.find((entry) => entry.id === activeProjectId).data.canvasBackgroundColor);
+    assert.equal(typed, '#f8f9fa');
+
+    // Mobile 390px viewport overflow & tap-target checks
+    await page.setViewport({ width: 390, height: 844, deviceScaleFactor: 1, isMobile: true, hasTouch: true });
+    await page.waitForFunction(() => window.innerWidth === 390);
+    await openPalette(page);
+    const phone = await page.evaluate(() => {
+        const option = document.querySelector('#palette-panel .palette-option');
+        const rect = option.getBoundingClientRect();
         return {
-            bg: project.data.canvasBackgroundColor,
-            style: document.body.dataset.style,
-        };
-    });
-    assert.equal(typed.bg, '#f8f9fa');
-    assert.equal(typed.style, 'glass');
-
-    const blurredOff = await page.evaluate(() => {
-        const input = document.getElementById('ui-blur-toggle');
-        input.checked = false;
-        input.dispatchEvent(new Event('change', { bubbles: true }));
-        return getComputedStyle(document.getElementById('tabs-bar')).backdropFilter;
-    });
-    assert.equal(blurredOff, 'none');
-    const blurredOn = await page.evaluate(() => {
-        const input = document.getElementById('ui-blur-toggle');
-        input.checked = true;
-        input.dispatchEvent(new Event('change', { bubbles: true }));
-        return getComputedStyle(document.getElementById('tabs-bar')).backdropFilter;
-    });
-    assert.notEqual(blurredOn, 'none');
-    await chooseBaseStyle(page, 'flat');
-    const flatStillSharp = await page.evaluate(() => getComputedStyle(document.getElementById('tabs-bar')).backdropFilter);
-    assert.equal(flatStillSharp, 'none');
-    await chooseBaseStyle(page, 'glass');
-
-    for (const style of ['glass', 'flat']) {
-        await page.evaluate((next) => selectBaseStyle(next), style);
-        await page.setViewport({ width: 390, height: 844, deviceScaleFactor: 1, isMobile: true, hasTouch: true });
-        await page.waitForFunction(() => window.innerWidth === 390);
-        await page.evaluate(() => document.getElementById('palette-btn').click());
-        await page.waitForSelector('#palette-panel.open .base-style-option');
-        const phone = await page.evaluate(() => {
-            const option = document.querySelector('.base-style-option');
-            const rect = option.getBoundingClientRect();
-            return {
-                scrollW: document.documentElement.scrollWidth,
-                innerW: window.innerWidth,
-                h: rect.height,
-                w: rect.width,
-            };
-        });
-        assert.ok(phone.scrollW <= phone.innerW + 1, `${style} overflows at 390px (${phone.scrollW})`);
-        assert.ok(phone.h >= 44, `${style} style option is ${phone.h}px tall`);
-        assert.ok(phone.w >= 44, `${style} style option is ${phone.w}px wide`);
-        await page.keyboard.press('Escape');
-        await page.waitForFunction(() => !document.getElementById('palette-panel').classList.contains('open'));
-        const closedWidth = await page.evaluate(() => ({
             scrollW: document.documentElement.scrollWidth,
             innerW: window.innerWidth,
-        }));
-        assert.ok(closedWidth.scrollW <= closedWidth.innerW + 1, `${style} overflows at 390px with the popup closed (${closedWidth.scrollW})`);
+            h: rect.height,
+            w: rect.width,
+        };
+    });
+    assert.ok(phone.scrollW <= phone.innerW + 1, `palette overflows at 390px (${phone.scrollW})`);
+    assert.ok(phone.w >= 44, `palette option width ${phone.w}px should be >= 44px`);
+    assert.ok(phone.h > 0, `palette option height should be > 0`);
+    await page.keyboard.press('Escape');
+    await page.waitForFunction(() => !document.getElementById('palette-panel').classList.contains('open'));
+    const closedWidth = await page.evaluate(() => ({
+        scrollW: document.documentElement.scrollWidth,
+        innerW: window.innerWidth,
+    }));
+    assert.ok(closedWidth.scrollW <= closedWidth.innerW + 1, `overflows at 390px with popup closed (${closedWidth.scrollW})`);
+
+    // Standalone static pages align with dark mineral palette and sharp containers
+    for (const rel of ['404.html', 'privacy.html', 'terms.html']) {
+        const html = readFileSync(path.join(ROOT, rel), 'utf8');
+        assert.ok(html.includes('#121110'), `${rel} missing #121110`);
+        assert.ok(html.includes('#24201B'), `${rel} missing #24201B`);
+        assert.ok(html.includes('#D4A359'), `${rel} missing #D4A359`);
+        assert.ok(html.includes('#2589BD'), `${rel} missing #2589BD`);
+        assert.ok(html.includes('Outfit') && html.includes('Plus Jakarta Sans'), `${rel} missing Outfit/Plus Jakarta Sans`);
+        assert.ok(html.includes('border-radius: 0'), `${rel} missing sharp border-radius: 0`);
+        assert.equal(/#429eff|#18191f/i.test(html), false, `${rel} contains legacy slate/blue color`);
     }
 
     await page.setViewport({ width: 1280, height: 800, deviceScaleFactor: 1, isMobile: false, hasTouch: false });
-    await page.evaluate(() => selectBaseStyle('glass'));
-    const glassChrome = await page.evaluate(() => ({
-        tabs: getComputedStyle(document.getElementById('tabs-bar')).backdropFilter,
-        left: getComputedStyle(document.getElementById('left-bar')).backdropFilter,
-        menu: getComputedStyle(document.getElementById('context-menu')).backdropFilter,
-        modal: getComputedStyle(document.querySelector('.glass-modal')).backdropFilter,
-    }));
-    assert.notEqual(glassChrome.tabs, 'none', glassChrome.tabs);
-    assert.notEqual(glassChrome.left, 'none', glassChrome.left);
-    assert.notEqual(glassChrome.menu, 'none', glassChrome.menu);
-    assert.notEqual(glassChrome.modal, 'none', glassChrome.modal);
     const added = pageErrors.slice(errorsBefore).filter(isFirstParty);
-    assert.deepEqual(added, [], `base style raised errors:\n${added.join('\n')}`);
-
-    await page.reload({ waitUntil: 'domcontentloaded' });
-    const earlyGlass = await page.evaluate(() => document.body.dataset.style);
-    assert.equal(earlyGlass, 'glass', 'stored glass style was not on the body before the app finished booting');
-    await page.waitForFunction(() => window.projects && window.projects.length > 0 && typeof selectBaseStyle === 'function', { timeout: 15000 });
-    const keptGlass = await page.evaluate(() => ({
-        body: document.body.dataset.style,
-        html: document.documentElement.dataset.style,
-        stored: JSON.parse(localStorage.getItem('moodinfinite-settings')).baseStyle,
-        backdrop: getComputedStyle(document.getElementById('tabs-bar')).backdropFilter,
-    }));
-    assert.equal(keptGlass.body, 'glass');
-    assert.equal(keptGlass.html, 'glass');
-    assert.equal(keptGlass.stored, 'glass');
-    assert.notEqual(keptGlass.backdrop, 'none', keptGlass.backdrop);
-    console.log('Base style passed.');
+    assert.deepEqual(added, [], `unified dark theme checks raised errors:\n${added.join('\n')}`);
+    console.log('Unified sharp dark theme passed.');
 }
 
 function cssContrastRatio(foreground, background) {
@@ -6057,21 +5966,6 @@ async function assertPaletteReview(page) {
     });
     await page.waitForFunction(() => !document.getElementById('palette-panel').classList.contains('open'));
     assert.equal(await page.$eval('#palette-btn', (el) => el.getAttribute('aria-expanded')), 'false');
-
-    await openPalette(page);
-    await page.evaluate(() => document.querySelector('#palette-panel [data-style-option="glass"]').click());
-    const styleStaysOpen = await page.evaluate(() => ({
-        open: document.getElementById('palette-panel').classList.contains('open'),
-        expanded: document.getElementById('palette-btn').getAttribute('aria-expanded'),
-        style: document.body.dataset.style,
-    }));
-    assert.equal(styleStaysOpen.open, true);
-    assert.equal(styleStaysOpen.expanded, 'true');
-    assert.equal(styleStaysOpen.style, 'glass');
-    await page.evaluate(() => document.querySelector('#palette-panel [data-style-option="flat"]').click());
-    assert.equal(await page.$eval('#palette-btn', (el) => el.getAttribute('aria-expanded')), 'true');
-    await page.keyboard.press('Escape');
-    await page.waitForFunction(() => !document.getElementById('palette-panel').classList.contains('open'));
 
     await openPalette(page);
     const presetButtons = await page.$$('#palette-panel .palette-option');
@@ -6143,33 +6037,29 @@ async function assertPaletteReview(page) {
         const gantt = projects.find((project) => project.type === 'moodgantt');
         const board = projects.find((project) => project.type === 'moodinfinite') || list;
         const rows = [];
-        for (const style of ['flat', 'glass']) {
-            selectBaseStyle(style);
-            for (const index of [1, 2, 9, 3]) {
-                const palette = colorPalettes[index];
-                [list, gantt, board].forEach((project) => {
-                    if (!project) return;
-                    project.data.canvasBackgroundColor = palette.bg;
-                    project.data.accentColor = palette.accent;
-                    project.data.gridColor = palette.grid;
-                });
-                switchTab(list.id);
-                rows.push({
-                    style,
-                    palette: index + 1,
-                    close: read(document.querySelector('.tab-item.active .tab-close-btn')),
-                    zoom: read(document.querySelector('.gantt-zoom-btn.active')),
-                    save: read(document.querySelector('.ml-save-btn')),
-                    pin: read(document.querySelector('.ml-view-toggle')),
-                    label: read(document.querySelector('.ml-section-label')),
-                });
-            }
+        for (const index of [1, 2, 9, 3]) {
+            const palette = colorPalettes[index];
+            [list, gantt, board].forEach((project) => {
+                if (!project) return;
+                project.data.canvasBackgroundColor = palette.bg;
+                project.data.accentColor = palette.accent;
+                project.data.gridColor = palette.grid;
+            });
+            switchTab(list.id);
+            rows.push({
+                style: 'default',
+                palette: index + 1,
+                close: read(document.querySelector('.tab-item.active .tab-close-btn')),
+                zoom: read(document.querySelector('.gantt-zoom-btn.active')),
+                save: read(document.querySelector('.ml-save-btn')),
+                pin: read(document.querySelector('.ml-view-toggle')),
+                label: read(document.querySelector('.ml-section-label')),
+            });
         }
         const freezeMotion = document.createElement('style');
         freezeMotion.textContent = '*, *::before, *::after { transition: none !important; animation: none !important; }';
         document.head.appendChild(freezeMotion);
-        const applyLook = (style, palette) => {
-            selectBaseStyle(style);
+        const applyLook = (palette) => {
             canvasBackgroundColor = palette.bg;
             accentColor = palette.accent;
             gridColor = palette.grid;
@@ -6196,31 +6086,29 @@ async function assertPaletteReview(page) {
         list.data.cards = [];
         renderMoodlistView(list);
         const surfaces = [];
-        for (const style of ['flat', 'glass']) {
-            for (const index of [1, 2, 9, 3]) {
-                applyLook(style, colorPalettes[index]);
-                const bottoms = [...document.querySelectorAll('.gcol-bottom')];
-                const today = bottoms.find((el) => el.closest('.is-today'));
-                const other = bottoms.find((el) => !el.closest('.is-today'));
-                const mp = document.getElementById('moodprompt-empty-guide');
-                const sf = document.getElementById('storyflow-empty-guide');
-                surfaces.push({
-                    style,
-                    palette: index + 1,
-                    ganttTitle: read(document.querySelector('#gantt-empty-guide .board-empty-title')),
-                    ganttDetail: read(document.querySelector('#gantt-empty-guide p:not(.board-empty-title)')),
-                    week: read(today),
-                    weekOther: read(other),
-                    weekTop: read(today && today.parentElement.querySelector('.gcol-top')),
-                    weekOtherTop: read(other && other.parentElement.querySelector('.gcol-top')),
-                    promptTitle: read(mp && mp.querySelector('.board-empty-title')),
-                    promptDetail: read(mp && mp.querySelector('p:not(.board-empty-title)')),
-                    flowTitle: read(sf && sf.querySelector('.board-empty-title')),
-                    flowDetail: read(sf && sf.querySelector('p:not(.board-empty-title)')),
-                    listEmpty: read(document.querySelector('.ml-empty p')),
-                    listOpacity: getComputedStyle(document.querySelector('.ml-empty')).opacity,
-                });
-            }
+        for (const index of [1, 2, 9, 3]) {
+            applyLook(colorPalettes[index]);
+            const bottoms = [...document.querySelectorAll('.gcol-bottom')];
+            const today = bottoms.find((el) => el.closest('.is-today'));
+            const other = bottoms.find((el) => !el.closest('.is-today'));
+            const mp = document.getElementById('moodprompt-empty-guide');
+            const sf = document.getElementById('storyflow-empty-guide');
+            surfaces.push({
+                style: 'default',
+                palette: index + 1,
+                ganttTitle: read(document.querySelector('#gantt-empty-guide .board-empty-title')),
+                ganttDetail: read(document.querySelector('#gantt-empty-guide p:not(.board-empty-title)')),
+                week: read(today),
+                weekOther: read(other),
+                weekTop: read(today && today.parentElement.querySelector('.gcol-top')),
+                weekOtherTop: read(other && other.parentElement.querySelector('.gcol-top')),
+                promptTitle: read(mp && mp.querySelector('.board-empty-title')),
+                promptDetail: read(mp && mp.querySelector('p:not(.board-empty-title)')),
+                flowTitle: read(sf && sf.querySelector('.board-empty-title')),
+                flowDetail: read(sf && sf.querySelector('p:not(.board-empty-title)')),
+                listEmpty: read(document.querySelector('.ml-empty p')),
+                listOpacity: getComputedStyle(document.querySelector('.ml-empty')).opacity,
+            });
         }
         if (promptBoard) {
             promptBoard.data.prompts = [{
@@ -6236,22 +6124,19 @@ async function assertPaletteReview(page) {
             renderMoodpromptView(promptBoard);
         }
         const buttons = [];
-        for (const style of ['flat', 'glass']) {
-            for (let index = 0; index < colorPalettes.length; index++) {
-                applyLook(style, colorPalettes[index]);
-                const image = [...document.querySelectorAll('.media-type-btn')].find((el) => el.classList.contains('active') && el.textContent.trim() === 'Image');
-                const setDefault = document.querySelector('.set-default-btn');
-                buttons.push({
-                    style,
-                    palette: index + 1,
-                    image: read(image),
-                    imageText: image ? image.textContent.trim() : '',
-                    setDefault: read(setDefault),
-                    setDefaultText: setDefault ? setDefault.textContent.trim() : '',
-                });
-            }
+        for (let index = 0; index < colorPalettes.length; index++) {
+            applyLook(colorPalettes[index]);
+            const image = [...document.querySelectorAll('.media-type-btn')].find((el) => el.classList.contains('active') && el.textContent.trim() === 'Image');
+            const setDefault = document.querySelector('.set-default-btn');
+            buttons.push({
+                style: 'default',
+                palette: index + 1,
+                image: read(image),
+                imageText: image ? image.textContent.trim() : '',
+                setDefault: read(setDefault),
+                setDefaultText: setDefault ? setDefault.textContent.trim() : '',
+            });
         }
-        selectBaseStyle('flat');
         const guide = document.getElementById('canvas-empty-guide');
         guide.hidden = false;
         return {
@@ -6294,7 +6179,7 @@ async function assertPaletteReview(page) {
         flowDetail: /Add a frame to start/,
         listEmpty: /No cards yet/,
     };
-    assert.equal(samples.surfaces.length, 8);
+    assert.equal(samples.surfaces.length, 4);
     for (const row of samples.surfaces) {
         assert.equal(row.listOpacity, '1', `${row.style} palette ${row.palette} moodlist empty is faded`);
         for (const key of ['ganttTitle', 'ganttDetail', 'week', 'weekOther', 'weekTop', 'weekOtherTop', 'promptTitle', 'promptDetail', 'flowTitle', 'flowDetail', 'listEmpty']) {
@@ -6305,7 +6190,7 @@ async function assertPaletteReview(page) {
             assert.ok(ratio >= 4.5, `${row.style} palette ${row.palette} ${key} is ${ratio.toFixed(2)}:1 (${pair.color} on ${pair.background})`);
         }
     }
-    assert.equal(samples.buttons.length, 20);
+    assert.equal(samples.buttons.length, 11);
     for (const row of samples.buttons) {
         assert.equal(row.imageText, 'Image');
         assert.match(row.setDefaultText, /Set current as default/);
@@ -6361,7 +6246,7 @@ async function assertMoodflowExports(page) {
     const html = built.sheet;
     assert.match(html, /lang="en"/);
     assert.match(html, /<title>Spot Verano 30s \(Moodflow sheet\)<\/title>/);
-    assert.match(html, /Outfit:wght@700;900/);
+    assert.match(html, /Outfit:wght@400;600;700;800;900/);
     assert.match(html, /Plus\+Jakarta\+Sans/);
     assert.match(html, /Exported from Moodinfinite/);
     assert.match(html, /October 15, 2026/);
@@ -6676,24 +6561,23 @@ async function assertMultiResolutionAndQoLFixes(page) {
     assert.equal(storyflowCheck.afterScroll, 0, `#storyflow-scroll-start-btn should scroll #storyflow-scroll-area to scrollLeft === 0, got ${storyflowCheck.afterScroll}`);
     assert.ok(storyflowCheck.zIndex > 100, `#storyflow-fullscreen z-index (${storyflowCheck.zIndex}) should be > 100`);
 
-    // 5. #palette-panel renders .base-style-group with both Glassmorphism ([data-style-option="glass"]) and Flat ([data-style-option="flat"]) options
+    // 5. #palette-panel renders .palette-option swatches and .set-default-btn without any style-mode radio group
     const paletteCheck = await page.evaluate(() => {
         const group = document.querySelector('#palette-panel .base-style-group');
-        const glassOpt = document.querySelector('#palette-panel .base-style-group .base-style-option[data-style-option="glass"]');
-        const flatOpt = document.querySelector('#palette-panel .base-style-group .base-style-option[data-style-option="flat"]');
+        const styleOpt = document.querySelector('#palette-panel [data-style-option]');
+        const options = document.querySelectorAll('#palette-panel .palette-option');
+        const setDefaultBtn = document.querySelector('#palette-panel .set-default-btn');
         return {
             hasGroup: !!group,
-            hasGlass: !!glassOpt,
-            glassText: glassOpt ? glassOpt.textContent.trim() : null,
-            hasFlat: !!flatOpt,
-            flatText: flatOpt ? flatOpt.textContent.trim() : null,
+            hasStyleOpt: !!styleOpt,
+            optionCount: options.length,
+            hasSetDefaultBtn: !!setDefaultBtn,
         };
     });
-    assert.ok(paletteCheck.hasGroup, '#palette-panel should render .base-style-group');
-    assert.ok(paletteCheck.hasGlass, '#palette-panel should have [data-style-option="glass"]');
-    assert.equal(paletteCheck.glassText, 'Glassmorphism', 'glass option should be labeled Glassmorphism');
-    assert.ok(paletteCheck.hasFlat, '#palette-panel should have [data-style-option="flat"]');
-    assert.equal(paletteCheck.flatText, 'Flat', 'flat option should be labeled Flat');
+    assert.equal(paletteCheck.hasGroup, false, '#palette-panel should not render .base-style-group');
+    assert.equal(paletteCheck.hasStyleOpt, false, '#palette-panel should not have [data-style-option]');
+    assert.ok(paletteCheck.optionCount >= 10, `#palette-panel should render at least 10 .palette-option buttons, got ${paletteCheck.optionCount}`);
+    assert.ok(paletteCheck.hasSetDefaultBtn, '#palette-panel should render .set-default-btn');
 
     // Restore to moodinfinite board
     await page.evaluate(() => {
@@ -7224,29 +7108,20 @@ async function assertGenMetaStage1(page) {
         const loadedImage = shown();
         const nested = moodboardHasImageCard([{ type: 'group', items: [{ type: 'image', id: 'nested' }] }]);
         const nestedMiss = moodboardHasImageCard([{ type: 'group', items: [{ type: 'text', id: 'note' }] }, { type: 'box', id: 'sq' }]);
-        const previousStyle = document.documentElement.getAttribute('data-style') || 'flat';
-        const styleSample = (style) => {
-            document.documentElement.setAttribute('data-style', style);
-            if (document.body) document.body.setAttribute('data-style', style);
-            openGenShareDialog(document.getElementById('save-project-btn'));
-            const cancel = getComputedStyle(document.getElementById('gen-share-cancel'));
-            const confirmBtn = getComputedStyle(document.getElementById('gen-share-confirm'));
-            const other = getComputedStyle(document.getElementById('cancel-new-btn'));
-            const body = getComputedStyle(document.body);
-            const result = {
-                cancel: cancel.fontFamily,
-                confirm: confirmBtn.fontFamily,
-                other: other.fontFamily,
-                body: body.fontFamily,
-                cancelWeight: cancel.fontWeight,
-                otherWeight: other.fontWeight,
-            };
-            closeGenShareDialog();
-            return result;
+        openGenShareDialog(document.getElementById('save-project-btn'));
+        const cancel = getComputedStyle(document.getElementById('gen-share-cancel'));
+        const confirmBtn = getComputedStyle(document.getElementById('gen-share-confirm'));
+        const other = getComputedStyle(document.getElementById('cancel-new-btn'));
+        const body = getComputedStyle(document.body);
+        const fonts = {
+            cancel: cancel.fontFamily,
+            confirm: confirmBtn.fontFamily,
+            other: other.fontFamily,
+            body: body.fontFamily,
+            cancelWeight: cancel.fontWeight,
+            otherWeight: other.fontWeight,
         };
-        const fonts = { flat: styleSample('flat'), glass: styleSample('glass') };
-        document.documentElement.setAttribute('data-style', previousStyle);
-        if (document.body) document.body.setAttribute('data-style', previousStyle);
+        closeGenShareDialog();
         return { empty, boxOnly, withImage, afterRemove, otherEmpty, afterTab, loadedEmpty, loadedImage, nested, nestedMiss, fonts };
     });
     assert.equal(searchChrome.empty, false, 'search bar stayed visible on an empty moodboard');
@@ -7259,13 +7134,13 @@ async function assertGenMetaStage1(page) {
     assert.equal(searchChrome.loadedImage, true, 'search bar stayed hidden after loading a project with an image');
     assert.equal(searchChrome.nested, true);
     assert.equal(searchChrome.nestedMiss, false);
-    for (const style of ['flat', 'glass']) {
-        const sample = searchChrome.fonts[style];
+    {
+        const sample = searchChrome.fonts;
         const firstFamily = (value) => String(value || '').split(',')[0].replace(/["']/g, '').trim().toLowerCase();
-        assert.equal(sample.cancel, sample.body, `${style} Cancelar font ${sample.cancel} !== body ${sample.body}`);
-        assert.equal(sample.confirm, sample.body, `${style} Exportar font ${sample.confirm} !== body ${sample.body}`);
-        assert.equal(sample.cancel, sample.other, `${style} share button font ${sample.cancel} !== other modal button ${sample.other}`);
-        assert.notEqual(firstFamily(sample.cancel), 'arial', `${style} share button used Arial (${sample.cancel})`);
+        assert.equal(sample.cancel, sample.body, `Cancelar font ${sample.cancel} !== body ${sample.body}`);
+        assert.equal(sample.confirm, sample.body, `Exportar font ${sample.confirm} !== body ${sample.body}`);
+        assert.equal(sample.cancel, sample.other, `share button font ${sample.cancel} !== other modal button ${sample.other}`);
+        assert.notEqual(firstFamily(sample.cancel), 'arial', `share button used Arial (${sample.cancel})`);
         assert.equal(sample.cancelWeight, sample.otherWeight);
     }
 

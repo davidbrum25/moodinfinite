@@ -1,4 +1,4 @@
-// Captures the palette popup open and closed for glass and flat, on two presets and two viewports.
+// Captures the palette popup open and closed on two presets and two viewports.
 // Usage: node tests/style-capture.mjs <outDir>   (CHROME_PATH=/usr/bin/google-chrome)
 import { spawn } from 'node:child_process';
 import { readFileSync, mkdirSync } from 'node:fs';
@@ -28,19 +28,17 @@ async function openPalette(page) {
     const open = await page.$eval('#palette-panel', (el) => el.classList.contains('open'));
     if (!open) {
         await page.evaluate(() => document.getElementById('palette-btn').click());
-        await page.waitForSelector('#palette-panel.open [role="radio"]');
+        await page.waitForSelector('#palette-panel.open .palette-option');
     }
 }
 
-async function applyLook(page, style, preset) {
+async function applyLook(page, preset) {
     const open = await page.$eval('#palette-panel', (el) => el.classList.contains('open'));
     if (open) {
         await page.keyboard.press('Escape');
         await page.waitForFunction(() => !document.getElementById('palette-panel').classList.contains('open'));
     }
     await openPalette(page);
-    await page.click(`#palette-panel [data-style-option="${style}"]`);
-    await page.waitForFunction((expected) => document.body.dataset.style === expected, {}, style);
     const options = await page.$$('#palette-panel .palette-option');
     await options[preset].click();
     await page.waitForFunction(() => !document.getElementById('palette-panel').classList.contains('open'));
@@ -50,19 +48,19 @@ async function applyLook(page, style, preset) {
     });
 }
 
-async function shootPair(page, style, preset, width, prefix) {
+async function shootPair(page, preset, width, prefix) {
     await openPalette(page);
     await page.waitForFunction(() => {
         const panel = document.getElementById('palette-panel');
         return panel.classList.contains('open') && getComputedStyle(panel).opacity === '1';
     });
-    await page.screenshot({ path: path.join(out, `${prefix}${style}-preset${preset}-${width}-popup.png`) });
+    await page.screenshot({ path: path.join(out, `${prefix}preset${preset}-${width}-popup.png`) });
     await page.keyboard.press('Escape');
     await page.waitForFunction(() => {
         const panel = document.getElementById('palette-panel');
         return !panel.classList.contains('open') && getComputedStyle(panel).opacity === '0';
     });
-    await page.screenshot({ path: path.join(out, `${prefix}${style}-preset${preset}-${width}.png`) });
+    await page.screenshot({ path: path.join(out, `${prefix}preset${preset}-${width}.png`) });
 }
 
 try {
@@ -71,7 +69,7 @@ try {
     await page.goto(`http://127.0.0.1:${PORT}/`, { waitUntil: 'load', timeout: 30000 });
     await page.evaluate(() => { try { localStorage.clear(); } catch (e) {} });
     await page.reload({ waitUntil: 'load' });
-    await page.waitForFunction(() => window.projects && window.projects.length > 0 && typeof createNewProject === 'function' && typeof selectBaseStyle === 'function', { timeout: 20000 });
+    await page.waitForFunction(() => window.projects && window.projects.length > 0 && typeof createNewProject === 'function', { timeout: 20000 });
 
     await page.evaluate((sample) => {
         createNewProject('storyflow');
@@ -102,14 +100,12 @@ try {
         { width: 1280, height: 800 },
         { width: 390, height: 844 },
     ];
-    for (const style of ['glass', 'flat']) {
-        for (const preset of [1, 4]) {
-            for (const viewport of viewports) {
-                await page.setViewport({ width: viewport.width, height: viewport.height, deviceScaleFactor: 1 });
-                await page.waitForFunction((w) => window.innerWidth === w, {}, viewport.width);
-                await applyLook(page, style, preset);
-                await shootPair(page, style, preset, viewport.width, '');
-            }
+    for (const preset of [1, 4]) {
+        for (const viewport of viewports) {
+            await page.setViewport({ width: viewport.width, height: viewport.height, deviceScaleFactor: 1 });
+            await page.waitForFunction((w) => window.innerWidth === w, {}, viewport.width);
+            await applyLook(page, preset);
+            await shootPair(page, preset, viewport.width, '');
         }
     }
 
@@ -117,7 +113,7 @@ try {
     await page.evaluate(() => {
         createNewProject('moodinfinite');
         const mid = screenToWorld({ x: canvas.width / 2, y: canvas.height / 2 });
-        const accent = accentColor || '#429eff';
+        const accent = accentColor || '#D4A359';
         const base = { rotation: 0, isPinned: false, opacity: 1, scaleX: 1, scaleY: 1 };
         items.push(
             { ...base, id: 'cap-note', type: 'text', text: 'Collect references here', title: 'Mood', x: mid.x - 220, y: mid.y - 80, width: 200, height: 130, fontSize: 16, fontFamily: 'Nunito', color: accent },
@@ -129,20 +125,18 @@ try {
         draw();
     });
 
-    for (const style of ['glass', 'flat']) {
-        for (const preset of [1, 4]) {
-            for (const viewport of viewports) {
-                await page.setViewport({ width: viewport.width, height: viewport.height, deviceScaleFactor: 1 });
-                await page.waitForFunction((w) => window.innerWidth === w, {}, viewport.width);
-                await page.evaluate(() => {
-                    selectedItems = [];
-                    focusOnSelection();
-                    draw();
-                });
-                await applyLook(page, style, preset);
-                await page.evaluate(() => { focusOnSelection(); draw(); });
-                await shootPair(page, style, preset, viewport.width, 'board-');
-            }
+    for (const preset of [1, 4]) {
+        for (const viewport of viewports) {
+            await page.setViewport({ width: viewport.width, height: viewport.height, deviceScaleFactor: 1 });
+            await page.waitForFunction((w) => window.innerWidth === w, {}, viewport.width);
+            await page.evaluate(() => {
+                selectedItems = [];
+                focusOnSelection();
+                draw();
+            });
+            await applyLook(page, preset);
+            await page.evaluate(() => { focusOnSelection(); draw(); });
+            await shootPair(page, preset, viewport.width, 'board-');
         }
     }
     console.log('captured', out);

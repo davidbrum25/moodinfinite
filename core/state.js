@@ -33,7 +33,7 @@ export const state = {
     internalClipboardTimestamp: 0,
     
     // UI State
-    canvasBackgroundColor: '#0d0d0d',
+    canvasBackgroundColor: '#121110',
     platformData: {
         isMac: navigator.platform.toUpperCase().indexOf('MAC') >= 0,
         isIOS: /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream,
@@ -44,5 +44,5 @@ export const state = {
 export const CONSTANTS = {
     MAX_ZOOM: 5,
     MIN_ZOOM: 0.05,
-    DEFAULT_CANVAS_BG: '#0d0d0d'
+    DEFAULT_CANVAS_BG: '#121110'
 };
