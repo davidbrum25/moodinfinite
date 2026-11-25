@@ -5,7 +5,7 @@
  * and output image placement.
  */
 
-import { ComfyClient } from './comfy-client.js';
+import { comfyClient } from './comfy-client.js';
 import {
     detectWorkflowFormat,
     WORKFLOW_FORMATS,
@@ -16,12 +16,21 @@ import {
     autoAdjustWorkflowModels
 } from './comfy-workflows.js';
 
+function escapeHtml(str) {
+    return String(str ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
 export const GEN_NODE_WIDTH = 340;
 export const GEN_NODE_DEFAULT_HEIGHT = 420;
 
 export class ComfyGenNodeManager {
     constructor() {
-        this.client = new ComfyClient();
+        this.client = comfyClient;
         this.container = null; // DOM overlay container
         this.builtInWorkflows = {
             'moss-image-t2i': {
@@ -48,7 +57,15 @@ export class ComfyGenNodeManager {
         };
 
         this.workflowCache = new Map();
+        this._workflowLoads = new Map();
         this.cachedObjectInfo = null;
+        this.lastExecutedWorkflowId = null;
+        this.client.onConfigChange((_, endpointChanged) => {
+            if (endpointChanged) {
+                this.cachedObjectInfo = null;
+                this.lastExecutedWorkflowId = null;
+            }
+        });
         this.init();
     }
 
@@ -75,22 +92,38 @@ export class ComfyGenNodeManager {
     }
 
     async preloadBuiltInWorkflows() {
-        for (const [id, def] of Object.entries(this.builtInWorkflows)) {
-            try {
-                const [rWf, rSide] = await Promise.all([
-                    fetch(def.path).then(r => r.json()),
-                    fetch(def.sidecar).then(r => r.json()).catch(() => null)
-                ]);
-                this.workflowCache.set(id, { workflow: rWf, sidecar: rSide });
-            } catch (err) {
-                console.warn(`[MoodComfy] Failed to preload workflow ${id}:`, err);
-            }
+        for (const id of Object.keys(this.builtInWorkflows)) {
+            await this.getWorkflowData(id);
         }
     }
 
     async getWorkflowData(workflowId) {
         if (this.workflowCache.has(workflowId)) {
             return this.workflowCache.get(workflowId);
+        }
+        if (this.builtInWorkflows[workflowId]) {
+            if (this._workflowLoads.has(workflowId)) {
+                return this._workflowLoads.get(workflowId);
+            }
+            const def = this.builtInWorkflows[workflowId];
+            const loadPromise = (async () => {
+                try {
+                    const wfRes = await fetch(def.path);
+                    if (!wfRes.ok) throw new Error(`HTTP ${wfRes.status}`);
+                    const rWf = await wfRes.json();
+                    const rSide = await fetch(def.sidecar).then(r => (r.ok ? r.json() : null)).catch(() => null);
+                    const data = { workflow: rWf, sidecar: rSide };
+                    this.workflowCache.set(workflowId, data);
+                    return data;
+                } catch (err) {
+                    console.warn(`[MoodComfy] Failed to load workflow ${workflowId}:`, err);
+                    return null;
+                } finally {
+                    this._workflowLoads.delete(workflowId);
+                }
+            })();
+            this._workflowLoads.set(workflowId, loadPromise);
+            return loadPromise;
         }
         // Custom workflow from config
         if (this.client.config.userWorkflows && this.client.config.userWorkflows[workflowId]) {
@@ -111,8 +144,8 @@ export class ComfyGenNodeManager {
             type: 'genNode',
             x: opts.x ?? 0,
             y: opts.y ?? 0,
-            width: GEN_NODE_WIDTH,
-            height: GEN_NODE_DEFAULT_HEIGHT,
+            width: opts.width ?? GEN_NODE_WIDTH,
+            height: opts.height ?? GEN_NODE_DEFAULT_HEIGHT,
             workflowId: opts.workflowId || 'moss-image-t2i',
             prompt: opts.prompt ?? '',
             negativePrompt: opts.negativePrompt ?? '',
@@ -281,7 +314,10 @@ export class ComfyGenNodeManager {
         if (!node || node.type !== 'genNode') return;
         if (node._runtime?.status === 'queued' || node._runtime?.status === 'running') return;
 
+        const controller = new AbortController();
+        const originProjectId = typeof window !== 'undefined' ? window.activeProjectId : null;
         node._runtime = node._runtime || {};
+        node._runtime.abortController = controller;
         node._runtime.status = 'queued';
         node._runtime.statusText = 'Checking ComfyUI...';
         node._runtime.progressPercent = 5;
@@ -290,6 +326,7 @@ export class ComfyGenNodeManager {
         try {
             // Check server stats
             const stats = await this.client.getSystemStats().catch(() => null);
+            if (controller.signal.aborted) return;
             if (!stats) {
                 node._runtime.status = 'offline';
                 node._runtime.statusText = 'ComfyUI offline or disconnected';
@@ -344,23 +381,33 @@ export class ComfyGenNodeManager {
                 uploadedImageName = uploadRes.name;
             }
 
-            // Effective prompt (combines manual prompt + connected text note if present)
-            let effectivePrompt = (node.prompt || '').trim();
-            if (connected.promptTexts.length > 0) {
-                const piped = connected.promptTexts.join(', ');
-                effectivePrompt = effectivePrompt ? `${effectivePrompt}, ${piped}` : piped;
+            if (controller.signal.aborted) return;
+
+            // Effective prompt (honor fixedPrompt sidecar if present, else manual + connected note)
+            let effectivePrompt = '';
+            if (wfData.sidecar?.fixedPrompt) {
+                effectivePrompt = wfData.sidecar.fixedPrompt;
+            } else {
+                effectivePrompt = (node.prompt || '').trim();
+                if (connected.promptTexts.length > 0) {
+                    const piped = connected.promptTexts.join(', ');
+                    effectivePrompt = effectivePrompt ? `${effectivePrompt}, ${piped}` : piped;
+                }
             }
 
-            // Unload models if switch configured
-            if (this.client.config.autoUnloadOnSwitch) {
+            // Unload models only when switching workflows
+            if (this.client.config.autoUnloadOnSwitch && this.lastExecutedWorkflowId && this.lastExecutedWorkflowId !== node.workflowId) {
                 await this.client.freeMemory(true, false);
             }
+            this.lastExecutedWorkflowId = node.workflowId;
 
             // Batch count (minimum 1, user can specify any number)
             const batchCount = Math.max(1, parseInt(node.batchCount, 10) || 1);
             const [w, h] = (node.size || '1024x1024').split('x').map(Number);
 
             for (let b = 0; b < batchCount; b++) {
+                if (controller.signal.aborted) break;
+
                 let currentSeed = node.seedMode === 'fixed' ? Number(node.seed) : Math.floor(Math.random() * 10000000000);
                 if (connected.seeds.length > 0) {
                     currentSeed = connected.seeds[0];
@@ -390,6 +437,11 @@ export class ComfyGenNodeManager {
                 const promptId = queueRes.prompt_id;
                 node._runtime.currentPromptId = promptId;
 
+                if (controller.signal.aborted) {
+                    await this.client.deleteQueueItem(promptId);
+                    break;
+                }
+
                 const histEntry = await this.client.watchPrompt(promptId, (p) => {
                     if (p.value != null && p.max != null && p.max > 0) {
                         const pct = 15 + (p.value / p.max) * 80;
@@ -397,10 +449,12 @@ export class ComfyGenNodeManager {
                         node._runtime.statusText = `Step ${p.value} of ${p.max} (${b + 1}/${batchCount})`;
                         this.syncSingleNodeDom(node);
                     }
-                });
+                }, controller.signal);
+
+                if (controller.signal.aborted) break;
 
                 // Retrieve output image
-                const outputs = histEntry.outputs || {};
+                const outputs = histEntry?.outputs || {};
                 let outputImageMeta = null;
                 if (mapping.outputNodeId && outputs[mapping.outputNodeId]) {
                     const nodeOut = outputs[mapping.outputNodeId];
@@ -438,8 +492,10 @@ export class ComfyGenNodeManager {
                     y: node.y + (outputIndex * 270)
                 };
 
-                await this.ingestOutputImage(node, imageFile, targetPos, genMeta);
+                await this.ingestOutputImage(node, imageFile, targetPos, genMeta, originProjectId);
             }
+
+            if (controller.signal.aborted) return;
 
             node._runtime.status = 'idle';
             node._runtime.statusText = 'Generation completed!';
@@ -448,23 +504,41 @@ export class ComfyGenNodeManager {
             if (window.showToast) window.showToast('Image(s) generated successfully');
 
         } catch (err) {
+            if (err?.name === 'AbortError' || controller.signal.aborted) {
+                node._runtime.status = 'idle';
+                node._runtime.statusText = 'Cancelado';
+                node._runtime.progressPercent = 0;
+                this.syncSingleNodeDom(node);
+                return;
+            }
             console.error('[MoodComfy] Error executing genNode:', err);
             node._runtime.status = 'error';
             node._runtime.statusText = err.userMessage || err.message;
             this.syncSingleNodeDom(node);
             if (window.showToast) window.showToast(err.message, 'error');
+        } finally {
+            if (node._runtime?.abortController === controller) {
+                node._runtime.abortController = null;
+                node._runtime.currentPromptId = null;
+            }
         }
     }
 
     /**
      * Ingests generated image into moodinfinite and connects it to the node's output port
      */
-    async ingestOutputImage(node, imageFile, targetPos, genMeta) {
-        return new Promise((resolve) => {
+    async ingestOutputImage(node, imageFile, targetPos, genMeta, targetProjectId = null) {
+        return new Promise((resolve, reject) => {
             const reader = new FileReader();
+            reader.onerror = () => reject(new Error('No se pudo leer la imagen generada.'));
             reader.onload = (readEvent) => {
                 const img = new Image();
+                img.onerror = () => reject(new Error('La imagen generada es inválida o está corrupta.'));
                 img.onload = () => {
+                    if (!img.width || !img.height) {
+                        reject(new Error('Dimensiones inválidas en la imagen generada.'));
+                        return;
+                    }
                     const aspectRatio = img.width / img.height;
                     const initialWidth = 250;
                     const initialHeight = initialWidth / aspectRatio;
@@ -472,6 +546,7 @@ export class ComfyGenNodeManager {
 
                     if (window.globalImageCache) {
                         window.globalImageCache[imageId] = readEvent.target.result;
+                        if (typeof window.markMediaCacheDirty === 'function') window.markMediaCacheDirty('image');
                     }
 
                     const newItem = {
@@ -494,11 +569,6 @@ export class ComfyGenNodeManager {
                         genSourceNodeId: node.id
                     };
 
-                    if (typeof window.addItemToLayeredItems === 'function') {
-                        window.addItemToLayeredItems(newItem);
-                    }
-
-                    // Create connector: genNode (out port) -> newItem (left port)
                     const conn = {
                         id: 'group_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5),
                         type: 'connector',
@@ -510,18 +580,29 @@ export class ComfyGenNodeManager {
                         isAutoOutput: true
                     };
 
-                    if (typeof window.addItemToLayeredItems === 'function') {
+                    const switchedTab = targetProjectId != null && typeof window !== 'undefined' && window.activeProjectId !== targetProjectId;
+                    if (switchedTab && Array.isArray(window.projects)) {
+                        const targetProj = window.projects.find(p => p.id === targetProjectId);
+                        if (targetProj?.data?.items) {
+                            targetProj.data.items.push(newItem, conn);
+                        }
+                    } else if (typeof window.addItemToLayeredItems === 'function') {
+                        window.addItemToLayeredItems(newItem);
                         window.addItemToLayeredItems(conn);
                     }
 
                     node.outputs = node.outputs || [];
                     node.outputs.push(newItem.id);
 
-                    if (typeof window.saveStateForUndo === 'function') {
-                        setTimeout(window.saveStateForUndo, 200);
-                    }
-                    if (typeof window.requestUpdate === 'function') {
-                        window.requestUpdate();
+                    if (!switchedTab) {
+                        if (typeof window.saveStateForUndo === 'function') {
+                            setTimeout(window.saveStateForUndo, 200);
+                        }
+                        if (typeof window.requestUpdate === 'function') {
+                            window.requestUpdate();
+                        }
+                    } else if (typeof window.scheduleAutoSave === 'function') {
+                        window.scheduleAutoSave();
                     }
                     resolve(newItem);
                 };
@@ -535,13 +616,19 @@ export class ComfyGenNodeManager {
      * Cancel currently running generation on a node
      */
     async cancelNode(node) {
-        if (node._runtime?.currentPromptId) {
+        if (!node) return;
+        node._runtime = node._runtime || {};
+        if (node._runtime.abortController) {
+            node._runtime.abortController.abort();
+        }
+        if (node._runtime.currentPromptId) {
             await this.client.deleteQueueItem(node._runtime.currentPromptId);
         }
         await this.client.interrupt();
         node._runtime.status = 'idle';
         node._runtime.statusText = 'Cancelado';
         node._runtime.progressPercent = 0;
+        node._runtime.currentPromptId = null;
         this.syncSingleNodeDom(node);
         if (window.showToast) window.showToast('Generación cancelada');
     }
@@ -633,6 +720,20 @@ export class ComfyGenNodeManager {
             el.className = 'comfy-gen-node-dom';
             el.dataset.nodeId = stringId;
             el.dataset.connSignature = connSignature;
+            el.addEventListener('pointerdown', (e) => {
+                if (e.target.closest('input, textarea, select, button, .gen-btn-icon, .gen-port-square')) {
+                    if (Array.isArray(window.selectedItems) && !window.selectedItems.includes(node)) {
+                        window.selectedItems = [node];
+                        if (typeof window.requestUpdate === 'function') window.requestUpdate();
+                    }
+                    return;
+                }
+                if (typeof window.startMovingGenNode === 'function') {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    window.startMovingGenNode(node, e);
+                }
+            });
             this.container.appendChild(el);
             this.renderNodeDomContent(el, node);
         } else if (el.dataset.connSignature !== connSignature) {
@@ -668,6 +769,8 @@ export class ComfyGenNodeManager {
 
     renderNodeDomContent(el, node) {
         const connected = this.getConnectedInputs(node);
+        const connSignature = `${connected.refImages.length}_${connected.promptTexts.join('|')}_${connected.seeds.join('|')}_${node.outputs?.length || 0}_${node.workflowId}_${node.seedMode}_${node.seed}`;
+        el.dataset.connSignature = connSignature;
         const hasInputImages = connected.refImages.length > 0;
         const hasPromptConnected = connected.promptTexts.length > 0;
         const hasSeedConnected = connected.seeds.length > 0;
@@ -711,8 +814,8 @@ export class ComfyGenNodeManager {
                 <div class="gen-refs-row">
                     ${hasInputImages ? `
                         <div class="gen-ref-thumb-wrap">
-                            <img src="${connected.refImages[0].img?.src || ''}" class="gen-ref-thumb" alt="Ref">
-                            <span class="gen-ref-name">${connected.refImages[0].caption || 'Image'}</span>
+                            <img src="${escapeHtml(connected.refImages[0].img?.src || '')}" class="gen-ref-thumb" alt="Ref">
+                            <span class="gen-ref-name">${escapeHtml(connected.refImages[0].caption || 'Image')}</span>
                         </div>
                     ` : `
                         <div class="gen-ref-placeholder">
@@ -728,7 +831,7 @@ export class ComfyGenNodeManager {
                 <div class="gen-port-square gen-port-prompt ${hasPromptConnected ? 'connected' : 'can-add'}" data-port-action="add-prompt" title="${hasPromptConnected ? 'Prompt input (prompt-in)' : 'Add prompt note'}">
                     ${!hasPromptConnected ? '<span class="gen-port-plus">+</span>' : ''}
                 </div>
-                <textarea class="gen-node-prompt" rows="2" placeholder="${hasPromptConnected ? `Connected: "${connected.promptTexts[0]?.slice(0, 32)}..."` : 'Describe what you want to generate... (Ctrl+Enter to generate)'}">${node.prompt || ''}</textarea>
+                <textarea class="gen-node-prompt" rows="2"></textarea>
                 ${hasPromptConnected ? `<div class="gen-connected-hint">↳ Connected prompt note</div>` : ''}
             </div>
 
@@ -744,7 +847,7 @@ export class ComfyGenNodeManager {
 
                 <div class="gen-batch-wrap" title="Batch count">
                     <label>Batch:</label>
-                    <input type="number" class="gen-batch-input" min="1" step="1" value="${node.batchCount || 1}">
+                    <input type="number" class="gen-batch-input" min="1" step="1" value="${escapeHtml(node.batchCount || 1)}">
                 </div>
             </div>
 
@@ -753,7 +856,7 @@ export class ComfyGenNodeManager {
                 <div class="gen-port-square gen-port-seed ${hasSeedConnected ? 'connected' : 'can-add'}" data-port-action="add-seed" title="${hasSeedConnected ? 'Seed input (seed-in)' : 'Add seed note'}">
                     ${!hasSeedConnected ? '<span class="gen-port-plus">+</span>' : ''}
                 </div>
-                <input type="number" class="gen-seed-input" placeholder="${hasSeedConnected ? `Connected seed: ${connected.seeds[0]}` : 'Seed (Random)'}" value="${node.seedMode === 'fixed' ? node.seed : ''}">
+                <input type="number" class="gen-seed-input" placeholder="${hasSeedConnected ? `Connected seed: ${escapeHtml(connected.seeds[0])}` : 'Seed (Random)'}" value="${node.seedMode === 'fixed' ? escapeHtml(node.seed) : ''}">
                 <button type="button" class="gen-btn-icon gen-seed-lock-btn ${node.seedMode === 'fixed' ? 'active' : ''}" title="${node.seedMode === 'fixed' ? 'Locked seed' : 'Lock seed'}">
                     <iconify-icon icon="${node.seedMode === 'fixed' ? 'lucide:lock' : 'lucide:unlock'}" width="15" height="15"></iconify-icon>
                 </button>
@@ -780,6 +883,14 @@ export class ComfyGenNodeManager {
             </div>
         `;
 
+        const promptTextarea = el.querySelector('.gen-node-prompt');
+        if (promptTextarea) {
+            promptTextarea.value = node.prompt || '';
+            promptTextarea.placeholder = hasPromptConnected
+                ? `Connected: "${(connected.promptTexts[0] || '').slice(0, 32)}..."`
+                : 'Describe what you want to generate... (Ctrl+Enter to generate)';
+        }
+
         this.bindNodeDomEvents(el, node);
     }
 
@@ -799,16 +910,6 @@ export class ComfyGenNodeManager {
         };
 
         header?.addEventListener('pointerdown', handleDragStart);
-        el.addEventListener('pointerdown', (e) => {
-            if (e.target.closest('input, textarea, select, button, .gen-btn-icon, .gen-port-square')) {
-                if (Array.isArray(window.selectedItems) && !window.selectedItems.includes(node)) {
-                    window.selectedItems = [node];
-                    if (typeof window.requestUpdate === 'function') window.requestUpdate();
-                }
-                return;
-            }
-            handleDragStart(e);
-        });
 
         // Prompt input and Ctrl+Enter shortcut
         const promptInput = el.querySelector('.gen-node-prompt');
@@ -905,6 +1006,9 @@ export class ComfyGenNodeManager {
         deleteBtn?.addEventListener('click', (e) => {
             e.preventDefault();
             e.stopPropagation();
+            if (node._runtime?.abortController) {
+                node._runtime.abortController.abort();
+            }
             if (typeof window.deleteItem === 'function') {
                 window.deleteItem(node);
             } else {

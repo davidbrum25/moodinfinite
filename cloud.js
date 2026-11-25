@@ -47,6 +47,16 @@ const CloudSync = (() => {
         'unknown': '#B8AFA0'
     };
 
+    // ─── LIFECYCLE / QUOTA CONSTANTS ────────────────────────────────────────
+    const HIDDEN_SUSPEND_DELAY_MS = 60_000;
+    const IDLE_SUSPEND_DELAY_MS = 180_000;
+    const WAKE_CHECK_COOLDOWN_MS = 60_000;
+    const POLL_INTERVALS_MS = [120_000, 180_000, 300_000];
+    const BACKOFF_BASE_MS = 120_000;
+    const BACKOFF_MAX_MS = 1_800_000;
+    const STORAGE_CACHE_TTL_MS = 300_000;
+    const ACTIVITY_THROTTLE_MS = 10_000;
+
     // ─── STATE ──────────────────────────────────────────────────────────────
     let _tokenClient = null;
     let _accessToken = null;
@@ -54,14 +64,26 @@ const CloudSync = (() => {
     let _userInfo = null;       // { name, email, picture }
     let _folderId = null;       // Drive folder ID (cached)
     let _ready = false;      // GIS script loaded
-    let _isSilentRefresh = false;  // true during background token renewal
-    let _syncTimer = null;         // Timer for background sync polling
-    let _lastCheckTime = 0;        // Last time we checked for updates
+    let _syncTimer = null;         // Timeout for adaptive background sync polling
+    let _hiddenTimer = null;       // Grace timer before suspending hidden tab
+    let _idleTimer = null;         // Inactivity timer before suspending idle tab
+    let _isSuspended = false;
+    let _suspendReason = null;     // 'hidden' | 'idle' | 'offline' | null
+    let _lastCheckTime = 0;        // Last time we checked for remote updates
+    let _pollStep = 0;
+    let _backoffAttempts = 0;
+    let _backoffUntil = 0;
+    let _isCheckingRemote = false;
+    let _isAutoSaving = false;
+    let _pendingAutoSave = false;
+    let _storageCache = null;      // { data, fetchedAt, email }
+    let _storageInFlight = null;
+    let _lastActivityReport = 0;
+    let _lifecycleWired = false;
     const _webpBlobCache = window._webpBlobCache || {};     // Share the in-memory cache with script.js
 
-    // Pending callback after auth (resolve queues)
-    let _pendingResolve = null;
-    let _pendingReject = null;
+    // Pending callback queues after auth
+    let _pendingAuthQueue = [];
 
     // ─── HELPERS ────────────────────────────────────────────────────────────
     function _isTokenValid() {
@@ -75,13 +97,89 @@ const CloudSync = (() => {
         };
     }
 
-    async function _fetchJSON(url, options = {}) {
-        const res = await fetch(url, options);
-        if (!res.ok) {
-            const text = await res.text();
-            throw new Error(`Drive API error ${res.status}: ${text}`);
+    function _createDriveError(status, message, retryAfterSec = null) {
+        const err = new Error(message);
+        err.status = status;
+        err.isRateLimit = status === 429;
+        err.isTransient = status === 429 || (status >= 500 && status < 600);
+        err.retryAfterSec = retryAfterSec;
+        return err;
+    }
+
+    function _parseRetryAfter(res) {
+        const raw = res?.headers?.get?.('Retry-After');
+        if (!raw) return null;
+        const sec = parseInt(raw, 10);
+        return Number.isFinite(sec) && sec >= 0 ? sec : null;
+    }
+
+    async function _fetchDrive(url, options = {}) {
+        const { retry = true, ...fetchOptions } = options;
+        const maxAttempts = retry ? 3 : 1;
+
+        for (let attempt = 0; attempt < maxAttempts; attempt++) {
+            const res = await fetch(url, fetchOptions);
+            if (res.ok) return res;
+
+            const text = await res.text().catch(() => '');
+            const retryAfterSec = _parseRetryAfter(res);
+            const err = _createDriveError(res.status, `Drive API error ${res.status}: ${text}`, retryAfterSec);
+
+            if (err.isTransient && attempt < maxAttempts - 1) {
+                const jitter = Math.floor(Math.random() * 250);
+                const delay = (retryAfterSec !== null && retryAfterSec <= 10)
+                    ? retryAfterSec * 1000
+                    : (1000 * Math.pow(2, attempt) + jitter);
+                await new Promise(r => setTimeout(r, delay));
+                continue;
+            }
+            throw err;
         }
+    }
+
+    async function _fetchJSON(url, options = {}) {
+        const res = await _fetchDrive(url, options);
         return res.json();
+    }
+
+    function _getActiveLinkedProject() {
+        const activeProject = window.projects?.find(p => p.id === window.activeProjectId);
+        return activeProject?.data?._cloudFileId ? activeProject : null;
+    }
+
+    function _hasSyncableContext() {
+        return Boolean(_userInfo && _isTokenValid() && _getActiveLinkedProject() && navigator.onLine !== false);
+    }
+
+    function _clearSyncTimer() {
+        if (_syncTimer) {
+            clearTimeout(_syncTimer);
+            _syncTimer = null;
+        }
+    }
+
+    function _invalidateStorageCache() {
+        _storageCache = null;
+        _storageInFlight = null;
+    }
+
+    function _resolvePendingAuth(token) {
+        const queue = _pendingAuthQueue.splice(0);
+        queue.forEach(entry => entry.resolve(token));
+    }
+
+    function _rejectPendingAuth(err) {
+        const queue = _pendingAuthQueue.splice(0);
+        queue.forEach(entry => entry.reject(err));
+    }
+
+    function _escapeHTML(str) {
+        return String(str ?? '')
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
     }
 
     // ─── GIS INIT ───────────────────────────────────────────────────────────
@@ -116,6 +214,7 @@ const CloudSync = (() => {
             _handleTokenError(response);
             return;
         }
+        const hadUser = Boolean(_userInfo);
         _accessToken = response.access_token;
         _tokenExpiry = Date.now() + (response.expires_in * 1000);
 
@@ -123,18 +222,26 @@ const CloudSync = (() => {
         fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
             headers: { Authorization: `Bearer ${_accessToken}` }
         })
-            .then(r => r.json())
+            .then(r => {
+                if (!r.ok) throw new Error(`UserInfo HTTP ${r.status}`);
+                return r.json();
+            })
             .then(info => {
                 _userInfo = { name: info.name, email: info.email, picture: info.picture };
                 // Persist so UI survives page refresh
                 localStorage.setItem('moodinfinite_cloud_user', JSON.stringify(_userInfo));
                 _updateUI_loggedIn();
-                showCloudToast('Signed in to Google Drive ✓', 'success');
-                if (_pendingResolve) { _pendingResolve(_accessToken); _pendingResolve = null; _pendingReject = null; }
+                if (!hadUser) {
+                    showCloudToast('Signed in to Google Drive ✓', 'success');
+                }
+                if (_hasSyncableContext() && !_isSuspended) {
+                    _scheduleNextPoll();
+                }
+                _resolvePendingAuth(_accessToken);
             })
             .catch(err => {
                 console.error('[CloudSync] Failed to fetch user info:', err);
-                if (_pendingReject) { _pendingReject(err); _pendingResolve = null; _pendingReject = null; }
+                _rejectPendingAuth(err);
             });
     }
 
@@ -142,7 +249,7 @@ const CloudSync = (() => {
         console.warn('[CloudSync] Auth error:', err);
         _accessToken = null;
         showCloudToast('Sign-in cancelled or failed.', 'error');
-        if (_pendingReject) { _pendingReject(err); _pendingResolve = null; _pendingReject = null; }
+        _rejectPendingAuth(err);
     }
 
     // ─── AUTH FLOW ──────────────────────────────────────────────────────────
@@ -155,6 +262,14 @@ const CloudSync = (() => {
         return new Promise((resolve, reject) => {
             if (_isTokenValid()) return resolve(_accessToken);
 
+            const enqueueAndRequest = () => {
+                const alreadyWaiting = _pendingAuthQueue.length > 0;
+                _pendingAuthQueue.push({ resolve, reject });
+                if (!alreadyWaiting) {
+                    _tokenClient.requestAccessToken({ prompt: _userInfo ? '' : 'select_account' });
+                }
+            };
+
             // If GIS is not ready yet, wait briefly for it instead of failing immediately.
             // This covers the case where the user triggers an action before the async
             // GIS script has fully initialised.
@@ -163,9 +278,7 @@ const CloudSync = (() => {
                 const waitPoll = setInterval(() => {
                     if (_ready) {
                         clearInterval(waitPoll);
-                        _pendingResolve = resolve;
-                        _pendingReject = reject;
-                        _tokenClient.requestAccessToken({ prompt: _userInfo ? '' : 'select_account' });
+                        enqueueAndRequest();
                     } else if (Date.now() >= deadline) {
                         clearInterval(waitPoll);
                         reject(new Error('Google Identity Services not loaded. Refresh and try again.'));
@@ -174,9 +287,7 @@ const CloudSync = (() => {
                 return;
             }
 
-            _pendingResolve = resolve;
-            _pendingReject = reject;
-            _tokenClient.requestAccessToken({ prompt: _userInfo ? '' : 'select_account' });
+            enqueueAndRequest();
         });
     }
 
@@ -214,7 +325,6 @@ const CloudSync = (() => {
     // ─── LIST DRIVE FILES ───────────────────────────────────────────────────
     async function listFiles() {
         await _ensureAuth();
-        await _ensureFolder();
         // With drive.file scope the parent folder ID is unreliable across sessions,
         // so we search all accessible files and exclude folders by mimeType.
         const q = encodeURIComponent(
@@ -261,11 +371,11 @@ const CloudSync = (() => {
 
     // ─── UPLOAD FILE ────────────────────────────────────────────────────────
     /**
-     * Uploads a Blob to Drive. If a file with the same name already exists in
-     * the Moodinfinite folder the user is asked what to do (keep local / keep drive / cancel).
-     * Returns the Drive file ID.
+     * Uploads a Blob to Drive. Uses a single PATCH when existingFileId is known;
+     * otherwise resolves the folder/file by name and checks for conflicts.
+     * Returns { id, modifiedTime, version, keptDrive? } or null if cancelled.
      */
-    async function uploadFile(blob, fileName, boardType, isAutoSave = false) {
+    async function uploadFile(blob, fileName, boardType, isAutoSave = false, existingFileId = null, needsConflictPrompt = false, existingModifiedTime = null) {
         if (isAutoSave) {
             if (!_isTokenValid()) {
                 console.warn('[CloudSync] Autosave cancelled: Google token expired or invalid.');
@@ -274,14 +384,31 @@ const CloudSync = (() => {
         } else {
             await _ensureAuth();
         }
+
+        // Fast path: 1 request when file ID is already linked
+        if (existingFileId) {
+            if (needsConflictPrompt && !isAutoSave) {
+                const driveDate = existingModifiedTime ? new Date(existingModifiedTime).toLocaleString() : 'Unknown';
+                const choice = await _showConflictDialog(fileName, driveDate);
+                if (choice === 'cancel') return null;
+                if (choice === 'keep-drive') return { id: existingFileId, keptDrive: true };
+            }
+            try {
+                return await _patchFile(existingFileId, blob);
+            } catch (err) {
+                // If file was deleted remotely, fall back to folder lookup / create
+                if (err.status !== 404) throw err;
+            }
+        }
+
         const fId = await _ensureFolder();
 
-        // Check if file already exists
+        // Check if file already exists by name
         const q = encodeURIComponent(
             `name='${fileName}' and '${fId}' in parents and trashed=false`
         );
         const existing = await _fetchJSON(
-            `${DRIVE_API}/files?q=${q}&fields=files(id,name,modifiedTime,appProperties)`,
+            `${DRIVE_API}/files?q=${q}&fields=files(id,name,modifiedTime,version,appProperties)`,
             { headers: _driveHeaders() }
         );
 
@@ -294,11 +421,20 @@ const CloudSync = (() => {
                 choice = await _showConflictDialog(fileName, driveDate);
             }
             if (choice === 'cancel') return null;
-            if (choice === 'keep-drive') return driveFile.id;
+            if (choice === 'keep-drive') {
+                return {
+                    id: driveFile.id,
+                    modifiedTime: driveFile.modifiedTime,
+                    version: driveFile.version,
+                    keptDrive: true,
+                };
+            }
             // choice === 'keep-local' → overwrite below
-            const fileId = await _patchFile(driveFile.id, blob);
-            await _updateMetadata(driveFile.id, boardType);
-            return fileId;
+            const patched = await _patchFile(driveFile.id, blob);
+            if (boardType && driveFile.appProperties?.boardType !== boardType) {
+                await _updateMetadata(driveFile.id, boardType);
+            }
+            return patched;
         }
 
         // New file upload
@@ -306,9 +442,9 @@ const CloudSync = (() => {
     }
 
     async function _createFile(blob, fileName, boardType, folderId) {
-        const metadata = { 
-            name: fileName, 
-            parents: [folderId] 
+        const metadata = {
+            name: fileName,
+            parents: [folderId]
         };
         if (boardType) {
             metadata.appProperties = { boardType: boardType };
@@ -317,18 +453,21 @@ const CloudSync = (() => {
         form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
         form.append('file', blob);
 
-        const res = await fetch(`${UPLOAD_API}/files?uploadType=multipart&fields=id`, {
+        const res = await _fetchDrive(`${UPLOAD_API}/files?uploadType=multipart&fields=id,modifiedTime,version`, {
             method: 'POST',
             headers: { Authorization: `Bearer ${_accessToken}` },
             body: form,
         });
-        if (!res.ok) throw new Error(`Upload failed: ${res.status}`);
         const json = await res.json();
-        return json.id;
+        return {
+            id: json.id,
+            modifiedTime: json.modifiedTime,
+            version: json.version,
+        };
     }
 
     async function _patchFile(fileId, blob) {
-        const res = await fetch(`${UPLOAD_API}/files/${fileId}?uploadType=media`, {
+        const res = await _fetchDrive(`${UPLOAD_API}/files/${fileId}?uploadType=media&fields=id,modifiedTime,version`, {
             method: 'PATCH',
             headers: {
                 Authorization: `Bearer ${_accessToken}`,
@@ -336,9 +475,12 @@ const CloudSync = (() => {
             },
             body: blob,
         });
-        if (!res.ok) throw new Error(`Update failed: ${res.status}`);
         const json = await res.json();
-        return json.id;
+        return {
+            id: json.id,
+            modifiedTime: json.modifiedTime,
+            version: json.version,
+        };
     }
 
     async function _updateMetadata(fileId, boardType) {
@@ -349,14 +491,11 @@ const CloudSync = (() => {
                     boardType: boardType
                 }
             };
-            const res = await fetch(`${DRIVE_API}/files/${fileId}`, {
+            await _fetchDrive(`${DRIVE_API}/files/${fileId}`, {
                 method: 'PATCH',
                 headers: _driveHeaders(),
                 body: JSON.stringify(metadata),
             });
-            if (!res.ok) {
-                console.warn(`[CloudSync] Failed to update metadata for file ${fileId}: ${res.status}`);
-            }
         } catch (err) {
             console.warn(`[CloudSync] Error updating metadata for file ${fileId}:`, err);
         }
@@ -365,24 +504,19 @@ const CloudSync = (() => {
     // ─── DOWNLOAD FILE ──────────────────────────────────────────────────────
     async function downloadFile(fileId) {
         await _ensureAuth();
-        const res = await fetch(`${DRIVE_API}/files/${fileId}?alt=media`, {
+        const res = await _fetchDrive(`${DRIVE_API}/files/${fileId}?alt=media`, {
             headers: { Authorization: `Bearer ${_accessToken}` },
         });
-        if (!res.ok) throw new Error(`Download failed: ${res.status}`);
         return res.blob();
     }
 
     // ─── DELETE FILE ────────────────────────────────────────────────────────
     async function deleteFile(fileId) {
         await _ensureAuth();
-        const res = await fetch(`${DRIVE_API}/files/${fileId}`, {
+        await _fetchDrive(`${DRIVE_API}/files/${fileId}`, {
             method: 'DELETE',
             headers: { Authorization: `Bearer ${_accessToken}` },
         });
-        if (!res.ok && res.status !== 204) {
-            const text = await res.text();
-            throw new Error(`Delete failed ${res.status}: ${text}`);
-        }
         return true;
     }
 
@@ -452,6 +586,12 @@ const CloudSync = (() => {
         _tokenExpiry = 0;
         _userInfo = null;
         _folderId = null;
+        _clearSyncTimer();
+        _invalidateStorageCache();
+        _backoffAttempts = 0;
+        _backoffUntil = 0;
+        _pollStep = 0;
+        _pendingAutoSave = false;
         // Clear persisted session
         localStorage.removeItem('moodinfinite_cloud_user');
         _updateUI_loggedOut();
@@ -460,19 +600,42 @@ const CloudSync = (() => {
 
     // ─── SWITCH ACCOUNT ─────────────────────────────────────────────────────
     function switchAccount() {
+        if (_accessToken) {
+            window.google?.accounts?.oauth2?.revoke(_accessToken, () => { });
+        }
         _accessToken = null;
         _tokenExpiry = 0;
         _userInfo = null;
         _folderId = null;
+        _clearSyncTimer();
+        _invalidateStorageCache();
+        _backoffAttempts = 0;
+        _backoffUntil = 0;
+        _pollStep = 0;
+        _pendingAutoSave = false;
         // Clear persisted session so we show the account picker freshly
         localStorage.removeItem('moodinfinite_cloud_user');
         _updateUI_loggedOut();
+        if (!_ready || !_tokenClient) {
+            showCloudToast('Google sign-in is still loading. Try again in a moment.', 'error');
+            return;
+        }
         // Force account picker on next request
-        _isSilentRefresh = false;
         _tokenClient.requestAccessToken({ prompt: 'select_account' });
     }
 
     // ─── PUBLIC SAVE & LOAD ─────────────────────────────────────────────────
+    function _applySavedProjectMeta(project, result) {
+        if (!project) return;
+        if (!project.data) project.data = {};
+        project.data._cloudSaved = Date.now();
+        project.data._cloudFileId = result.id;
+        if (result.modifiedTime) project.data._cloudModifiedTime = result.modifiedTime;
+        if (result.version) project.data._cloudVersion = result.version;
+        project.data._isDirty = false;
+        project.data._needsMergeOrReload = false;
+    }
+
     /**
      * Called when the user triggers "Save to Drive".
      * Serialises the current active project into a .mood blob and uploads it.
@@ -495,23 +658,43 @@ const CloudSync = (() => {
             if (!blob) { setCloudStatus('idle'); return; }
 
             const fileName = `${(activeProject?.name || 'moodboard').replace(/[^a-z0-9 _-]/gi, '_')}.mood`;
+            const existingFileId = activeProject?.data?._cloudFileId || null;
+            const needsConflict = Boolean(activeProject?.data?._needsMergeOrReload);
+            const existingModifiedTime = activeProject?.data?._cloudModifiedTime || null;
 
-            const fileId = await uploadFile(blob, fileName, activeProject?.type || 'moodinfinite', isAutoSave);
-            if (fileId) {
-                // Fetch latest metadata to get exact modifiedTime from Drive
-                const meta = await _fetchJSON(`${DRIVE_API}/files/${fileId}?fields=id,modifiedTime,version`, { headers: _driveHeaders() });
-                
-                showCloudToast(`Saved "${fileName}" to Drive ✓`, 'success');
-                if (activeProject) {
-                    if (!activeProject.data) activeProject.data = {};
-                    activeProject.data._cloudSaved = Date.now();
-                    activeProject.data._cloudFileId = fileId;
-                    activeProject.data._cloudModifiedTime = meta.modifiedTime;
-                    activeProject.data._cloudVersion = meta.version;
-                    activeProject.data._isDirty = false; // Mark as clean after save
-                    activeProject.data._needsMergeOrReload = false;
+            const result = await uploadFile(
+                blob,
+                fileName,
+                activeProject?.type || 'moodinfinite',
+                isAutoSave,
+                existingFileId,
+                needsConflict,
+                existingModifiedTime
+            );
+
+            if (result?.keptDrive) {
+                if (activeProject?.data?._needsMergeOrReload && result.id) {
+                    const meta = (result.modifiedTime && result.version)
+                        ? result
+                        : await _fetchJSON(`${DRIVE_API}/files/${result.id}?fields=modifiedTime,version`, { headers: _driveHeaders() });
+                    await _reloadActiveProject(result.id, meta, activeProject.id);
+                } else {
+                    setCloudStatus('synced');
                 }
+                return;
+            }
+
+            if (result?.id) {
+                _applySavedProjectMeta(activeProject, result);
+                _invalidateStorageCache();
+                _pollStep = 0;
+                _backoffAttempts = 0;
+                _backoffUntil = 0;
+                _lastCheckTime = Date.now();
+
+                showCloudToast(`Saved "${fileName}" to Drive ✓`, 'success');
                 setCloudStatus('synced');
+                _scheduleNextPoll();
             } else {
                 setCloudStatus('idle');
             }
@@ -541,34 +724,37 @@ const CloudSync = (() => {
             if (!fileId) { setCloudStatus('idle'); return; }
 
             showCloudToast('Loading project from Drive…', 'info');
-            
+
             // Get metadata first to store version/modifiedTime
             const meta = await _fetchJSON(`${DRIVE_API}/files/${fileId}?fields=id,name,modifiedTime,version,appProperties`, { headers: _driveHeaders() });
-            
+
             const blob = await downloadFile(fileId);
             const file = new File([blob], meta.name || 'project.mood');
 
-            // Reuse the existing loadFileFromObject function
-            window.loadFileFromObject(file);
-            
-            // After loading, we need to find the newly created project and attach cloud info
-            // Wait a bit for loadFileFromObject to finish (it's async internally)
-            setTimeout(() => {
-                const newProj = window.projects?.find(p => p.id === window.activeProjectId);
-                if (newProj) {
-                    if (!newProj.data) newProj.data = {};
-                    newProj.data._cloudFileId = fileId;
-                    newProj.data._cloudModifiedTime = meta.modifiedTime;
-                    newProj.data._cloudVersion = meta.version;
-                    newProj.data._isDirty = false;
-                    _startSyncPolling(); // Ensure polling is active
+            // Reuse the existing loadFileFromObject function (returns Promise<project>)
+            const newProj = await window.loadFileFromObject(file);
+            if (!newProj) {
+                throw new Error('Failed to unpack loaded project');
+            }
 
-                    // If boardType is not set in Drive metadata, update it now
-                    if (newProj.type && (!meta.appProperties || !meta.appProperties.boardType)) {
-                        _updateMetadata(fileId, newProj.type);
-                    }
-                }
-            }, 1000);
+            if (!newProj.data) newProj.data = {};
+            newProj.data._cloudFileId = fileId;
+            newProj.data._cloudModifiedTime = meta.modifiedTime;
+            newProj.data._cloudVersion = meta.version;
+            newProj.data._cloudSaved = Date.now();
+            newProj.data._isDirty = false;
+            newProj.data._needsMergeOrReload = false;
+            _pollStep = 0;
+            _backoffAttempts = 0;
+            _backoffUntil = 0;
+            _lastCheckTime = Date.now();
+            updateBottomLeftIndicator();
+            _scheduleNextPoll();
+
+            // If boardType is not set in Drive metadata, update it now
+            if (newProj.type && (!meta.appProperties || !meta.appProperties.boardType)) {
+                _updateMetadata(fileId, newProj.type);
+            }
 
             setCloudStatus('synced');
         } catch (err) {
@@ -587,13 +773,17 @@ const CloudSync = (() => {
             const sortSel    = document.getElementById('cloud-picker-sort');
             const storageEl  = document.getElementById('cloud-picker-storage');
 
-            // ── Compute app storage directly from the files list (no extra API call) ──
-            const totalAppBytes = files.reduce((s, f) => s + parseInt(f.size || 0, 10), 0);
-            if (storageEl) {
-                storageEl.textContent = `${files.length} project${files.length !== 1 ? 's' : ''} · ${_fmtBytes(totalAppBytes)} used by Moodinfinite`;
-            }
-
+            let currentFiles = [...files];
             let currentSort = sortSel?.value || 'modified-desc';
+
+            // ── Compute app storage directly from the files list (no extra API call) ──
+            function _updateStorageLabel() {
+                const totalAppBytes = currentFiles.reduce((s, f) => s + parseInt(f.size || 0, 10), 0);
+                if (storageEl) {
+                    storageEl.textContent = `${currentFiles.length} project${currentFiles.length !== 1 ? 's' : ''} · ${_fmtBytes(totalAppBytes)} used by Moodinfinite`;
+                }
+            }
+            _updateStorageLabel();
 
             function _sortFiles(arr, key) {
                 const sorted = [...arr];
@@ -646,10 +836,10 @@ const CloudSync = (() => {
                     const typeColor = BOARD_TYPE_COLORS[boardType] || BOARD_TYPE_COLORS['unknown'];
 
                     item.innerHTML = `
-                        <iconify-icon class="cloud-picker-icon" icon="${typeIcon}" style="color: ${typeColor}; font-size: 18px; width: 18px; height: 18px;" width="18" height="18"></iconify-icon>
+                        <iconify-icon class="cloud-picker-icon" icon="${_escapeHTML(typeIcon)}" style="color: ${_escapeHTML(typeColor)}; font-size: 18px; width: 18px; height: 18px;" width="18" height="18"></iconify-icon>
                         <div class="cloud-picker-info">
-                            <span class="cloud-picker-name">${f.name}</span>
-                            <span class="cloud-picker-meta">${date} · ${sizeStr} · ${typeLabel}</span>
+                            <span class="cloud-picker-name">${_escapeHTML(f.name)}</span>
+                            <span class="cloud-picker-meta">${_escapeHTML(date)} · ${_escapeHTML(sizeStr)} · ${_escapeHTML(typeLabel)}</span>
                         </div>
                         <button class="cloud-picker-delete-btn"><iconify-icon icon="lucide:trash-2"></iconify-icon></button>
                     `;
@@ -659,18 +849,25 @@ const CloudSync = (() => {
                     item.querySelector('.cloud-picker-delete-btn').addEventListener('click', async (e) => {
                         e.stopPropagation();
                         if (await _showDeleteConfirmDialog(f.name)) {
-                            await deleteFile(f.id);
-                            const updated = await listFiles();
-                            _renderList(updated);
+                            try {
+                                await deleteFile(f.id);
+                                currentFiles = currentFiles.filter(itemFile => itemFile.id !== f.id);
+                                _invalidateStorageCache();
+                                _updateStorageLabel();
+                                _renderList(currentFiles);
+                            } catch (err) {
+                                console.error('[CloudSync] Delete error:', err);
+                                showCloudToast('Failed to delete file from Drive.', 'error');
+                            }
                         }
                     });
                     list.appendChild(item);
                 });
             }
 
-            _renderList(files);
+            _renderList(currentFiles);
             overlay.style.display = 'flex';
-            if (sortSel) sortSel.onchange = () => { currentSort = sortSel.value; _renderList(files); };
+            if (sortSel) sortSel.onchange = () => { currentSort = sortSel.value; _renderList(currentFiles); };
             function cleanup() { overlay.style.display = 'none'; }
             cancelBtn.onclick = () => { cleanup(); resolve(null); };
         });
@@ -811,7 +1008,7 @@ const CloudSync = (() => {
         // Determine state
         let state = forceState;
         if (state === 'idle') state = null; // mapping 'idle' to fallback
-        
+
         if (!state) {
             if (!_userInfo) {
                 state = 'not-logged-in';
@@ -819,13 +1016,15 @@ const CloudSync = (() => {
                 state = 'not-synced';
             } else if (activeProject.data._needsMergeOrReload) {
                 state = 'remote-change';
+            } else if (_isSuspended) {
+                state = 'paused';
             } else {
                 state = 'synced'; // default state
             }
         }
 
         // Apply state classes to bottom-left indicator
-        indicator.classList.remove('synced', 'syncing', 'error', 'remote-change', 'not-synced', 'not-logged-in');
+        indicator.classList.remove('synced', 'syncing', 'error', 'remote-change', 'not-synced', 'not-logged-in', 'paused');
         indicator.classList.add(state);
 
         // Update icon attribute
@@ -835,7 +1034,7 @@ const CloudSync = (() => {
                 iconEl.setAttribute('icon', 'lucide:cloud-alert');
             } else if (state === 'syncing') {
                 iconEl.setAttribute('icon', 'lucide:cloud-sync');
-            } else if (state === 'not-synced' || state === 'not-logged-in') {
+            } else if (state === 'not-synced' || state === 'not-logged-in' || (state === 'paused' && _suspendReason === 'offline')) {
                 iconEl.setAttribute('icon', 'lucide:cloud-off');
             } else {
                 iconEl.setAttribute('icon', 'lucide:cloud');
@@ -855,6 +1054,10 @@ const CloudSync = (() => {
                 textEl.textContent = 'Local board. Click to sync to Drive.';
             } else if (state === 'not-logged-in') {
                 textEl.textContent = 'Sign in to sync with Google Drive.';
+            } else if (state === 'paused') {
+                textEl.textContent = _suspendReason === 'offline'
+                    ? 'Offline · Sync paused'
+                    : 'Sync paused (idle) · Click to sync';
             } else {
                 textEl.textContent = 'Cloud Synced';
             }
@@ -872,91 +1075,252 @@ const CloudSync = (() => {
                 statusDot.classList.add('error');
             } else if (state === 'remote-change') {
                 statusDot.classList.add('remote-change');
+            } else if (state === 'paused') {
+                statusDot.classList.add('paused');
+            }
+        }
+
+        // Reconcile adaptive polling when switching tabs or updating indicator
+        if (!forceState) {
+            if (!_hasSyncableContext()) {
+                _clearSyncTimer();
+            } else if (!_isSuspended && !_syncTimer) {
+                _scheduleNextPoll();
             }
         }
     }
 
-    // ─── BACKGROUND SYNC ────────────────────────────────────────────────────
-    function _startSyncPolling() {
-        if (_syncTimer) clearInterval(_syncTimer);
-        _syncTimer = setInterval(_checkRemoteChanges, 30000); // Check every 30s
+    // ─── SMART SUSPENSION & ADAPTIVE BACKGROUND SYNC ─────────────────────────
+    function _scheduleNextPoll(overrideDelayMs = null) {
+        _clearSyncTimer();
+        if (_isSuspended || !_hasSyncableContext()) return;
+
+        let delay;
+        if (overrideDelayMs != null) {
+            delay = Math.max(1000, overrideDelayMs);
+        } else if (_backoffAttempts > 0) {
+            const expDelay = Math.min(BACKOFF_MAX_MS, BACKOFF_BASE_MS * Math.pow(2, _backoffAttempts - 1));
+            const jitter = Math.floor(Math.random() * 5000);
+            delay = Math.max(expDelay + jitter, _backoffUntil - Date.now());
+        } else {
+            delay = POLL_INTERVALS_MS[Math.min(_pollStep, POLL_INTERVALS_MS.length - 1)];
+        }
+
+        _syncTimer = setTimeout(_checkRemoteChanges, delay);
+    }
+
+    function _suspendSync(reason) {
+        if (_isSuspended && _suspendReason === reason) return;
+        _isSuspended = true;
+        _suspendReason = reason;
+        _clearSyncTimer();
+        if (_idleTimer) {
+            clearTimeout(_idleTimer);
+            _idleTimer = null;
+        }
+        updateBottomLeftIndicator();
+    }
+
+    function _resetIdleTimer() {
+        if (_idleTimer) {
+            clearTimeout(_idleTimer);
+            _idleTimer = null;
+        }
+        if (document.hidden || navigator.onLine === false) return;
+        _idleTimer = setTimeout(() => {
+            if (!document.hidden && navigator.onLine !== false && !_isSuspended) {
+                _suspendSync('idle');
+            }
+        }, IDLE_SUSPEND_DELAY_MS);
+    }
+
+    function _resumeSync(triggerCheck = true) {
+        if (document.hidden || navigator.onLine === false) return;
+        const wasSuspended = _isSuspended;
+        _isSuspended = false;
+        _suspendReason = null;
+        _resetIdleTimer();
+
+        if (wasSuspended) {
+            _pollStep = 0;
+            updateBottomLeftIndicator();
+
+            if (_pendingAutoSave && _autosaveEnabled) {
+                _pendingAutoSave = false;
+                runAutoSave();
+            }
+
+            if (triggerCheck && _hasSyncableContext()) {
+                const elapsed = Date.now() - _lastCheckTime;
+                if (elapsed >= WAKE_CHECK_COOLDOWN_MS) {
+                    _checkRemoteChanges();
+                } else {
+                    _scheduleNextPoll(WAKE_CHECK_COOLDOWN_MS - elapsed);
+                }
+            } else {
+                _scheduleNextPoll();
+            }
+        } else if (_hasSyncableContext() && !_syncTimer) {
+            _scheduleNextPoll();
+        }
+    }
+
+    function _wireLifecycleEvents() {
+        if (_lifecycleWired) return;
+        _lifecycleWired = true;
+
+        document.addEventListener('visibilitychange', () => {
+            if (document.hidden) {
+                if (_hiddenTimer) clearTimeout(_hiddenTimer);
+                if (_idleTimer) {
+                    clearTimeout(_idleTimer);
+                    _idleTimer = null;
+                }
+                _hiddenTimer = setTimeout(() => {
+                    _hiddenTimer = null;
+                    if (document.hidden) _suspendSync('hidden');
+                }, HIDDEN_SUSPEND_DELAY_MS);
+            } else {
+                if (_hiddenTimer) {
+                    clearTimeout(_hiddenTimer);
+                    _hiddenTimer = null;
+                }
+                _resumeSync(true);
+            }
+        });
+
+        const onUserActivity = () => {
+            if (document.hidden || navigator.onLine === false) return;
+            if (_isSuspended && _suspendReason === 'idle') {
+                _lastActivityReport = Date.now();
+                _resumeSync(true);
+                return;
+            }
+            const now = Date.now();
+            if (now - _lastActivityReport >= ACTIVITY_THROTTLE_MS) {
+                _lastActivityReport = now;
+                _resetIdleTimer();
+            }
+        };
+
+        ['pointerdown', 'keydown', 'wheel', 'touchstart'].forEach(evt => {
+            window.addEventListener(evt, onUserActivity, { passive: true });
+        });
+
+        window.addEventListener('offline', () => {
+            if (_hiddenTimer) {
+                clearTimeout(_hiddenTimer);
+                _hiddenTimer = null;
+            }
+            _suspendSync('offline');
+        });
+
+        window.addEventListener('online', () => {
+            if (!document.hidden) _resumeSync(true);
+        });
+
+        if (navigator.onLine === false) {
+            _suspendSync('offline');
+        } else if (document.hidden) {
+            _hiddenTimer = setTimeout(() => {
+                _hiddenTimer = null;
+                if (document.hidden) _suspendSync('hidden');
+            }, HIDDEN_SUSPEND_DELAY_MS);
+        } else {
+            _resetIdleTimer();
+        }
     }
 
     async function _checkRemoteChanges() {
-        if (!_accessToken || !_isTokenValid()) return;
-        
-        const activeProject = window.projects?.find(p => p.id === window.activeProjectId);
-        if (!activeProject || !activeProject.data || !activeProject.data._cloudFileId) return;
+        if (_isCheckingRemote || _isSuspended || !_hasSyncableContext()) return;
+
+        const activeProject = _getActiveLinkedProject();
+        if (!activeProject) return;
 
         const fileId = activeProject.data._cloudFileId;
         const localModifiedTime = activeProject.data._cloudModifiedTime;
 
+        _isCheckingRemote = true;
+        _lastCheckTime = Date.now();
+
         try {
-            const meta = await _fetchJSON(`${DRIVE_API}/files/${fileId}?fields=modifiedTime,version`, { headers: _driveHeaders() });
-            
+            const meta = await _fetchJSON(
+                `${DRIVE_API}/files/${fileId}?fields=modifiedTime,version`,
+                { headers: _driveHeaders(), retry: false }
+            );
+
+            _backoffAttempts = 0;
+            _backoffUntil = 0;
+
             if (meta.modifiedTime !== localModifiedTime) {
                 console.log(`[CloudSync] Remote change detected for ${fileId}. Local: ${localModifiedTime}, Remote: ${meta.modifiedTime}`);
-                
+                _pollStep = 0;
+
                 // If local is not dirty, we can auto-reload
                 if (!activeProject.data._isDirty) {
-                    _reloadActiveProject(fileId, meta);
+                    await _reloadActiveProject(fileId, meta, activeProject.id);
                 } else {
                     // Local is dirty, notify user
                     activeProject.data._needsMergeOrReload = true;
                     setCloudStatus('remote-change');
                 }
             } else {
+                _pollStep = Math.min(_pollStep + 1, POLL_INTERVALS_MS.length - 1);
                 if (activeProject.data._needsMergeOrReload) {
                     activeProject.data._needsMergeOrReload = false;
                     setCloudStatus('idle');
                 }
             }
         } catch (err) {
+            if (err.status === 401) {
+                _accessToken = null;
+                _tokenExpiry = 0;
+                _clearSyncTimer();
+                updateBottomLeftIndicator('error');
+                showCloudToast('Google Drive session expired. Click to sign in again.', 'error');
+                return;
+            }
+            if (err.isTransient || err.status === 404) {
+                _backoffAttempts = Math.min(_backoffAttempts + 1, 5);
+                if (err.retryAfterSec != null) {
+                    _backoffUntil = Date.now() + err.retryAfterSec * 1000;
+                }
+            }
             console.warn('[CloudSync] Sync check failed:', err);
+        } finally {
+            _isCheckingRemote = false;
+            _scheduleNextPoll();
         }
     }
 
-    async function _reloadActiveProject(fileId, meta) {
+    async function _reloadActiveProject(fileId, meta, targetProjectId = null) {
+        const expectedProjectId = targetProjectId ?? window.activeProjectId;
         try {
             setCloudStatus('syncing');
             const blob = await downloadFile(fileId);
-            const activeProject = window.projects?.find(p => p.id === window.activeProjectId);
-            
-            // For a "seamless" reload, we need to update the data in place or switch tabs
-            // Since we use global variables (items, cameraOffset, etc.), we should use loadProject
-            const jsonStr = await _blobToString(blob);
-            const data = JSON.parse(jsonStr);
-            
-            // If it's a zip/mood file, we need to unpack it (reuse loadFileFromObject logic)
-            // But for simplicity in this MVP, let's just trigger a reload if it's clean.
-            // Actually, loadFileFromObject is better.
-            const file = new File([blob], activeProject.name + '.mood');
-            
-            // Store current position if we want to preserve view
-            const oldOffset = { ...window.cameraOffset };
-            const oldZoom = window.cameraZoom;
-
-            // We need a version of loadFileFromObject that REPLACES the current project instead of adding a new one
-            if (window.reloadCurrentProjectFromBlob) {
-                await window.reloadCurrentProjectFromBlob(blob);
-            } else {
-                // Fallback: notify user to reload manually for now, or just load as new tab
-                showCloudToast('Project updated remotely. Reloading...', 'info');
-                // Implementation of reloadCurrentProjectFromBlob in script.js will be needed
-                const reader = new FileReader();
-                reader.onload = async (e) => {
-                    // Logic to update current project data
-                    // This is complex because of images and JSZip.
-                    // Let's assume we implement reloadCurrentProjectFromBlob in script.js
-                };
-                reader.readAsArrayBuffer(blob);
+            const targetProject = window.projects?.find(p => p.id === expectedProjectId);
+            if (!targetProject) {
+                setCloudStatus('idle');
+                return;
             }
 
-            if (activeProject) {
-                activeProject.data._cloudModifiedTime = meta.modifiedTime;
-                activeProject.data._cloudVersion = meta.version;
-                activeProject.data._isDirty = false;
-                activeProject.data._needsMergeOrReload = false;
+            if (typeof window.reloadCurrentProjectFromBlob === 'function') {
+                const ok = await window.reloadCurrentProjectFromBlob(blob, expectedProjectId);
+                if (ok === false) {
+                    throw new Error('reloadCurrentProjectFromBlob returned false');
+                }
+            } else {
+                console.warn('[CloudSync] reloadCurrentProjectFromBlob is not available.');
+                setCloudStatus('idle');
+                return;
+            }
+
+            if (targetProject.data) {
+                targetProject.data._cloudModifiedTime = meta.modifiedTime;
+                targetProject.data._cloudVersion = meta.version;
+                targetProject.data._cloudSaved = Date.now();
+                targetProject.data._isDirty = false;
+                targetProject.data._needsMergeOrReload = false;
             }
             setCloudStatus('synced');
             showCloudToast('Project synced with remote changes ✓', 'success');
@@ -964,14 +1328,6 @@ const CloudSync = (() => {
             console.error('[CloudSync] Reload failed:', err);
             setCloudStatus('error');
         }
-    }
-
-    function _blobToString(blob) {
-        return new Promise((resolve) => {
-            const reader = new FileReader();
-            reader.onload = () => resolve(reader.result);
-            reader.readAsText(blob);
-        });
     }
 
     // ─── UI: LOGGED IN / LOGGED OUT ──────────────────────────────────────────
@@ -1000,15 +1356,12 @@ const CloudSync = (() => {
         updateBottomLeftIndicator();
     }
 
-    // Loads the storage meter — called only when the menu is opened (user gesture, token is valid)
-    async function _loadStorageMeter() {
+    // Loads the storage meter — cached in memory for 5 min to avoid redundant API calls
+    async function _loadStorageMeter(forceRefresh = false) {
         const storageMeter = document.getElementById('cloud-menu-storage');
         if (!storageMeter || !_isTokenValid()) return;
 
-        storageMeter.style.display = 'block';
-        storageMeter.innerHTML = `<span class="cloud-storage-label">Loading storage…</span>`;
-        try {
-            const { appBytes, totalBytes, usedBytes } = await getDriveStorageInfo();
+        const renderStorage = ({ appBytes, totalBytes, usedBytes }) => {
             const appPct  = totalBytes > 0 ? (appBytes  / totalBytes) * 100 : 0;
             const usedPct = totalBytes > 0 ? (usedBytes / totalBytes) * 100 : 0;
             const barColor = appPct > 80 ? '#E8A0A0' : appPct > 50 ? '#D4A359' : '#2589BD';
@@ -1027,6 +1380,26 @@ const CloudSync = (() => {
                     <span class="cloud-storage-label">Moodinfinite: ${_fmtBytes(appBytes)}</span>
                 </div>
             `;
+        };
+
+        const accountEmail = _userInfo?.email || null;
+        storageMeter.style.display = 'block';
+        if (!forceRefresh && _storageCache && _storageCache.email === accountEmail && (Date.now() - _storageCache.fetchedAt < STORAGE_CACHE_TTL_MS)) {
+            renderStorage(_storageCache.data);
+            return;
+        }
+
+        storageMeter.innerHTML = `<span class="cloud-storage-label">Loading storage…</span>`;
+        try {
+            if (!_storageInFlight || forceRefresh) {
+                _storageInFlight = getDriveStorageInfo().finally(() => {
+                    _storageInFlight = null;
+                });
+            }
+            const info = await _storageInFlight;
+            if (!_userInfo || _userInfo.email !== accountEmail) return;
+            _storageCache = { data: info, fetchedAt: Date.now(), email: accountEmail };
+            renderStorage(info);
         } catch (_) {
             storageMeter.style.display = 'none';
         }
@@ -1038,12 +1411,14 @@ const CloudSync = (() => {
         const menuAvatar = document.getElementById('cloud-menu-avatar');
         const menuEmail = document.getElementById('cloud-menu-email');
         const menuName = document.getElementById('cloud-menu-name');
+        const storageMeter = document.getElementById('cloud-menu-storage');
 
-        if (avatarImg) { avatarImg.src = ''; avatarImg.style.display = 'none'; }
-        if (menuAvatar) { menuAvatar.src = ''; menuAvatar.style.display = 'none'; }
+        if (avatarImg) { avatarImg.removeAttribute('src'); avatarImg.style.display = 'none'; }
+        if (menuAvatar) { menuAvatar.removeAttribute('src'); menuAvatar.style.display = 'none'; }
         if (avatarIcon) avatarIcon.style.display = 'flex';
         if (menuEmail) menuEmail.textContent = '';
         if (menuName) menuName.textContent = '';
+        if (storageMeter) { storageMeter.innerHTML = ''; storageMeter.style.display = 'none'; }
         updateBottomLeftIndicator();
     }
 
@@ -1053,9 +1428,11 @@ const CloudSync = (() => {
             setCloudStatus('syncing');
             await _ensureAuth();
             setCloudStatus('idle');
+            return true;
         } catch (err) {
             console.error('[CloudSync] signIn error:', err);
             setCloudStatus('error');
+            return false;
         }
     }
 
@@ -1079,13 +1456,9 @@ const CloudSync = (() => {
             }, 200);
         }
 
-        // Wire up the user account menu
+        // Wire up the user account menu and tab lifecycle listeners
         _wireMenuEvents();
-
-        // Start polling if we already have a logged in session and an active project with cloud ID
-        if (_userInfo) {
-            _startSyncPolling();
-        }
+        _wireLifecycleEvents();
     }
 
     function _wireMenuEvents() {
@@ -1119,9 +1492,12 @@ const CloudSync = (() => {
         });
 
         // Menu item: Save to Drive
-        document.getElementById('cloud-menu-save')?.addEventListener('click', () => {
+        document.getElementById('cloud-menu-save')?.addEventListener('click', async () => {
             document.getElementById('cloud-user-menu')?.classList.remove('open');
-            if (!_userInfo) { signIn().then(saveCurrentProject); return; }
+            if (!_userInfo) {
+                const ok = await signIn();
+                if (!ok) return;
+            }
             saveCurrentProject();
         });
 
@@ -1224,39 +1600,55 @@ const CloudSync = (() => {
     }
 
     async function runAutoSave() {
-        if (!_userInfo || !_isTokenValid()) return;
-        
+        if (!_userInfo || !_isTokenValid() || _isAutoSaving) return;
+        if (_isSuspended || navigator.onLine === false) {
+            _pendingAutoSave = true;
+            return;
+        }
+
+        _isAutoSaving = true;
         try {
             let savedAny = false;
             for (const proj of window.projects || []) {
-                if (!proj.data) continue;
+                // Only autosave boards already linked to Google Drive
+                if (!proj.data || !proj.data._cloudFileId) continue;
+                if (proj.data._needsMergeOrReload) continue;
+
                 const localMod = proj.data._localModified || 0;
                 const cloudSave = proj.data._cloudSaved || 0;
-                
-                if (localMod > cloudSave) {
-                    const oldCloudSaved = proj.data._cloudSaved;
-                    proj.data._cloudSaved = Date.now();
-                    console.log(`[CloudSync] Autosaving "${proj.name}"...`);
-                    const blob = await _buildProjectBlob(proj);
-                    if (blob) {
-                        const fileName = `${(proj.name || 'moodboard').replace(/[^a-z0-9 _-]/gi, '_')}.mood`;
-                        const fileId = await uploadFile(blob, fileName, proj.type, true);
-                        if (fileId) {
-                            savedAny = true;
-                        } else {
-                            proj.data._cloudSaved = oldCloudSaved;
-                        }
+                if (!proj.data._isDirty && localMod <= cloudSave) continue;
+
+                const oldCloudSaved = proj.data._cloudSaved;
+                proj.data._cloudSaved = Date.now();
+                console.log(`[CloudSync] Autosaving "${proj.name}"...`);
+                const blob = await _buildProjectBlob(proj);
+                if (blob) {
+                    const fileName = `${(proj.name || 'moodboard').replace(/[^a-z0-9 _-]/gi, '_')}.mood`;
+                    const result = await uploadFile(blob, fileName, proj.type, true, proj.data._cloudFileId);
+                    if (result?.id) {
+                        _applySavedProjectMeta(proj, result);
+                        savedAny = true;
                     } else {
                         proj.data._cloudSaved = oldCloudSaved;
                     }
+                } else {
+                    proj.data._cloudSaved = oldCloudSaved;
                 }
             }
-            
+
             if (savedAny) {
+                _invalidateStorageCache();
+                _pollStep = 0;
+                _backoffAttempts = 0;
+                _backoffUntil = 0;
+                _lastCheckTime = Date.now();
                 setCloudStatus('synced');
+                _scheduleNextPoll();
             }
         } catch (err) {
             console.warn('[CloudSync] Autosave failed:', err);
+        } finally {
+            _isAutoSaving = false;
         }
     }
 
@@ -1268,15 +1660,21 @@ const CloudSync = (() => {
         switchAccount,
         saveCurrentProject,
         openFromDrive,
+        runAutoSave,
         setCloudStatus,
         showCloudToast,
         updateIndicator: updateBottomLeftIndicator,
         get isLoggedIn() { return !!_userInfo; },
         get userInfo() { return _userInfo; },
+        get isSuspended() { return _isSuspended; },
+        get suspendReason() { return _suspendReason; },
+        get lastCheckTime() { return _lastCheckTime; },
         buildProjectBlob: _buildProjectBlob,
     };
 
 })();
+
+window.CloudSync = CloudSync;
 
 // Auto-initialise on DOM ready
 if (document.readyState === 'loading') {

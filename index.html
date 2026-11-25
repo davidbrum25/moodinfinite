@@ -147,7 +147,7 @@
             <div id="cloud-btn-wrapper" style="position: relative;">
                 <button id="cloud-login-btn" class="tab-add-btn cloud-login-btn" title="Sign in to Google Drive" aria-label="Sign in to Google Drive">
                     <!-- Avatar image (shown when logged in) -->
-                    <img id="cloud-avatar-img" src="" alt="Google Account avatar" referrerpolicy="no-referrer"
+                    <img id="cloud-avatar-img" alt="Google Account avatar" referrerpolicy="no-referrer"
                         onerror="this.style.display='none'; document.getElementById('cloud-avatar-icon').style.display='flex';"
                         style="display:none; width:24px; height:24px; border-radius:50%; object-fit:cover;">
                     <!-- Default icon (shown when logged out) -->
@@ -604,7 +604,7 @@
             <button id="storyflow-lightbox-close" title="Close (Esc)" aria-label="Close (Esc)">
                 <iconify-icon icon="lucide:x" width="20" height="20"></iconify-icon>
             </button>
-            <img id="storyflow-lightbox-img" src="" alt="Frame preview" />
+            <img id="storyflow-lightbox-img" alt="Frame preview" />
         </div>
 
         <div id="colorseeker-container" class="tab-content"
@@ -856,7 +856,7 @@
     <!-- User account dropdown menu -->
     <div id="cloud-user-menu" class="cloud-user-menu">
         <div class="cloud-menu-profile">
-            <img id="cloud-menu-avatar" src="" alt="Google Account avatar" referrerpolicy="no-referrer"
+            <img id="cloud-menu-avatar" alt="Google Account avatar" referrerpolicy="no-referrer"
                 onerror="this.src=&quot;data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23B8AFA0' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2'/><circle cx='12' cy='7' r='4'/></svg>&quot;;"
                 style="width:36px; height:36px; border-radius:50%; object-fit:cover; flex-shrink:0;">
             <div class="cloud-menu-profile-info">
@@ -866,11 +866,11 @@
         </div>
         <div class="cloud-menu-divider"></div>
 
-        <button id="cloud-menu-save" class="cloud-menu-item" title="Ctrl+Alt+S" aria-label="Ctrl+Alt+S">
+        <button id="cloud-menu-save" class="cloud-menu-item" title="Ctrl+Alt+S" aria-label="Save to Drive (Ctrl+Alt+S)">
             <iconify-icon icon="lucide:cloud-upload" width="16" height="16"></iconify-icon>
             Save to Drive
         </button>
-        <button id="cloud-menu-open" class="cloud-menu-item" title="Ctrl+Alt+O" aria-label="Ctrl+Alt+O">
+        <button id="cloud-menu-open" class="cloud-menu-item" title="Ctrl+Alt+O" aria-label="Open from Drive (Ctrl+Alt+O)">
             <iconify-icon icon="lucide:cloud-download" width="16" height="16"></iconify-icon>
             Open from Drive
         </button>
@@ -916,9 +916,9 @@
         </button>
         <div class="cloud-menu-divider"></div>
         <div class="cloud-menu-legal">
-            <a href="/privacy.html" target="_blank">Privacy</a>
+            <a href="/privacy.html" target="_blank" rel="noopener noreferrer">Privacy</a>
             <span class="cloud-menu-legal-sep">·</span>
-            <a href="/terms.html" target="_blank">Terms</a>
+            <a href="/terms.html" target="_blank" rel="noopener noreferrer">Terms</a>
         </div>
     </div>
 
@@ -1167,7 +1167,7 @@
                     </li>
                     <li><strong>Add Comment (N):</strong> Create sticky-note style comments for annotations.</li>
                     <li><strong>Add Link (K):</strong> Add hyperlinks to your board. Click the <strong>external link
-                            icon</strong> on the item or toolar to open the URL.</li>
+                            icon</strong> on the item or toolbar to open the URL.</li>
                     <li><strong>Add Text List (L):</strong> Create interactive checklists. <strong>Click
                             checkboxes</strong> to toggle items and <strong>double-click</strong> to edit the list.</li>
                     <li><strong>Draw (D):</strong> Freehand drawing and sketching.</li>
@@ -1223,22 +1223,22 @@
                     <li><strong>Deselect / Cancel:</strong> Escape</li>
                 </ul>
                 <h3>Credits</h3>
-                <p style="line-height:1.8">Made by H. David Brum<br><a href="mailto:davidbrum@gmail.com" target="_blank"
+                <p style="line-height:1.8">Made by H. David Brum<br><a href="mailto:davidbrum@gmail.com" target="_blank" rel="noopener noreferrer"
                         style="color:var(--switch-bg-checked);text-decoration:none">davidbrum@gmail.com</a><br><a
-                        href="https://linktr.ee/davidbrum" target="_blank"
+                        href="https://linktr.ee/davidbrum" target="_blank" rel="noopener noreferrer"
                         style="color:var(--switch-bg-checked);text-decoration:none">linktr.ee/davidbrum</a></p>
                 <div style="display:flex;gap:1.5rem;justify-content:center;margin-top:2rem;">
-                    <a href="https://linktr.ee/davidbrum" target="_blank" class="footer-btn"
+                    <a href="https://linktr.ee/davidbrum" target="_blank" rel="noopener noreferrer" class="footer-btn"
                         title="H. David Brum Links" aria-label="H. David Brum Links"><iconify-icon icon="lucide:external-link" width="16"
                             height="16"></iconify-icon></a>
-                    <a href="https://github.com/davidbrum25/moodinfinite" target="_blank" class="footer-btn"
+                    <a href="https://github.com/davidbrum25/moodinfinite" target="_blank" rel="noopener noreferrer" class="footer-btn"
                         title="View on GitHub" aria-label="View on GitHub"><iconify-icon icon="lucide:github" width="16"
                             height="16"></iconify-icon></a>
                 </div>
                 <div class="help-modal-legal" style="margin-top:1.25rem; text-align:center; font-size:0.82rem; color:var(--text-color-light);">
-                    <a href="/privacy.html" target="_blank" style="color:var(--switch-bg-checked);text-decoration:none;">Privacy Policy</a>
+                    <a href="/privacy.html" target="_blank" rel="noopener noreferrer" style="color:var(--switch-bg-checked);text-decoration:none;">Privacy Policy</a>
                     <span style="margin: 0 0.5rem; opacity: 0.5;">·</span>
-                    <a href="/terms.html" target="_blank" style="color:var(--switch-bg-checked);text-decoration:none;">Terms of Service</a>
+                    <a href="/terms.html" target="_blank" rel="noopener noreferrer" style="color:var(--switch-bg-checked);text-decoration:none;">Terms of Service</a>
                 </div>
             </div>
         </div>

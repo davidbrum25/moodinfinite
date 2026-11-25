@@ -45,6 +45,22 @@ const imageLazyObserver = new IntersectionObserver((entries, observer) => {
 }, { rootMargin: '200px' });
 
 let autoSaveTimeout = null;
+let _lastSavedImageCacheSig = '';
+let _lastSavedVideoCacheSig = '';
+let _mediaCacheDirty = { image: false, video: false };
+
+function markMediaCacheDirty(kind = 'both') {
+    if (kind === 'image' || kind === 'both') _mediaCacheDirty.image = true;
+    if (kind === 'video' || kind === 'both') _mediaCacheDirty.video = true;
+}
+window.markMediaCacheDirty = markMediaCacheDirty;
+
+function getCacheSignature(obj) {
+    if (!obj || typeof obj !== 'object') return '0:';
+    const keys = Object.keys(obj);
+    return `${keys.length}:${keys.join(',')}`;
+}
+
 function scheduleAutoSave() {
     clearTimeout(autoSaveTimeout);
     const activeProject = projects.find(p => p.id === activeProjectId);
@@ -91,8 +107,9 @@ function restoreImages(itemArray) {
     itemArray.forEach(t => {
         if (t.type === 'image') {
             const img = new Image();
+            img.onload = () => requestUpdate();
             if (t.imageId && globalImageCache[t.imageId]) img.src = globalImageCache[t.imageId];
-            else if (t.img) img.src = t.img;
+            else if (t.imgSrc || (typeof t.img === 'string' && t.img)) img.src = t.imgSrc || t.img;
             t.img = img;
             sanitizeStoredGenMeta(t);
         } else if (t.type === 'video') {
@@ -109,7 +126,94 @@ function restoreImages(itemArray) {
     });
 }
 
+function releaseVideoSrc(video) {
+    if (!video) return;
+    if (video.src) {
+        if (video.src.startsWith('blob:')) {
+            try { URL.revokeObjectURL(video.src); } catch (_) { }
+        }
+        video.removeAttribute('src');
+        video.load();
+    }
+    video._hasFrameCallback = false;
+}
+
+function ensureVideoSrc(item) {
+    if (!item || !item.video || item.video.src) return;
+    if (item.videoId && globalVideoCache[item.videoId]) {
+        const videoData = globalVideoCache[item.videoId];
+        item.video.src = videoData instanceof Blob ? URL.createObjectURL(videoData) : videoData;
+    } else if (item.videoSrc) {
+        item.video.src = item.videoSrc;
+    }
+}
+
+function pauseAndReleaseVideos(itemList) {
+    if (!Array.isArray(itemList)) return;
+    itemList.forEach(item => {
+        if (!item) return;
+        if (item.type === 'video' && item.video) {
+            if (!item.video.paused) item.video.pause();
+            releaseVideoSrc(item.video);
+        } else if (item.type === 'group' && Array.isArray(item.items)) {
+            pauseAndReleaseVideos(item.items);
+        }
+    });
+}
+
+function pruneUnusedMediaCaches() {
+    const usedImages = new Set();
+    const usedVideos = new Set();
+
+    const scanItems = (arr) => {
+        if (!Array.isArray(arr)) return;
+        for (const it of arr) {
+            if (!it) continue;
+            if (it.type === 'image' && it.imageId) usedImages.add(it.imageId);
+            else if (it.type === 'video' && it.videoId) usedVideos.add(it.videoId);
+            else if (it.type === 'group' && Array.isArray(it.items)) scanItems(it.items);
+        }
+    };
+
+    for (const p of projects) {
+        if (!p || !p.data) continue;
+        if (p.type === 'moodinfinite') {
+            scanItems(p.id === activeProjectId ? items : p.data.items);
+            if (Array.isArray(p.data.historyStack)) {
+                for (const snap of p.data.historyStack) {
+                    if (typeof snap !== 'string') continue;
+                    try { scanItems(JSON.parse(snap)); } catch (_) { }
+                }
+            }
+        } else if (p.type === 'moodgantt' && Array.isArray(p.data.groups)) {
+            for (const g of p.data.groups) {
+                for (const t of g?.tasks || []) {
+                    if (t && t.attachment && typeof t.attachment === 'string' && globalImageCache[t.attachment]) {
+                        usedImages.add(t.attachment);
+                    }
+                }
+            }
+        }
+    }
+
+    for (const id of Object.keys(globalImageCache)) {
+        if (!usedImages.has(id)) {
+            delete globalImageCache[id];
+            if (window._webpBlobCache) delete window._webpBlobCache[id];
+            _mediaCacheDirty.image = true;
+        }
+    }
+    for (const id of Object.keys(globalVideoCache)) {
+        if (!usedVideos.has(id)) {
+            delete globalVideoCache[id];
+            _mediaCacheDirty.video = true;
+        }
+    }
+}
+
 function saveToBrowser() {
+    clearTimeout(autoSaveTimeout);
+    autoSaveTimeout = null;
     if (activeProjectId) {
         const currentProject = projects.find(p => p.id === activeProjectId);
         if (currentProject) {
@@ -126,26 +230,41 @@ function saveToBrowser() {
     }
     let projectsToSave;
     try {
-        projectsToSave = projects.map(p => {
-            const copy = JSON.parse(JSON.stringify(p, storageReplacer));
-            if (copy.type === 'moodinfinite' && copy.data && p.data && p.data.items) {
-                // serializeItems only drops img/video. A link iconImage and a video
-                // frame canvas are still on the copy and make localforage reject the write.
-                copy.data.items = JSON.parse(JSON.stringify(serializeItems(p.data.items), storageReplacer));
-            }
-            return copy;
-        });
+        projectsToSave = projects.map(p => JSON.parse(JSON.stringify(p, storageReplacer)));
     } catch (err) {
         console.error('saveToBrowser failed', err);
-        return;
+        return Promise.resolve();
     }
-    return Promise.all([
+
+    const imgSig = getCacheSignature(globalImageCache);
+    const vidSig = getCacheSignature(globalVideoCache);
+    const writes = [
         window.localforage.setItem('moodinfinite_projects', projectsToSave),
-        window.localforage.setItem('moodinfinite_cache', globalImageCache),
-        window.localforage.setItem('moodinfinite_video_cache', globalVideoCache),
         window.localforage.setItem('moodinfinite_active_tab', activeProjectId),
         window.localforage.setItem('moodinfinite_workers', getSharedWorkers()),
-    ]);
+    ];
+    if (_mediaCacheDirty.image || imgSig !== _lastSavedImageCacheSig) {
+        writes.push(
+            window.localforage.setItem('moodinfinite_cache', globalImageCache).then(() => {
+                _mediaCacheDirty.image = false;
+                _lastSavedImageCacheSig = imgSig;
+            })
+        );
+    }
+    if (_mediaCacheDirty.video || vidSig !== _lastSavedVideoCacheSig) {
+        writes.push(
+            window.localforage.setItem('moodinfinite_video_cache', globalVideoCache).then(() => {
+                _mediaCacheDirty.video = false;
+                _lastSavedVideoCacheSig = vidSig;
+            })
+        );
+    }
+    return Promise.all(writes).catch(err => {
+        console.error('saveToBrowser IndexedDB write failed', err);
+        if (typeof showToast === 'function') {
+            showToast('Failed to save locally (storage full or unavailable).', 'error');
+        }
+    });
 }
 
 
@@ -416,6 +535,10 @@ function switchTab(projectId, options) {
         return;
     }
 
+    stopStoryflowAnimatic();
+    stopStoryflowFullscreen();
+    closeGenMetaPanel();
+
     // Commit an open note, comment, or list before the board is copied.
     // Otherwise the item stays isHidden and the in-progress text is dropped.
     if (currentlyEditingText) {
@@ -608,8 +731,13 @@ function actuallyCloseTab() {
     const projectId = projectPendingClose;
     const index = projects.findIndex(p => p.id === projectId);
     if (index > -1) {
+        const closingProject = projects[index];
         const wasActive = activeProjectId === projectId;
+        if (closingProject && closingProject.type === 'moodinfinite') {
+            pauseAndReleaseVideos(wasActive ? items : closingProject.data?.items);
+        }
         projects.splice(index, 1);
+        pruneUnusedMediaCaches();
         if (wasActive) {
             if (projects.length > 0) {
                 const newActiveIndex = Math.max(0, index - 1);
@@ -672,8 +800,7 @@ function duplicateProject(projectId) {
         source.data.historyIndex = historyIndex;
     }
     const copy = JSON.parse(JSON.stringify(source, storageReplacer));
-    if (copy.type === 'moodinfinite' && source.data.items) {
-        copy.data.items = JSON.parse(JSON.stringify(serializeItems(source.data.items), storageReplacer));
+    if (copy.type === 'moodinfinite' && copy.data && copy.data.items) {
         restoreImages(copy.data.items);
     }
     copy.id = nextProjectId();
@@ -913,64 +1040,98 @@ function openVariableManager(project) {
     }
     
     const renderContent = () => {
-        let html = `
-            <div class="app-modal" style="width: 500px; max-width: 90vw;">
-                <h2>Variable Manager</h2>
-                <p style="color: var(--text-color-light); font-size: 0.9rem; margin-bottom: 1rem;">Define variables to use across all prompts in this project. Use {{variable_name}} in your text.</p>
-                <div id="var-list" style="display: flex; flex-direction: column; gap: 0.5rem; margin-bottom: 1rem; max-height: 300px; overflow-y: auto;">
-        `;
-        
-        Object.entries(project.data.variables).forEach(([key, val]) => {
-            html += `
-                <div style="display: flex; gap: 0.5rem;">
-                    <input type="text" class="form-input var-key" value="${key}" placeholder="Name (e.g. subject)" style="width: 30%;">
-                    <input type="text" class="form-input var-val" value="${val}" placeholder="Value" style="flex-grow: 1;">
-                    <button class="modal-button cancel delete-var-btn" data-key="${key}" style="padding: 0.5rem;">&times;</button>
-                </div>
-            `;
-        });
-        
-        html += `
-                </div>
-                <button id="add-var-btn" class="modal-button" style="width: 100%; margin-bottom: 1rem;"><iconify-icon icon="lucide:plus"></iconify-icon> Add Variable</button>
-                <div class="modal-buttons">
-                    <button id="close-var-btn" class="modal-button confirm">Done</button>
-                </div>
-            </div>
-        `;
-        
-        overlay.innerHTML = html;
-        
-        overlay.querySelectorAll('.delete-var-btn').forEach(btn => {
-            btn.onclick = (e) => {
-                delete project.data.variables[e.target.dataset.key];
-                saveToBrowser();
-                renderContent();
-            };
-        });
-        
+        overlay.innerHTML = '';
+        const modal = document.createElement('div');
+        modal.className = 'app-modal';
+        modal.style.cssText = 'width: 500px; max-width: 90vw;';
+
+        const title = document.createElement('h2');
+        title.textContent = 'Variable Manager';
+
+        const desc = document.createElement('p');
+        desc.style.cssText = 'color: var(--text-color-light); font-size: 0.9rem; margin-bottom: 1rem;';
+        desc.textContent = 'Define variables to use across all prompts in this project. Use {{variable_name}} in your text.';
+
+        const listEl = document.createElement('div');
+        listEl.id = 'var-list';
+        listEl.style.cssText = 'display: flex; flex-direction: column; gap: 0.5rem; margin-bottom: 1rem; max-height: 300px; overflow-y: auto;';
+
         const updateVars = () => {
             const newVars = {};
-            const keys = overlay.querySelectorAll('.var-key');
-            const vals = overlay.querySelectorAll('.var-val');
-            keys.forEach((kInput, i) => {
-                const k = kInput.value.trim().replace(/[{}]/g, '');
-                const v = vals[i].value;
-                if (k) newVars[k] = v;
+            listEl.querySelectorAll('.var-row').forEach(row => {
+                const kInput = row.querySelector('.var-key');
+                const vInput = row.querySelector('.var-val');
+                const k = (kInput?.value || '').trim().replace(/[{}]/g, '');
+                if (k) newVars[k] = vInput?.value ?? '';
             });
             project.data.variables = newVars;
             saveToBrowser();
         };
-        
-        overlay.querySelectorAll('.var-key, .var-val').forEach(inp => { inp.onchange = updateVars; });
-        
-        overlay.querySelector('#add-var-btn').onclick = () => {
-            project.data.variables[`var${Object.keys(project.data.variables).length + 1}`] = '';
+
+        Object.entries(project.data.variables).forEach(([key, val]) => {
+            const row = document.createElement('div');
+            row.className = 'var-row';
+            row.style.cssText = 'display: flex; gap: 0.5rem;';
+
+            const keyInput = document.createElement('input');
+            keyInput.type = 'text';
+            keyInput.className = 'form-input var-key';
+            keyInput.value = key;
+            keyInput.placeholder = 'Name (e.g. subject)';
+            keyInput.style.width = '30%';
+            keyInput.onchange = updateVars;
+
+            const valInput = document.createElement('input');
+            valInput.type = 'text';
+            valInput.className = 'form-input var-val';
+            valInput.value = val ?? '';
+            valInput.placeholder = 'Value';
+            valInput.style.flexGrow = '1';
+            valInput.onchange = updateVars;
+
+            const delBtn = document.createElement('button');
+            delBtn.type = 'button';
+            delBtn.className = 'modal-button cancel delete-var-btn';
+            delBtn.style.padding = '0.5rem';
+            delBtn.textContent = '×';
+            delBtn.onclick = () => {
+                const currentKey = keyInput.value.trim().replace(/[{}]/g, '');
+                delete project.data.variables[currentKey];
+                delete project.data.variables[key];
+                saveToBrowser();
+                renderContent();
+            };
+
+            row.append(keyInput, valInput, delBtn);
+            listEl.appendChild(row);
+        });
+
+        const addBtn = document.createElement('button');
+        addBtn.id = 'add-var-btn';
+        addBtn.type = 'button';
+        addBtn.className = 'modal-button';
+        addBtn.style.cssText = 'width: 100%; margin-bottom: 1rem;';
+        addBtn.innerHTML = '<iconify-icon icon="lucide:plus"></iconify-icon> Add Variable';
+        addBtn.onclick = () => {
+            let idx = 1;
+            while (`var${idx}` in project.data.variables) idx++;
+            project.data.variables[`var${idx}`] = '';
             saveToBrowser();
             renderContent();
         };
-        
-        overlay.querySelector('#close-var-btn').onclick = () => overlay.style.display = 'none';
+
+        const btns = document.createElement('div');
+        btns.className = 'modal-buttons';
+        const closeBtn = document.createElement('button');
+        closeBtn.id = 'close-var-btn';
+        closeBtn.type = 'button';
+        closeBtn.className = 'modal-button confirm';
+        closeBtn.textContent = 'Done';
+        closeBtn.onclick = () => { overlay.style.display = 'none'; };
+        btns.appendChild(closeBtn);
+
+        modal.append(title, desc, listEl, addBtn, btns);
+        overlay.appendChild(modal);
     };
     
     renderContent();
@@ -1114,7 +1275,6 @@ function renderMoodpromptView(project) {
             currentProject.data.prompts.forEach(p => { p.collapsed = true; });
             renderMoodpromptView(currentProject);
             saveToBrowser();
-            scheduleAutoSave();
         };
 
         const expandAllBtnItem = document.createElement('button');
@@ -1131,7 +1291,6 @@ function renderMoodpromptView(project) {
             currentProject.data.prompts.forEach(p => { p.collapsed = false; });
             renderMoodpromptView(currentProject);
             saveToBrowser();
-            scheduleAutoSave();
         };
 
         // 6. Variables Item
@@ -1248,7 +1407,6 @@ function renderMoodpromptView(project) {
             }
             renderMoodpromptView(currentProject);
             saveToBrowser();
-            scheduleAutoSave();
         });
     }
 
@@ -1540,17 +1698,6 @@ function createPromptCard(project, prompt, index) {
         previousBtn.hidden = false;
         scheduleAutoSave();
     });
-    previousBtn.onclick = () => {
-        if (prompt.previous == null) return;
-        const current = prompt.text || '';
-        prompt.text = prompt.previous;
-        prompt.previous = current;
-        sessionText = prompt.text || '';
-        promptText.value = prompt.text || '';
-        previousBtn.hidden = false;
-        scheduleAutoSave();
-    };
-
     const counterBadge = document.createElement('div');
     counterBadge.className = 'prompt-counter-badge';
     const updateCounter = () => {
@@ -1561,6 +1708,18 @@ function createPromptCard(project, prompt, index) {
     };
     updateCounter();
     promptText.addEventListener('input', updateCounter);
+
+    previousBtn.onclick = () => {
+        if (prompt.previous == null) return;
+        const current = prompt.text || '';
+        prompt.text = prompt.previous;
+        prompt.previous = current;
+        sessionText = prompt.text || '';
+        promptText.value = prompt.text || '';
+        previousBtn.hidden = false;
+        updateCounter();
+        scheduleAutoSave();
+    };
 
     textWrapper.append(promptText, counterBadge, expandBtn);
     const setMediaType = (type, persist) => {
@@ -1666,7 +1825,6 @@ function createPromptCard(project, prompt, index) {
         prompt.collapsed = !prompt.collapsed;
         applyCollapsedState();
         saveToBrowser();
-        scheduleAutoSave();
     };
     collapseBtn.onclick = (e) => {
         e.stopPropagation();
@@ -2071,14 +2229,22 @@ let gridSize = 50, gridOpacity = 0.05;
 let currentProjectName = 'moodinfinite';
 const HISTORY_LIMIT = 50;
 let needsUpdate = true;
+let rafId = 0;
 // True while a mouse or touch button is down. Firefox does not present canvas
 // frames that were painted from requestAnimationFrame during that time.
 let pointerHeld = false;
 let presentedDrawTimer = 0;
 
+function scheduleFrame() {
+    if (!rafId && typeof gameLoop === 'function') {
+        rafId = requestAnimationFrame(gameLoop);
+    }
+}
+
 function requestUpdate() {
     needsUpdate = true;
     if (pointerHeld) schedulePresentedDraw();
+    else scheduleFrame();
 }
 
 function schedulePresentedDraw() {
@@ -2125,6 +2291,7 @@ function getIconImage(icon, color) {
     if (svgCache[key]) return svgCache[key];
     const svgStr = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${commentIcons[icon]}</svg>`;
     const img = new Image();
+    img.onload = () => requestUpdate();
     img.src = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svgStr);
     svgCache[key] = img;
     return img;
@@ -2824,21 +2991,22 @@ canvas.addEventListener('mouseleave', clearHoverStates);
 
         const ganttCtx = document.getElementById('gantt-context-menu');
         const cloudUserMenu = document.getElementById('cloud-user-menu');
+        const isVisibleEl = (el) => Boolean(el && getComputedStyle(el).display !== 'none');
 
         // Context menus & popups
-        if (contextMenu && contextMenu.style.display !== 'none') {
+        if (isVisibleEl(contextMenu)) {
             contextMenu.style.display = 'none';
             closed = true;
         }
-        if (tabContextMenu && tabContextMenu.style.display !== 'none') {
+        if (isVisibleEl(tabContextMenu)) {
             tabContextMenu.style.display = 'none';
             closed = true;
         }
-        if (sfContextMenu && sfContextMenu.style.display !== 'none') {
+        if (isVisibleEl(sfContextMenu)) {
             sfContextMenu.style.display = 'none';
             closed = true;
         }
-        if (ganttCtx && ganttCtx.style.display !== 'none') {
+        if (isVisibleEl(ganttCtx)) {
             ganttCtx.style.display = 'none';
             closed = true;
         }
@@ -3045,14 +3213,7 @@ canvas.addEventListener('mouseleave', clearHoverStates);
             const process = (itemList) => {
                 itemList.forEach(item => {
                     if (item.type === 'video' && item.video) {
-                        if (!item.video.src) {
-                            if (item.videoId && globalVideoCache[item.videoId]) {
-                                const videoData = globalVideoCache[item.videoId];
-                                item.video.src = videoData instanceof Blob ? URL.createObjectURL(videoData) : videoData;
-                            } else if (item.videoSrc) {
-                                item.video.src = item.videoSrc;
-                            }
-                        }
+                        ensureVideoSrc(item);
                         item.video.play().catch(e => console.log("Autoplay prevented:", e));
                         item.isPlaying = true;
                         changed = true;
@@ -3200,13 +3361,13 @@ canvas.addEventListener('mouseleave', clearHoverStates);
     if (centerViewBtn) centerViewBtn.addEventListener('click', centerView);
     if (centerSelectedBtn) centerSelectedBtn.addEventListener('click', focusOnSelection);
 
-    if (showGridToggle) showGridToggle.addEventListener('change', e => { showGrid = e.target.checked; saveSettings() });
+    if (showGridToggle) showGridToggle.addEventListener('change', e => { showGrid = e.target.checked; saveSettings(); requestUpdate(); });
     if (snapGridToggle) snapGridToggle.addEventListener('change', e => { snapToGrid = e.target.checked; saveSettings() });
-    if (dropShadowToggle) dropShadowToggle.addEventListener('change', e => { showDropShadow = e.target.checked; saveSettings() });
+    if (dropShadowToggle) dropShadowToggle.addEventListener('change', e => { showDropShadow = e.target.checked; saveSettings(); requestUpdate(); });
     if (showNotificationsToggle) showNotificationsToggle.addEventListener('change', e => { showNotifications = e.target.checked; saveSettings() });
 
-    if (gridSizeSlider) gridSizeSlider.addEventListener('input', e => { gridSize = parseInt(e.target.value); gridSizeValue.textContent = `${gridSize}px`; saveSettings() });
-    if (gridOpacitySlider) gridOpacitySlider.addEventListener('input', e => { gridOpacity = parseFloat(e.target.value); gridOpacityValue.textContent = `${Math.round(gridOpacity * 100)}%`; saveSettings() });
+    if (gridSizeSlider) gridSizeSlider.addEventListener('input', e => { gridSize = parseInt(e.target.value); gridSizeValue.textContent = `${gridSize}px`; saveSettings(); requestUpdate(); });
+    if (gridOpacitySlider) gridOpacitySlider.addEventListener('input', e => { gridOpacity = parseFloat(e.target.value); gridOpacityValue.textContent = `${Math.round(gridOpacity * 100)}%`; saveSettings(); requestUpdate(); });
 
     if (deleteItemBtn) deleteItemBtn.addEventListener('click', deleteSelectedItems);
 
@@ -3219,6 +3380,7 @@ canvas.addEventListener('mouseleave', clearHoverStates);
             else if (key === 'gridColor') gridColor = value;
             updateUIColors();
             requestUpdate();
+            scheduleAutoSave();
         }
     };
 
@@ -3231,7 +3393,8 @@ canvas.addEventListener('mouseleave', clearHoverStates);
         itemOpacitySlider.addEventListener('input', e => {
             const t = parseFloat(e.target.value);
             selectedItems.forEach(e => { e.opacity = t });
-            itemOpacityValue.textContent = `${Math.round(t * 100)}%`
+            itemOpacityValue.textContent = `${Math.round(t * 100)}%`;
+            requestUpdate();
         });
         itemOpacitySlider.addEventListener('change', () => { saveStateForUndo() });
     }
@@ -3243,14 +3406,7 @@ canvas.addEventListener('mouseleave', clearHoverStates);
                 const item = selectedItems[0];
                 if (item.video) {
                     if (item.video.paused) {
-                        if (!item.video.src) {
-                            if (item.videoId && globalVideoCache[item.videoId]) {
-                                const videoData = globalVideoCache[item.videoId];
-                                item.video.src = videoData instanceof Blob ? URL.createObjectURL(videoData) : videoData;
-                            } else if (item.videoSrc) {
-                                item.video.src = item.videoSrc;
-                            }
-                        }
+                        ensureVideoSrc(item);
                         item.video.play().catch(e => console.log(e));
                         item.isPlaying = true;
                     } else {
@@ -3324,8 +3480,12 @@ canvas.addEventListener('mouseleave', clearHoverStates);
             if (selectedItems.length === 1 && (['box', 'circle', 'text', 'measure', 'comment', 'link', 'textList'].includes(selectedItems[0].type))) {
                 selectedItems[0].color = e.target.value;
                 selectedItems[0]._isDirty = true;
-                saveStateForUndo();
                 requestUpdate();
+            }
+        });
+        itemColorPicker.addEventListener('change', () => {
+            if (selectedItems.length === 1 && (['box', 'circle', 'text', 'measure', 'comment', 'link', 'textList'].includes(selectedItems[0].type))) {
+                saveStateForUndo();
             }
         });
     }
@@ -3335,8 +3495,12 @@ canvas.addEventListener('mouseleave', clearHoverStates);
             if (selectedItems.length === 1 && selectedItems[0].type === 'text') {
                 selectedItems[0].bgColor = e.target.value;
                 selectedItems[0]._isDirty = true;
-                saveStateForUndo();
                 requestUpdate();
+            }
+        });
+        noteBgColorInput.addEventListener('change', () => {
+            if (selectedItems.length === 1 && selectedItems[0].type === 'text') {
+                saveStateForUndo();
             }
         });
     }
@@ -3558,8 +3722,8 @@ function registerVideoFrameCallback(video) {
     if (video.requestVideoFrameCallback) {
         video._hasFrameCallback = true;
         const cb = () => {
-            if (!video.paused) {
-                needsUpdate = true;
+            if (!video.paused && video.src) {
+                requestUpdate();
                 video.requestVideoFrameCallback(cb);
             } else {
                 video._hasFrameCallback = false;
@@ -3574,9 +3738,11 @@ function hasPlayingVideoInViewport() {
     const activeProject = projects.find(p => p.id === activeProjectId);
     if (!activeProject || activeProject.type !== 'moodinfinite') return false;
 
-    return items.some(e => {
+    const checkVideoList = (list) => list.some(e => {
+        if (!e) return false;
+        if (e.type === 'group' && Array.isArray(e.items)) return checkVideoList(e.items);
         if (e.type !== 'video' || !e.video || e.video.paused) return false;
-        
+
         if (e.video.requestVideoFrameCallback) {
             registerVideoFrameCallback(e.video);
             return false;
@@ -3586,27 +3752,33 @@ function hasPlayingVideoInViewport() {
         const vStart = screenToWorld({ x: -padding, y: -padding });
         const vEnd = screenToWorld({ x: canvas.width + padding, y: canvas.height + padding });
         if (!vStart || !vEnd) return false;
-        
+
         const minX = Math.min(vStart.x, vEnd.x);
         const maxX = Math.max(vStart.x, vEnd.x);
         const minY = Math.min(vStart.y, vEnd.y);
         const maxY = Math.max(vStart.y, vEnd.y);
-        
+
         const box = getItemBoundingBox(e);
         return !(box.x + box.width < minX || box.x > maxX ||
                  box.y + box.height < minY || box.y > maxY);
     });
+
+    return checkVideoList(items);
 }
 
 function gameLoop() {
+    rafId = 0;
     if (needsUpdate || hasPlayingVideoInViewport()) {
-        if (pointerHeld) schedulePresentedDraw();
-        else {
+        if (pointerHeld) {
+            schedulePresentedDraw();
+        } else {
             draw();
             needsUpdate = false;
         }
     }
-    requestAnimationFrame(gameLoop);
+    if (needsUpdate || hasPlayingVideoInViewport()) {
+        scheduleFrame();
+    }
 }
 
 function moodboardHasImageCard(list) {
@@ -3662,6 +3834,7 @@ function draw() {
     const selectedSet = new Set(selectedItems);
     const drawItem = (e) => {
         if (!e || e.isHidden) return;
+        let saved = false;
         try {
             // Culling Check. Reuse the box cached on the item when geometry has not changed
             // so a steady camera frame does not recompute trigonometry for every item.
@@ -3680,10 +3853,16 @@ function draw() {
                         const farThresholdY = viewportHeight * 2;
                         if (box.x + box.width < viewport.minX - farThresholdX || box.x > viewport.maxX + farThresholdX ||
                             box.y + box.height < viewport.minY - farThresholdY || box.y > viewport.maxY + farThresholdY) {
-                            if (e.video.src) {
-                                e.video.removeAttribute('src');
-                                e.video.load();
-                            }
+                            releaseVideoSrc(e.video);
+                        }
+                    } else if (e.type === 'group' && Array.isArray(e.items)) {
+                        const viewportWidth = viewport.maxX - viewport.minX;
+                        const viewportHeight = viewport.maxY - viewport.minY;
+                        const farThresholdX = viewportWidth * 2;
+                        const farThresholdY = viewportHeight * 2;
+                        if (box.x + box.width < viewport.minX - farThresholdX || box.x > viewport.maxX + farThresholdX ||
+                            box.y + box.height < viewport.minY - farThresholdY || box.y > viewport.maxY + farThresholdY) {
+                            pauseAndReleaseVideos(e.items);
                         }
                     }
                     return;
@@ -3691,14 +3870,7 @@ function draw() {
                     if (cameraZoom < 0.15) {
                         if (!e.video.paused) e.video.pause();
                     } else {
-                        if (!e.video.src) {
-                            if (e.videoId && globalVideoCache[e.videoId]) {
-                                const videoData = globalVideoCache[e.videoId];
-                                e.video.src = videoData instanceof Blob ? URL.createObjectURL(videoData) : videoData;
-                            } else if (e.videoSrc) {
-                                e.video.src = e.videoSrc;
-                            }
-                        }
+                        ensureVideoSrc(e);
                         if (e.video.paused && e.isPlaying) {
                             e.video.play().catch(err => {});
                         }
@@ -3707,6 +3879,7 @@ function draw() {
             }
 
             ctx.save();
+            saved = true;
             ctx.globalAlpha = e.opacity ?? 1;
 
             if (showDropShadow && selectedSet.has(e)) {
@@ -3742,9 +3915,10 @@ function draw() {
             }
 
             ctx.restore();
+            saved = false;
         } catch (err) {
             console.error("Error drawing item:", e, err);
-            ctx.restore();
+            if (saved) ctx.restore();
         }
     };
 
@@ -3831,6 +4005,7 @@ function syncCanvasChrome() {
 }
 
 let minimapFrame = null;
+let _lastToolbarCssCache = { bottom: '', width: '', right: '' };
 
 function updateMobileBottomToolbarHeight() {
     const bar = document.getElementById('left-bar');
@@ -3838,13 +4013,25 @@ function updateMobileBottomToolbarHeight() {
     const rect = bar.getBoundingClientRect();
     if (window.innerWidth <= 768) {
         if (rect.height > 0) {
-            document.documentElement.style.setProperty('--bottom-toolbar-height', `${Math.ceil(rect.height)}px`);
+            const val = `${Math.ceil(rect.height)}px`;
+            if (_lastToolbarCssCache.bottom !== val) {
+                _lastToolbarCssCache.bottom = val;
+                document.documentElement.style.setProperty('--bottom-toolbar-height', val);
+            }
         }
         return;
     }
     if (rect.width > 0) {
-        document.documentElement.style.setProperty('--left-toolbar-width', `${Math.ceil(rect.width)}px`);
-        document.documentElement.style.setProperty('--left-toolbar-right', `${Math.ceil(rect.right)}px`);
+        const wVal = `${Math.ceil(rect.width)}px`;
+        const rVal = `${Math.ceil(rect.right)}px`;
+        if (_lastToolbarCssCache.width !== wVal) {
+            _lastToolbarCssCache.width = wVal;
+            document.documentElement.style.setProperty('--left-toolbar-width', wVal);
+        }
+        if (_lastToolbarCssCache.right !== rVal) {
+            _lastToolbarCssCache.right = rVal;
+            document.documentElement.style.setProperty('--left-toolbar-right', rVal);
+        }
     }
 }
 
@@ -3933,7 +4120,6 @@ function syncCanvasMinimap() {
         return;
     }
     if (root.hidden) root.hidden = false;
-    updateMobileBottomToolbarHeight();
 
     const tl = screenToWorld({ x: 0, y: 0 });
     const br = screenToWorld({ x: canvas.width, y: canvas.height });
@@ -4256,7 +4442,7 @@ function drawTextItem(ctx, item) {
     ctx.textBaseline = 'top';
 
     const baseSize = item.fontSize || 14;
-    const lines = item.text.replace(/\r/g, '').split('\n');
+    const lines = (item.text || '').replace(/\r/g, '').split('\n');
     const bodyAlign = item.textAlign || 'left';
     lines.forEach(line => {
         const consumedH = renderMarkdownLine(ctx, line, x + pX, currY, item.width - pX * 2, baseSize, item.fontFamily, textPrimary, textSecondary, bodyAlign);
@@ -4264,16 +4450,20 @@ function drawTextItem(ctx, item) {
     });
 
     const necessaryHeight = (currY - y) + 15;
+    let expanded = false;
     if (item.height < necessaryHeight) {
         item.height = necessaryHeight;
         item._isDirty = true;
         item._cachedBox = null;
+        expanded = true;
     }
     if (item.width < 120) {
         item.width = 120;
         item._isDirty = true;
         item._cachedBox = null;
+        expanded = true;
     }
+    if (expanded) requestUpdate();
 
     ctx.restore();
 }
@@ -4601,9 +4791,11 @@ function drawVideoItem(ctx, item) {
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
             ctx.fillText('LOADING', 0, pulseRadius + 22 / cameraZoom);
-            
-            // Request an update to keep the pulse/spinner animating
-            requestUpdate();
+
+            // Only keep spinner animating when a valid source is actually loading
+            if (item.video && item.video.src && !item.video.error && item.video.networkState !== HTMLMediaElement.NETWORK_NO_SOURCE) {
+                requestUpdate();
+            }
         }
     } catch (e) {
         // Fallback
@@ -5323,7 +5515,6 @@ function drawRerouteItem(e, t) {
 
 function drawCounterItem(e, t) {
     e.save();
-    e.globalAlpha *= (t.opacity ?? 1);
     const o = t.x + t.width / 2, a = t.y + t.height / 2;
     e.translate(o, a);
     e.rotate(t.rotation || 0);
@@ -5354,7 +5545,6 @@ function drawCounterItem(e, t) {
 
 function drawGroupItem(e, t) {
     e.save();
-    e.globalAlpha *= (t.opacity ?? 1);
     const o = t.x + t.width / 2, a = t.y + t.height / 2;
     e.translate(o, a);
     e.rotate(t.rotation || 0);
@@ -5384,10 +5574,22 @@ function drawGroupItem(e, t) {
         else if (o.type === "textList") drawTextListItem(e, a);
         else if (o.type === "counter") drawCounterItem(e, a);
         else if (o.type === "group") drawGroupItem(e, a);
-        else if (o.type === "video") drawVideoItem(e, a);
-
-
-        else if (o.type === "group") drawGroupItem(e, a);
+        else if (o.type === "video") {
+            if (o.video) {
+                if (cameraZoom < 0.15) {
+                    if (!o.video.paused) o.video.pause();
+                } else {
+                    ensureVideoSrc(o);
+                    if (o.video.paused && o.isPlaying) {
+                        o.video.play().catch(() => {});
+                    }
+                }
+            }
+            drawVideoItem(e, a);
+            o._offscreenCanvas = a._offscreenCanvas;
+            o._frameCount = a._frameCount;
+            o._hasCachedFrame = a._hasCachedFrame;
+        }
     });
     e.restore();
 }
@@ -5533,6 +5735,14 @@ function handleKeyDown(e) {
         else if (selectedItems.length > 0) { selectedItems = []; updateSelectionToolbar(); updateLeftBarState(); clearHoverStates(); }
         return;
     }
+    if (e.ctrlKey) {
+        if (e.altKey && key === 's') { e.preventDefault(); if (typeof CloudSync !== 'undefined') CloudSync.saveCurrentProject(false); return; }
+        if (e.altKey && key === 'o') { e.preventDefault(); if (typeof CloudSync !== 'undefined') CloudSync.openFromDrive(); return; }
+        if (key === 's' && !e.shiftKey) { e.preventDefault(); saveProject(); return; }
+        if (key === 'o' && !e.shiftKey) { e.preventDefault(); projectInput.click(); return; }
+    }
+    if (!activeProject || activeProject.type !== 'moodinfinite') return;
+
     if (e.shiftKey && key === 'n') { e.preventDefault(); confirmNewBoard(); return; }
     if (e.shiftKey && key === 'c') { e.preventDefault(); copyToClipboard(); return; }
     if (e.altKey && key === 'g') { e.preventDefault(); setCurrentTool('grid'); return; }
@@ -5540,10 +5750,6 @@ function handleKeyDown(e) {
         if (e.shiftKey && key === 'a') { e.preventDefault(); autoAlignSelection(); return; }
         if (e.shiftKey && key === 'z') { e.preventDefault(); redoLastAction(); return; }
         if (e.shiftKey && key === 'g') { e.preventDefault(); ungroupSelectedItems(); return; }
-        if (e.altKey && key === 's') { e.preventDefault(); if (typeof CloudSync !== 'undefined') CloudSync.saveCurrentProject(true); return; }
-        if (e.altKey && key === 'o') { e.preventDefault(); if (typeof CloudSync !== 'undefined') CloudSync.openFromDrive(); return; }
-        if (key === 's') { e.preventDefault(); saveProject(); return; }
-        if (key === 'o') { e.preventDefault(); projectInput.click(); return; }
         if (key === 'z') { e.preventDefault(); undoLastAction(); return; }
         if (key === 'a' && !e.shiftKey) { e.preventDefault(); selectedItems = [...items]; updateSelectionToolbar(); updateLeftBarState(); return; }
         if (key === 'i') { e.preventDefault(); const selectedIds = new Set(selectedItems.map(item => item.id)); selectedItems = items.filter(item => !selectedIds.has(item.id)); updateSelectionToolbar(); updateLeftBarState(); showToast(`Selection inverted (${selectedItems.length} items selected).`); return; }
@@ -5584,11 +5790,10 @@ function handleKeyDown(e) {
     if (key === 'delete' || key === 'backspace') { e.preventDefault(); deleteSelectedItems(); return; }
     if (selectedItems.length !== 1) return;
     const item = selectedItems[0];
-    e.preventDefault();
-    if (key === 'p') { togglePin(); requestUpdate(); return; }
+    if (key === 'p') { e.preventDefault(); togglePin(); requestUpdate(); return; }
     if (item.isPinned) return;
-    switch (key) { case 'r': setActiveGizmo('rotate'); break; case 's': setActiveGizmo('scale'); break; }
-    requestUpdate();
+    if (key === 'r') { e.preventDefault(); setActiveGizmo('rotate'); requestUpdate(); }
+    else if (key === 's') { e.preventDefault(); setActiveGizmo('scale'); requestUpdate(); }
 }
 
 function handleKeyUp(e) {
@@ -5609,14 +5814,7 @@ function onDoubleClick(e) {
     if (o && o.type === 'video' && !o.isPinned) {
         if (o.video) {
             if (o.video.paused) {
-                if (!o.video.src) {
-                    if (o.videoId && globalVideoCache[o.videoId]) {
-                        const videoData = globalVideoCache[o.videoId];
-                        o.video.src = videoData instanceof Blob ? URL.createObjectURL(videoData) : videoData;
-                    } else if (o.videoSrc) {
-                        o.video.src = o.videoSrc;
-                    }
-                }
+                ensureVideoSrc(o);
                 o.video.play().catch(e => console.log(e));
                 o.isPlaying = true;
             } else {
@@ -5863,12 +6061,15 @@ function onMouseDown(e) {
                 newItem = { id: 'group_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5), type: 'comment', text: 'Note...', x: o.x, y: o.y, width: 0, height: 0, fontSize: 16, rotation: 0, isPinned: false, opacity: 1, fontFamily: 'Nunito', textAlign: 'left', fontWeight: 'bold', fontStyle: 'normal', color: accentColor, scaleX: 1, scaleY: 1, icon: 'none' };
             } else if (currentTool === 'box') {
                 newItem = { id: 'group_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5), type: 'box', color: accentColor, x: o.x, y: o.y, width: 0, height: 0, rotation: 0, isPinned: false, style: 'fill', opacity: 1, scaleX: 1, scaleY: 1 };
+                Object.defineProperty(newItem, '_drawStart', { value: { x: o.x, y: o.y }, enumerable: false, configurable: true });
             } else if (currentTool === 'circle') {
                 newItem = { id: 'group_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5), type: 'circle', color: accentColor, x: o.x, y: o.y, width: 0, height: 0, rotation: 0, isPinned: false, style: 'fill', opacity: 1, scaleX: 1, scaleY: 1 };
+                Object.defineProperty(newItem, '_drawStart', { value: { x: o.x, y: o.y }, enumerable: false, configurable: true });
             } else if (currentTool === 'measure') {
                 newItem = { id: 'group_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5), type: 'measure', startX: o.x, startY: o.y, endX: o.x, endY: o.y, unit: 'px', color: accentColor, isPinned: false, x: o.x, y: o.y, width: 0, height: 0, rotation: 0, opacity: 1 };
             } else if (currentTool === 'grid') {
                 newItem = { id: 'group_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5), type: 'grid', color: accentColor, x: o.x, y: o.y, width: 0, height: 0, rotation: 0, isPinned: false, opacity: 1, rows: 3, cols: 3, scaleX: 1, scaleY: 1 };
+                Object.defineProperty(newItem, '_drawStart', { value: { x: o.x, y: o.y }, enumerable: false, configurable: true });
             } else if (currentTool === 'textList') {
                 newItem = { id: 'group_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5), type: 'textList', items: [{ text: 'Item 1', completed: false }], text: 'Item 1', x: o.x, y: o.y, width: 0, height: 0, fontSize: 18, rotation: 0, isPinned: false, opacity: 1, fontFamily: 'Nunito', textAlign: 'left', fontWeight: 'bold', fontStyle: 'normal', color: accentColor, scaleX: 1, scaleY: 1 };
                 updateTextListDimensions(newItem);
@@ -5901,7 +6102,7 @@ function onMouseDown(e) {
             }
             if (itemUnderMouse && itemUnderMouse.type === 'link') {
                 if (isLinkButtonHit(itemUnderMouse, o)) {
-                    window.open(itemUnderMouse.url, '_blank');
+                    openSafeUrl(itemUnderMouse.url);
                     return;
                 }
             }
@@ -5983,6 +6184,7 @@ function onMouseUp(e) {
             rearrangingListObj = null;
             rearrangingItemIndex = -1;
             canvas.style.cursor = 'default';
+            saveStateForUndo();
             requestUpdate();
             return;
         }
@@ -6046,6 +6248,12 @@ function clearHoverStates() {
     if (changed) requestUpdate();
 }
 function onMouseMove(e) {
+    const prevHoveredItem = hoveredItem;
+    const prevHoveredPort = hoveredPort;
+    const prevHoveredConnector = hoveredConnector;
+    const prevHoveredGizmo = hoveredGizmo;
+    const prevHoveredArrowHandle = hoveredArrowHandle;
+
     const worldPos = screenToWorld(getEventLocation(e));
     hoveredItem = getItemAtPosition(worldPos);
     hoveredPort = getHoveredPort(worldPos);
@@ -6062,7 +6270,6 @@ function onMouseMove(e) {
             itemsList.splice(overIndex, 0, movedItem);
             rearrangingItemIndex = overIndex;
             syncTextListProperty(rearrangingListObj);
-            saveStateForUndo();
         }
         requestUpdate();
         return;
@@ -6070,7 +6277,7 @@ function onMouseMove(e) {
 
     if (isMovingItems || isTransforming || isTransformingArrow || isDrawing) {
         if (selectionToolbar.style.display !== 'none') selectionToolbar.style.display = 'none';
-        items.forEach(item => { item._isDirty = true; });
+        selectedItems.forEach(item => { item._isDirty = true; });
     }
 
     if (isDraggingConnector && typeof tempConnector !== 'undefined' && tempConnector) {
@@ -6269,9 +6476,9 @@ function onMouseMove(e) {
             item.y = bbox.y;
             item.width = bbox.width;
             item.height = bbox.height;
-        } else if (item.type === 'text' || item.type === 'box' || item.type === 'circle' || item.type === 'grid') {
-            const startX = item.x;
-            const startY = item.y;
+        } else if (item.type === 'box' || item.type === 'circle' || item.type === 'grid') {
+            const startX = item._drawStart ? item._drawStart.x : item.x;
+            const startY = item._drawStart ? item._drawStart.y : item.y;
             const currentX = worldPos.x;
             const currentY = worldPos.y;
 
@@ -6307,19 +6514,36 @@ function onMouseMove(e) {
     }
 
     // Update cursor based on hover state if not dragging/drawing etc.
+    let linkHoverChanged = false;
     if (!isDragging && !isMovingItems && !isTransforming && !isTransformingArrow) {
         const currentGizmo = getGizmoAtPosition(worldPos);
         const currentArrowHandle = getArrowHandleAtPosition(worldPos);
-        const itemUnderMouse = getItemAtPosition(worldPos);
 
         // Reset ALL link hover states first
-        items.forEach(i => { if (i.type === 'link') i.isHovered = false; });
+        items.forEach(i => {
+            if (i.type === 'link' && i.isHovered) {
+                i.isHovered = false;
+                linkHoverChanged = true;
+            }
+        });
 
         hoveredGizmo = currentGizmo;
         hoveredArrowHandle = currentArrowHandle;
         updateCursor(e);
     }
-    requestUpdate();
+
+    const activeInteraction = isDragging || isMovingItems || isTransforming || isTransformingArrow || isDrawing || isSelectingBox || isDraggingConnector;
+    const hoverChanged =
+        hoveredItem !== prevHoveredItem ||
+        hoveredConnector !== prevHoveredConnector ||
+        hoveredGizmo !== prevHoveredGizmo ||
+        hoveredArrowHandle !== prevHoveredArrowHandle ||
+        (hoveredPort?.item !== prevHoveredPort?.item || hoveredPort?.side !== prevHoveredPort?.side) ||
+        linkHoverChanged;
+
+    if (activeInteraction || hoverChanged) {
+        requestUpdate();
+    }
 }
 
 function updateCursor(e) {
@@ -6398,6 +6622,9 @@ function onContextMenu(e) {
     const aiEditBtn = document.getElementById('context-ai-edit-btn');
     if (aiEditBtn) aiEditBtn.style.display = isImg ? 'flex' : 'none';
 
+    const aiRemoveBgBtn = document.getElementById('context-ai-remove-bg-btn');
+    if (aiRemoveBgBtn) aiRemoveBgBtn.style.display = isImg ? 'flex' : 'none';
+
     const aiRegenerateBtn = document.getElementById('context-ai-regenerate-btn');
     if (aiRegenerateBtn) {
         let canRegen = false;
@@ -6430,10 +6657,15 @@ function onContextMenu(e) {
 
     showAndPositionMenu(contextMenu, e)
 }
-function confirmNewBoard() { if (items.length > 0) { showConfirmationModal() } else { resetBoard() } }
+function confirmNewBoard() {
+    const activeProject = projects.find(p => p.id === activeProjectId);
+    if (!activeProject || activeProject.type !== 'moodinfinite') return;
+    if (items.length > 0) { showConfirmationModal(); } else { resetBoard(); }
+}
 function resetBoard() {
     const e = projects.find(e => e.id === activeProjectId);
-    if (!e) return;
+    if (!e || e.type !== 'moodinfinite') return;
+    pauseAndReleaseVideos(items);
     e.data.items = [];
     e.data.cameraOffset = { x: window.innerWidth / 2, y: (window.innerHeight - 48) / 2 };
     e.data.cameraZoom = 1;
@@ -6442,6 +6674,10 @@ function resetBoard() {
     e.data.canvasBackgroundColor = '#121110';
     e.data.accentColor = '#D4A359';
     e.data.gridColor = '#F4F1EA';
+    items = e.data.items;
+    historyStack = e.data.historyStack;
+    historyIndex = -1;
+    pruneUnusedMediaCaches();
     switchTab(activeProjectId, { force: true });
     saveStateForUndo();
 }
@@ -6521,6 +6757,42 @@ function downloadStructuredBoardPng(project) {
     showToast("Image exported as PNG.");
 }
 
+function drawItemToExportCtx(e, ctx) {
+    ctx.save();
+    ctx.globalAlpha = e.opacity ?? 1;
+    if (showDropShadow) {
+        ctx.shadowColor = 'rgba(0,0,0,0.4)';
+        ctx.shadowBlur = 15;
+        ctx.shadowOffsetX = 4;
+        ctx.shadowOffsetY = 4;
+    }
+    if (e.type === 'image') {
+        const t = e.x + e.width / 2, o = e.y + e.height / 2;
+        ctx.translate(t, o);
+        ctx.rotate(e.rotation);
+        ctx.scale(e.scaleX || 1, e.scaleY || 1);
+        ctx.drawImage(e.img, -e.width / 2, -e.height / 2, e.width, e.height);
+    } else if (e.type === 'video') { drawVideoItem(ctx, e); }
+    else if (e.type === 'arrow') { drawArrow(ctx, e); }
+    else if (e.type === 'text') { drawTextItem(ctx, e); }
+    else if (e.type === 'box') { drawBoxItem(ctx, e); }
+    else if (e.type === 'circle') { drawCircleItem(ctx, e); }
+    else if (e.type === 'measure') { drawMeasureItem(ctx, e); }
+    else if (e.type === 'stroke') { drawStrokeItem(ctx, e); }
+    else if (e.type === 'grid') { drawGridItem(ctx, e); }
+    else if (e.type === 'group') { drawGroupItem(ctx, e); }
+    else if (e.type === 'comment') { drawCommentItem(ctx, e); }
+    else if (e.type === 'link') { drawLinkItem(ctx, e); }
+    else if (e.type === 'textList') { drawTextListItem(ctx, e); }
+    else if (e.type === 'counter') { drawCounterItem(ctx, e); }
+    else if (e.type === 'reroute') { drawRerouteItem(ctx, e); }
+    else if (e.type === 'connector') { drawConnectorItem(e, ctx); }
+    else if (e.type === 'genNode') {
+        if (window.ComfyGenNodeManager) window.ComfyGenNodeManager.drawGenNodeOnCanvas(ctx, e);
+    }
+    ctx.restore();
+}
+
 async function copyToClipboard() {
     const activeBoard = projects.find(p => p.id === activeProjectId);
     if (activeBoard && activeBoard.type === 'colorseeker') { colorseekerCopyHex(activeBoard); return; }
@@ -6541,46 +6813,11 @@ async function copyToClipboard() {
     l.fillRect(0, 0, r, s);
     l.translate(-e + i, -t + i);
 
-    const drawItemToCtx = (e, ctx) => {
-        ctx.save();
-        ctx.globalAlpha = e.opacity ?? 1;
-        if (showDropShadow) {
-            ctx.shadowColor = 'rgba(0,0,0,0.4)';
-            ctx.shadowBlur = 15;
-            ctx.shadowOffsetX = 4;
-            ctx.shadowOffsetY = 4
-        }
-        if (e.type === 'image') {
-            const t = e.x + e.width / 2, o = e.y + e.height / 2;
-            ctx.translate(t, o);
-            ctx.rotate(e.rotation);
-            ctx.scale(e.scaleX || 1, e.scaleY || 1);
-            ctx.drawImage(e.img, -e.width / 2, -e.height / 2, e.width, e.height)
-        } else if (e.type === 'arrow') { drawArrow(ctx, e) }
-        else if (e.type === 'text') { drawTextItem(ctx, e) }
-        else if (e.type === 'box') { drawBoxItem(ctx, e) }
-        else if (e.type === 'circle') { drawCircleItem(ctx, e) }
-        else if (e.type === 'measure') { drawMeasureItem(ctx, e) }
-        else if (e.type === 'stroke') { drawStrokeItem(ctx, e) }
-        else if (e.type === 'grid') { drawGridItem(ctx, e) }
-        else if (e.type === 'group') { drawGroupItem(ctx, e) }
-        else if (e.type === 'comment') { drawCommentItem(ctx, e) }
-        else if (e.type === 'link') { drawLinkItem(ctx, e) }
-        else if (e.type === 'textList') { drawTextListItem(ctx, e) }
-        else if (e.type === 'counter') { drawCounterItem(ctx, e) }
-        else if (e.type === 'reroute') { drawRerouteItem(ctx, e) }
-        else if (e.type === 'connector') { drawConnectorItem(e, ctx) }
-        else if (e.type === 'genNode') {
-            if (window.ComfyGenNodeManager) window.ComfyGenNodeManager.drawGenNodeOnCanvas(ctx, e);
-        }
-        ctx.restore()
-    };
-
     // Draw in layers to match screen
-    items.forEach(e => { if (e.type !== 'comment' && e.type !== 'link' && e.type !== 'connector') drawItemToCtx(e, l); });
-    items.forEach(e => { if (e.type === 'connector') drawItemToCtx(e, l); });
-    items.forEach(e => { if (e.type === 'link') drawItemToCtx(e, l); });
-    items.forEach(e => { if (e.type === 'comment') drawItemToCtx(e, l); });
+    items.forEach(e => { if (e.type !== 'comment' && e.type !== 'link' && e.type !== 'connector') drawItemToExportCtx(e, l); });
+    items.forEach(e => { if (e.type === 'connector') drawItemToExportCtx(e, l); });
+    items.forEach(e => { if (e.type === 'link') drawItemToExportCtx(e, l); });
+    items.forEach(e => { if (e.type === 'comment') drawItemToExportCtx(e, l); });
 
     try {
         const e = await new Promise(e => n.toBlob(e, 'image/png')), t = new ClipboardItem({ 'image/png': e });
@@ -6621,47 +6858,11 @@ function saveAsPng() {
     n.fillRect(0, 0, i, r);
     n.translate(-e + 50, -t + 50);
 
-    const drawItemToCtx = (e, ctx) => {
-        ctx.save();
-        ctx.globalAlpha = e.opacity ?? 1;
-        if (showDropShadow) {
-            ctx.shadowColor = 'rgba(0,0,0,0.4)';
-            ctx.shadowBlur = 15;
-            ctx.shadowOffsetX = 4;
-            ctx.shadowOffsetY = 4
-        }
-        if (e.type === 'image') {
-            const t = e.x + e.width / 2, o = e.y + e.height / 2;
-            ctx.translate(t, o);
-            ctx.rotate(e.rotation);
-            ctx.scale(e.scaleX || 1, e.scaleY || 1);
-            ctx.drawImage(e.img, -e.width / 2, -e.height / 2, e.width, e.height)
-        } else if (e.type === 'video') { drawVideoItem(ctx, e) }
-        else if (e.type === 'arrow') { drawArrow(ctx, e) }
-        else if (e.type === 'text') { drawTextItem(ctx, e) }
-        else if (e.type === 'box') { drawBoxItem(ctx, e) }
-        else if (e.type === 'circle') { drawCircleItem(ctx, e) }
-        else if (e.type === 'measure') { drawMeasureItem(ctx, e) }
-        else if (e.type === 'stroke') { drawStrokeItem(ctx, e) }
-        else if (e.type === 'grid') { drawGridItem(ctx, e) }
-        else if (e.type === 'group') { drawGroupItem(ctx, e) }
-        else if (e.type === 'comment') { drawCommentItem(ctx, e) }
-        else if (e.type === 'link') { drawLinkItem(ctx, e) }
-        else if (e.type === 'textList') { drawTextListItem(ctx, e) }
-        else if (e.type === 'counter') { drawCounterItem(ctx, e) }
-        else if (e.type === 'reroute') { drawRerouteItem(ctx, e) }
-        else if (e.type === 'connector') { drawConnectorItem(e, ctx) }
-        else if (e.type === 'genNode') {
-            if (window.ComfyGenNodeManager) window.ComfyGenNodeManager.drawGenNodeOnCanvas(ctx, e);
-        }
-        ctx.restore()
-    };
-
     // Draw in layers to match screen
-    items.forEach(e => { if (e.type !== 'comment' && e.type !== 'link' && e.type !== 'connector') drawItemToCtx(e, n); });
-    items.forEach(e => { if (e.type === 'connector') drawItemToCtx(e, n); });
-    items.forEach(e => { if (e.type === 'link') drawItemToCtx(e, n); });
-    items.forEach(e => { if (e.type === 'comment') drawItemToCtx(e, n); });
+    items.forEach(e => { if (e.type !== 'comment' && e.type !== 'link' && e.type !== 'connector') drawItemToExportCtx(e, n); });
+    items.forEach(e => { if (e.type === 'connector') drawItemToExportCtx(e, n); });
+    items.forEach(e => { if (e.type === 'link') drawItemToExportCtx(e, n); });
+    items.forEach(e => { if (e.type === 'comment') drawItemToExportCtx(e, n); });
 
     const fileName = activeProject && activeProject.name ? `${activeProject.name}.png` : 'moodboard.png';
     const l = document.createElement('a');
@@ -6691,50 +6892,14 @@ function exportSelectionAsPng() {
     n.fillRect(0, 0, s.width, s.height);
     n.translate(-bbox.x + padding, -bbox.y + padding);
 
-    const drawItemToCtx = (e, ctx) => {
-        ctx.save();
-        ctx.globalAlpha = e.opacity ?? 1;
-        if (showDropShadow) {
-            ctx.shadowColor = 'rgba(0,0,0,0.4)';
-            ctx.shadowBlur = 15;
-            ctx.shadowOffsetX = 4;
-            ctx.shadowOffsetY = 4;
-        }
-        if (e.type === 'image') {
-            const t = e.x + e.width / 2, o = e.y + e.height / 2;
-            ctx.translate(t, o);
-            ctx.rotate(e.rotation);
-            ctx.scale(e.scaleX || 1, e.scaleY || 1);
-            ctx.drawImage(e.img, -e.width / 2, -e.height / 2, e.width, e.height);
-        } else if (e.type === 'video') { drawVideoItem(ctx, e); }
-        else if (e.type === 'arrow') { drawArrow(ctx, e); }
-        else if (e.type === 'text') { drawTextItem(ctx, e); }
-        else if (e.type === 'box') { drawBoxItem(ctx, e); }
-        else if (e.type === 'circle') { drawCircleItem(ctx, e); }
-        else if (e.type === 'measure') { drawMeasureItem(ctx, e); }
-        else if (e.type === 'stroke') { drawStrokeItem(ctx, e); }
-        else if (e.type === 'grid') { drawGridItem(ctx, e); }
-        else if (e.type === 'group') { drawGroupItem(ctx, e); }
-        else if (e.type === 'comment') { drawCommentItem(ctx, e); }
-        else if (e.type === 'link') { drawLinkItem(ctx, e); }
-        else if (e.type === 'textList') { drawTextListItem(ctx, e); }
-        else if (e.type === 'counter') { drawCounterItem(ctx, e); }
-        else if (e.type === 'reroute') { drawRerouteItem(ctx, e); }
-        else if (e.type === 'connector') { drawConnectorItem(e, ctx); }
-        else if (e.type === 'genNode') {
-            if (window.ComfyGenNodeManager) window.ComfyGenNodeManager.drawGenNodeOnCanvas(ctx, e);
-        }
-        ctx.restore();
-    };
-
     const selectedSet = new Set(selectedItems);
     const toDraw = items.filter(e => selectedSet.has(e));
     selectedItems.forEach(e => { if (!toDraw.includes(e)) toDraw.push(e); });
 
-    toDraw.forEach(e => { if (e.type !== 'comment' && e.type !== 'link' && e.type !== 'connector') drawItemToCtx(e, n); });
-    toDraw.forEach(e => { if (e.type === 'connector') drawItemToCtx(e, n); });
-    toDraw.forEach(e => { if (e.type === 'link') drawItemToCtx(e, n); });
-    toDraw.forEach(e => { if (e.type === 'comment') drawItemToCtx(e, n); });
+    toDraw.forEach(e => { if (e.type !== 'comment' && e.type !== 'link' && e.type !== 'connector') drawItemToExportCtx(e, n); });
+    toDraw.forEach(e => { if (e.type === 'connector') drawItemToExportCtx(e, n); });
+    toDraw.forEach(e => { if (e.type === 'link') drawItemToExportCtx(e, n); });
+    toDraw.forEach(e => { if (e.type === 'comment') drawItemToExportCtx(e, n); });
 
     const baseName = activeProject && activeProject.name ? activeProject.name : 'moodboard';
     const fileName = `${baseName}_selection.png`;
@@ -6862,7 +7027,13 @@ function saveProject(options) {
                 document.body.removeChild(n);
                 URL.revokeObjectURL(n.href);
                 showToast(shareExport ? "Export listo para compartir." : "Project exported successfully.");
+            }).catch((err) => {
+                console.error('saveProject export failed:', err);
+                showToast("Failed to export project.", "error");
             });
+        }).catch((err) => {
+            console.error('saveProject packaging failed:', err);
+            showToast("Failed to export project.", "error");
         });
     } else if (t.type === 'moodprompt' || t.type === 'storyflow' || t.type === 'moodlist' || t.type === 'moodgantt' || t.type === 'colorseeker') {
         eJSON = t.data;
@@ -6876,6 +7047,9 @@ function saveProject(options) {
             document.body.removeChild(n);
             URL.revokeObjectURL(n.href);
             showToast("Project exported successfully.");
+        }).catch((err) => {
+            console.error('saveProject export failed:', err);
+            showToast("Failed to export project.", "error");
         });
     }
 }
@@ -6894,7 +7068,11 @@ window.getDeduplicatedTabName = getDeduplicatedTabName;
 
 function loadFileAsNewTab(fileContent, fileName) {
     try {
-        const data = JSON.parse(fileContent);
+        const data = typeof fileContent === 'string' ? JSON.parse(fileContent) : fileContent;
+        if (!data || typeof data !== 'object') {
+            showToast("Failed to load project. Unknown format.", "error");
+            return null;
+        }
         const rawName = (fileName && fileName.includes('.') ? fileName.split('.').slice(0, -1).join('.') : (fileName || '')) || 'Loaded Project';
         const name = getDeduplicatedTabName(rawName);
         if (data.prompts && Array.isArray(data.prompts)) {
@@ -6904,34 +7082,34 @@ function loadFileAsNewTab(fileContent, fileName) {
             renderTabs();
             switchTab(newId);
             showToast("Prompt file loaded successfully.");
-            return;
+            return newProject;
         }
         if (data.frames && Array.isArray(data.frames)) {
             const newId = nextProjectId();
-            const newProject = { id: newId, type: 'storyflow', name: name, data: { frames: data.frames, canvasBackgroundColor: data.canvasBackgroundColor || '#121110' } };
+            const newProject = { id: newId, type: 'storyflow', name: name, data: { ...data, frames: data.frames, canvasBackgroundColor: data.canvasBackgroundColor || '#121110' } };
             projects.push(newProject);
             renderTabs();
             switchTab(newId);
             showToast("StoryFlow file loaded successfully.");
-            return;
+            return newProject;
         }
         if (data.items && Array.isArray(data.items)) {
             const newId = nextProjectId();
             const newProject = { id: newId, type: 'moodinfinite', name: name, data: { items: [], cameraOffset: {}, cameraZoom: 1, historyStack: [], historyIndex: -1 } };
             projects.push(newProject);
-            activeProjectId = newId;
             renderTabs();
-            loadProject(fileContent);
-            return;
+            switchTab(newId);
+            loadProject(data);
+            return newProject;
         }
         if (data.cards && Array.isArray(data.cards)) {
             const newId = nextProjectId();
-            const newProject = { id: newId, type: 'moodlist', name: name, data: { cards: data.cards } };
+            const newProject = { id: newId, type: 'moodlist', name: name, data: { ...data, cards: data.cards, canvasBackgroundColor: data.canvasBackgroundColor || '#121110' } };
             projects.push(newProject);
             renderTabs();
             switchTab(newId);
             showToast("Moodlist file loaded successfully.");
-            return;
+            return newProject;
         }
         if (data.groups && Array.isArray(data.groups)) {
             const newId = nextProjectId();
@@ -6940,7 +7118,7 @@ function loadFileAsNewTab(fileContent, fileName) {
             renderTabs();
             switchTab(newId);
             showToast("Moodgantt file loaded successfully.");
-            return;
+            return newProject;
         }
         if (data.baseColor && data.mode && Array.isArray(data.colors)) {
             const newId = nextProjectId();
@@ -6949,17 +7127,38 @@ function loadFileAsNewTab(fileContent, fileName) {
             renderTabs();
             switchTab(newId);
             showToast("Moodtone file loaded successfully.");
-            return;
+            return newProject;
         }
         showToast("Failed to load project. Unknown format.", "error");
+        return null;
     } catch (err) {
         console.error("Failed to load project:", err);
         showToast("Failed to load project. Invalid JSON.", "error");
+        return null;
     }
 }
 function loadProject(e) {
     try {
-        const t = JSON.parse(e); const o = projects.find(e => e.id === activeProjectId); if (!o || o.type !== 'moodinfinite') return; o.data.cameraOffset = t.cameraOffset || (t.data && t.data.cameraOffset) || { x: window.innerWidth / 2, y: window.innerHeight / 2 }; o.data.cameraZoom = t.cameraZoom || (t.data && t.data.cameraZoom) || 1; canvasBackgroundColor = t.canvasBackgroundColor || (t.data && t.data.canvasBackgroundColor) || '#121110'; accentColor = t.accentColor || (t.data && t.data.accentColor) || '#D4A359'; gridColor = t.gridColor || (t.data && t.data.gridColor) || '#F4F1EA'; o.data.canvasBackgroundColor = canvasBackgroundColor; o.data.accentColor = accentColor; o.data.gridColor = gridColor; showGrid = t.showGrid ?? (t.data && t.data.showGrid) ?? true; snapToGrid = t.snapToGrid ?? (t.data && t.data.snapToGrid) ?? true; showDropShadow = t.showDropShadow ?? (t.data && t.data.showDropShadow) ?? true; gridSize = t.gridSize || (t.data && t.data.gridSize) || 50; gridOpacity = t.gridOpacity || (t.data && t.data.gridOpacity) || .05; if (t.globalImageCache) { globalImageCache = { ...globalImageCache, ...t.globalImageCache }; }
+        const t = typeof e === 'string' ? JSON.parse(e) : e;
+        const o = projects.find(e => e.id === activeProjectId);
+        if (!o || o.type !== 'moodinfinite' || !t) return;
+        o.data.cameraOffset = t.cameraOffset || (t.data && t.data.cameraOffset) || { x: window.innerWidth / 2, y: window.innerHeight / 2 };
+        o.data.cameraZoom = t.cameraZoom || (t.data && t.data.cameraZoom) || 1;
+        canvasBackgroundColor = t.canvasBackgroundColor || (t.data && t.data.canvasBackgroundColor) || '#121110';
+        accentColor = t.accentColor || (t.data && t.data.accentColor) || '#D4A359';
+        gridColor = t.gridColor || (t.data && t.data.gridColor) || '#F4F1EA';
+        o.data.canvasBackgroundColor = canvasBackgroundColor;
+        o.data.accentColor = accentColor;
+        o.data.gridColor = gridColor;
+        showGrid = t.showGrid ?? (t.data && t.data.showGrid) ?? true;
+        snapToGrid = t.snapToGrid ?? (t.data && t.data.snapToGrid) ?? true;
+        showDropShadow = t.showDropShadow ?? (t.data && t.data.showDropShadow) ?? true;
+        gridSize = t.gridSize || (t.data && t.data.gridSize) || 50;
+        gridOpacity = t.gridOpacity || (t.data && t.data.gridOpacity) || .05;
+        if (t.globalImageCache) {
+            globalImageCache = { ...globalImageCache, ...t.globalImageCache };
+            markMediaCacheDirty('image');
+        }
         const processedItems = t.items || (t.data && t.data.items) || [];
         restoreImages(processedItems);
         o.data.items = [
@@ -6970,74 +7169,92 @@ function loadProject(e) {
         o.data.historyStack = []; o.data.historyIndex = -1;
         historyStack = []; historyIndex = -1;
         switchTab(activeProjectId, { force: true }); updateUIColors(); saveStateForUndo(); showToast("Project loaded successfully.");
-
-
-    } catch (e) { console.error("Failed to load project:", e); showToast("Failed to load project. Invalid file.", "error") }
+    } catch (err) { console.error("Failed to load project:", err); showToast("Failed to load project. Invalid file.", "error") }
 }
 
 function loadFileFromObject(t) {
     if (t.name.endsWith('.zip') || t.name.endsWith('.mood')) {
-        window.JSZip.loadAsync(t).then(zip => {
+        return window.JSZip.loadAsync(t).then(zip => {
             const rootKey = Object.keys(zip.files).find(k => k.endsWith('data.json'));
-            if (!rootKey) { showToast("Invalid project format", "error"); return; }
+            if (!rootKey) { showToast("Invalid project format", "error"); return null; }
             const rootDirName = rootKey.split('data.json')[0];
             return zip.file(rootKey).async("string").then(jsonStr => {
                 const data = JSON.parse(jsonStr);
                 const promises = Object.keys(data.globalImageCache || {}).map(id => {
                     const relativePath = data.globalImageCache[id];
-                    if (relativePath.startsWith('images/')) {
+                    if (typeof relativePath === 'string' && relativePath.startsWith('images/')) {
                         const file = zip.file(rootDirName + relativePath);
                         if (file) {
                             return file.async("base64").then(b64 => {
                                 globalImageCache[id] = "data:image/webp;base64," + b64;
+                                markMediaCacheDirty('image');
                             });
                         }
-                    } else {
+                    } else if (relativePath != null) {
                         globalImageCache[id] = relativePath;
+                        markMediaCacheDirty('image');
                     }
                     return Promise.resolve();
                 });
                 const videoPromises = Object.keys(data.globalVideoCache || {}).map(id => {
                     const relativePath = data.globalVideoCache[id];
-                    if (relativePath && relativePath.startsWith('videos/')) {
+                    if (typeof relativePath === 'string' && relativePath.startsWith('videos/')) {
                         const file = zip.file(rootDirName + relativePath);
                         if (file) {
                             return file.async("blob").then(videoBlob => {
                                 globalVideoCache[id] = videoBlob;
+                                markMediaCacheDirty('video');
                             });
                         }
-                    } else {
+                    } else if (relativePath != null) {
                         globalVideoCache[id] = relativePath;
+                        markMediaCacheDirty('video');
                     }
                     return Promise.resolve();
                 });
                 return Promise.all([...promises, ...videoPromises]).then(() => {
-                    data.globalImageCache = globalImageCache;
-                    data.globalVideoCache = globalVideoCache;
-                    loadFileAsNewTab(JSON.stringify(data), t.name);
+                    delete data.globalImageCache;
+                    delete data.globalVideoCache;
+                    const created = loadFileAsNewTab(data, t.name);
                     scheduleAutoSave();
+                    return created;
                 });
             });
-        }).catch(() => showToast("Failed to unpack project", "error"));
+        }).catch((err) => {
+            console.error('Failed to unpack project:', err);
+            showToast("Failed to unpack project", "error");
+            return null;
+        });
     } else {
-        const o = new FileReader;
-        o.onload = e => { loadFileAsNewTab(e.target.result, t.name); scheduleAutoSave(); };
-        o.readAsText(t);
+        return new Promise((resolve) => {
+            const o = new FileReader();
+            o.onload = e => {
+                const created = loadFileAsNewTab(e.target.result, t.name);
+                scheduleAutoSave();
+                resolve(created);
+            };
+            o.onerror = () => {
+                showToast("Failed to read project file", "error");
+                resolve(null);
+            };
+            o.readAsText(t);
+        });
     }
 }
 
 /**
- * Reloads the data for the current active project from a .mood (zip) blob.
+ * Reloads the data for the target (or current active) project from a .mood (zip) blob.
  * Used for background sync.
  */
-window.reloadCurrentProjectFromBlob = async function(blob) {
-    const activeProject = projects.find(p => p.id === activeProjectId);
-    if (!activeProject) return;
+window.reloadCurrentProjectFromBlob = async function(blob, targetProjectId = null) {
+    const expectedId = targetProjectId ?? activeProjectId;
+    const targetProject = projects.find(p => p.id === expectedId);
+    if (!targetProject) return false;
 
     try {
         const zip = await window.JSZip.loadAsync(blob);
         const rootKey = Object.keys(zip.files).find(k => k.endsWith('data.json'));
-        if (!rootKey) return;
+        if (!rootKey) return false;
 
         const jsonStr = await zip.file(rootKey).async("string");
         const data = JSON.parse(jsonStr);
@@ -7045,58 +7262,74 @@ window.reloadCurrentProjectFromBlob = async function(blob) {
         // Update image cache
         const promises = Object.keys(data.globalImageCache || {}).map(async id => {
             const relativePath = data.globalImageCache[id];
-            if (relativePath.startsWith('images/')) {
+            if (typeof relativePath === 'string' && relativePath.startsWith('images/')) {
                 const rootDirName = rootKey.split('data.json')[0];
                 const file = zip.file(rootDirName + relativePath);
                 if (file) {
                     const b64 = await file.async("base64");
                     globalImageCache[id] = "data:image/webp;base64," + b64;
+                    markMediaCacheDirty('image');
                 }
-            } else {
+            } else if (relativePath != null) {
                 globalImageCache[id] = relativePath;
+                markMediaCacheDirty('image');
             }
         });
         const videoPromises = Object.keys(data.globalVideoCache || {}).map(async id => {
             const relativePath = data.globalVideoCache[id];
-            if (relativePath && relativePath.startsWith('videos/')) {
+            if (typeof relativePath === 'string' && relativePath.startsWith('videos/')) {
                 const rootDirName = rootKey.split('data.json')[0];
                 const file = zip.file(rootDirName + relativePath);
                 if (file) {
                     const videoBlob = await file.async("blob");
                     globalVideoCache[id] = videoBlob;
+                    markMediaCacheDirty('video');
                 }
-            } else {
+            } else if (relativePath != null) {
                 globalVideoCache[id] = relativePath;
+                markMediaCacheDirty('video');
             }
         });
         await Promise.all([...promises, ...videoPromises]);
 
         // Update project data
-        if (activeProject.type === 'moodinfinite') {
-            // Special handling for moodinfinite global variables
+        if (targetProject.type === 'moodinfinite') {
             const t = data;
-            canvasBackgroundColor = t.canvasBackgroundColor || '#121110';
-            accentColor = t.accentColor || '#D4A359';
-            gridColor = t.gridColor || '#F4F1EA';
-            showGrid = t.showGrid ?? true;
-            snapToGrid = t.snapToGrid ?? true;
-            showDropShadow = t.showDropShadow ?? true;
-            gridSize = t.gridSize || 50;
-            gridOpacity = t.gridOpacity || .05;
+            const bg = t.canvasBackgroundColor || '#121110';
+            const acc = t.accentColor || '#D4A359';
+            const grd = t.gridColor || '#F4F1EA';
+            targetProject.data.canvasBackgroundColor = bg;
+            targetProject.data.accentColor = acc;
+            targetProject.data.gridColor = grd;
+            if (t.cameraOffset) targetProject.data.cameraOffset = t.cameraOffset;
+            if (t.cameraZoom) targetProject.data.cameraZoom = t.cameraZoom;
 
             const processedItems = t.items || [];
             restoreImages(processedItems);
-            
-            activeProject.data.items = [
+
+            pauseAndReleaseVideos(activeProjectId === targetProject.id ? items : targetProject.data.items);
+            targetProject.data.items = [
                 ...processedItems.filter(i => i.type !== 'comment'),
                 ...processedItems.filter(i => i.type === 'comment')
             ];
-            activeProject.data.historyStack = [];
-            activeProject.data.historyIndex = -1;
-            
-            // Sync the global items variable if this is still the active project
-            if (activeProjectId === activeProject.id) {
-                items = activeProject.data.items;
+            targetProject.data.historyStack = [];
+            targetProject.data.historyIndex = -1;
+
+            // Sync globals if this project is currently active
+            if (activeProjectId === targetProject.id) {
+                canvasBackgroundColor = bg;
+                accentColor = acc;
+                gridColor = grd;
+                showGrid = t.showGrid ?? true;
+                snapToGrid = t.snapToGrid ?? true;
+                showDropShadow = t.showDropShadow ?? true;
+                gridSize = t.gridSize || 50;
+                gridOpacity = t.gridOpacity || .05;
+                if (t.cameraOffset) cameraOffset = t.cameraOffset;
+                if (t.cameraZoom) cameraZoom = t.cameraZoom;
+                selectedItems = [];
+                updateSelectionToolbar();
+                items = targetProject.data.items;
                 historyStack = [];
                 historyIndex = -1;
                 updateUIColors();
@@ -7104,11 +7337,10 @@ window.reloadCurrentProjectFromBlob = async function(blob) {
                 requestUpdate();
             }
         } else {
-
-
-            // General reload for other types
-            activeProject.data = { ...activeProject.data, ...data };
-            if (activeProjectId === activeProject.id) {
+            delete data.globalImageCache;
+            delete data.globalVideoCache;
+            targetProject.data = { ...targetProject.data, ...data };
+            if (activeProjectId === targetProject.id) {
                 switchTab(activeProjectId, { force: true });
             }
         }
@@ -7131,64 +7363,36 @@ function isTextEntryTarget(el) {
 }
 
 function handlePaste(e) {
+    const activeProject = projects.find(p => p.id === activeProjectId);
     const focus = document.activeElement;
+    const isMoodlistTextField = Boolean(
+        activeProject && activeProject.type === 'moodlist' &&
+        focus && focus.closest && focus.closest('#moodlist-container') &&
+        (focus.isContentEditable || focus.tagName === 'TEXTAREA' ||
+            (focus.tagName === 'INPUT' && !['checkbox', 'radio', 'date', 'file', 'color', 'range', 'button', 'submit'].includes((focus.type || 'text').toLowerCase())))
+    );
+
     if (isTextEntryTarget(focus)) {
-        const activeProject = projects.find(p => p.id === activeProjectId);
-        const inListField = activeProject && activeProject.type === 'moodlist'
-            && focus.closest && focus.closest('#moodlist-container')
-            && focus.matches('input, textarea');
-        if (!inListField) return;
-    }
-    const text = e.clipboardData.getData('text');
-    if (text) {
-        try {
-            const data = JSON.parse(text);
-            if (data && data.type === 'moodinfinite-items' && Array.isArray(data.items)) {
-                e.preventDefault();
-                clipboard = data.items;
-                internalClipboardTimestamp = Date.now();
-                
-                // Add any missing images to the local globalImageCache
-                clipboard.forEach(item => {
-                    const registerImage = (imgItem) => {
-                        if (imgItem.type === 'image' && imgItem.imgSrc) {
-                            if (!imgItem.imageId) {
-                                imgItem.imageId = 'img_' + Math.random().toString(36).substr(2, 9);
-                            }
-                            globalImageCache[imgItem.imageId] = imgItem.imgSrc;
-                        } else if (imgItem.type === 'group' && Array.isArray(imgItem.items)) {
-                            imgItem.items.forEach(registerImage);
-                        }
-                    };
-                    registerImage(item);
-                });
-                
-                pasteItems();
-                return;
+        if (!isMoodlistTextField) return;
+        if (focus.matches('input, textarea')) {
+            e.preventDefault();
+            const clip = e.clipboardData ? e.clipboardData.getData('text') : '';
+            const start = focus.selectionStart == null ? focus.value.length : focus.selectionStart;
+            const end = focus.selectionEnd == null ? start : focus.selectionEnd;
+            focus.value = focus.value.slice(0, start) + clip + focus.value.slice(end);
+            const caret = start + clip.length;
+            if (typeof focus.setSelectionRange === 'function') {
+                try { focus.setSelectionRange(caret, caret); } catch (_) { }
             }
-        } catch (err) {
-            // Not JSON or not our signature, continue to normal pasting checks
+            focus.dispatchEvent(new Event('input', { bubbles: true }));
         }
+        return;
     }
 
-    const activeProject = projects.find(p => p.id === activeProjectId);
-    if (activeProject && activeProject.type === 'moodlist') {
-        const focus = document.activeElement;
-        const inList = focus && focus.closest && focus.closest('#moodlist-container');
-        if (inList && (focus.matches('input, textarea') || focus.isContentEditable)) {
-            if (focus.matches('input, textarea')) {
-                e.preventDefault();
-                const clip = e.clipboardData ? e.clipboardData.getData('text') : '';
-                const start = focus.selectionStart == null ? focus.value.length : focus.selectionStart;
-                const end = focus.selectionEnd == null ? start : focus.selectionEnd;
-                focus.value = focus.value.slice(0, start) + clip + focus.value.slice(end);
-                const caret = start + clip.length;
-                if (focus.setSelectionRange) focus.setSelectionRange(caret, caret);
-                focus.dispatchEvent(new Event('input', { bubbles: true }));
-            }
-            return;
-        }
-        const text = e.clipboardData.getData('text');
+    if (!activeProject) return;
+
+    if (activeProject.type === 'moodlist') {
+        const text = e.clipboardData ? e.clipboardData.getData('text') : '';
         if (text) {
             try {
                 const data = JSON.parse(text);
@@ -7209,7 +7413,7 @@ function handlePaste(e) {
                     if (!activeProject.data.cards) activeProject.data.cards = [];
                     activeProject.data.cards.unshift(newCard);
                     scheduleAutoSave();
-                    
+
                     if (typeof renderMoodlistView === 'function') {
                         renderMoodlistView(activeProject);
                     }
@@ -7224,7 +7428,7 @@ function handlePaste(e) {
                     let title = 'Pasted List';
                     let itemsList = [];
                     let startIdx = 0;
-                    
+
                     if (lines[0].startsWith('# ')) {
                         title = lines[0].substring(2).trim();
                         startIdx = 1;
@@ -7232,11 +7436,11 @@ function handlePaste(e) {
                         title = lines[0];
                         startIdx = 1;
                     }
-                    
+
                     for (let i = startIdx; i < lines.length; i++) {
                         let line = lines[i];
                         let checked = false;
-                        
+
                         if (line.startsWith('- [ ] ') || line.startsWith('* [ ] ')) {
                             line = line.substring(6);
                         } else if (line.startsWith('- [x] ') || line.startsWith('* [x] ') || line.startsWith('- [X] ') || line.startsWith('* [X] ')) {
@@ -7245,14 +7449,14 @@ function handlePaste(e) {
                         } else if (line.startsWith('- ') || line.startsWith('* ')) {
                             line = line.substring(2);
                         }
-                        
+
                         itemsList.push({
                             id: 'group_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5) + '_' + Math.random().toString(36).slice(2, 9) + '_' + i,
                             text: line,
                             checked: checked
                         });
                     }
-                    
+
                     if (itemsList.length > 0) {
                         const newCard = {
                             id: 'group_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5) + '_' + Math.random().toString(36).slice(2, 9),
@@ -7265,7 +7469,7 @@ function handlePaste(e) {
                         if (!activeProject.data.cards) activeProject.data.cards = [];
                         activeProject.data.cards.unshift(newCard);
                         scheduleAutoSave();
-                        
+
                         if (typeof renderMoodlistView === 'function') {
                             renderMoodlistView(activeProject);
                         }
@@ -7278,12 +7482,50 @@ function handlePaste(e) {
         return;
     }
 
-    const imageFiles = Array.from(e.clipboardData.items)
+    if (activeProject.type !== 'moodinfinite') return;
+
+    const text = e.clipboardData ? e.clipboardData.getData('text') : '';
+    if (text) {
+        try {
+            const data = JSON.parse(text);
+            if (data && data.type === 'moodinfinite-items' && Array.isArray(data.items)) {
+                e.preventDefault();
+                clipboard = data.items;
+                internalClipboardTimestamp = Date.now();
+
+                // Add any missing images to the local globalImageCache
+                clipboard.forEach(item => {
+                    const registerImage = (imgItem) => {
+                        if (imgItem.type === 'image' && imgItem.imgSrc) {
+                            if (!imgItem.imageId) {
+                                imgItem.imageId = 'img_' + Math.random().toString(36).substr(2, 9);
+                            }
+                            globalImageCache[imgItem.imageId] = imgItem.imgSrc;
+                            markMediaCacheDirty('image');
+                        } else if (imgItem.type === 'group' && Array.isArray(imgItem.items)) {
+                            imgItem.items.forEach(registerImage);
+                        }
+                    };
+                    registerImage(item);
+                });
+
+                pasteItems();
+                return;
+            }
+        } catch (err) {
+            // Not JSON or not our signature, continue to normal pasting checks
+        }
+    }
+
+    const clipItems = Array.from(e.clipboardData?.items || []);
+    const imageFiles = clipItems
         .filter(item => item.type.startsWith('image/'))
-        .map(item => item.getAsFile());
-    const videoFiles = Array.from(e.clipboardData.items)
+        .map(item => item.getAsFile())
+        .filter(Boolean);
+    const videoFiles = clipItems
         .filter(item => item.type.startsWith('video/'))
-        .map(item => item.getAsFile());
+        .map(item => item.getAsFile())
+        .filter(Boolean);
     const isInternalClipboardOld = (Date.now() - internalClipboardTimestamp) > 500;
     if ((imageFiles.length > 0 || videoFiles.length > 0) && isInternalClipboardOld) {
         const center = screenToWorld({ x: canvas.width / 2, y: canvas.height / 2 });
@@ -7323,21 +7565,22 @@ function handleImageFile(file, callback) {
 }
 
 function processFiles(files, worldPos, explicitGenMeta = null) {
-    Array.from(files).forEach((file, index) => {
-        if (!file.type.startsWith('image/')) return;
+    const filePromises = Array.from(files).map((file, index) => new Promise((resolve) => {
+        if (!file || !file.type.startsWith('image/')) return resolve(false);
         const bufferPromise = (file.arrayBuffer ? file.arrayBuffer() : Promise.resolve(null)).catch(() => null);
         const reader = new FileReader();
         reader.onload = (readEvent) => {
             const img = new Image();
             img.onload = () => {
                 const finish = (genMeta) => {
-                    const aspectRatio = img.width / img.height;
+                    const aspectRatio = img.width / (img.height || 1);
                     const initialWidth = 250;
                     const initialHeight = initialWidth / aspectRatio;
                     const imageId = Date.now() + '_' + index + '_' + Math.random().toString(36).substr(2, 9);
 
                     // Store in global cache
                     globalImageCache[imageId] = readEvent.target.result;
+                    markMediaCacheDirty('image');
 
                     const item = {
                         id: 'group_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5) + index,
@@ -7360,6 +7603,7 @@ function processFiles(files, worldPos, explicitGenMeta = null) {
                     if (finalMeta) item.genMeta = finalMeta;
                     addItemToLayeredItems(item);
                     bringSelectedToFront();
+                    resolve(true);
                 };
                 if (explicitGenMeta) {
                     finish(explicitGenMeta);
@@ -7375,35 +7619,40 @@ function processFiles(files, worldPos, explicitGenMeta = null) {
                     }).catch(() => finish(null));
                 }).catch(() => finish(null));
             };
+            img.onerror = () => resolve(false);
             img.src = readEvent.target.result;
         };
+        reader.onerror = () => resolve(false);
         reader.readAsDataURL(file);
+    }));
+    Promise.all(filePromises).then((results) => {
+        if (results.some(Boolean)) saveStateForUndo();
     });
-    setTimeout(saveStateForUndo, 500);
 }
 
 function processVideoFiles(files, worldPos) {
-    Array.from(files).forEach((file, index) => {
-        if (!file.type.startsWith('video/')) return;
-        
+    const videoPromises = Array.from(files).map((file, index) => new Promise((resolve) => {
+        if (!file || !file.type.startsWith('video/')) return resolve(false);
+
         const videoId = 'video_' + Date.now() + '_' + index + '_' + Math.random().toString(36).substr(2, 9);
-        
+
         // Store raw Blob in globalVideoCache
         globalVideoCache[videoId] = file;
-        
+        markMediaCacheDirty('video');
+
         const video = document.createElement('video');
         video.loop = true;
         video.muted = true;
         video.playsInline = true;
         video.addEventListener('play', () => { registerVideoFrameCallback(video); });
-        
+
         const objectURL = URL.createObjectURL(file);
-        
+
         video.addEventListener('loadedmetadata', () => {
-            const aspectRatio = video.videoWidth / video.videoHeight || 16/9;
+            const aspectRatio = video.videoWidth / video.videoHeight || 16 / 9;
             const initialWidth = 320;
             const initialHeight = initialWidth / aspectRatio;
-            
+
             addItemToLayeredItems({
                 id: 'group_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5) + index,
                 type: 'video',
@@ -7424,14 +7673,22 @@ function processVideoFiles(files, worldPos) {
                 isPlaying: true,
                 isMuted: true
             });
-            
+
             video.play().catch(e => console.log("Autoplay prevented:", e));
             bringSelectedToFront();
-        });
+            resolve(true);
+        }, { once: true });
+
+        video.addEventListener('error', () => {
+            URL.revokeObjectURL(objectURL);
+            resolve(false);
+        }, { once: true });
 
         video.src = objectURL;
+    }));
+    Promise.all(videoPromises).then((results) => {
+        if (results.some(Boolean)) saveStateForUndo();
     });
-    setTimeout(saveStateForUndo, 500);
 }
 
 function downloadSourceImage() { if (selectedItems.length !== 1 || selectedItems[0].type !== 'image') return; const e = selectedItems[0]; if (!e.img) return; const t = document.createElement('a'); t.href = e.img.src; try { const e = new URL(t.href), o = e.pathname.split('/'); t.download = o[o.length - 1] || 'source_image' } catch (e) { t.download = 'source_image.png' } document.body.appendChild(t); t.click(); document.body.removeChild(t); showToast("Source image download started.") }
@@ -7555,9 +7812,10 @@ function duplicateItems() {
             if (item.type === 'image') {
                 clone.imageId = item.imageId;
                 const img = new Image;
+                img.onload = () => requestUpdate();
                 if (item.imageId && globalImageCache[item.imageId]) {
                     img.src = globalImageCache[item.imageId];
-                } else {
+                } else if (item.img && item.img.src) {
                     img.src = item.img.src;
                 }
                 clone.img = img;
@@ -7591,7 +7849,7 @@ function duplicateItems() {
         a.y += o;
         if (a.type === 'arrow' || a.type === 'measure') { a.startX += o; a.startY += o; a.endX += o; a.endY += o }
         else if (a.type === 'stroke') { a.points.forEach(e => { e.x += o; e.y += o }) }
-        items.push(a);
+        addItemToLayeredItems(a);
         t.push(a)
     });
     selectedItems = t;
@@ -8261,9 +8519,23 @@ editLinkBtn.onclick = () => {
     }
 };
 
+function openSafeUrl(rawUrl) {
+    if (!rawUrl || typeof rawUrl !== 'string') return;
+    try {
+        const parsed = new URL(rawUrl.trim(), window.location.href);
+        if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
+            window.open(parsed.href, '_blank', 'noopener,noreferrer');
+        } else {
+            showToast('Blocked unsafe link protocol.', 'error');
+        }
+    } catch (_) {
+        showToast('Invalid URL.', 'error');
+    }
+}
+
 openLinkBtn.onclick = () => {
     if (selectedItems.length === 1 && selectedItems[0].type === 'link') {
-        window.open(selectedItems[0].url, '_blank');
+        openSafeUrl(selectedItems[0].url);
     }
 };
 
@@ -8344,6 +8616,7 @@ function cancelNoteEditing() {
     noteEditorOverlay.style.display = 'none';
     if (noteTitleInput && document.activeElement === noteTitleInput) noteTitleInput.blur();
     if (noteBodyInput && document.activeElement === noteBodyInput) noteBodyInput.blur();
+    requestUpdate();
 }
 
 function finishNoteEditing() {
@@ -8362,6 +8635,7 @@ function finishNoteEditing() {
     updateSelectionToolbar();
     if (noteTitleInput && document.activeElement === noteTitleInput) noteTitleInput.blur();
     if (noteBodyInput && document.activeElement === noteBodyInput) noteBodyInput.blur();
+    requestUpdate();
 }
 
 function updateNoteDimensions(item) {
@@ -8549,7 +8823,6 @@ function undoLastAction() {
 function redoLastAction() { if (historyIndex < historyStack.length - 1) { historyIndex++; const e = historyStack[historyIndex]; loadStateFromHistory(e) } }
 function groupSelectedItems() {
     if (selectedItems.length <= 1) return; 
-    saveStateForUndo(); 
     
     // Instead of unpacking nested groups, we just add them as-is.
     const e = [...selectedItems]; 
@@ -8578,7 +8851,8 @@ function groupSelectedItems() {
     addItemToLayeredItems(o);
     selectedItems = [o];
     updateSelectionToolbar();
-    updateLeftBarState()
+    updateLeftBarState();
+    saveStateForUndo();
 }
 
 
@@ -8589,7 +8863,6 @@ function groupOrderedItems() {
         showToast("Select at least 2 images to group ordered.", "error");
         return;
     }
-    saveStateForUndo();
     const rowThreshold = 50;
     images.sort((a, b) => {
         if (Math.abs(a.y - b.y) < rowThreshold) {
@@ -8600,7 +8873,6 @@ function groupOrderedItems() {
     images.forEach((item, index) => {
         item.label = (index + 1).toString().padStart(3, '0');
     });
-    const originalSelection = [...selectedItems];
     selectedItems = images;
     groupSelectedItems();
 }
@@ -8608,7 +8880,6 @@ function groupOrderedItems() {
 function ungroupSelectedItems() {
     const groups = selectedItems.filter(e => e.type === 'group');
     if (groups.length === 0) return;
-    saveStateForUndo();
 
     const newItems = [];
     const groupIds = new Set();
@@ -8662,15 +8933,16 @@ function ungroupSelectedItems() {
             delete n._cachedBox;
             n._isDirty = true;
 
-            items.push(n);
             newItems.push(n);
         });
     });
 
     items = items.filter(e => !groupIds.has(e.id));
+    newItems.forEach(n => addItemToLayeredItems(n));
     selectedItems = newItems;
     updateSelectionToolbar();
     updateLeftBarState();
+    saveStateForUndo();
 }
 function paletteSupportsPreview(project) {
     return !!(project && (project.type === 'moodinfinite' || project.type === 'moodprompt' || project.type === 'storyflow' || project.type === 'moodlist'));
@@ -8743,7 +9015,23 @@ function buildPaletteMenu() {
     };
     palettePanel.appendChild(setDefaultBtn);
 }
-function showToast(e, t = 'success') { if (!showNotifications) return; const o = document.getElementById('toast-container'); if (!o) return; const a = document.createElement('div'); a.className = `toast-notification ${t}`; let i = ''; if (t === 'success') { i = `<iconify-icon icon="lucide:check-circle" width="20" height="20" class="icon"></iconify-icon>` } else if (t === 'error') { i = `<iconify-icon icon="lucide:alert-circle" width="20" height="20" class="icon"></iconify-icon>` } a.innerHTML = `${i}<span>${e}</span>`; o.appendChild(a); setTimeout(() => { a.remove() }, 3e3) }
+function showToast(e, t = 'success') {
+    if (!showNotifications) return;
+    const o = document.getElementById('toast-container');
+    if (!o) return;
+    const a = document.createElement('div');
+    a.className = `toast-notification ${t}`;
+    if (t === 'success') {
+        a.innerHTML = `<iconify-icon icon="lucide:check-circle" width="20" height="20" class="icon"></iconify-icon>`;
+    } else if (t === 'error') {
+        a.innerHTML = `<iconify-icon icon="lucide:alert-circle" width="20" height="20" class="icon"></iconify-icon>`;
+    }
+    const span = document.createElement('span');
+    span.textContent = String(e ?? '');
+    a.appendChild(span);
+    o.appendChild(a);
+    setTimeout(() => { a.remove(); }, 3000);
+}
 
 let lastTap = 0, longPressTimer = null, isPinching = false, initialPinchDistance = null, lastPinchCenter = null, initialCameraZoomOnPinch = 1;
 function onTouchStart(e) {
@@ -8865,7 +9153,7 @@ function getItemAtPosition(pos) {
         const bbox = getItemBoundingBox(item);
         if (pos.x >= bbox.x && pos.x <= bbox.x + bbox.width && pos.y >= bbox.y && pos.y <= bbox.y + bbox.height) {
             if (item.type === 'group') {
-                const centerX = item.x + item.width / 2, centerY = item.y + item.height / 2, dx = pos.x - centerX, dy = pos.y - centerY, cos = Math.cos(-item.rotation), sin = Math.sin(-item.rotation), rx = dx * cos - dy * sin, ry = dx * sin + dy * cos, localX = rx + centerX - item.x, localY = ry + centerY - item.y;
+                const centerX = item.x + item.width / 2, centerY = item.y + item.height / 2, dx = pos.x - centerX, dy = pos.y - centerY, rot = -(item.rotation || 0), cos = Math.cos(rot), sin = Math.sin(rot), rx = dx * cos - dy * sin, ry = dx * sin + dy * cos, localX = rx + centerX - item.x, localY = ry + centerY - item.y;
                 for (let i = item.items.length - 1; i >= 0; i--) {
                     const subItem = item.items[i], subBox = { x: subItem.x, y: subItem.y, width: subItem.width, height: subItem.height };
                     if (localX >= subBox.x && localX <= subBox.x + subBox.width && localY >= subBox.y && localY <= subBox.y + subBox.height) return item;
@@ -8883,7 +9171,7 @@ function getItemAtPosition(pos) {
             } else if (item.type === 'reroute') {
                 if (Math.hypot(pos.x - item.x, pos.y - item.y) <= 12 / cameraZoom) return item
             } else {
-                const centerX = item.x + item.width / 2, centerY = item.y + item.height / 2, dx = pos.x - centerX, dy = pos.y - centerY, sin = -item.rotation, rx = dx * Math.cos(sin) - dy * Math.sin(sin), ry = dx * Math.sin(sin) + dy * Math.cos(sin);
+                const centerX = item.x + item.width / 2, centerY = item.y + item.height / 2, dx = pos.x - centerX, dy = pos.y - centerY, sin = -(item.rotation || 0), rx = dx * Math.cos(sin) - dy * Math.sin(sin), ry = dx * Math.sin(sin) + dy * Math.cos(sin);
                 if (rx > -item.width / 2 && rx < item.width / 2 && ry > -item.height / 2 && ry < item.height / 2) return item
             }
         }
@@ -9205,18 +9493,51 @@ buildPaletteMenu();
 
 let sharedWorkers = [];
 
-window.localforage.getItem('moodinfinite_video_cache').then(vCache => {
-    if (vCache) globalVideoCache = vCache;
-    return window.localforage.getItem('moodinfinite_cache');
-}).then(cache => {
-    if (cache) globalImageCache = cache;
-    return window.localforage.getItem('moodinfinite_workers');
-}).then(savedWorkers => {
-    if (Array.isArray(savedWorkers)) {
-        sharedWorkers = savedWorkers.filter(name => typeof name === 'string' && name.trim());
+Promise.allSettled([
+    window.localforage.getItem('moodinfinite_video_cache'),
+    window.localforage.getItem('moodinfinite_cache'),
+    window.localforage.getItem('moodinfinite_workers'),
+    window.localforage.getItem('moodinfinite_projects'),
+    window.localforage.getItem('moodinfinite_active_tab'),
+]).then(([vidRes, imgRes, workersRes, projRes, tabRes]) => {
+    if (vidRes.status === 'fulfilled' && vidRes.value) {
+        globalVideoCache = vidRes.value;
+        _lastSavedVideoCacheSig = getCacheSignature(globalVideoCache);
+    } else if (vidRes.status === 'rejected') {
+        console.warn('Failed to load video cache from indexedDB', vidRes.reason);
     }
-    return window.localforage.getItem('moodinfinite_projects');
-}).then(savedProjects => {
+
+    if (imgRes.status === 'fulfilled' && imgRes.value) {
+        globalImageCache = imgRes.value;
+        _lastSavedImageCacheSig = getCacheSignature(globalImageCache);
+    } else if (imgRes.status === 'rejected') {
+        console.warn('Failed to load image cache from indexedDB', imgRes.reason);
+    }
+
+    if (workersRes.status === 'fulfilled' && Array.isArray(workersRes.value)) {
+        sharedWorkers = workersRes.value.filter(name => typeof name === 'string' && name.trim());
+    }
+
+    if (projRes.status === 'rejected') {
+        console.error('Failed to load projects from indexedDB', projRes.reason);
+        showToast('Could not read saved projects from browser storage.', 'error');
+        // Boot in memory without overwriting existing IndexedDB data
+        projects = [{
+            id: nextProjectId(),
+            type: 'moodinfinite',
+            name: 'Moodboard 1',
+            pinned: false,
+            data: { items: [], cameraOffset: { x: window.innerWidth / 2, y: window.innerHeight / 2 }, cameraZoom: 1, historyStack: [], historyIndex: -1, canvasBackgroundColor: '#121110', accentColor: '#D4A359', gridColor: '#F4F1EA' }
+        }];
+        renderTabs();
+        activeProjectId = projects[0].id;
+        items = projects[0].data.items;
+        resizeCanvas();
+        gameLoop();
+        return;
+    }
+
+    const savedProjects = projRes.value;
     if (savedProjects && savedProjects.length > 0) {
         savedProjects.forEach(p => {
             if (p.type === 'moodinfinite' && p.data && p.data.items) {
@@ -9226,22 +9547,14 @@ window.localforage.getItem('moodinfinite_video_cache').then(vCache => {
         projects = savedProjects;
         sharedWorkers = getSharedWorkers();
         renderTabs();
-        window.localforage.getItem('moodinfinite_active_tab').then(actId => {
-            if (actId && projects.find(p => p.id === actId)) switchTab(actId);
-            else switchTab(projects[0].id);
-            gameLoop();
-        }).catch(() => {
-            switchTab(projects[0].id);
-            gameLoop();
-        });
+        const actId = tabRes.status === 'fulfilled' ? tabRes.value : null;
+        if (actId && projects.find(p => p.id === actId)) switchTab(actId);
+        else switchTab(projects[0].id);
+        gameLoop();
     } else {
         createNewProject('moodinfinite');
         gameLoop();
     }
-}).catch(err => {
-    console.error("Failed to load from indexedDB", err);
-    createNewProject('moodinfinite');
-    gameLoop();
 });
 
 let activeLinkEdit = null;
@@ -9417,10 +9730,12 @@ function drawLinkItem(ctx, item) {
                 item.iconLoading = false;
             } else {
                 const img = new Image();
+                img.crossOrigin = 'anonymous';
                 img.onload = () => {
                     faviconCache[domain] = img;
                     item.iconImage = img;
                     item.iconLoading = false;
+                    requestUpdate();
                 };
                 img.onerror = () => {
                     item.iconLoading = false;
@@ -9748,7 +10063,6 @@ function colorseekerSendToCanvas() {
     }
     const colors = source.data.colors.slice();
     switchTab(board.id);
-    saveStateForUndo();
     const mid = screenToWorld({ x: canvas.width / 2, y: canvas.height / 2 });
     const size = 80;
     const gap = 16;
@@ -9756,7 +10070,7 @@ function colorseekerSendToCanvas() {
     const y = mid.y - size / 2;
     const stamp = Date.now();
     colors.forEach((color, i) => {
-        items.push({
+        addItemToLayeredItems({
             id: stamp + '-palette-swatch-' + i,
             type: 'box',
             color,
@@ -9773,6 +10087,7 @@ function colorseekerSendToCanvas() {
             fromPalette: true,
         });
     });
+    saveStateForUndo();
     syncActiveMoodboard();
     requestUpdate();
     showToast('Palette sent to the canvas.');
@@ -10058,7 +10373,7 @@ function renderColorSeeker(projectId) {
     window._colorseekerKeepFocus = null;
 
     if (colorseekerModeSelect) colorseekerModeSelect.value = project.data.mode || 'shades';
-    if (colorseekerBasePicker) colorseekerBasePicker.value = project.data.baseColor || '#ffffff';
+    if (colorseekerBasePicker) syncColorInput(colorseekerBasePicker, project.data.baseColor || '#ffffff');
     if (!project.data.colors) project.data.colors = generatePalette(project.data.baseColor, project.data.mode, project.data.lockedColors);
 
     if (colorseekerHexList && project.data.colors) {
@@ -10161,13 +10476,25 @@ function renderColorSeeker(projectId) {
             info.style.cssText = 'position:absolute;bottom:4.5rem;left:50%;transform:translateX(-50%);opacity:0;transition:opacity 0.2s;display:flex;flex-direction:column;gap:0.5rem;align-items:center;pointer-events:none;white-space:nowrap;';
             const hslStr = hexToHsl(cHex);
             info.style.color = getContrastTextColor(cHex);
-            info.innerHTML = `
-                <div style="font-size:1.5rem;font-weight:bold;margin-bottom:0.5rem;">${cHex.toUpperCase()}</div>
-                <div style="font-size:0.9rem;">RGB: ${hexToRgb(cHex)}</div>
-                <div style="font-size:0.9rem;">HSL: ${hslStr.h}, ${hslStr.s}%, ${hslStr.l}%</div>
-                <div style="font-size:0.9rem;">CMYK: ${hexToCmyk(cHex)}</div>
-                ${isLocked ? '<div style="font-size:0.8rem;margin-top:0.25rem;opacity:0.8;">🔒 Locked</div>' : ''}
-            `;
+            const hexDiv = document.createElement('div');
+            hexDiv.style.cssText = 'font-size:1.5rem;font-weight:bold;margin-bottom:0.5rem;';
+            hexDiv.textContent = String(cHex).toUpperCase();
+            const rgbDiv = document.createElement('div');
+            rgbDiv.style.fontSize = '0.9rem';
+            rgbDiv.textContent = `RGB: ${hexToRgb(cHex)}`;
+            const hslDiv = document.createElement('div');
+            hslDiv.style.fontSize = '0.9rem';
+            hslDiv.textContent = `HSL: ${hslStr.h}, ${hslStr.s}%, ${hslStr.l}%`;
+            const cmykDiv = document.createElement('div');
+            cmykDiv.style.fontSize = '0.9rem';
+            cmykDiv.textContent = `CMYK: ${hexToCmyk(cHex)}`;
+            info.append(hexDiv, rgbDiv, hslDiv, cmykDiv);
+            if (isLocked) {
+                const lockDiv = document.createElement('div');
+                lockDiv.style.cssText = 'font-size:0.8rem;margin-top:0.25rem;opacity:0.8;';
+                lockDiv.textContent = '🔒 Locked';
+                info.appendChild(lockDiv);
+            }
             bar.appendChild(info);
 
             // Bottom actions cluster (Move left, Lock, Move right)
@@ -10264,7 +10591,7 @@ function renderColorSeeker(projectId) {
                 if (e.target.closest('button')) return;
                 if (e.shiftKey) {
                     project.data.baseColor = cHex;
-                    project.data.colors = generatePalette(cHex, project.data.mode, project.data.lockedColors);
+                    colorseekerRegenerate(project);
                     saveToBrowser();
                     renderColorSeeker(projectId);
                     showToast('Base color set.');
@@ -10954,6 +11281,7 @@ function createStoryCard(project, frame, index) {
     descArea.value = frame.description || '';
     descArea.oninput = (e) => { frame.description = e.target.value; scheduleAutoSave(); updateStoryflowStats(project); };
 
+    if (!frame.meta) frame.meta = {};
     const metaGrid = document.createElement('div');
     metaGrid.className = 'story-meta-grid';
 
@@ -11086,7 +11414,6 @@ function createStoryCard(project, frame, index) {
     
     cameraItem.append(cameraLbl, cameraSelect);
 
-    if (!frame.meta) frame.meta = {};
     const artistItem = document.createElement('div');
     artistItem.className = 'story-meta-item';
     const artistLbl = document.createElement('div');
@@ -11253,8 +11580,9 @@ function createStoryImageSlot(project, frame) {
     uploadBtn.innerHTML = `<iconify-icon icon="lucide:upload" width="20" height="20"></iconify-icon>`;
     uploadBtn.onclick = (e) => {
         e.stopPropagation();
-        promptImageInput.onchange = (e) => {
-            const file = e.target.files[0];
+        promptImageInput.onchange = (ev) => {
+            const file = ev.target.files[0];
+            ev.target.value = '';
             handleImageFile(file, (dataUrl) => {
                 frame.image = dataUrl;
                 renderStoryflowView(project);
@@ -11406,28 +11734,47 @@ function createStoryImageSlot(project, frame) {
     overlay.append(uploadBtn, zoomBtn, libraryBtn, drawOnFrameBtn, removeBtn);
     slot.appendChild(overlay);
 
-    // Support paste on slot
+    // Support paste on slot via a single module-level target to prevent leaked listeners
     slot.addEventListener('mouseenter', () => {
-        const handlePaste = (e) => {
-            const items = (e.clipboardData || e.originalEvent.clipboardData).items;
-            for (const item of items) {
-                if (item.type.indexOf("image") !== -1) {
-                    const blob = item.getAsFile();
-                    const reader = new FileReader();
-                    reader.onload = (readEvent) => {
-                        frame.image = readEvent.target.result;
-                        renderStoryflowView(project);
-                        saveToBrowser();
-                    };
-                    reader.readAsDataURL(blob);
-                }
-            }
-        };
-        window.addEventListener('paste', handlePaste);
-        slot.addEventListener('mouseleave', () => window.removeEventListener('paste', handlePaste), { once: true });
+        window._hoveredStorySlot = { project, frame };
+    });
+    slot.addEventListener('mouseleave', () => {
+        if (window._hoveredStorySlot && window._hoveredStorySlot.frame === frame) {
+            window._hoveredStorySlot = null;
+        }
     });
 
     return slot;
+}
+
+if (!window._storySlotPasteListenerAttached) {
+    window._storySlotPasteListenerAttached = true;
+    window.addEventListener('paste', (e) => {
+        const target = window._hoveredStorySlot;
+        if (!target) return;
+        const activeProj = projects.find(p => p.id === activeProjectId);
+        if (!activeProj || activeProj.type !== 'storyflow' || activeProj.id !== target.project.id) {
+            window._hoveredStorySlot = null;
+            return;
+        }
+        const items = e.clipboardData?.items || [];
+        for (const item of items) {
+            if (item.type && item.type.indexOf("image") !== -1) {
+                const blob = item.getAsFile();
+                if (!blob) continue;
+                e.preventDefault();
+                const reader = new FileReader();
+                reader.onload = (readEvent) => {
+                    target.frame.image = readEvent.target.result;
+                    window._hoveredStorySlot = null;
+                    renderStoryflowView(target.project);
+                    saveToBrowser();
+                };
+                reader.readAsDataURL(blob);
+                break;
+            }
+        }
+    });
 }
 
 function openAssetLibrary(callback) {
@@ -12435,10 +12782,12 @@ function renderGanttView(project) {
     const totalW   = cols.length * colWidth;
     const today    = ganttToday();
 
-    // Update zoom button states
+    // Update zoom button and slider states
     document.querySelectorAll('.gantt-zoom-btn').forEach(b => {
         b.classList.toggle('active', b.dataset.zoom === zoom);
     });
+    const zoomSliderEl = document.getElementById('gantt-zoom-slider');
+    if (zoomSliderEl) zoomSliderEl.value = Math.round(zoomScale * 100);
 
     // ── Build date header ──
     const header = document.getElementById('gantt-date-header');
@@ -12737,9 +13086,7 @@ function renderGanttView(project) {
                     ganttContextTarget = { projectId: project.id, groupId: group.id, taskId: task.id };
                     if (ganttContextMenu) {
                         document.querySelectorAll('.context-menu').forEach(m => m.style.display = 'none');
-                        ganttContextMenu.style.display = 'block';
-                        ganttContextMenu.style.left = e.pageX + 'px';
-                        ganttContextMenu.style.top = e.pageY + 'px';
+                        showAndPositionMenu(ganttContextMenu, e);
                     }
                 };
                 tSide.ondragstart = (e) => {
@@ -12844,9 +13191,7 @@ function renderGanttView(project) {
                     ganttContextTarget = { projectId: project.id, groupId: group.id, taskId: task.id };
                     if (ganttContextMenu) {
                         document.querySelectorAll('.context-menu').forEach(m => m.style.display = 'none');
-                        ganttContextMenu.style.display = 'block';
-                        ganttContextMenu.style.left = e.pageX + 'px';
-                        ganttContextMenu.style.top = e.pageY + 'px';
+                        showAndPositionMenu(ganttContextMenu, e);
                     }
                 };
 
@@ -13198,8 +13543,14 @@ function ganttOpenDetail(project, groupId, taskId) {
         imgSrc = globalImageCache[task.attachment];
     }
     
-    if (imgSrc) {
-        preview.innerHTML = `<img src="${imgSrc}" alt="Task attachment preview" style="width: 100%; height: 100%; object-fit: cover;">`;
+    const isSafePreviewSrc = typeof imgSrc === 'string' && /^(data:image\/|https?:\/\/)/i.test(imgSrc.trim());
+    if (isSafePreviewSrc) {
+        preview.innerHTML = '';
+        const img = document.createElement('img');
+        img.src = imgSrc.trim();
+        img.alt = 'Task attachment preview';
+        img.style.cssText = 'width: 100%; height: 100%; object-fit: cover;';
+        preview.appendChild(img);
         clearBtn.style.display = 'block';
     } else {
         preview.innerHTML = '<iconify-icon icon="lucide:image" width="16" height="16" style="color: var(--text-color-light);"></iconify-icon>';
@@ -13336,7 +13687,7 @@ function ganttJumpToToday(project) {
         project.data.viewEndDate   = ganttFormatDate(ganttAddDays(today,  14));
     } else {
         const half   = months[zoom];
-        project.data.viewStartDate = ganttFormatDate(ganttAddMonths(today, -half/2));
+        project.data.viewStartDate = ganttFormatDate(ganttAddMonths(today, -Math.floor(half / 2)));
         project.data.viewEndDate   = ganttFormatDate(ganttAddMonths(today,  half));
     }
     renderGanttView(project);
@@ -13344,7 +13695,7 @@ function ganttJumpToToday(project) {
     // Scroll to today
     setTimeout(() => {
         const cols     = ganttGetColumns(project.data.viewStartDate, project.data.viewEndDate, zoom);
-        const colWidth = GANTT_ZOOM[zoom].colWidth;
+        const colWidth = GANTT_ZOOM[zoom].colWidth * (project.data.zoomScale || 1);
         const offset   = ganttColOffset(today, cols, colWidth, zoom);
         const timeline = document.getElementById('gantt-timeline');
         if (timeline) timeline.scrollLeft = Math.max(0, offset - timeline.clientWidth / 2);
@@ -13404,9 +13755,19 @@ function setupGanttListeners() {
     document.getElementById('gantt-detail-close')?.addEventListener('click', ganttCloseDetail);
 
     // Sync detail fields live
-    ['gantt-detail-name','gantt-detail-start','gantt-detail-end','gantt-detail-depends','gantt-detail-status','gantt-detail-assignee','gantt-detail-notes'].forEach(id => {
-        document.getElementById(id)?.addEventListener('input', ganttSyncDetailToTask);
+    document.getElementById('gantt-detail-name')?.addEventListener('input', ganttSyncDetailToTask);
+    document.getElementById('gantt-detail-name')?.addEventListener('change', ganttSyncDetailToTask);
+    ['gantt-detail-start','gantt-detail-end','gantt-detail-depends','gantt-detail-status','gantt-detail-assignee'].forEach(id => {
         document.getElementById(id)?.addEventListener('change', ganttSyncDetailToTask);
+    });
+    document.getElementById('gantt-detail-notes')?.addEventListener('input', (e) => {
+        if (!ganttDetailTarget) return;
+        const { project, groupId, taskId } = ganttDetailTarget;
+        const group = project.data.groups.find(g => g.id === groupId);
+        const task = group && group.tasks.find(t => t.id === taskId);
+        if (!task) return;
+        task.notes = e.target.value;
+        scheduleAutoSave();
     });
 
     document.getElementById('gantt-detail-progress')?.addEventListener('input', (e) => {
@@ -13463,6 +13824,7 @@ function setupGanttListeners() {
             rotation: 0
         }];
         internalClipboardTimestamp = Date.now();
+        navigator.clipboard?.writeText(JSON.stringify({ type: 'moodinfinite-items', items: clipboard })).catch(() => {});
         showToast("Task link copied! Paste in any canvas board.");
         if (ganttContextMenu) ganttContextMenu.style.display = 'none';
     });
@@ -13784,7 +14146,7 @@ function capGenMetaField(el, max) {
     if (typeof pos === 'number' && el.setSelectionRange) el.setSelectionRange(Math.min(pos, max), Math.min(pos, max));
 }
 
-function commitGenMetaFromPanel() {
+function commitGenMetaFromPanel(recordUndo = true) {
     const item = currentGenMetaItem();
     if (!item || !window.GenMeta) return;
     capGenMetaField(document.getElementById('gen-meta-prompt'), 4000);
@@ -13798,7 +14160,12 @@ function commitGenMetaFromPanel() {
     if (clean) item.genMeta = clean;
     else delete item.genMeta;
     syncGenMetaEmptyState();
-    saveStateForUndo();
+    if (recordUndo) {
+        saveStateForUndo();
+    } else {
+        syncActiveMoodboard();
+        scheduleAutoSave();
+    }
 }
 
 function openGenMetaPanel(item, opener) {
@@ -13925,10 +14292,10 @@ function setupGenMetaUi() {
                 const next = capped.join('\n');
                 if (next !== target.value) target.value = next;
             }
-            commitGenMetaFromPanel();
+            commitGenMetaFromPanel(false);
         });
         panel.addEventListener('change', (ev) => {
-            if (ev.target && panel.contains(ev.target)) commitGenMetaFromPanel();
+            if (ev.target && panel.contains(ev.target)) commitGenMetaFromPanel(true);
         });
     }
 

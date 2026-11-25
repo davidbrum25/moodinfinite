@@ -95,14 +95,20 @@ function ascii(bytes, offset, length) {
     return text;
 }
 
+const UTF8_DECODER = typeof TextDecoder !== 'undefined' ? new TextDecoder('utf-8', { fatal: true }) : null;
+const LATIN1_DECODER = typeof TextDecoder !== 'undefined' ? new TextDecoder('iso-8859-1') : null;
+
 function decodeBytes(bytes) {
-    try {
-        return new TextDecoder('utf-8', { fatal: true }).decode(bytes);
-    } catch (err) {
-        let text = '';
-        for (let i = 0; i < bytes.length; i++) text += String.fromCharCode(bytes[i]);
-        return text;
+    if (UTF8_DECODER) {
+        try {
+            return UTF8_DECODER.decode(bytes);
+        } catch (_) {
+            if (LATIN1_DECODER) return LATIN1_DECODER.decode(bytes);
+        }
     }
+    let text = '';
+    for (let i = 0; i < bytes.length; i++) text += String.fromCharCode(bytes[i]);
+    return text;
 }
 
 function cstring(bytes, start) {
@@ -193,7 +199,7 @@ function isSampler(type) {
     return type === 'KSampler' || type === 'KSamplerAdvanced' || type === 'SamplerCustom' || type === 'SamplerCustomAdvanced' || type.indexOf('KSampler') === 0;
 }
 
-function collectClipText(graph, nodeId, seen) {
+function collectClipText(graph, nodeId, seen, polarity = 'positive') {
     if (!nodeId || seen.has(nodeId)) return [];
     seen.add(nodeId);
     const node = graph[nodeId];
@@ -202,7 +208,10 @@ function collectClipText(graph, nodeId, seen) {
     const inputs = node.inputs || {};
     if (/CLIPTextEncode|TextEncode/i.test(type)) {
         const parts = [];
-        ['text', 'text_g', 'text_l'].forEach((key) => {
+        const keys = polarity === 'negative'
+            ? ['negative_prompt', 'text', 'text_g', 'text_l']
+            : ['text', 'text_g', 'text_l', 'prompt'];
+        keys.forEach((key) => {
             const text = resolveScalar(graph, inputs[key], 0);
             if (text) parts.push(text);
         });
@@ -210,9 +219,11 @@ function collectClipText(graph, nodeId, seen) {
     }
     const out = [];
     Object.keys(inputs).forEach((key) => {
-        if (!/conditioning|positive|negative|cond/i.test(key)) return;
+        if (!/conditioning|positive|negative|cond|guider/i.test(key)) return;
+        if (polarity === 'positive' && /negative/i.test(key)) return;
+        if (polarity === 'negative' && /positive/i.test(key)) return;
         const id = linkId(inputs[key]);
-        if (id) out.push(...collectClipText(graph, id, seen));
+        if (id) out.push(...collectClipText(graph, id, seen, polarity));
     });
     return out;
 }
@@ -279,8 +290,20 @@ export function extractComfyGenMeta(text) {
     let seed = '';
     samplers.forEach((sampler) => {
         const inputs = sampler.inputs || {};
-        if (!positive.length && inputs.positive != null) positive = collectClipText(graph, linkId(inputs.positive), new Set());
-        if (!negative.length && inputs.negative != null) negative = collectClipText(graph, linkId(inputs.negative), new Set());
+        if (!positive.length && inputs.positive != null) positive = collectClipText(graph, linkId(inputs.positive), new Set(), 'positive');
+        if (!negative.length && inputs.negative != null) negative = collectClipText(graph, linkId(inputs.negative), new Set(), 'negative');
+        if (inputs.guider != null) {
+            const guiderId = linkId(inputs.guider);
+            const guider = guiderId ? graph[guiderId] : null;
+            const gInputs = guider?.inputs || {};
+            if (!positive.length) {
+                const posTarget = linkId(gInputs.positive) || linkId(gInputs.conditioning);
+                if (posTarget) positive = collectClipText(graph, posTarget, new Set(), 'positive');
+            }
+            if (!negative.length && gInputs.negative != null) {
+                negative = collectClipText(graph, linkId(gInputs.negative), new Set(), 'negative');
+            }
+        }
         if (!seed) seed = readSamplerSeed(graph, sampler);
     });
 
@@ -300,7 +323,7 @@ export function parseA1111Parameters(text) {
     let positive = source.trim();
     let negative = '';
     let settings = '';
-    const negMatch = source.match(/\nNegative prompt:\s*/i);
+    const negMatch = source.match(/(?:^|\n)Negative prompt:\s*/i);
     if (negMatch) {
         positive = source.slice(0, negMatch.index).trim();
         const rest = source.slice(negMatch.index + negMatch[0].length);

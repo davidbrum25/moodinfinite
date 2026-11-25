@@ -2,7 +2,7 @@
  * UI components, dialogs and state coordination for ComfyUI integration in moodinfinite.
  */
 
-import { ComfyClient } from './comfy-client.js';
+import { ComfyClient, comfyClient } from './comfy-client.js';
 import {
     detectWorkflowFormat,
     WORKFLOW_FORMATS,
@@ -12,9 +12,18 @@ import {
     validateAgainstObjectInfo
 } from './comfy-workflows.js';
 
+function escapeHtml(str) {
+    return String(str ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
 class MoodComfyUI {
     constructor() {
-        this.client = new ComfyClient();
+        this.client = comfyClient;
         this.activeTask = 'generate'; // 'generate' | 'edit' | 'removeBg'
         this.currentWorkflowData = null;
         this.currentWorkflowSidecar = null;
@@ -23,6 +32,9 @@ class MoodComfyUI {
         this.isGenerating = false;
         this.seedLocked = false;
         this.targetSelectedImageItem = null;
+        this.client.onConfigChange((_, endpointChanged) => {
+            if (endpointChanged) this.cachedObjectInfo = null;
+        });
 
         // Built-in workflows registry
         this.builtInWorkflows = {
@@ -83,13 +95,13 @@ class MoodComfyUI {
             <div class="comfy-modal-body">
                 <div class="comfy-form-group">
                     <label for="comfy-host-input">Host o IP</label>
-                    <input type="text" id="comfy-host-input" class="comfy-input" placeholder="127.0.0.1" value="${this.client.config.host}">
+                    <input type="text" id="comfy-host-input" class="comfy-input" placeholder="127.0.0.1" value="${escapeHtml(this.client.config.host)}">
                     <span class="comfy-input-hint">Para usar en red local pon tu IP (ej. 192.168.1.50) o tu dirección de Tailscale (*.ts.net)</span>
                 </div>
                 <div class="comfy-form-row">
                     <div class="comfy-form-group" style="flex: 1;">
                         <label for="comfy-port-input">Puerto</label>
-                        <input type="number" id="comfy-port-input" class="comfy-input" placeholder="8188" value="${this.client.config.port}">
+                        <input type="number" id="comfy-port-input" class="comfy-input" placeholder="8188" value="${escapeHtml(this.client.config.port)}">
                     </div>
                     <div class="comfy-form-group" style="flex: 1;">
                         <label for="comfy-protocol-select">Protocolo</label>
@@ -293,8 +305,10 @@ class MoodComfyUI {
 
         // Settings save
         document.getElementById('comfy-settings-save-btn')?.addEventListener('click', () => {
-            const host = document.getElementById('comfy-host-input')?.value || '127.0.0.1';
-            const port = parseInt(document.getElementById('comfy-port-input')?.value, 10) || 8188;
+            const host = (document.getElementById('comfy-host-input')?.value || '127.0.0.1').trim() || '127.0.0.1';
+            const rawPort = (document.getElementById('comfy-port-input')?.value || '').trim();
+            const parsedPort = rawPort === '' ? '' : parseInt(rawPort, 10);
+            const port = rawPort === '' ? '' : (Number.isFinite(parsedPort) && parsedPort > 0 ? parsedPort : 8188);
             const protocol = document.getElementById('comfy-protocol-select')?.value || 'http';
             const autoUnload = document.getElementById('comfy-unload-toggle')?.checked ?? true;
 
@@ -308,6 +322,8 @@ class MoodComfyUI {
             const snippet = document.getElementById('comfy-cors-snippet')?.textContent || '';
             navigator.clipboard.writeText(snippet).then(() => {
                 if (window.showToast) window.showToast('Comando copiado al portapapeles');
+            }).catch(() => {
+                if (window.showToast) window.showToast('No se pudo copiar al portapapeles', 'error');
             });
         });
 
@@ -359,6 +375,15 @@ class MoodComfyUI {
     }
 
     openSettingsDialog() {
+        const hostInput = document.getElementById('comfy-host-input');
+        const portInput = document.getElementById('comfy-port-input');
+        const protoSelect = document.getElementById('comfy-protocol-select');
+        const unloadToggle = document.getElementById('comfy-unload-toggle');
+        if (hostInput) hostInput.value = this.client.config.host || '127.0.0.1';
+        if (portInput) portInput.value = this.client.config.port ?? '';
+        if (protoSelect) protoSelect.value = this.client.config.protocol || 'http';
+        if (unloadToggle) unloadToggle.checked = !!this.client.config.autoUnloadOnSwitch;
+
         this.updateCorsSnippet();
         const dialog = document.getElementById('comfy-settings-dialog');
         if (dialog && typeof dialog.showModal === 'function') {
@@ -374,8 +399,17 @@ class MoodComfyUI {
             badge.textContent = 'Conectando...';
         }
 
+        const host = (document.getElementById('comfy-host-input')?.value || this.client.config.host || '127.0.0.1').trim() || '127.0.0.1';
+        const rawPort = (document.getElementById('comfy-port-input')?.value || '').trim();
+        const parsedPort = rawPort === '' ? '' : parseInt(rawPort, 10);
+        const port = rawPort === '' ? '' : (Number.isFinite(parsedPort) && parsedPort > 0 ? parsedPort : 8188);
+        const protocol = document.getElementById('comfy-protocol-select')?.value || this.client.config.protocol || 'http';
+
+        const probeClient = new ComfyClient();
+        probeClient.config = { ...this.client.config, host, port, protocol };
+
         try {
-            const res = await this.client.testConnection();
+            const res = await probeClient.testConnection();
             if (badge) {
                 badge.className = 'comfy-status-badge comfy-status-success';
                 badge.textContent = 'Conectado';
@@ -385,8 +419,8 @@ class MoodComfyUI {
                 const dev = (res.stats.devices && res.stats.devices[0]) || {};
                 box.style.display = 'block';
                 box.innerHTML = `
-                    <div><strong>Versión:</strong> ComfyUI ${sys.comfyui_version || 'Desconocida'}</div>
-                    <div><strong>Dispositivo:</strong> ${dev.name || 'CPU'}</div>
+                    <div><strong>Versión:</strong> ComfyUI ${escapeHtml(sys.comfyui_version || 'Desconocida')}</div>
+                    <div><strong>Dispositivo:</strong> ${escapeHtml(dev.name || 'CPU')}</div>
                     <div><strong>VRAM libre:</strong> ${(dev.vram_free ? (dev.vram_free / (1024**3)).toFixed(2) + ' GB' : 'N/A')}</div>
                     <div><strong>WebSocket:</strong> ${res.webSocketOk ? 'OK' : 'Error (se usará polling)'}</div>
                 `;
@@ -398,7 +432,7 @@ class MoodComfyUI {
             }
             if (box) {
                 box.style.display = 'block';
-                box.innerHTML = `<span style="color: var(--color-error, #E8A0A0);">${err.userMessage || err.message}</span>`;
+                box.innerHTML = `<span style="color: var(--color-error, #E8A0A0);">${escapeHtml(err.userMessage || err.message)}</span>`;
             }
         }
     }
@@ -492,10 +526,10 @@ class MoodComfyUI {
                     alertBox.style.display = 'block';
                     let html = '<strong>Advertencia de compatibilidad con tus modelos/nodos:</strong><br>';
                     if (objVal.missingClasses.length) {
-                        html += `Custom nodes faltantes: ${objVal.missingClasses.map(c => c.classType).join(', ')}<br>`;
+                        html += `Custom nodes faltantes: ${escapeHtml(objVal.missingClasses.map(c => c.classType).join(', '))}<br>`;
                     }
                     if (objVal.missingModels.length) {
-                        html += `Modelos faltantes en carpetas de ComfyUI: ${objVal.missingModels.map(m => m.requiredValue).join(', ')}<br>`;
+                        html += `Modelos faltantes en carpetas de ComfyUI: ${escapeHtml(objVal.missingModels.map(m => m.requiredValue).join(', '))}<br>`;
                     }
                     alertBox.innerHTML = html;
                 }

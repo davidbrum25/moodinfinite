@@ -123,7 +123,13 @@ function renderMoodlistView(project) {
         grid.className = 'ml-grid';
         container.appendChild(grid);
         if (typeof ResizeObserver !== 'undefined') {
-            const ro = new ResizeObserver(() => _syncAllMoodlistItemLayouts(grid));
+            let lastWidth = -1;
+            const ro = new ResizeObserver((entries) => {
+                const width = Math.round(entries?.[0]?.contentRect?.width ?? grid.clientWidth);
+                if (width <= 0 || width === lastWidth) return;
+                lastWidth = width;
+                _syncAllMoodlistItemLayouts(grid);
+            });
             ro.observe(grid);
         }
 
@@ -164,7 +170,14 @@ function renderMoodlistView(project) {
     }
     if (!window._mlResizeBound) {
         window._mlResizeBound = true;
-        window.addEventListener('resize', () => _syncAllMoodlistItemLayouts());
+        let lastWinWidth = window.innerWidth;
+        window.addEventListener('resize', () => {
+            const cont = document.getElementById('moodlist-container');
+            if (!cont || cont.style.display === 'none') return;
+            if (window.innerWidth === lastWinWidth) return;
+            lastWinWidth = window.innerWidth;
+            _syncAllMoodlistItemLayouts();
+        });
     }
 
     renderMoodlistCards(project, grid);
@@ -592,15 +605,19 @@ function _wireCard(el, card, project, grid) {
             inp.value = '';
         };
 
+        let cancelled = false;
         inp.addEventListener('keydown', (e) => {
             if (e.key === 'Enter') { e.preventDefault(); addInPlace(); }
             if (e.key === 'Escape') {
+                e.preventDefault();
+                cancelled = true;
                 input.remove();
                 if (anyAdded) renderMoodlistCards(project, grid);
             }
         });
 
         inp.addEventListener('blur', () => {
+            if (cancelled) return;
             const text = inp.value.trim();
             if (text) {
                 card.items.push({ id: mlId(), text, checked: false });
@@ -729,13 +746,15 @@ function _wireDragDrop(container, card, project, grid) {
     });
 
     container.addEventListener('dragover', (e) => {
+        if (!draggedId) return;
         e.preventDefault();
         e.dataTransfer.dropEffect = 'move';
         const row = e.target.closest('.ml-card-item');
         container.querySelectorAll('.ml-card-item').forEach(r =>
             r.classList.remove('ml-drag-over-top', 'ml-drag-over-bottom'));
         if (!row || row.dataset.itemId === draggedId) return;
-        const midY = row.getBoundingClientRect().top + row.getBoundingClientRect().height / 2;
+        const rect = row.getBoundingClientRect();
+        const midY = rect.top + rect.height / 2;
         row.classList.add(e.clientY < midY ? 'ml-drag-over-top' : 'ml-drag-over-bottom');
     });
 
@@ -747,18 +766,25 @@ function _wireDragDrop(container, card, project, grid) {
     });
 
     container.addEventListener('drop', (e) => {
+        if (!draggedId) return;
         e.preventDefault();
         const row = e.target.closest('.ml-card-item');
-        if (!row || !draggedId || row.dataset.itemId === draggedId) return;
+        if (!row || row.dataset.itemId === draggedId) return;
 
-        const midY = row.getBoundingClientRect().top + row.getBoundingClientRect().height / 2;
+        const rect = row.getBoundingClientRect();
+        const midY = rect.top + rect.height / 2;
         const dropBefore = e.clientY < midY;
 
         const fromIdx = card.items.findIndex(i => i.id === draggedId);
         const targetId = row.dataset.itemId;
+        if (fromIdx < 0 || !card.items.some(i => i.id === targetId)) return;
         const [moved] = card.items.splice(fromIdx, 1);
         const toIdx = card.items.findIndex(i => i.id === targetId);
-        card.items.splice(dropBefore ? toIdx : toIdx + 1, 0, moved);
+        if (toIdx < 0) {
+            card.items.push(moved);
+        } else {
+            card.items.splice(dropBefore ? toIdx : toIdx + 1, 0, moved);
+        }
 
         scheduleAutoSave();
         renderMoodlistCards(project, grid);
@@ -837,9 +863,67 @@ function _syncItemTextLayout(itemEl) {
 function _syncAllMoodlistItemLayouts(root) {
     const scope = root || document.getElementById('moodlist-container');
     if (!scope) return;
-    scope.querySelectorAll('.ml-card-item').forEach((itemEl) => {
-        _syncItemTextLayout(itemEl);
-    });
+    const itemEls = Array.from(scope.querySelectorAll('.ml-card-item'));
+    if (!itemEls.length) return;
+
+    // Pass 1 (read/measure prep): compute metrics and reset heights in a batch
+    const records = [];
+    for (const itemEl of itemEls) {
+        const field = itemEl.querySelector('.ml-card-item-text');
+        const moreBtn = itemEl.querySelector('.ml-card-item-more');
+        if (!field) continue;
+        const cs = getComputedStyle(field);
+        const fontSize = parseFloat(cs.fontSize) || 14.08;
+        const lineHeight = parseFloat(cs.lineHeight) || (fontSize * 1.4);
+        if (!lineHeight || field.clientWidth === 0) continue;
+        const oneLineHeight = Math.ceil(lineHeight);
+        field.style.maxHeight = 'none';
+        field.style.height = `${oneLineHeight}px`;
+        records.push({ itemEl, field, moreBtn, lineHeight, oneLineHeight });
+    }
+
+    // Pass 2 (read scrollHeight): read all heights before writing final heights
+    for (const rec of records) {
+        rec.fullHeight = Math.max(rec.oneLineHeight, rec.field.scrollHeight);
+        rec.isEditing = document.activeElement === rec.field || rec.itemEl.classList.contains('is-editing');
+    }
+
+    // Pass 3 (write): apply final heights and overflow classes
+    for (const rec of records) {
+        const { itemEl, field, moreBtn, lineHeight, fullHeight, isEditing } = rec;
+        const maxClampedHeight = Math.round(lineHeight * ML_ITEM_MAX_LINES);
+        const overflows = fullHeight > maxClampedHeight + Math.round(lineHeight * 0.35);
+
+        if (!overflows) {
+            itemEl.classList.remove('is-clamped', 'is-expanded', 'has-overflow');
+            field.style.height = `${fullHeight}px`;
+            field.scrollTop = 0;
+            if (moreBtn) {
+                moreBtn.hidden = true;
+                moreBtn.textContent = 'Show more';
+                moreBtn.setAttribute('aria-expanded', 'false');
+            }
+            continue;
+        }
+
+        itemEl.classList.add('has-overflow');
+        const isExpanded = itemEl.classList.contains('is-expanded');
+
+        if (moreBtn) {
+            moreBtn.hidden = false;
+            moreBtn.textContent = isExpanded ? 'Show less' : 'Show more';
+            moreBtn.setAttribute('aria-expanded', isExpanded ? 'true' : 'false');
+        }
+
+        if (isEditing || isExpanded) {
+            itemEl.classList.remove('is-clamped');
+            field.style.height = `${fullHeight}px`;
+        } else {
+            itemEl.classList.add('is-clamped');
+            field.style.height = `${maxClampedHeight}px`;
+        }
+        field.scrollTop = 0;
+    }
 }
 
 function _wireItemText(itemEl, item) {
@@ -858,8 +942,8 @@ function _wireItemText(itemEl, item) {
         itemEl.classList.remove('is-editing');
         item.text = field.value;
         _syncItemTextLayout(itemEl);
-        scheduleAutoSave();
         if (typeof saveToBrowser === 'function') saveToBrowser();
+        else scheduleAutoSave();
     });
     field.addEventListener('keydown', (e) => {
         if (e.key === 'Enter') {
@@ -892,7 +976,6 @@ function _wireItemText(itemEl, item) {
             _syncItemTextLayout(itemEl);
         });
     }
-    _syncItemTextLayout(itemEl);
 }
 
 function _wireItemDue(itemEl, item) {

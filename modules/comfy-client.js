@@ -21,6 +21,12 @@ export class ComfyClient {
     constructor() {
         this.config = this.loadConfig();
         this.clientId = this.generateClientId();
+        this._configListeners = new Set();
+    }
+
+    onConfigChange(cb) {
+        if (typeof cb === 'function') this._configListeners.add(cb);
+        return () => this._configListeners.delete(cb);
     }
 
     generateClientId() {
@@ -44,14 +50,27 @@ export class ComfyClient {
     }
 
     saveConfig(updates) {
+        const prevHost = this.config.host;
+        const prevPort = this.config.port;
+        const prevProto = this.config.protocol;
         this.config = { ...this.config, ...updates };
-        if (typeof window === 'undefined' || typeof localStorage === 'undefined') {
-            return this.config;
+        const endpointChanged =
+            this.config.host !== prevHost ||
+            this.config.port !== prevPort ||
+            this.config.protocol !== prevProto;
+        if (endpointChanged && this._sharedWs) {
+            try { this._sharedWs.close(); } catch (_) { }
+            this._sharedWs = null;
         }
-        try {
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(this.config));
-        } catch (e) {
-            console.warn('[MoodComfy] Error saving to localStorage:', e);
+        if (typeof window !== 'undefined' && typeof localStorage !== 'undefined') {
+            try {
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(this.config));
+            } catch (e) {
+                console.warn('[MoodComfy] Error saving to localStorage:', e);
+            }
+        }
+        for (const cb of this._configListeners) {
+            try { cb(this.config, endpointChanged); } catch (_) { }
         }
         return this.config;
     }
@@ -117,7 +136,8 @@ export class ComfyClient {
             const isLocal = addressSpace !== null;
 
             if (err.name === 'TypeError') {
-                if (isHttps && this.config.protocol === 'http') {
+                const effectiveProto = url.startsWith('https://') ? 'https' : 'http';
+                if (isHttps && effectiveProto === 'http') {
                     err.classifiedType = 'MIXED_CONTENT_OR_LNA_DENIED';
                     err.userMessage = 'Conexión bloqueada. Verifica los permisos de Red Local (LNA) en tu navegador o que ComfyUI tenga CORS activado.';
                 } else {
@@ -373,11 +393,27 @@ export class ComfyClient {
      * Watches prompt execution using shared WebSocket with fallback to polling /history.
      * onProgress callback receives { value, max, node, promptId }
      */
-    watchPrompt(promptId, onProgress) {
+    watchPrompt(promptId, onProgress, signal = null) {
         return new Promise((resolve, reject) => {
+            if (signal?.aborted) {
+                const err = new Error('Generación cancelada');
+                err.name = 'AbortError';
+                reject(err);
+                return;
+            }
+
             let pollingTimer = null;
             let finished = false;
             const listenerId = 'watch_' + promptId + '_' + Date.now();
+
+            const onAbort = () => {
+                if (finished) return;
+                finished = true;
+                cleanup();
+                const err = new Error('Generación cancelada');
+                err.name = 'AbortError';
+                reject(err);
+            };
 
             const cleanup = () => {
                 this.removeWsListener(listenerId);
@@ -385,11 +421,20 @@ export class ComfyClient {
                     clearInterval(pollingTimer);
                     pollingTimer = null;
                 }
+                if (signal) {
+                    signal.removeEventListener('abort', onAbort);
+                }
             };
 
+            if (signal) {
+                signal.addEventListener('abort', onAbort, { once: true });
+            }
+
             const checkHistory = async () => {
+                if (finished) return;
                 try {
                     const hist = await this.getHistory(promptId);
+                    if (finished) return;
                     if (hist && hist[promptId]) {
                         const entry = hist[promptId];
                         if (entry.status && entry.status.completed) {
@@ -411,23 +456,36 @@ export class ComfyClient {
             this.addWsListener(listenerId, (msg) => {
                 if (finished) return;
                 if (msg.type === 'progress') {
-                    if (onProgress && msg.data) {
+                    if (onProgress && msg.data && (!msg.data.prompt_id || msg.data.prompt_id === promptId)) {
                         onProgress({
                             value: msg.data.value,
                             max: msg.data.max,
-                            promptId: msg.data.prompt_id
+                            promptId: msg.data.prompt_id || promptId
                         });
                     }
                 } else if (msg.type === 'executing') {
                     if (msg.data && msg.data.prompt_id === promptId) {
                         if (msg.data.node === null) {
-                            // Done!
-                            finished = true;
-                            cleanup();
-                            this.getHistory(promptId).then((h) => resolve(h[promptId])).catch(reject);
+                            this.getHistory(promptId).then((h) => {
+                                if (finished) return;
+                                if (h && h[promptId]) {
+                                    finished = true;
+                                    cleanup();
+                                    resolve(h[promptId]);
+                                }
+                                // If history is not yet flushed, keep polling fallback active
+                            }).catch(() => {});
                         } else if (onProgress) {
                             onProgress({ node: msg.data.node, promptId });
                         }
+                    }
+                } else if (msg.type === 'execution_interrupted') {
+                    if (msg.data && msg.data.prompt_id === promptId) {
+                        finished = true;
+                        cleanup();
+                        const err = new Error('Generación interrumpida');
+                        err.name = 'AbortError';
+                        reject(err);
                     }
                 } else if (msg.type === 'execution_error') {
                     if (msg.data && msg.data.prompt_id === promptId) {
@@ -443,3 +501,5 @@ export class ComfyClient {
         });
     }
 }
+
+export const comfyClient = new ComfyClient();

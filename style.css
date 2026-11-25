@@ -1014,8 +1014,6 @@
         }
 
         .minimap-control-btn {
-            background: transparent;
-            border: none;
             color: var(--text-color-light);
             cursor: pointer;
             border-radius: 8px;
@@ -4024,7 +4022,8 @@
             #storyflow-stats-bar, #storyflow-fullscreen, #storyflow-script-view,
             .story-manage-artists, .story-apply-artist-all, .story-card-duplicate-btn,
             .story-card-move-left-btn, .story-card-move-right-btn,
-            #legal-links-pill, .legal-links-pill, #canvas-fit-view-btn, #canvas-zoom-readout, #canvas-minimap {
+            #legal-links-pill, .legal-links-pill, #canvas-fit-view-btn, #canvas-zoom-readout, #canvas-minimap,
+            #cloud-sync-indicator, #cloud-user-menu, #gen-meta-search, #gen-meta-panel {
                 display: none !important;
             }
 
@@ -4430,6 +4429,10 @@
             animation: cloudPulse 2s infinite;
         }
 
+        .cloud-status-dot.paused {
+            background: #7A6E60;
+        }
+
         @keyframes cloudPulse {
             0%, 100% { opacity: 1; transform: scale(1); }
             50%       { opacity: 0.5; transform: scale(1.3); }
@@ -4543,6 +4546,11 @@
         .cloud-sync-indicator.not-logged-in #cloud-sync-icon {
             color: var(--color-text-dim);
             filter: drop-shadow(0 0 4px rgba(100, 116, 139, 0.3));
+        }
+
+        .cloud-sync-indicator.paused #cloud-sync-icon {
+            color: #B8AFA0;
+            opacity: 0.65;
         }
 
         @keyframes syncPulse {
@@ -5657,38 +5665,6 @@
             text-transform: uppercase;
             letter-spacing: 0.05em;
         }
-
-#toast-container {
-    position: fixed;
-    bottom: 2rem;
-    right: 2rem;
-    z-index: 10000;
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-    pointer-events: none;
-}
-
-.toast {
-    background: var(--bg-ui);
-    color: var(--text-color);
-    padding: 12px 20px;
-    border-radius: 8px;
-    border: 1px solid var(--switch-bg-checked);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
-    font-size: 0.9rem;
-    opacity: 0;
-    transform: translateY(20px);
-    transition: opacity 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275), transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-    display: flex;
-    align-items: center;
-    gap: 10px;
-}
-
-.toast.show {
-    opacity: 1;
-    transform: translateY(0);
-}
 
 /* ═══════════════════════════════════════════════════════
    MOODLIST — Google Keep-style checklist boards
@@ -8552,6 +8528,11 @@ dialog.comfy-modal-dialog::backdrop {
     background: #F0B8B8;
 }
 
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
 /* ==========================================================================
    Reduced Motion & Forced Colors
    ========================================================================== */
@@ -8572,6 +8553,10 @@ dialog.comfy-modal-dialog::backdrop {
         animation: none !important;
         transform: none;
         transition: background-color 150ms ease, color 150ms ease, border-color 150ms ease, opacity 150ms ease;
+    }
+
+    .toast-notification {
+        opacity: 1;
     }
 }
 
